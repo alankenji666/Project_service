@@ -7,8 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Incluindo a biblioteca html2pdf.js para gerar PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <!-- Incluindo a biblioteca Chart.js para gráficos -->
+    <!-- Incluindo a biblioteca Chart.js e o plugin de datalabels -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+
     <style>
         /* Estilos para a barra de rolagem para uma melhor estética */
         ::-webkit-scrollbar {
@@ -481,7 +483,7 @@
 <body class="bg-gray-100 font-sans flex flex-col h-screen">
 
 <!-- OVERLAY DE CARREGAMENTO DE TELA CHEIA -->
-<div id="loading-overlay" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+<div id="loading-overlay" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
     <div class="flex flex-col items-center">
         <svg class="w-16 h-16 text-white spinning" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
             <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
@@ -513,7 +515,12 @@
     <div class="container mx-auto flex flex-col space-y-4">
         <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
             <!-- Campos de busca e filtro globais (visibilidade controlada por JS) -->
-            <input type="text" id="global-search-input" placeholder="Buscar por código ou descrição..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div class="relative w-full">
+                <input type="text" id="global-search-input" placeholder="Buscar por código ou descrição..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10">
+                <button id="clear-global-search-btn" class="absolute inset-y-0 right-0 flex items-center pr-3 hidden" title="Limpar busca">
+                    <svg class="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
             <div class="relative w-full sm:w-48" id="global-filter-menu-container">
                 <button id="global-filter-button" class="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <span id="global-filter-button-label">Filtros</span>
@@ -550,11 +557,11 @@
                 </button>
             </div>
             <div class="flex items-center space-x-2">
-                <button id="launch-garantia-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto">
-                    Lançar Garantia
+                <button id="view-saidas-btn" class="px-4 py-2 bg-gray-500 text-white rounded-lg shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors w-full sm:w-auto">
+                    Ver Saídas
                 </button>
-                <button id="launch-fabrica-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto">
-                    Lançar Fábrica
+                <button id="create-saida-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto">
+                    Criar Saída
                 </button>
             </div>
         </div>
@@ -636,6 +643,35 @@
     </div>
 </div>
 
+<!-- NOVA BARRA DE AÇÕES PARA DIAGNÓSTICO DE SAÍDAS -->
+<div id="saida-action-bar" class="report-action-bar-style hidden">
+    <div class="left-buttons">
+        <button id="saida-back-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg shadow-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+            Voltar
+        </button>
+    </div>
+    <div class="right-buttons">
+        <!-- Espaço para botões futuros se necessário -->
+    </div>
+</div>
+
+<!-- NOVA BARRA DE AÇÕES PARA RELATÓRIO DE SAÍDA -->
+<div id="saida-report-action-bar" class="report-action-bar-style hidden">
+    <div class="left-buttons">
+        <button id="saida-report-back-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg shadow-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+            Voltar
+        </button>
+    </div>
+    <div class="right-buttons">
+        <button id="launch-saida-garantia-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            Lançar Saída - Garantia
+        </button>
+        <button id="launch-saida-fabrica-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            Lançar Saída - Fábrica
+        </button>
+    </div>
+</div>
+
 <!-- CONTAINER DAS PÁGINAS -->
 <div class="flex-grow overflow-hidden">
     <!-- PÁGINA: PESQUISAR PRODUTO -->
@@ -667,6 +703,15 @@
         <p id="no-orders-message" class="text-center text-gray-500 py-8 hidden">Nenhum pedido encontrado.</p>
     </main>
 
+    <!-- NOVA PÁGINA: VISÃO GERAL DE SAÍDAS -->
+    <main id="page-overview-saidas" class="hidden p-8 h-full overflow-y-auto bg-gray-100 flex flex-col items-center text-center">
+        <h1 class="text-4xl font-bold text-gray-800 mb-6">Diagnóstico de Saídas</h1>
+        <p class="text-lg text-gray-600 mb-8">Visão geral das suas saídas:</p>
+        <div id="saida-overview-cards" class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8 w-full max-w-4xl">
+        </div>
+        <p id="no-saidas-message" class="text-center text-gray-500 py-8 hidden">Nenhuma saída encontrada.</p>
+    </main>
+
     <!-- PÁGINA: GERENCIAR SAÍDA -->
     <main id="page-gerenciar-saida" class="hidden p-8 h-full overflow-y-auto">
         <!-- Conteúdo será renderizado pelo JavaScript -->
@@ -693,6 +738,12 @@
     <!-- NOVA PÁGINA: RELATÓRIO DE PRODUTOS SELECIONADOS -->
     <main id="page-report" class="hidden p-8 h-full overflow-y-auto bg-gray-100">
         <div id="page-report-content" class="container mx-auto mt-4">
+        </div>
+    </main>
+
+    <!-- PÁGINA: RELATÓRIO DE SAÍDA -->
+    <main id="page-saida-report" class="hidden p-8 h-full overflow-y-auto bg-gray-100">
+        <div id="page-saida-report-content" class="container mx-auto mt-4">
         </div>
     </main>
 </div>
@@ -732,8 +783,13 @@
         <div id="consolidated-orders-table-container-modal" class="w-full space-y-4 text-left flex-grow flex flex-col">
             
             <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                <input type="text" id="orders-search-input" placeholder="Buscar por Código, Descrição ou Requisição..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                
+                <div class="relative w-full">
+                    <input type="text" id="orders-search-input" placeholder="Buscar por Código, Descrição ou Requisição..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10">
+                    <button id="clear-orders-search-btn" class="absolute inset-y-0 right-0 flex items-center pr-3 hidden" title="Limpar busca">
+                        <svg class="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
                 <div class="relative w-full sm:w-48" id="orders-filter-menu-container">
                     <button id="orders-filter-button" class="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <span id="orders-filter-button-label">Filtros de Status</span>
@@ -953,6 +1009,27 @@
     </div>
 </div>
 
+<!-- NOVO: Modal para Ajuste de Estoque -->
+<div id="stock-adjustment-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[65] p-4">
+    <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full relative">
+        <button id="close-stock-adjustment-modal-btn" class="absolute top-3 right-3 text-gray-500 hover:text-gray-800">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+        <h3 class="text-2xl font-bold mb-4 text-gray-800">Ajuste de Estoque (Balanço)</h3>
+        <p id="stock-adjustment-product-info" class="text-gray-700 mb-2 text-left"></p>
+        <p id="stock-adjustment-current-stock" class="text-gray-700 mb-6 text-left"></p>
+        <div class="space-y-4 text-left">
+            <div>
+                <label for="stock-adjustment-new-quantity" class="block text-sm font-bold text-gray-700">Nova Quantidade em Estoque:</label>
+                <input type="number" id="stock-adjustment-new-quantity" class="mt-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-blue-500" placeholder="0">
+            </div>
+        </div>
+        <div class="flex justify-end space-x-4 mt-8">
+            <button id="cancel-stock-adjustment-btn" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">Cancelar</button>
+            <button id="confirm-stock-adjustment-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Confirmar Ajuste</button>
+        </div>
+    </div>
+</div>
 
 <!-- ATUALIZAÇÃO: O script pesquisarProduto.js foi movido para um bloco inline abaixo para incorporar as novas funcionalidades de imagem. -->
 <script>
@@ -977,7 +1054,15 @@ const PesquisarProduto = (function() {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                 ${_utils.createDetailItem('Preço', (product.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))}
                 ${_utils.createDetailItem('Unidade', product.unidade || 'N/A')}
-                ${_utils.createDetailItem('Estoque Atual', product.estoque, 'font-bold')}
+                <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Estoque Atual</p>
+                        <p class="text-lg text-gray-800 font-bold">${product.estoque || 0}</p>
+                    </div>
+                    <button class="open-stock-adjustment-modal-btn p-2 rounded-full hover:bg-gray-200" data-product-id="${product.id}" title="Ajustar Estoque">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
+                    </button>
+                </div>
                 ${_utils.createDetailItem('Estoque Mínimo', product.estoque_minimo)}
                 ${_utils.createDetailItem('Estoque Máximo', product.estoque_maximo)}
                 ${_utils.createDetailItem('Localização', product.localizacao || 'N/A')}
@@ -1002,6 +1087,11 @@ const PesquisarProduto = (function() {
         `;
         _dom.details_placeholder.classList.add('hidden');
         _dom.product_details.classList.remove('hidden');
+    }
+
+    // NOVO: Função para renderizar detalhes, exposta para ser chamada externamente
+    function renderDetails(product) {
+        _renderProductDetails(product);
     }
 
     /**
@@ -1060,6 +1150,7 @@ const PesquisarProduto = (function() {
                          alt="${product.descricao || 'Imagem do produto'}" 
                          class="product-list-item-img" 
                          data-image-url="${imageUrl}"
+                         data-product-id="${product.id}"
                          onerror="this.onerror=null;this.src='https://placehold.co/50x50/e2e8f0/64748b?text=?';">
                     <div class="flex-grow overflow-hidden">
                         <h3 class="font-semibold text-gray-800 text-sm truncate" title="${product.descricao || ''}">${product.descricao || 'Sem descrição'}</h3>
@@ -1079,11 +1170,13 @@ const PesquisarProduto = (function() {
         _allProducts = config.allProducts;
         _dom = config.domElements;
         _utils = config.utilities;
+        // NOVO: Recebe a função para abrir o modal do App principal
+        _openStockAdjustmentModal = config.openStockAdjustmentModal;
 
         if (_dom.product_list_container) {
             // Listener para cliques nos itens da lista
             _dom.product_list_container.addEventListener('click', _handleProductClick);
-
+            
             // Listener para pré-visualização de imagem (usando delegação de eventos)
             _dom.product_list_container.addEventListener('mouseover', (event) => {
                 if (event.target.classList.contains('product-list-item-img')) {
@@ -1096,36 +1189,58 @@ const PesquisarProduto = (function() {
                 }
             });
         }
+
+        // NOVO: Listener delegado para o botão de ajuste de estoque dentro dos detalhes do produto
+        if (_dom.product_details_container) {
+            _dom.product_details_container.addEventListener('click', (event) => {
+                const adjustmentBtn = event.target.closest('.open-stock-adjustment-modal-btn');
+                if (adjustmentBtn && typeof _openStockAdjustmentModal === 'function') {
+                    _openStockAdjustmentModal(adjustmentBtn.dataset.productId);
+                }
+            });
+        }
     }
 
     // Expõe as funções públicas
     return {
         init,
-        render
+        render,
+        renderDetails // NOVO
     };
 })();
 </script>
 
 <!-- NOVO: Inclui o módulo utils.js via jsDelivr -->
-<script type="module" src="https://cdn.jsdelivr.net/gh/alankenji666/ProjectService@main/utils.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/gh/alankenji666/Project_service@main/utils.js"></script>
 
 <script type="module">
     // Importa as funções utilitárias do novo módulo
-    import { debounce, addBusinessDays, getBusinessDaysDifference, formatCnpjCpf, createDetailItem, createStatusPill } from 'https://cdn.jsdelivr.net/gh/alankenji666/ProjectService@main/utils.js';
+    import { debounce, addBusinessDays, getBusinessDaysDifference, formatCnpjCpf, createDetailItem, createStatusPill } from 'https://cdn.jsdelivr.net/gh/alankenji666/Project_service@main/utils.js';
 
     // URLs das suas APIs do Google Apps Script
     // ATENÇÃO: Substitua estas URLs pelas URLs de IMPLANTAÇÃO dos seus respectivos scripts
     const PRODUCTS_API_URL = "https://script.google.com/macros/s/AKfycbwLWLCM0SuAnELFllVp0uPPzOaMozMx5yN-XKmf6QLSvpYgfxOtEVtLSLOqLOWE5umY/exec";
     const ORDERS_API_URL_TERCEIROS = "https://script.google.com/macros/s/AKfycbwYWSPrgMdA5IGVYnH5EVJ3FLnU1THcI6SQa8opOHkjN_CZO-G2S7JJDuTqZQDd0Y2s/exec";
-      const ORDERS_API_URL_FABRICA = "https://script.google.com/macros/s/AKfycbwKsLHoAhfLxEcq6nyu9lCHybh3EOGqEku-shgdoomSg8SAyL9VcUsWWjzVPmvcSkvOTA/exec"; // URL para requisições de fábrica
+    const ORDERS_API_URL_FABRICA = "https://script.google.com/macros/s/AKfycbwKsLHoAhfLxEcq6nyu9lCHybh3EOGqEku-shgdoomSg8SAyL9VcUsWWjzVPmvcSkvOTA/exec"; // URL para requisições de fábrica
     
+    // NOVO: URL para a API de consulta de Saídas para Fábrica
+    const SAIDAS_API_URL_FABRICA = "https://script.google.com/macros/s/AKfycbxEJwbvF9f0NBQ_ueTsXSSXxeOrr7AiGl58v6UKgJQ1NGI9ZOwrpS8vXYkwgRWe285n/exec";
+    
+    // NOVO: URL para a API de consulta de Saídas para Garantia
+    const SAIDAS_API_URL_GARANTIA = "https://script.google.com/macros/s/AKfycbz5szPRjcuugJ3JZjGozdXMhcUiYzmKnAMqoqvOywWCpm7935YH6p-Fay-M0CZPni89sQ/exec";
+
+    // NOVO: URL para a API de lançamento de Saída para Fábrica
+    const SAIDA_FABRICA_LAUNCH_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saida-fabrica";
+
+    // NOVO: URL para a API de lançamento de Saída para Garantia
+    const SAIDA_GARANTIA_LAUNCH_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saida-garantia";
+
     // ATUALIZADO: URL do webhook agora aponta para a sua Cloud Function
      const WEBHOOK_LAUNCH_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app"; 
 
-    // NOVO: URL para a API de atualização de status de pedidos
-    // ESTA URL DEVE APONTAR PARA O NOVO ENDPOINT DA SUA CLOUD FUNCTION, NÃO DIRETAMENTE PARA O GOOGLE APPS SCRIPT.
-    // Exemplo: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/update-order-status"
-      const ORDERS_UPDATE_API_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app/update-order-status"; 
+    // ATUALIZADO: URL para a API que atualiza o status do pedido e o estoque no Bling.
+    // Esta é a nova Cloud Function que centraliza as duas operações.
+    const ORDERS_UPDATE_API_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app/estoque/update-stock"; 
 
     // NOVO: URL para a API de Conferência NFe (leitura)
    const NFE_API_URL = "https://script.google.com/macros/s/AKfycbwetL7dn2Zmsr6ZPlE6x6B2JTahGOyhfENK6AoL-2HwEvffyTejBuHvIp7S_kgHI3_t/exec"; 
@@ -1142,6 +1257,10 @@ const PesquisarProduto = (function() {
     // NOVO: URL para a API de atualização de observação de Requisição de Fábrica
     const FABRICA_OBSERVATION_API_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app/add-fabrica-observation";
 
+    // NOVO: URLs para a API de atualização de observação de Saídas.
+    const SAIDA_FABRICA_OBSERVATION_API_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app/add-fabrica-observation"; // Reutiliza a mesma API de fábrica
+    const SAIDA_GARANTIA_OBSERVATION_API_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app/add-garantia-observation"; // API específica para garantia
+
 
     // Início do padrão Revealing Module para a aplicação principal
     const App = (function() {
@@ -1149,14 +1268,22 @@ const PesquisarProduto = (function() {
         let _allProducts = [];
         let _allOrdersTerceiros = []; 
         let _allOrdersFabrica = []; 
+        let _allSaidasGarantia = [];
+        let _allSaidasFabrica = [];
         let _allNFeData = []; 
         let _selectedSaidaItems = new Set();
-        let _selectedStockItems = new Set();
+        let _selectedStockItems = new Set(); 
         let _reportState = {
             sortColumn: 'descricao',
             sortDirection: 'asc',
             isIntelligentMode: false
         };
+
+        let _saidaReportState = {
+            sortColumn: 'descricao',
+            sortDirection: 'asc'
+        };
+        let _saidaReportQuantities = new Map();
 
         let _currentSalesDetails = []; // NOVO: Armazena os dados do modal de detalhes de vendas para exportação
 
@@ -1215,14 +1342,15 @@ const PesquisarProduto = (function() {
         let _currentPrintModalType = '';
 
         // --- REFERÊNCIAS PRIVADAS A ELEMENTOS DO DOM ---
-        let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageReport, _pageGerenciarSaida, _pageDashboards;
+        let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageReport, _pageSaidaReport, _pageGerenciarSaida, _pageDashboards;
         let _navPesquisar, _navEstoque, _navGerenciarSaida, _navDashboards;
         let _refreshButton, _loadingOverlay;
-        let _globalFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer; // Corrected: Removed duplicate _globalFilterButtonLabel
-        let _product_list_container, _product_details_container, _details_placeholder, _product_details, _requisitionOverviewCardsContainer, _ordersTableTitle, _ordersTableContent, _noOrdersMessage, _noOrdersMessageModal, _ordersSearchInput;
-        let _saidaActionsContainer, _selectedSaidaItemsCount, _clearSaidaSelectionBtn, _launchGarantiaBtn, _launchFabricaBtn;
+        let _globalFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer;
+        let _product_list_container, _product_details_container, _details_placeholder, _product_details, _requisitionOverviewCardsContainer, _saidaOverviewCards, _ordersTableTitle, _ordersTableContent, _noOrdersMessage, _noOrdersMessageModal, _ordersSearchInput;
+        let _saidaActionsContainer, _selectedSaidaItemsCount, _clearSaidaSelectionBtn, _viewSaidasBtn, _createSaidaBtn;
         let _ordersTableActionsMenuContainer, _ordersTableActionsButton, _ordersTableActionsDropdown, _ordersTableActionPrintGeneric, _ordersTableActionPrintList, _ordersTableActionPrintSolicitation, _ordersTableActionExcel;
         let _ordersFilterMenuContainer, _ordersFilterButton, _ordersFilterButtonLabel, _ordersFilterDropdown, _ordersStatusCheckboxesContainer;
+        let _clearGlobalSearchBtn, _clearOrdersSearchBtn; // NOVO: Botões para limpar busca
         let _nfeOverviewCardsContainer, _noNFeMessageOverview, _nfeFilterBar, _nfeStartDateInput, _nfeEndDateInput, _nfeClearFiltersBtn, _nfeDashboardGrid, _nfeDiagnosticTableContainer;
         let _orderDetailsModal, _closeModalBtn, _modalOrderTitle, _modalOrderContent;
         let _messageModal, _messageModalTitle, _messageModalContent, _messageModalOkBtn, _closeMessageModalBtn;
@@ -1235,13 +1363,14 @@ const PesquisarProduto = (function() {
         let _browserPrintFabricaModal, _browserPrintFabricaContent, _closeBrowserPrintFabricaModalBtn;
         let _customProductTooltip;
         let _viewRequisitionsBtn;
-        let _requisitionActionBar, _requisitionBackBtn;
+        let _requisitionActionBar, _requisitionBackBtn, _saidaActionBar, _saidaBackBtn, _saidaReportActionBar, _saidaReportBackBtn, _launchSaidaGarantiaBtn, _launchSaidaFabricaBtn, _pageSaidaReportContent;
         let _dashboardFilterBar, _dashboardStartDateInput, _dashboardEndDateInput, _dashboardSummaryCards, _salesChartCanvas, _salesTableContainer, _dashboardClearFiltersBtn;
         let _currentFilteredOrderItems = []; // NOVO: Armazena os itens filtrados e ordenados da tabela de pedidos
         let _clearSelectionBtn;
         let _salesDetailsModal, _closeSalesDetailsModalBtn, _salesDetailsModalTitle, _salesDetailsModalContent, _noSalesDetailsMessage, _exportSalesDetailsCsvBtn; // Modal de Vendas
         let _nfeObservationModal, _nfeObservationModalInfo, _nfeObservationHistory, _nfeObservationTextarea, _saveNfeObservationBtn, _cancelNfeObservationBtn, _nfeObservationCharCount; // Modal de Observação NFe
         let _requisitionObservationModal, _requisitionObservationModalInfo, _requisitionObservationHistory, _requisitionObservationTextarea, _saveRequisitionObservationBtn, _cancelRequisitionObservationBtn, _requisitionObservationCharCount; // Modal de Observação Requisição
+        let _stockAdjustmentModal, _closeStockAdjustmentModalBtn, _stockAdjustmentProductInfo, _stockAdjustmentCurrentStock, _stockAdjustmentNewQuantity, _stockAdjustmentReason, _confirmStockAdjustmentBtn, _cancelStockAdjustmentBtn; // NOVO: Modal de Ajuste de Estoque
 
         // --- FUNÇÕES DE UTILIDADE PRIVADAS ---
         
@@ -1648,10 +1777,18 @@ const PesquisarProduto = (function() {
          * @returns {object|null} O objeto do item ou null se não for encontrado.
          */
         function _findRequisitionItem(orderCode, codigoService) {
-            const allOrders = [..._allOrdersTerceiros, ..._allOrdersFabrica];
-            const order = allOrders.find(o => o.orderCode === orderCode);
+            // ATUALIZADO: Inclui as listas de SAÍDA na busca pelo item.
+            const allOrders = [
+                ..._allOrdersTerceiros, 
+                ..._allOrdersFabrica,
+                ..._allSaidasFabrica,
+                ..._allSaidasGarantia
+            ];
+            const trimmedOrderCode = String(orderCode || '').trim();
+            const trimmedCodigoService = String(codigoService || '').trim();
+            const order = allOrders.find(o => String(o.orderCode || '').trim() === trimmedOrderCode);
             if (!order) return null;
-            return order.rawItems.find(i => i.codigoService === codigoService);
+            return order.rawItems.find(i => String(i.codigoService || '').trim() === trimmedCodigoService);
         }
 
         /**
@@ -1739,9 +1876,14 @@ const PesquisarProduto = (function() {
                     observacao: newObservation
                 };
 
-                const apiUrl = itemToUpdate.requisitionType === 'fabrica'
-                    ? FABRICA_OBSERVATION_API_URL
-                    : TERCEIROS_OBSERVATION_API_URL;
+                // ATUALIZADO: Determina a URL correta da API com base no tipo de requisição/saída.
+                const apiUrls = {
+                    'terceiros': TERCEIROS_OBSERVATION_API_URL,
+                    'fabrica': FABRICA_OBSERVATION_API_URL,
+                    'saidas-fabrica': SAIDA_FABRICA_OBSERVATION_API_URL,
+                    'saidas-garantia': SAIDA_GARANTIA_OBSERVATION_API_URL
+                };
+                const apiUrl = apiUrls[itemToUpdate.requisitionType];
 
                 const response = await fetch(apiUrl, {
                     method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
@@ -1915,11 +2057,85 @@ const PesquisarProduto = (function() {
             _salesDetailsModal.classList.remove('hidden');
         }
 
+        // NOVO: Abre o modal de ajuste de estoque
+        function _openStockAdjustmentModal(productId) {
+            const product = _allProducts.find(p => String(p.id) === String(productId));
+            if (!product) {
+                _showMessageModal("Erro", "Produto não encontrado para realizar o ajuste.");
+                return;
+            }
+
+            if (_stockAdjustmentModal) {
+                _stockAdjustmentModal.dataset.productId = product.id;
+                _stockAdjustmentProductInfo.innerHTML = `<strong>Produto:</strong> ${product.descricao} (Cód: ${product.codigo})`;
+                _stockAdjustmentCurrentStock.innerHTML = `<strong>Estoque Atual:</strong> ${product.estoque || 0}`;
+                _stockAdjustmentNewQuantity.value = '';
+                _stockAdjustmentModal.classList.remove('hidden');
+                _stockAdjustmentNewQuantity.focus();
+            }
+        }
+
+        // NOVO: Salva o ajuste de estoque
+        async function _saveStockAdjustment() {
+            const productId = _stockAdjustmentModal.dataset.productId;
+            const newQuantityStr = _stockAdjustmentNewQuantity.value;
+
+            const newQuantity = parseFloat(String(newQuantityStr || '0').replace(',', '.'));
+
+            if (isNaN(newQuantity) || newQuantity < 0) {
+                _showMessageModal("Valor Inválido", "Por favor, insira uma nova quantidade de estoque válida (número maior ou igual a zero).");
+                return;
+            }
+
+            const product = _allProducts.find(p => String(p.id) === String(productId));
+            if (!product) {
+                _showMessageModal("Erro", "Produto não encontrado para salvar o ajuste.");
+                return;
+            }
+
+            const payload = {
+                produto: { id: product.id, codigo: product.codigo },
+                operacaoBling: "B", // "B" para Balanço
+                quantidadeMovimento: 0, // Não aplicável para balanço
+                quantidadeFinal: newQuantity,
+                tipoEntrada: "Balanço", // Tipo para identificar a operação
+                observacoes: `Ajuste de balanço via sistema`,
+                // Dados para a Planilha (não aplicável para balanço, mas mantemos a estrutura)
+                orderCode: 'BALANCO',
+                codigoService: product.codigo,
+                newStatus: 'N/A',
+                requisitionType: 'balanco',
+                dataEntrega: new Date().toLocaleDateString('pt-BR'),
+                diasCorridos: '0'
+            };
+
+            _loadingOverlay.classList.remove('hidden');
+            try {
+                const response = await fetch(ORDERS_UPDATE_API_URL, { method: 'POST', mode: 'cors', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
+                
+                product.estoque = newQuantity;
+                _stockAdjustmentModal.classList.add('hidden');
+                _showMessageModal("Sucesso!", `Estoque do produto <strong>${product.descricao}</strong> ajustado para <strong>${newQuantity}</strong>.`);
+                
+                // ATUALIZADO: Re-renderiza a lista e os detalhes do produto
+                if (typeof PesquisarProduto !== 'undefined' && PesquisarProduto.renderDetails) {
+                    PesquisarProduto.renderDetails(product);
+                }
+            } catch (error) {
+                _showMessageModal("Erro no Ajuste", `Falha ao ajustar o estoque: ${error.message}`);
+            } finally {
+                _loadingOverlay.classList.add('hidden');
+            }
+        }
+
         // --- FUNÇÕES DE LÓGICA PRINCIPAL PRIVADAS ---
         function _showPage(pageId) {
             _pagePesquisar.classList.add('hidden');
             _pageEstoque.classList.add('hidden');
+            _pageOverviewSaidas.classList.add('hidden');
             _pageOverviewRequisitions.classList.add('hidden');
+            _pageSaidaReport.classList.add('hidden');
             _pageReport.classList.add('hidden');
             _pageGerenciarSaida.classList.add('hidden');
             _pageDashboards.classList.add('hidden');
@@ -1935,6 +2151,8 @@ const PesquisarProduto = (function() {
             if (_nfeFilterBar) _nfeFilterBar.classList.add('hidden'); // Esconde a nova barra
             if (_reportActionBar) _reportActionBar.classList.add('hidden');
             if (_requisitionActionBar) _requisitionActionBar.classList.add('hidden'); // Add this line to hide by default
+            if (_saidaReportActionBar) _saidaReportActionBar.classList.add('hidden');
+            if (_saidaActionBar) _saidaActionBar.classList.add('hidden');
 
             if (pageId === 'pesquisar') {
                 _pagePesquisar.classList.remove('hidden');
@@ -1967,7 +2185,14 @@ const PesquisarProduto = (function() {
             } else if (pageId === 'report') {
                 _pageReport.classList.remove('hidden');
                 if (_reportActionBar) _reportActionBar.classList.remove('hidden');
+            } else if (pageId === 'saida-report') {
+                _pageSaidaReport.classList.remove('hidden');
+                if (_saidaReportActionBar) _saidaReportActionBar.classList.remove('hidden');
             } else if (pageId === 'gerenciar-saida') {
+                // Quando o usuário clica na navegação, ele vê a lista de produtos para selecionar.
+                // A tela de diagnóstico é uma sub-página.
+                _pageGerenciarSaida.classList.remove('hidden');
+                _pageOverviewSaidas.classList.add('hidden');
                 _pageGerenciarSaida.classList.remove('hidden');
                 _navGerenciarSaida.classList.add('active');
                 if (_globalFilterBar) {
@@ -1977,6 +2202,11 @@ const PesquisarProduto = (function() {
                     _stockActionsContainer.classList.add('hidden');
                     _saidaActionsContainer.classList.remove('hidden');
                 }
+            } else if (pageId === 'overview-saidas') {
+                // Esta é a página de diagnóstico, acessada pelo botão "Ver Saídas".
+                _pageOverviewSaidas.classList.remove('hidden');
+                if (_saidaActionBar) _saidaActionBar.classList.remove('hidden');
+                _renderSaidaOverviewPage();
             } else if (pageId === 'dashboards') {
                 _pageDashboards.classList.remove('hidden');
                 _navDashboards.classList.add('active');
@@ -2055,14 +2285,62 @@ const PesquisarProduto = (function() {
             });
         }
         
+        // NOVO: Processa os dados brutos de SAÍDAS da fábrica
+        function _processRawSaidasData(rawData, type) {
+            if (!Array.isArray(rawData) || (rawData.length > 0 && typeof rawData[0] !== 'object')) {
+                console.warn(`Estrutura de dados de saídas inválida (${type}). Esperado um array de objetos. Recebido:`, rawData);
+                return [];
+            }
+            if (rawData.length === 0) return [];
+
+            const saidasMap = new Map();
+            rawData.forEach(row => {
+                const saidaCode = row.requisicao;
+                if (!saidaCode) return;
+
+                if (!saidasMap.has(saidaCode)) {
+                    saidasMap.set(saidaCode, {
+                        orderCode: saidaCode,
+                        dataPedido: row.data_pedido,
+                        totalItems: 0,
+                        totalAtendido: 0,
+                        totalPendente: 0,
+                        rawItems: [],
+                    });
+                }
+                const saida = saidasMap.get(saidaCode);
+                const itemStatus = (row.situacao || '').toLowerCase();
+
+                saida.rawItems.push({
+                    orderCode: saidaCode,
+                    codigoService: row.codigo_service || '', // CORRIGIDO: Garante que o campo correto seja mapeado.
+                    descricao: row.descricao || '',
+                    localizacao: row.localizacao || 0,
+                    quantidadePedido: row.quantidade || 0, // Mapeia 'quantidade' para 'quantidadePedido'
+                    situacao: itemStatus,
+                    dataPedido: row.data_pedido,
+                    dataConclusao: row.data_envio || null, // Mapeia 'data_envio' para 'dataConclusao'
+                    observacao: row.observacao || [],
+                    responsavel: row.responsavel || '',
+                    requisitionType: type // 'saidas-fabrica'
+                });
+
+                saida.totalItems++;
+                if (itemStatus === 'ok') saida.totalAtendido++; else saida.totalPendente++;
+            });
+            return Array.from(saidasMap.values());
+        }
+        
         async function _fetchData() {
             _loadingOverlay.classList.remove('hidden');
             try {
-                const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes] = await Promise.all([
+                const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasFabricaRes, saidasGarantiaRes] = await Promise.all([
                     fetch(`${PRODUCTS_API_URL}?t=${new Date().getTime()}`, { mode: 'cors' }),
                     fetch(`${ORDERS_API_URL_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }),
                     fetch(`${ORDERS_API_URL_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
-                    fetch(`${NFE_API_URL}?t=${new Date().getTime()}`, { mode: 'cors' })
+                    fetch(`${NFE_API_URL}?t=${new Date().getTime()}`, { mode: 'cors' }),
+                    fetch(`${SAIDAS_API_URL_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
+                    fetch(`${SAIDAS_API_URL_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' })
                 ]);
 
                 if (!productsRes.ok) throw new Error(`Erro na API de Produtos: ${productsRes.statusText}`);
@@ -2085,6 +2363,16 @@ const PesquisarProduto = (function() {
                 const nfeData = await nfeRes.json();
                 if (nfeData.error || !nfeData.data) throw new Error(`Erro nos dados de NFe: ${nfeData.message || 'Formato inválido'}`);
                 _allNFeData = nfeData.data;
+
+                if (!saidasFabricaRes.ok) throw new Error(`Erro na API de Saídas Fábrica: ${saidasFabricaRes.statusText}`);
+                const saidasFabricaData = await saidasFabricaRes.json();
+                if (saidasFabricaData.error || !saidasFabricaData.data) throw new Error(`Erro nos dados de Saídas Fábrica: ${saidasFabricaData.message || 'Formato inválido'}`);
+                _allSaidasFabrica = _processRawSaidasData(saidasFabricaData.data, 'saidas-fabrica');
+
+                if (!saidasGarantiaRes.ok) throw new Error(`Erro na API de Saídas Garantia: ${saidasGarantiaRes.statusText}`);
+                const saidasGarantiaData = await saidasGarantiaRes.json();
+                if (saidasGarantiaData.error || !saidasGarantiaData.data) throw new Error(`Erro nos dados de Saídas Garantia: ${saidasGarantiaData.message || 'Formato inválido'}`);
+                _allSaidasGarantia = _processRawSaidasData(saidasGarantiaData.data, 'saidas-garantia');
 
                 _renderCategoryFilters();
                 _applyGlobalFilters();
@@ -2246,14 +2534,11 @@ const PesquisarProduto = (function() {
             if (_selectedSaidaItemsCount) {
                 _selectedSaidaItemsCount.textContent = `Itens selecionados: ${_selectedSaidaItems.size}`;
             }
+            if (_createSaidaBtn) {
+                _createSaidaBtn.disabled = _selectedSaidaItems.size === 0;
+            }
             if (_clearSaidaSelectionBtn) {
                 _clearSaidaSelectionBtn.classList.toggle('hidden', _selectedSaidaItems.size === 0);
-            }
-            if (_launchGarantiaBtn) {
-                _launchGarantiaBtn.disabled = _selectedSaidaItems.size === 0;
-            }
-            if (_launchFabricaBtn) {
-                _launchFabricaBtn.disabled = _selectedSaidaItems.size === 0;
             }
         }
         
@@ -2592,6 +2877,31 @@ const PesquisarProduto = (function() {
             }
         }
 
+        // NOVO: Renderiza a página de diagnóstico de saídas
+        function _renderSaidaOverviewPage() {
+            // ATUALIZADO: Usa os dados reais para a contagem
+            const fabricaItemsCount = _allSaidasFabrica.reduce((acc, saida) => acc + (saida.totalPendente || 0), 0);
+            const garantiaItemsCount = _allSaidasGarantia.reduce((acc, saida) => acc + (saida.totalPendente || 0), 0);
+
+            // Reutiliza a função de criar card para manter o estilo
+            let cardsHtml = `
+                ${_createRequisitionCard('saidas-fabrica', 'Itens para Fábrica', fabricaItemsCount, 'bg-green-500')}
+                ${_createRequisitionCard('saidas-garantia', 'Itens para Garantia', garantiaItemsCount, 'bg-blue-500')}
+            `;
+            if (_saidaOverviewCards) _saidaOverviewCards.innerHTML = cardsHtml;
+
+            if (_saidaOverviewCards) {
+                _saidaOverviewCards.querySelectorAll('.status-card').forEach(card => {
+                    card.addEventListener('click', () => {
+                        _ordersTableState.selectedType = card.dataset.id;
+                        _ordersTableState.searchTerm = '';
+                        if (_terceirosOrdersModal) _terceirosOrdersModal.classList.remove('hidden');
+                        _renderConsolidatedOrdersTable();
+                    });
+                });
+            }
+        }
+
         function _renderOrderSortIcon(column) {
             if (_ordersTableState.sortColumn !== column) return '';
             return _ordersTableState.sortDirection === 'asc' ? '▲' : '▼';
@@ -2612,6 +2922,12 @@ const PesquisarProduto = (function() {
             } else if (_ordersTableState.selectedType === 'fabrica') {
                 ordersToProcess = _allOrdersFabrica;
                 tableTitleSuffix = ' - Fábrica';
+            } else if (_ordersTableState.selectedType === 'saidas-fabrica') {
+                ordersToProcess = _allSaidasFabrica;
+                tableTitleSuffix = ' - Saídas Fábrica';
+            } else if (_ordersTableState.selectedType === 'saidas-garantia') {
+                ordersToProcess = _allSaidasGarantia;
+                tableTitleSuffix = ' - Saídas Garantia';
             } else { 
                 ordersToProcess = [..._allOrdersTerceiros, ..._allOrdersFabrica];
                 tableTitleSuffix = ' - Todos';
@@ -2716,6 +3032,8 @@ const PesquisarProduto = (function() {
                 if (_noOrdersMessageModal) _noOrdersMessageModal.classList.add('hidden');
                 _currentFilteredOrderItems = filteredItems; // Popula a variável global com os itens filtrados e ordenados
 
+                const showResponsavelColumn = _ordersTableState.selectedType === 'saidas-fabrica' || _ordersTableState.selectedType === 'saidas-garantia';
+
                 const itemDisplayHeaders = [
                     { label: '', sortable: false, key: 'checkbox' },
                     { label: 'REQUISIÇÃO', sortable: true, key: 'orderCode' },
@@ -2723,10 +3041,15 @@ const PesquisarProduto = (function() {
                     { label: 'LOCALIZAÇÃO', sortable: false, key: 'localizacao' },
                     { label: 'QTD. PEDIDO', sortable: true, key: 'quantidadePedido' },
                     { label: 'DATA PEDIDO', sortable: true, key: 'dataPedido' }, // Mantido
-                    { label: 'PREVISÃO / RECEBIMENTO', sortable: true, key: 'dataPrevista' }, // ATUALIZADO
+                    { label: 'PREVISÃO', sortable: false, key: 'dataPrevista' }, // Coluna separada
+                    { label: 'RECEBIMENTO', sortable: true, key: 'dataConclusao' }, // Coluna separada
                     { label: 'DIAS ATRASADOS', sortable: false, key: 'diasAtrasados' }, // NOVO
                     { label: 'STATUS', sortable: false, key: 'status' } // RE-ADICIONADO
                 ];
+
+                if (showResponsavelColumn) {
+                    itemDisplayHeaders.splice(3, 0, { label: 'RESPONSÁVEL', sortable: true, key: 'responsavel' });
+                }
 
                 let itemsHtml = `
                     <table class="min-w-full divide-y divide-gray-200">
@@ -2754,19 +3077,25 @@ const PesquisarProduto = (function() {
                     let statusHtml = '';
                     let rowClass = 'row-pending';
 
-                    if (orderDate) {
-                        deliveryDueDate = addBusinessDays(orderDate, prazoEntregaDias);
-                        formattedDueDate = deliveryDueDate.toLocaleDateString('pt-BR');
-                        if (!isOk) {
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            if (today > deliveryDueDate) {
-                                diasAtrasadosUteis = getBusinessDaysDifference(deliveryDueDate, today);
+                    // ATUALIZADO: Lógica condicional para datas
+                    if (item.requisitionType === 'saidas-fabrica' || item.requisitionType === 'saidas-garantia') {
+                        formattedDueDate = 'N/A';
+                        diasAtrasadosDisplay = '-';
+                    } else {
+                        if (orderDate) {
+                            deliveryDueDate = addBusinessDays(orderDate, prazoEntregaDias);
+                            formattedDueDate = deliveryDueDate.toLocaleDateString('pt-BR');
+                            if (!isOk) {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                if (today > deliveryDueDate) {
+                                    diasAtrasadosUteis = getBusinessDaysDifference(deliveryDueDate, today);
+                                }
                             }
                         }
+                        diasAtrasadosDisplay = diasAtrasadosUteis > 0 ? diasAtrasadosUteis : (isOk ? '-' : '0');
+                        if (!orderDate) diasAtrasadosDisplay = '-';
                     }
-                    diasAtrasadosDisplay = diasAtrasadosUteis > 0 ? diasAtrasadosUteis : (isOk ? '-' : '0');
-                    if (!orderDate) diasAtrasadosDisplay = '-';
 
                     // --- Lógica de Status e Cor da Linha ---
                     const statusText = (item.situacao && item.situacao.trim() !== '') 
@@ -2785,9 +3114,6 @@ const PesquisarProduto = (function() {
                             rowClass = 'row-pending';
                         }
                     }
-
-                    // ATUALIZADO: Define qual data será exibida na coluna. Se o item foi entregue, mostra a data de conclusão.
-                    const displayDate = isOk ? (item.dataConclusao || 'Recebido') : formattedDueDate;
 
 
                     const correspondingProduct = _allProducts.find(p => p.codigo === item.codigoService);
@@ -2814,10 +3140,12 @@ const PesquisarProduto = (function() {
                             <td class="px-6 py-4 text-sm text-gray-900 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap product-description-cell" data-full-description="${item.descricao || 'N/A'}" data-image-url="${imageUrl}">
                                 <strong>${truncatedDescription}</strong><br><span class="text-xs text-gray-500">${item.codigoService || 'N/A'}</span>
                             </td>
+                            ${showResponsavelColumn ? `<td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.responsavel || ''}</td>` : ''}
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.localizacao}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.quantidadePedido}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.dataPedido || 'N/A'}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium ${isOk ? 'text-green-700 font-bold' : 'text-gray-900'}">${displayDate}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium text-gray-900">${formattedDueDate}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium ${isOk ? 'text-green-700 font-bold' : 'text-gray-500'}">${isOk ? (item.dataConclusao || 'Recebido') : 'Pendente'}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-bold ${diasAtrasadosUteis > 0 ? 'text-red-600' : 'text-gray-900'}">${diasAtrasadosDisplay}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-center">${statusHtml}</td>
                         </tr>
                     `;
@@ -3023,7 +3351,28 @@ const PesquisarProduto = (function() {
                 return;
             }
 
-            const confirmed = await _showConfirmationModal("Confirmar Entrega", `Deseja marcar o item como 'Entregue' (OK)?`);
+            // ATUALIZADO: Mensagem de confirmação dinâmica com campo de quantidade para devoluções
+            const isSaida = requisitionType.startsWith('saida');
+            const item = _findRequisitionItem(orderCode, codigoService);
+            if (!item) {
+                _showMessageModal("Erro", "Item não encontrado para processar a operação.");
+                checkboxElement.checked = false;
+                return;
+            }
+
+            const originalQuantity = item.quantidadePedido || 1;
+            let confirmationTitle = isSaida ? "Confirmar Devolução" : "Confirmar Entrega";
+            let confirmationMessage = isSaida 
+                ? `
+                    <p>Confirmar a devolução do item ao estoque?</p>
+                    <div class="mt-4 text-left">
+                        <label for="devolucao-quantity-input" class="block text-sm font-medium text-gray-700">Quantidade a ser devolvida:</label>
+                        <input type="number" id="devolucao-quantity-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" value="${originalQuantity}" min="1">
+                    </div>
+                `
+                : "Deseja marcar o item como 'Entregue' (OK)?";
+
+            const confirmed = await _showConfirmationModal(confirmationTitle, confirmationMessage);
             if (!confirmed) {
                 checkboxElement.checked = false;
                 return;
@@ -3037,37 +3386,116 @@ const PesquisarProduto = (function() {
             if(parentDiv) parentDiv.insertBefore(spinner, checkboxElement);
 
             try {
-                const item = _findRequisitionItem(orderCode, codigoService);
+                const product = _allProducts.find(p => p.codigo === codigoService);
+                if (!product) throw new Error("Produto correspondente não encontrado localmente.");
 
-                // ATUALIZADO: Adiciona a data de entrega ao payload para o backend
+                // DEBUG: Imprime os valores brutos para análise, conforme solicitado.
+                console.log('--- DEBUG: Valores para cálculo de estoque ---');
+                console.log(`Estoque Atual (product.estoque): '${product.estoque}' (tipo: ${typeof product.estoque})`);
+                console.log(`Qtd. Requisição (item.quantidadePedido): '${item.quantidadePedido}' (tipo: ${typeof item.quantidadePedido})`);
+                console.log('-------------------------------------------');
+
+                // 2. Preparar o payload combinado para a Cloud Function
+                // CORREÇÃO DEFINITIVA: Lógica de parse robusta para tratar números formatados como texto (ex: "1.234,56" ou "2,00").
+                // 1. Converte para string.
+                // 2. Remove pontos de milhar.
+                // 3. Troca a vírgula decimal por ponto.
+                // 4. Converte para número.
+                let quantidadeMovimento;
+                if (isSaida) {
+                    const inputQty = document.getElementById('devolucao-quantity-input')?.value;
+                    quantidadeMovimento = parseFloat(String(inputQty || '0').replace(/\./g, '').replace(',', '.')) || 0;
+                } else {
+                    quantidadeMovimento = parseFloat(String(item.quantidadePedido || '0').replace(/\./g, '').replace(',', '.')) || 0;
+                }
+
+                const estoqueAtualBruto = parseFloat(String(product.estoque || '0').replace(/\./g, '').replace(',', '.')) || 0;
+                // CORREÇÃO: Usa o valor absoluto do estoque para corrigir o problema de valores negativos inesperados.
+                const estoqueAtual = Math.abs(estoqueAtualBruto);
+                const quantidadeFinal = estoqueAtual + quantidadeMovimento; // A operação é sempre de entrada no estoque
+
+                // ATUALIZADO: Define o tipo de entrada e observação com base no tipo de requisição
+                let tipoEntrada = '';
+                let observacoes = `Recebimento referente à requisição ${orderCode}`;
+
+                if (requisitionType === 'saidas-fabrica') {
+                    tipoEntrada = 'Devolução - Fábrica';
+                    observacoes = `Devolução de item da fabrica - Responsável: ${item.responsavel || 'N/A'}`;
+                } else if (requisitionType === 'saidas-garantia') {
+                    tipoEntrada = 'Devolução - Garantia';
+                    observacoes = `Devolução de item de garantia - Responsável: ${item.responsavel || 'N/A'}`;
+                } else { // Requisições de compra
+                    tipoEntrada = requisitionType === 'fabrica' ? 'Recebimento da Fábrica' : 'Recebimento de Terceiros';
+                }
+
                 const today = new Date();
                 const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
-                const payload = { 
-                    orderCode, 
-                    codigoService, 
-                    newStatus: 'ok', 
-                    requisitionType, // 'terceiros' ou 'fabrica'
-                    dataEntrega: formattedDate, // Adiciona a data de entrega
-                    diasCorridos: item?.diasCorridosRaw || '0' // NOVO: Envia os dias corridos
+                // ATUALIZADO: Payload combinado com todos os dados no nível raiz, conforme a necessidade da API.
+                const payload = {
+                    // Dados para o Bling (formato principal)
+                    produto: {
+                        id: product.id,
+                        codigo: product.codigo
+                    },
+                    operacaoBling: "E",
+                    quantidadeMovimento: quantidadeMovimento,
+                    quantidadeFinal: quantidadeFinal,
+                    tipoEntrada: tipoEntrada,
+                    observacoes: observacoes,
+
+                    // Dados para a Planilha (agora no nível raiz)
+                    orderCode: orderCode,
+                    codigoService: codigoService, // Adicionado conforme erro da API
+                    newStatus: 'OK', // ATUALIZADO: Para 'OK' maiúsculo, conforme exemplo funcional
+                    requisitionType: requisitionType,
+                    dataEntrega: formattedDate,
+                    diasCorridos: item?.diasCorridosRaw || '0'
                 };
+
+                // ATENDENDO AO PEDIDO: Imprime o JSON que será enviado para o backend.
+                console.log('--- JSON a ser enviado para o backend ---');
+                console.log(JSON.stringify(payload, null, 2));
+                console.log('---------------------------------------');
+
+                // 3. Enviar a requisição para a API
                 const response = await fetch(ORDERS_UPDATE_API_URL, {
                     method: 'POST', mode: 'cors', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
                 });
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`Erro na rede (Status: ${response.status}): ${errorText}`);
+                    throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`);
                 }
 
-                // ATUALIZADO: Atualiza os dados locais e re-renderiza a tabela para refletir o novo status
-                const ordersArray = requisitionType === 'terceiros' ? _allOrdersTerceiros : _allOrdersFabrica;
-                const order = ordersArray.find(o => o.orderCode === orderCode);
-                if (item) { item.situacao = 'ok'; item.dataConclusao = formattedDate; }
-                _renderConsolidatedOrdersTable();
+                // 4. Atualizar os dados locais e a interface
+                if (item) {
+                    item.situacao = 'ok';
+                    item.dataConclusao = formattedDate;
+                    
+                    // ATUALIZAÇÃO: Encontra o pedido pai e ajusta os contadores de itens pendentes/atendidos.
+                    let ordersArray;
+                    if (requisitionType === 'terceiros') ordersArray = _allOrdersTerceiros;
+                    else if (requisitionType === 'fabrica') ordersArray = _allOrdersFabrica;
+                    else if (requisitionType === 'saidas-fabrica') ordersArray = _allSaidasFabrica;
+                    else if (requisitionType === 'saidas-garantia') ordersArray = _allSaidasGarantia;
+                    else ordersArray = [];
 
-                _showMessageModal("Sucesso!", `Item marcado como 'Entregue'!`);
+                    const order = ordersArray.find(o => o.orderCode === orderCode);
+                    if (order) {
+                        order.totalPendente = Math.max(0, order.totalPendente - 1);
+                        order.totalAtendido++;
+                    }
+                }
+                if (product) { product.estoque = quantidadeFinal; }
+                
+                // Re-renderiza a tabela do modal para refletir a mudança do item
+                _renderConsolidatedOrdersTable();
+                // ATUALIZAÇÃO: Re-renderiza os cards da página de diagnóstico para atualizar a contagem
+                if (isSaida) _renderSaidaOverviewPage(); else _renderRequisitionOverviewPage();
+
+                _showMessageModal("Sucesso!", isSaida ? "Item devolvido ao estoque com sucesso." : "Item marcado como 'Entregue' e estoque atualizado.");
             } catch (error) {
-                _showMessageModal("Erro na Atualização", `Falha ao marcar item como 'Entregue': ${error.message}.`);
+                _showMessageModal("Erro na Atualização", `Falha ao processar a operação: ${error.message}.`);
                 checkboxElement.checked = false; 
             } finally {
                 // A re-renderização da tabela já cuida de remover o spinner, mas garantimos aqui por segurança.
@@ -3083,6 +3511,298 @@ const PesquisarProduto = (function() {
             _generateReport();
         }
 
+        // ATUALIZADO: Lida com o clique nos botões de lançamento da tela de "Criar Saída"
+        async function _handleLaunchSaida(type) {
+             const itemsToLaunch = Array.from(_saidaReportQuantities.entries())
+                 .filter(([productId, qty]) => qty > 0)
+                 .map(([productId, qty]) => {
+                     const product = _allProducts.find(p => p.id === productId);
+                     return { product, quantity: qty };
+                 });
+ 
+             if (itemsToLaunch.length === 0) {
+                 _showMessageModal("Nenhum Item", "Por favor, defina a quantidade para ao menos um item.");
+                 return;
+             }
+ 
+             const itemsWithInsufficientStock = itemsToLaunch
+                 .filter(item => item.quantity > item.product.estoque)
+                 .map(item => item.product.descricao);
+ 
+             if (itemsWithInsufficientStock.length > 0) {
+                 const confirmationMessage = `
+                     <p class="mb-2">Os seguintes itens têm quantidade de saída maior que o estoque:</p>
+                     <ul class="list-disc list-inside text-left mb-4">${itemsWithInsufficientStock.map(name => `<li>${name}</li>`).join('')}</ul>
+                     <p>Deseja continuar mesmo assim?</p>`;
+                 const confirmed = await _showConfirmationModal("Estoque Insuficiente", confirmationMessage);
+                 if (!confirmed) return;
+             }
+ 
+            if (type === 'garantia') {
+                const today = new Date();
+                const ddmmaa = `${String(today.getDate()).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getFullYear()).slice(-2)}`;
+                const todayStr = today.toLocaleDateString('pt-BR');
+                const saidasTodayCodes = new Set(
+                    [..._allSaidasFabrica, ..._allSaidasGarantia]
+                        .filter(s => {
+                            const parsedDate = _parsePtBrDate(s.dataPedido);
+                            return parsedDate && parsedDate.toLocaleDateString('pt-BR') === todayStr;
+                        })
+                        .map(s => s.orderCode)
+                );
+                const nextSequence = saidasTodayCodes.size + 1;
+                const requisitionCode = `${ddmmaa}-${nextSequence}`;
+
+                const confirmationMessage = `
+                    <p>Confirmar o lançamento de <b>${itemsToLaunch.length}</b> itens para a Garantia?</p>
+                    <p class="mt-2">Será gerada a requisição de saída: <b>${requisitionCode}</b>.</p>
+                    <div class="mt-4 text-left">
+                        <label for="saida-responsavel-input" class="block text-sm font-medium text-gray-700">Responsável:</label>
+                        <input type="text" id="saida-responsavel-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Nome do responsável">
+                    </div>
+                `;
+                const confirmed = await _showConfirmationModal("Confirmar Lançamento de Saída", confirmationMessage);
+                if (!confirmed) return;
+
+                const responsavel = document.getElementById('saida-responsavel-input')?.value.trim() || '';
+                if (!responsavel) {
+                    _showMessageModal("Campo Obrigatório", "Por favor, preencha o nome do responsável.");
+                    return;
+                }
+
+                const todayForPayload = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+                const payloadData = itemsToLaunch.map(item => ({
+                    requisicao: requisitionCode, codigo_service: item.product.codigo || '', codigo_mks_equipamentos: '',
+                    descricao: item.product.descricao || '', localizacao: item.product.localizacao || '', quantidade: item.quantity,
+                    situacao: 'Pendente', data_pedido: todayForPayload, data_envio: '', observacao: [], responsavel: responsavel
+                }));
+
+                _loadingOverlay.classList.remove('hidden');
+                try {
+                    const response = await fetch(SAIDA_GARANTIA_LAUNCH_URL, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: payloadData }) });
+                    if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
+                    await response.json();
+
+                    const newSaida = {
+                        orderCode: requisitionCode, dataPedido: payloadData[0].data_pedido, totalItems: payloadData.length, totalAtendido: 0, totalPendente: payloadData.length,
+                        rawItems: payloadData.map(item => ({ orderCode: item.requisicao, codigoService: item.codigo_service, descricao: item.descricao, localizacao: item.localizacao, quantidadePedido: item.quantidade, situacao: 'pendente', dataPedido: item.data_pedido, dataConclusao: null, observacao: [], responsavel: item.responsavel, requisitionType: 'saidas-garantia' }))
+                    };
+                    _allSaidasGarantia.push(newSaida);
+
+                    itemsToLaunch.forEach(item => {
+                        if (item.product) {
+                            const currentStock = parseFloat(String(item.product.estoque || '0').replace(/\./g, '').replace(',', '.')) || 0;
+                            const quantityToDebit = parseFloat(String(item.quantity || '0').replace(/\./g, '').replace(',', '.')) || 0;
+                            item.product.estoque = currentStock - quantityToDebit;
+                        }
+                    });
+
+                    _showMessageModal("Sucesso!", `Saída para garantia lançada com a requisição <b>${requisitionCode}</b>.`);
+                    _selectedSaidaItems.clear(); _saidaReportQuantities.clear(); _updateSelectedSaidaCountDisplay(); _showPage('gerenciar-saida');
+                } catch (error) { _showMessageModal("Erro no Lançamento", `Falha ao lançar saída: ${error.message}.`); } finally { _loadingOverlay.classList.add('hidden'); }
+                return;
+             }
+ 
+             if (type === 'fabrica') {
+                 const today = new Date();
+                 const ddmmaa = `${String(today.getDate()).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getFullYear()).slice(-2)}`;
+                 const todayStr = today.toLocaleDateString('pt-BR');
+                 const saidasTodayCodes = new Set(
+                    [..._allSaidasFabrica, ..._allSaidasGarantia]
+                        .filter(s => {
+                            const parsedDate = _parsePtBrDate(s.dataPedido);
+                            return parsedDate && parsedDate.toLocaleDateString('pt-BR') === todayStr;
+                        })
+                        .map(s => s.orderCode)
+                );
+                 const nextSequence = saidasTodayCodes.size + 1;
+                 const requisitionCode = `${ddmmaa}-${nextSequence}`;
+ 
+                 const confirmationMessage = `
+                    <p>Confirmar o lançamento de <b>${itemsToLaunch.length}</b> itens para a Fábrica?</p>
+                    <p class="mt-2">Será gerada a requisição de saída: <b>${requisitionCode}</b>.</p>
+                    <div class="mt-4 text-left">
+                        <label for="saida-responsavel-input" class="block text-sm font-medium text-gray-700">Responsável:</label>
+                        <input type="text" id="saida-responsavel-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Nome do responsável">
+                    </div>
+                 `;
+                 const confirmed = await _showConfirmationModal("Confirmar Lançamento de Saída", confirmationMessage);
+                 if (!confirmed) return;
+ 
+                 const responsavel = document.getElementById('saida-responsavel-input')?.value.trim() || '';
+                 if (!responsavel) {
+                     _showMessageModal("Campo Obrigatório", "Por favor, preencha o nome do responsável.");
+                     return;
+                 }
+
+                 const todayForPayload = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+                 const payloadData = itemsToLaunch.map(item => ({
+                     requisicao: requisitionCode, codigo_service: item.product.codigo || '', codigo_mks_equipamentos: '',
+                     descricao: item.product.descricao || '', localizacao: item.product.localizacao || '', quantidade: item.quantity,
+                     situacao: 'Pendente', data_pedido: todayForPayload, data_envio: '', observacao: [], responsavel: responsavel
+                 }));
+ 
+                 _loadingOverlay.classList.remove('hidden');
+                 try {
+                     const response = await fetch(SAIDA_FABRICA_LAUNCH_URL, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: payloadData }) });
+                     if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
+                     await response.json();
+
+                     // ATUALIZADO: Atualiza os dados locais em vez de fazer um novo fetch
+                     const newSaida = {
+                         orderCode: requisitionCode,
+                         dataPedido: payloadData[0].data_pedido,
+                         totalItems: payloadData.length,
+                         totalAtendido: 0,
+                         totalPendente: payloadData.length,
+                         rawItems: payloadData.map(item => ({
+                             orderCode: item.requisicao,
+                             codigoService: item.codigo_service,
+                             descricao: item.descricao,
+                             localizacao: item.localizacao,
+                             quantidadePedido: item.quantidade,
+                             situacao: 'pendente',
+                             dataPedido: item.data_pedido,
+                             dataConclusao: null,
+                             observacao: [],
+                             responsavel: item.responsavel,
+                             requisitionType: 'saidas-fabrica'
+                         }))
+                     };
+                     _allSaidasFabrica.push(newSaida);
+
+                     // NOVO: Debita o estoque dos produtos no frontend
+                     itemsToLaunch.forEach(item => {
+                         if (item.product) {
+                             // Garante que o estoque seja tratado como número
+                             const currentStock = parseFloat(String(item.product.estoque || '0').replace(/\./g, '').replace(',', '.')) || 0;
+                             const quantityToDebit = parseFloat(String(item.quantity || '0').replace(/\./g, '').replace(',', '.')) || 0;
+                             item.product.estoque = currentStock - quantityToDebit;
+                         }
+                     });
+
+                     _showMessageModal("Sucesso!", `Saída para fábrica lançada com a requisição <b>${requisitionCode}</b>.`);
+                     _selectedSaidaItems.clear();
+                     _saidaReportQuantities.clear();
+                     _updateSelectedSaidaCountDisplay();
+                     _showPage('gerenciar-saida');
+                 } catch (error) {
+                     _showMessageModal("Erro no Lançamento", `Falha ao lançar saída: ${error.message}.`);
+                 } finally {
+                     _loadingOverlay.classList.add('hidden');
+                 }
+             }
+        }
+ // NOVO: Atualiza a quantidade de um item no relatório de saída
+        function _updateSaidaReportQuantity(productId, newQuantity) {
+            const parsedQuantity = parseInt(newQuantity, 10);
+            if (!isNaN(parsedQuantity) && parsedQuantity >= 0) {
+                _saidaReportQuantities.set(productId, parsedQuantity);
+            } else {
+                _saidaReportQuantities.set(productId, 0);
+            }
+            _updateSaidaReportActionButtonsState();
+        }
+
+        // NOVO: Atualiza o estado dos botões de ação do relatório de saída
+        function _updateSaidaReportActionButtonsState() {
+            const hasItems = Array.from(_saidaReportQuantities.values()).some(qty => qty > 0);
+            if (_launchSaidaGarantiaBtn) _launchSaidaGarantiaBtn.disabled = !hasItems;
+            if (_launchSaidaFabricaBtn) _launchSaidaFabricaBtn.disabled = !hasItems;
+        }
+
+        // NOVO: Gera o relatório para a tela de "Criar Saída"
+        function _generateSaidaReport() {
+            if (_selectedSaidaItems.size === 0) {
+                _showMessageModal("Nenhum Item Selecionado", "Por favor, selecione ao menos um item para criar a saída.");
+                return;
+            }
+            const selectedProducts = _allProducts.filter(p => _selectedSaidaItems.has(p.id));
+
+            // Lógica de ordenação (simplificada para o relatório de saída)
+            selectedProducts.sort((a, b) => {
+                const sortKey = _saidaReportState.sortColumn;
+                const valA = a[sortKey] || '';
+                const valB = b[sortKey] || '';
+                const comparison = String(valA).localeCompare(String(valB), 'pt-BR', { numeric: true });
+                return _saidaReportState.sortDirection === 'asc' ? comparison : -comparison;
+            });
+
+            // Inicializa as quantidades se não existirem
+            selectedProducts.forEach(p => {
+                if (!_saidaReportQuantities.has(p.id)) {
+                    _saidaReportQuantities.set(p.id, 1); // Padrão 1 para saída
+                }
+            });
+
+            // Remove itens do mapa de quantidades que não estão mais selecionados
+            _saidaReportQuantities.forEach((value, key) => {
+                if (!_selectedSaidaItems.has(key)) _saidaReportQuantities.delete(key);
+            });
+
+            _updateSaidaReportActionButtonsState();
+
+            let reportContentHtml = `
+                <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Criar Saída de Estoque</h1>
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-full sortable-header" data-sort="descricao">Produto</th>
+                                <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sortable-header" data-sort="estoque">Estoque</th>
+                                <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Qtd. Saída</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+            `;
+            selectedProducts.forEach(p => {
+                const currentQuantity = _saidaReportQuantities.get(p.id) || 0;
+                const imageUrl = p.url_imagens_externas?.[0] || 'https://placehold.co/50x50/e2e8f0/64748b?text=?';
+                reportContentHtml += `
+                    <tr data-product-id="${p.id}">
+                        <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-medium">
+                            <button class="remove-saida-item-btn text-red-600 hover:text-red-800 p-1 rounded-full" title="Remover item" data-product-id="${p.id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                            </button>
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <img src="${imageUrl}" alt="${p.descricao || 'Imagem do produto'}" class="product-list-item-img" data-image-url="${imageUrl}" onerror="this.onerror=null;this.src='https://placehold.co/50x50/e2e8f0/64748b?text=?';">
+                                <div class="ml-4">
+                                    <div class="text-xs font-medium text-gray-900">${p.descricao}</div>
+                                    <div class="text-xs text-gray-500">${p.codigo}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-bold text-gray-800">${p.estoque ?? 0}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-medium">
+                            <input type="number" value="${currentQuantity}" data-product-id="${p.id}" class="w-20 px-2 py-1 border border-gray-300 rounded-md text-center text-xs saida-report-quantity-input" min="0">
+                        </td>
+                    </tr>
+                `;
+            });
+            reportContentHtml += `</tbody></table></div>`;
+
+            if (_pageSaidaReportContent) _pageSaidaReportContent.innerHTML = reportContentHtml;
+            _showPage('saida-report');
+
+            // Adiciona listeners
+            _pageSaidaReportContent.querySelectorAll('.remove-saida-item-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const productIdToRemove = event.currentTarget.dataset.productId;
+                    _selectedSaidaItems.delete(productIdToRemove);
+                    _saidaReportQuantities.delete(productIdToRemove);
+                    _generateSaidaReport();
+                    _updateSelectedSaidaCountDisplay();
+                });
+            });
+            _pageSaidaReportContent.querySelectorAll('.saida-report-quantity-input').forEach(input => {
+                input.addEventListener('input', (event) => {
+                    _updateSaidaReportQuantity(event.target.dataset.productId, event.target.value);
+                });
+            });
+        }
         // NOVO: Função para atualizar o estado dos botões de ação do relatório
         function _updateReportActionButtonsState() {
             const hasFabricaItems = Array.from(_reportQuantities.entries()).some(([productId, qty]) => {
@@ -3357,8 +4077,14 @@ const PesquisarProduto = (function() {
                 const today = new Date();
                 const ddmmaa = `${String(today.getDate()).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getFullYear()).slice(-2)}`;
                 const todayStr = today.toLocaleDateString('pt-BR');
-                const requisitionsToday = new Set();
-                _allOrdersFabrica.forEach(order => { if (order.dataPedido === todayStr) requisitionsToday.add(order.orderCode); });
+                const requisitionsToday = new Set(
+                    _allOrdersFabrica
+                        .filter(order => {
+                            const orderDate = _parsePtBrDate(order.dataPedido);
+                            return orderDate && orderDate.toLocaleDateString('pt-BR') === todayStr;
+                        })
+                        .map(order => order.orderCode)
+                );
                 const nextSequence = requisitionsToday.size + 1;
                 const requisitionCode = `${ddmmaa}-${nextSequence}`;
 
@@ -3632,13 +4358,21 @@ const PesquisarProduto = (function() {
             const itemsToPrint = _currentFilteredOrderItems;
             const currentDate = new Date().toLocaleDateString('pt-br');
 
+            // NOVO: Define o título dinamicamente com base no tipo de lista
+            let reportTitle = 'Itens de Reposição'; // Título padrão para requisições de compra
+            if (_ordersTableState.selectedType === 'saidas-fabrica') {
+                reportTitle = 'Saída para Fábrica';
+            } else if (_ordersTableState.selectedType === 'saidas-garantia') {
+                reportTitle = 'Itens de Garantia';
+            }
+
             let printHtml = '';
 
             printHtml += `
                 <div class="solicitation-page">
                     <div class="solicitation-header">
                         <div class="company-name">MKS Service</div>
-                        <div class="report-title">Itens de Reposição</div>
+                        <div class="report-title">${reportTitle}</div>
                         <div class="solicitation-info">
                             <div><strong>Data da Impressão:</strong> ${currentDate}</div>
                         </div>
@@ -3689,8 +4423,11 @@ const PesquisarProduto = (function() {
 
         // NOVO: Função para imprimir a "Solicitação" a partir da tela de Relatório
         function _printReportSolicitation() {
-            const productsToPrint = _allProducts
-                .filter(p => _selectedStockItems.has(p.id) && (_reportQuantities.get(p.id) || 0) > 0);
+            // CORREÇÃO: Usa os produtos já filtrados na tela do relatório, em vez de buscar na lista completa.
+            // A chave do mapa de quantidades é o 'id' do produto.
+            const productsToPrint = Array.from(_reportQuantities.keys())
+                .filter(productId => (_reportQuantities.get(productId) || 0) > 0)
+                .map(productId => _allProducts.find(p => String(p.id) === String(productId)));
 
             if (productsToPrint.length === 0) {
                 _showMessageModal("Nenhum Item", "Não há itens com quantidade a requisitar maior que zero para imprimir.");
@@ -4188,12 +4925,32 @@ const PesquisarProduto = (function() {
             if (_salesChartInstance) _salesChartInstance.destroy();
             
             const ctx = _salesChartCanvas.getContext('2d');
+
+            // NOVO: Registra o plugin de datalabels
+            Chart.register(ChartDataLabels);
+
             _salesChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: { labels: chartLabels, datasets: chartDatasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { position: 'top' }, title: { display: true, text: 'Evolução de Vendas por Canal' } },
+                    plugins: { 
+                        legend: { position: 'top' }, 
+                        title: { display: true, text: 'Evolução de Vendas por Canal' },
+                        // NOVO: Configuração do plugin de datalabels
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'top',
+                            offset: 8,
+                            color: '#4A5568', // text-gray-700
+                            font: { weight: 'bold', size: 10 },
+                            formatter: function(value) {
+                                if (value === 0) return ''; // Não mostra label para valor 0
+                                // Formata o valor de forma compacta (ex: 15200 -> R$ 15,2k)
+                                return 'R$ ' + (value / 1000).toFixed(1).replace('.', ',') + 'k';
+                            }
+                        }
+                    },
                     scales: { y: { beginAtZero: true, ticks: { callback: (value) => 'R$ ' + value.toLocaleString('pt-BR') } } }
                 }
             });
@@ -4234,6 +4991,47 @@ const PesquisarProduto = (function() {
             _renderDashboardsPage();
         }
 
+        // NOVO: Vincula os eventos dos botões do modal de ajuste de estoque
+        function _bindStockAdjustmentModalEvents() {
+            if (_closeStockAdjustmentModalBtn) {
+                _closeStockAdjustmentModalBtn.addEventListener('click', () => _stockAdjustmentModal.classList.add('hidden'));
+            }
+            if (_cancelStockAdjustmentBtn) {
+                _cancelStockAdjustmentBtn.addEventListener('click', () => _stockAdjustmentModal.classList.add('hidden'));
+            }
+            if (_confirmStockAdjustmentBtn) {
+                _confirmStockAdjustmentBtn.addEventListener('click', _saveStockAdjustment);
+            }
+        }
+
+
+        // NOVO: Configura os campos de busca para terem um botão de limpar ("X")
+        function _setupClearableInputs() {
+            const inputsToSetup = [
+                { input: _globalSearchInput, clearBtn: _clearGlobalSearchBtn },
+                { input: _ordersSearchInput, clearBtn: _clearOrdersSearchBtn }
+            ];
+
+            inputsToSetup.forEach(({ input, clearBtn }) => {
+                if (!input || !clearBtn) return;
+
+                input.addEventListener('input', () => {
+                    clearBtn.classList.toggle('hidden', input.value === '');
+                });
+
+                clearBtn.addEventListener('click', () => {
+                    input.value = '';
+                    clearBtn.classList.add('hidden');
+                    // Dispara o evento 'input' para que a lógica de filtro/busca seja acionada
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.focus();
+                });
+
+                // Garante que o botão esteja no estado correto ao carregar a página
+                clearBtn.classList.toggle('hidden', input.value === '');
+            });
+        }
+
 
         function _bindEvents() {
             const debouncedApplyGlobalFilters = debounce(_applyGlobalFilters, 300);
@@ -4260,17 +5058,9 @@ const PesquisarProduto = (function() {
             if (_generateReportButton) _generateReportButton.addEventListener('click', _generateReport);
             if (_clearSelectionBtn) _clearSelectionBtn.addEventListener('click', _clearSelection);
             if (_closeModalBtn) _closeModalBtn.addEventListener('click', () => _orderDetailsModal.classList.add('hidden'));
+            if (_viewSaidasBtn) _viewSaidasBtn.addEventListener('click', () => _showPage('overview-saidas'));
+            if (_createSaidaBtn) _createSaidaBtn.addEventListener('click', _generateSaidaReport);
             if (_clearSaidaSelectionBtn) _clearSaidaSelectionBtn.addEventListener('click', _clearSaidaSelection);
-            if (_launchGarantiaBtn) {
-                _launchGarantiaBtn.addEventListener('click', () => {
-                    _showMessageModal('Ação', 'Funcionalidade "Lançar Garantia" a ser implementada.');
-                });
-            }
-            if (_launchFabricaBtn) {
-                _launchFabricaBtn.addEventListener('click', () => {
-                    _showMessageModal('Ação', 'Funcionalidade "Lançar Fábrica" a ser implementada.');
-                });
-            }
             if (_ordersSearchInput) _ordersSearchInput.addEventListener('input', (e) => {
                 _ordersTableState.searchTerm = e.target.value;
                 debouncedRenderConsolidatedOrdersTable();
@@ -4284,6 +5074,10 @@ const PesquisarProduto = (function() {
                 }
             });
 
+            if (_saidaBackBtn) _saidaBackBtn.addEventListener('click', () => _showPage('gerenciar-saida'));
+            if (_saidaReportBackBtn) _saidaReportBackBtn.addEventListener('click', () => _showPage('gerenciar-saida'));
+            if (_launchSaidaGarantiaBtn) _launchSaidaGarantiaBtn.addEventListener('click', () => _handleLaunchSaida('garantia'));
+            if (_launchSaidaFabricaBtn) _launchSaidaFabricaBtn.addEventListener('click', () => _handleLaunchSaida('fabrica'));
             if (_ordersTableActionsButton) {
                 _ordersTableActionsButton.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -4463,12 +5257,15 @@ const PesquisarProduto = (function() {
             if (_exportSalesDetailsCsvBtn) {
                 _exportSalesDetailsCsvBtn.addEventListener('click', _exportSalesDetailsToCSV);
             }
+
         }
 
         function _cacheDomElements() {
             _pagePesquisar = document.getElementById('page-pesquisar-produto');
             _pageEstoque = document.getElementById('page-gerenciar-estoque');
+            _pageOverviewSaidas = document.getElementById('page-overview-saidas');
             _pageOverviewRequisitions = document.getElementById('page-overview-requisitions');
+            _pageSaidaReport = document.getElementById('page-saida-report');
             _pageReport = document.getElementById('page-report');
             _pageGerenciarSaida = document.getElementById('page-gerenciar-saida');
             _pageDashboards = document.getElementById('page-dashboards');
@@ -4488,9 +5285,9 @@ const PesquisarProduto = (function() {
             _generateReportButton = document.getElementById('generate-report-button');
             _saidaActionsContainer = document.getElementById('saida-actions');
             _selectedSaidaItemsCount = document.getElementById('selected-saida-items-count');
+            _createSaidaBtn = document.getElementById('create-saida-btn');
+            _viewSaidasBtn = document.getElementById('view-saidas-btn');
             _clearSaidaSelectionBtn = document.getElementById('clear-saida-selection-btn');
-            _launchGarantiaBtn = document.getElementById('launch-garantia-btn');
-            _launchFabricaBtn = document.getElementById('launch-fabrica-btn');
             _stockActionsContainer = document.getElementById('stock-actions');
             _globalFilterButtonLabel = document.getElementById('global-filter-button-label');
             _globalFilterMenuContainer = document.getElementById('global-filter-menu-container');
@@ -4498,6 +5295,7 @@ const PesquisarProduto = (function() {
             _product_details_container = document.getElementById('product-details-container');
             _details_placeholder = document.getElementById('details-placeholder');
             _product_details = document.getElementById('product-details');
+            _saidaOverviewCards = document.getElementById('saida-overview-cards');
             _requisitionOverviewCardsContainer = document.getElementById('requisition-overview-cards');
             _ordersTableTitle = document.getElementById('orders-table-title');
             _ordersTableContent = document.getElementById('orders-table-content');
@@ -4517,6 +5315,8 @@ const PesquisarProduto = (function() {
             _ordersFilterButtonLabel = document.getElementById('orders-filter-button-label');
             _ordersFilterDropdown = document.getElementById('orders-filter-dropdown');
             _ordersStatusCheckboxesContainer = document.getElementById('orders-status-checkboxes');
+            _clearGlobalSearchBtn = document.getElementById('clear-global-search-btn'); // NOVO
+            _clearOrdersSearchBtn = document.getElementById('clear-orders-search-btn'); // NOVO
             _noNFeMessageOverview = document.getElementById('no-nfe-message-overview'); // Mantido para a mensagem
             _dashboardFilterBar = document.getElementById('dashboard-filter-bar');
             _dashboardStartDateInput = document.getElementById('dashboard-start-date');
@@ -4608,7 +5408,22 @@ const PesquisarProduto = (function() {
             document.body.appendChild(_customProductTooltip);
             _viewRequisitionsBtn = document.getElementById('view-requisitions-btn');
             _requisitionActionBar = document.getElementById('requisition-action-bar');
+            _saidaActionBar = document.getElementById('saida-action-bar');
+            _saidaBackBtn = document.getElementById('saida-back-btn');
+            _pageSaidaReportContent = document.getElementById('page-saida-report-content');
+            _saidaReportActionBar = document.getElementById('saida-report-action-bar');
+            _saidaReportBackBtn = document.getElementById('saida-report-back-btn');
+            _launchSaidaGarantiaBtn = document.getElementById('launch-saida-garantia-btn');
+            _launchSaidaFabricaBtn = document.getElementById('launch-saida-fabrica-btn');
             _requisitionBackBtn = document.getElementById('requisition-back-btn');
+            // NOVO: Cache dos elementos do modal de ajuste de estoque
+            _stockAdjustmentModal = document.getElementById('stock-adjustment-modal');
+            _closeStockAdjustmentModalBtn = document.getElementById('close-stock-adjustment-modal-btn');
+            _stockAdjustmentProductInfo = document.getElementById('stock-adjustment-product-info');
+            _stockAdjustmentCurrentStock = document.getElementById('stock-adjustment-current-stock');
+            _stockAdjustmentNewQuantity = document.getElementById('stock-adjustment-new-quantity');
+            _confirmStockAdjustmentBtn = document.getElementById('confirm-stock-adjustment-btn');
+            _cancelStockAdjustmentBtn = document.getElementById('cancel-stock-adjustment-btn');
         }
 
         function _setDefaultDateFilters() {
@@ -4622,6 +5437,8 @@ const PesquisarProduto = (function() {
             init: function() {
                 _cacheDomElements();
                 _bindEvents();
+                _bindStockAdjustmentModalEvents(); // NOVO
+                _setupClearableInputs(); // NOVO: Configura os botões de limpar
                 _setDefaultDateFilters();
                 
                 if (typeof PesquisarProduto !== 'undefined') {
@@ -4632,13 +5449,13 @@ const PesquisarProduto = (function() {
                             product_details_container: _product_details_container,
                             details_placeholder: _details_placeholder,
                             product_details: _product_details,
-                            customProductTooltip: _customProductTooltip
                         },
                         utilities: { 
                             createDetailItem,
-                            showProductTooltip: _showProductTooltip,
-                            hideProductTooltip: _hideProductTooltip
-                        }
+                            showProductTooltip: _showProductTooltip, // Mantido para compatibilidade, mas o módulo usa o seu próprio
+                            hideProductTooltip: _hideProductTooltip // Mantido para compatibilidade
+                        },
+                        openStockAdjustmentModal: _openStockAdjustmentModal // NOVO: Passa a função para o módulo
                     });
                 } else {
                     console.error("Erro: Módulo PesquisarProduto não foi carregado corretamente.");
@@ -4646,8 +5463,7 @@ const PesquisarProduto = (function() {
                 }
                 _showPage('pesquisar');
                 _fetchData();
-            },
-            updateReportQuantity: _updateReportQuantity 
+            }
         };
     })();
 
