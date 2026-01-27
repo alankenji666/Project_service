@@ -1,0 +1,499 @@
+/* Estilos para a barra de rolagem para uma melhor estética */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+/* Estilo para o item ativo na lista de produtos */
+.product-item.active {
+    background-color: #e0f2fe; /* light-blue-100 */
+}
+/* Estilo para o link de navegação ativo */
+.nav-link.active {
+    background-color: #3b82f6; /* blue-500 */
+    color: white;
+}
+/* Estilo para o hover do link de navegação ativo */
+.nav-link.active:hover {
+    background-color: #2563eb; /* blue-600 */
+}
+/* NOVO: Estilos para a página de Atendimento (Kanban) */
+.kanban-column {
+    min-width: 300px;
+    width: 320px;
+}
+.kanban-card {
+    transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+.kanban-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+/* NOVO: Estilos para as bolhas de chat no modal de atendimento */
+.chat-bubble-user {
+    background-color: #e2e8f0; /* gray-200 */
+    align-self: flex-start;
+    max-width: 80%;
+    word-wrap: break-word;
+}
+.chat-bubble-agent {
+    background-color: #dbeafe; /* blue-100 */
+    align-self: flex-end;
+    max-width: 80%;
+    word-wrap: break-word;
+}
+/* Animação de giro para o ícone de refresh */
+.spinning {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+/* Estilo para o card de status de estoque ativo */
+.status-card.active {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+/* Estilo para cabeçalho de tabela ordenável */
+.sortable-header {
+    cursor: pointer;
+}
+.sortable-header:hover {
+    background-color: #f0f0f0;
+}
+/* Estilo para linha de tabela de pedido clicável */
+.order-row {
+    cursor: pointer;
+}
+.order-row:hover {
+    background-color: #f9fafb; /* gray-50 */
+}
+/* Novas classes para cores de linha no modal */
+.row-ok {
+    background-color: #dcfce7; /* green-50 */
+}
+.row-pending {
+    background-color: #fff7ed; /* orange-50 */
+}
+.row-overdue { /* Novo estilo para itens atrasados */
+    background-color: #fee2e2; /* red-100 */
+}
+/* NOVO: Estilos para linhas da tabela NFe no modal de impressão */
+.row-conferido {
+    background-color: #dcfce7; /* green-50 */
+}
+.row-nao-conferido {
+    background-color: #fee2e2; /* red-100 */
+}
+
+/* Estilo para a barra de ações do relatório - NÃO É MAIS FIXA */
+/* Ela agora é um elemento no fluxo normal do documento, abaixo do header e da global-filter-bar */
+.report-action-bar-style { /* Nova classe para aplicar estilos visuais */
+    background-color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    z-index: 20; /* Mesmo z-index da global-filter-bar */
+    border-bottom: 1px solid #e5e7eb; /* gray-200 */
+}
+.report-action-bar-style .left-buttons,
+.report-action-bar-style .right-buttons {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Estilo para o tooltip personalizado */
+#custom-product-tooltip {
+    pointer-events: none; /* Permite que o mouse passe por baixo do tooltip */
+    transition: opacity 0.2s ease-in-out; /* Adiciona uma transição suave */
+    opacity: 0; /* Começa invisível */
+}
+
+/* Estilos para o ícone de modo de visualização */
+#toggle-view-mode-icon {
+    cursor: pointer;
+    color: #3b82f6; /* blue-500 */
+    transition: transform 0.3s ease-in-out;
+}
+#toggle-view-mode-icon:hover {
+    transform: scale(1.1);
+}
+
+/* ATUALIZADO: Estilos para a tabela na PRÉ-VISUALIZAÇÃO (com coluna de Ações) */
+.print-preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+.print-preview-table th,
+.print-preview-table td {
+    border: 1px solid #ccc;
+    padding: 4px 6px;
+    text-align: left;
+    font-size: 8px;
+    vertical-align: top;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal; /* Permite que o texto quebre linha */
+}
+.print-preview-table th {
+    background-color: #f0f0f0;
+}
+/* Larguras para a tabela de PRÉ-VISUALIZAÇÃO NFe (14 colunas) */
+.print-preview-table th:nth-child(1), .print-preview-table td:nth-child(1) { width: 5%; } /* AÇÕES */
+.print-preview-table th:nth-child(2), .print-preview-table td:nth-child(2) { width: 7%; } /* Nº DA NOTA */
+.print-preview-table th:nth-child(3), .print-preview-table td:nth-child(3) { width: 7%; } /* DATA DE EMISSÃO */
+.print-preview-table th:nth-child(4), .print-preview-table td:nth-child(4) { width: 5%; } /* SITUAÇÃO */
+.print-preview-table th:nth-child(5), .print-preview-table td:nth-child(5) { width: 7%; } /* VALOR DA NOTA */
+.print-preview-table th:nth-child(6), .print-preview-table td:nth-child(6) { width: 6%; } /* VALOR DO FRETE */
+.print-preview-table th:nth-child(7), .print-preview-table td:nth-child(7) { width: 10%; } /* NOME DO CLIENTE */
+.print-preview-table th:nth-child(8), .print-preview-table td:nth-child(8) { width: 9%; } /* CNPJ/CPF CLIENTE */
+.print-preview-table th:nth-child(9), .print-preview-table td:nth-child(9) { width: 9%; } /* NOME DO VENDEDOR */
+.print-preview-table th:nth-child(10), .print-preview-table td:nth-child(10) { width: 6%; } /* Nº PEDIDO LOJA */
+.print-preview-table th:nth-child(11), .print-preview-table td:nth-child(11) { width: 8%; } /* TRANSPORTADORA */
+.print-preview-table th:nth-child(12), .print-preview-table td:nth-child(12) { width: 5%; } /* FRETE POR CONTA */
+.print-preview-table th:nth-child(13), .print-preview-table td:nth-child(13) { width: 6%; } /* ORIGEM LOJA */
+.print-preview-table th:nth-child(14), .print-preview-table td:nth-child(14) { width: 10%; } /* OBSERVAÇÃO */
+
+
+/* ATUALIZADO: Estilos para a tabela de EXPORTAÇÃO DE PDF (sem coluna de Ações) */
+.pdf-export-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+.pdf-export-table th,
+.pdf-export-table td {
+    border: 1px solid #ccc;
+    padding: 4px 6px;
+    text-align: left;
+    font-size: 8px;
+    vertical-align: top;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal; /* Permite que o texto quebre linha */
+}
+.pdf-export-table th {
+    background-color: #f0f0f0;
+}
+/* Larguras para a tabela de EXPORTAÇÃO DE PDF NFe (13 colunas) */
+.pdf-export-table th:nth-child(1), .pdf-export-table td:nth-child(1) { width: 7%; } /* Nº DA NOTA */
+.pdf-export-table th:nth-child(2), .pdf-export-table td:nth-child(2) { width: 8%; } /* DATA DE EMISSÃO */
+.pdf-export-table th:nth-child(3), .pdf-export-table td:nth-child(3) { width: 6%; } /* SITUAÇÃO */
+.pdf-export-table th:nth-child(4), .pdf-export-table td:nth-child(4) { width: 8%; } /* VALOR DA NOTA */
+.pdf-export-table th:nth-child(5), .pdf-export-table td:nth-child(5) { width: 7%; } /* VALOR DO FRETE */
+.pdf-export-table th:nth-child(6), .pdf-export-table td:nth-child(6) { width: 10%; } /* NOME DO CLIENTE */
+.pdf-export-table th:nth-child(7), .pdf-export-table td:nth-child(7) { width: 9%; } /* CNPJ/CPF CLIENTE */
+.pdf-export-table th:nth-child(8), .pdf-export-table td:nth-child(8) { width: 9%; } /* NOME DO VENDEDOR */
+.pdf-export-table th:nth-child(9), .pdf-export-table td:nth-child(9) { width: 7%; } /* Nº PEDIDO LOJA */
+.pdf-export-table th:nth-child(10), .pdf-export-table td:nth-child(10) { width: 9%; } /* TRANSPORTADORA */
+.pdf-export-table th:nth-child(11), .pdf-export-table td:nth-child(11) { width: 6%; } /* FRETE POR CONTA */
+.pdf-export-table th:nth-child(12), .pdf-export-table td:nth-child(12) { width: 7%; } /* ORIGEM LOJA */
+.pdf-export-table th:nth-child(13), .pdf-export-table td:nth-child(13) { width: 7%; } /* OBSERVAÇÃO */
+
+
+/* Estilos para o cabeçalho e rodapé flutuantes do modal de impressão */
+#print-table-modal .modal-header {
+    position: sticky;
+    top: 0;
+    background-color: white; /* Garante que o fundo seja opaco */
+    padding: 1rem;
+    border-bottom: 1px solid #e5e7eb; /* gray-200 */
+    z-index: 10; /* Acima do conteúdo da tabela */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#print-table-modal .modal-header .header-buttons {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Ajusta o padding do conteúdo do modal para não ser coberto pelos elementos sticky */
+#print-table-modal #print-modal-content {
+    padding-top: 1rem; /* Espaço para o cabeçalho sticky */
+    padding-bottom: 1rem; /* Espaço para o rodapé sticky */
+}
+
+/* NOVO: Estilos para cabeçalhos de tabela fixos (sticky) */
+/* Aplica a todas as thead th dentro de um container com overflow */
+#page-gerenciar-estoque thead th,
+#orders-table-content thead th,
+#page-report-content thead th,
+#nfe-modal-table-content thead th, /* ATUALIZADO: para o novo modal da NFe */
+#nfe-diagnostic-table-content thead th, /* NOVO: para a tabela de diagnóstico */
+#modal-order-content thead th,
+.print-preview-table thead th,
+.pdf-export-table thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f9fafb; /* Cor de fundo para evitar que o conteúdo role por baixo */
+    z-index: 1; /* Garante que o cabeçalho fique acima do conteúdo da tabela */
+}
+
+/* NOVO: Estilos para o cabeçalho do modal de pedidos de terceiros */
+#terceiros-orders-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+#terceiros-orders-modal .modal-header .left-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem; /* Espaçamento entre título e botão de imprimir */
+}
+
+/* NOVO: Estilos para o cabeçalho do modal de detalhes da NFE */
+#nfe-details-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+#nfe-details-modal .modal-header .left-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem; /* Espaçamento entre título e botão de imprimir */
+}
+
+/* NOVO: Ajuste de z-index para o modal de confirmação */
+#confirmation-modal {
+    z-index: 70; /* Maior que o nfe-details-modal (z-index: 50) e print-table-modal (z-index: 60) */
+}
+/* NOVO: Ajuste de z-index para o modal de mensagem genérico */
+#message-modal {
+    z-index: 75; /* Maior que todos os outros modais */
+}
+
+/* Estilos para a tabela de impressão de solicitação da fábrica */
+.fabrica-solicitacao-print-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.fabrica-solicitacao-print-table th,
+.fabrica-solicitacao-print-table td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+    font-size: 10px;
+    vertical-align: top;
+}
+.fabrica-solicitacao-print-table th {
+    background-color: #f0f0f0;
+}
+.fabrica-solicitacao-print-table .product-image {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+}
+
+/* NOVO: Estilos para o modal de pré-visualização de impressão do navegador */
+#browser-print-fabrica-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: white; /* Fundo branco para impressão */
+    z-index: 9999; /* Garante que fique acima de tudo */
+    display: none; /* Escondido por padrão, será mostrado via JS */
+    padding: 20px; /* Padding para o conteúdo */
+    overflow-y: auto; /* Permite rolagem se o conteúdo for grande */
+}
+
+  
+
+/* NOVO: Estilo para os cards do dashboard serem clicáveis */
+#dashboard-summary-cards [data-id], #nfe-overview-cards [data-id] {
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+#dashboard-summary-cards [data-id]:hover, #nfe-overview-cards [data-id]:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+/* NOVO: Estilo para o card ativo na tela de NFe */
+#nfe-overview-cards [data-id].active {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+
+/* NOVO: Estilos para a miniatura da imagem do produto e a pré-visualização */
+.product-list-item-img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-right: 12px;
+    flex-shrink: 0; /* Impede que a imagem encolha */
+    transition: transform 0.2s ease-in-out;
+}
+.product-list-item-img:hover {
+    transform: scale(1.1); /* Efeito de zoom sutil ao passar o mouse */
+}
+/* ATUALIZADO: Aumentado o tamanho do zoom da imagem */
+#custom-product-tooltip img {
+    max-width: 350px;
+    max-height: 350px;
+    border-radius: 8px;
+}
+
+/* NOVO: Estilo para células de vendas clicáveis */
+.clickable-sales-cell {
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+}
+.clickable-sales-cell:hover {
+    background-color: #e0e0e0; /* Um cinza claro para indicar hover */
+}
+
+@media print {
+    @page {
+        size: A4; /* Define o tamanho do papel, mas permite que o usuário escolha a orientação */
+        margin: 0.5in;
+    }
+
+    html, body {
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    body > *:not(#browser-print-fabrica-modal):not(#print-area) {
+        display: none !important;
+    }
+
+    /* --- Estilos para o modal de impressão da FÁBRICA --- */
+    #browser-print-fabrica-modal {
+        display: block !important; position: static !important; width: auto; height: auto;
+        padding: 0; overflow: visible !important; background: none !important; box-shadow: none !important;
+    }
+    #browser-print-fabrica-modal .print-controls { display: none !important; }
+
+    /* NOVO: Estilos para a área de impressão direta do relatório */
+    #print-area {
+        display: block !important;
+    }
+    #print-area .report-print-table,
+    #print-area .orders-print-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 8pt !important;
+        table-layout: auto !important;
+    }
+    /* NOVO: Definindo larguras fixas para as colunas na impressão do relatório */
+    #print-area .report-print-table th:nth-child(1), #print-area .report-print-table td:nth-child(1) { width: 45%; } /* Produto */
+    #print-area .report-print-table th:nth-child(2), #print-area .report-print-table td:nth-child(2) { width: 10%; } /* Est. */
+    #print-area .report-print-table th:nth-child(3), #print-area .report-print-table td:nth-child(3) { width: 15%; } /* Aguardando */
+    #print-area .report-print-table th:nth-child(4), #print-area .report-print-table td:nth-child(4) { width: 10%; } /* Mín/Máx */
+    #print-area .report-print-table th:nth-child(5), #print-area .report-print-table td:nth-child(5) { width: 10%; } /* Vendas 90d */
+    #print-area .report-print-table th:nth-child(6), #print-area .report-print-table td:nth-child(6) { width: 10%; } /* Qtd. Req. */
+    /* NOVO: Larguras para a tabela de impressão de Pedidos */
+    #print-area .orders-print-table th:nth-child(1), #print-area .orders-print-table td:nth-child(1) { width: 8%; } /* REQ. */
+    #print-area .orders-print-table th:nth-child(2), #print-area .orders-print-table td:nth-child(2) { width: 43%; } /* PRODUTO */
+    #print-area .orders-print-table th:nth-child(3), #print-area .orders-print-table td:nth-child(3) { width: 8%; } /* LOCAL */
+    #print-area .orders-print-table th:nth-child(4), #print-area .orders-print-table td:nth-child(4) { width: 5%; }  /* QTD */
+    #print-area .orders-print-table th:nth-child(5), #print-area .orders-print-table td:nth-child(5) { width: 8%; }  /* SITUAÇÃO */
+    #print-area .orders-print-table th:nth-child(6), #print-area .orders-print-table td:nth-child(6) { width: 8%; }  /* DATA */
+    #print-area .orders-print-table th:nth-child(7), #print-area .orders-print-table td:nth-child(7) { width: 8%; }  /* DIAS COR. */
+    #print-area .orders-print-table th:nth-child(8), #print-area .orders-print-table td:nth-child(8) { width: 6%; }  /* PRAZO */ /* Total 100% */
+    #print-area .orders-print-table th:nth-child(9), #print-area .orders-print-table td:nth-child(9) { width: 6%; }  /* ATRASO */ /* Total 100% */
+    
+    /* ATUALIZADO: Estilos genéricos aplicados apenas às tabelas de lista */
+    #print-area .report-print-table th,
+    #print-area .report-print-table td,
+    #print-area .orders-print-table th,
+    #print-area .orders-print-table td {
+        border: 1px solid #ccc !important;
+        padding: 4px !important;
+        text-align: left !important;
+        word-break: break-word;
+        vertical-align: middle !important;
+    }
+    #print-area .report-print-table th,
+    #print-area .orders-print-table th {
+        background-color: #f2f2f2 !important;
+        font-weight: bold;
+    }
+    #print-area .report-print-table tbody tr:nth-child(even),
+    #print-area .orders-print-table tbody tr:nth-child(even) {
+        background-color: #f9f9f9 !important;
+    }
+    #print-area .product-list-item-img {
+        display: inline-block !important;
+        width: 30px !important;
+        height: 30px !important;
+        object-fit: cover !important;
+        border-radius: 4px !important;
+        margin-right: 8px !important;
+        vertical-align: middle !important;
+    }
+    #print-area .text-center-print {
+        text-align: center !important;
+    }
+    
+    /* --- Estilos para a impressão de Solicitação --- */
+    #print-area .solicitation-page {
+        width: 100%;
+        margin-bottom: 2rem;
+        page-break-after: always;
+    }
+    #print-area .solicitation-page:last-child {
+        page-break-after: avoid;
+    }
+    #print-area .solicitation-header {
+        text-align: center;
+        margin-bottom: 1.5rem;
+        border-bottom: 2px solid #333;
+        padding-bottom: 1rem;
+    }
+    #print-area .solicitation-header .company-name { font-size: 18pt !important; font-weight: bold !important; }
+    #print-area .solicitation-header .report-title { font-size: 14pt !important; color: #555 !important; margin-top: 0.5rem !important; }
+    #print-area .solicitation-header .solicitation-info { display: flex !important; justify-content: space-around !important; margin-top: 1rem !important; font-size: 10pt !important; }
+    
+    #print-area .solicitation-print-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 10pt !important;
+        table-layout: fixed !important; /* Força o navegador a respeitar as larguras definidas */
+    }
+    #print-area .solicitation-print-table th, 
+    #print-area .solicitation-print-table td {
+        border: 1px solid #ccc !important; padding: 8px !important; text-align: left !important; vertical-align: middle !important;
+        word-wrap: break-word; overflow-wrap: break-word;
+    }
+    #print-area .solicitation-print-table th { background-color: #f2f2f2 !important; font-weight: bold !important; }
+    #print-area .solicitation-print-table .photo-cell { width: 15% !important; text-align: center !important; }
+    #print-area .solicitation-print-table .product-cell { width: 65% !important; }
+    #print-area .solicitation-print-table .location-cell { width: 12% !important; text-align: center !important; }
+    #print-area .solicitation-print-table .quantity-cell { width: 8% !important; text-align: center !important; font-weight: bold !important; font-size: 12pt !important; }
+    #print-area .solicitation-product-image { max-width: 80px; max-height: 80px; object-fit: contain; display: block !important; margin: auto !important; }
+}
+
+/* NOVO: Estilos para o modo "Somente Leitura" */
+body.read-only .read-only-disable {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    background-color: #d1d5db !important; /* gray-400 */
+}

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajuste de Estoque</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563EB"/>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Biblioteca para leitura de QR Code -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        body {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        #reader {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #reader video {
+            width: 100% !important;
+            height: auto !important;
+        }
+        .scanner-container {
+            position: relative;
+            width: 100%;
+        }
+        .scanner-container .overlay-line {
+            position: absolute;
+            left: 5%;
+            right: 5%;
+            top: 50%;
+            height: 2px;
+            background-color: rgba(255, 0, 0, 0.7);
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.9);
+            animation: scan 1.5s infinite ease-in-out;
+        }
+        @keyframes scan {
+            0% { top: 20%; }
+            50% { top: 80%; }
+            100% { top: 20%; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto max-w-lg p-4 font-sans">
+        <!-- Cabeçalho -->
+        <div class="bg-white p-4 rounded-lg shadow-md mb-4 text-center">
+            <h1 class="text-2xl font-bold text-gray-800">Ajuste de Estoque</h1>
+            <p class="text-sm text-gray-500">Aponte a câmera para o QR Code da prateleira</p>
+        </div>
+
+        <!-- Leitor de QR Code -->
+        <div id="scanner-container" class="scanner-container bg-black rounded-lg mb-4 hidden">
+            <div id="reader"></div>
+            <div class="overlay-line"></div>
+        </div>
+        <button id="start-scan-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-blue-700 transition-all duration-200 flex items-center justify-center text-lg">
+            <svg class="w-6 h-6 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 12.75a.75.75 0 01.75-.75h9a.75.75 0 010 1.5h-9a.75.75 0 01-.75-.75z" /></svg>
+            Iniciar Câmera
+        </button>
+        <button id="stop-scan-btn" class="w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-red-700 transition-all duration-200 hidden mt-2">Parar Câmera</button>
+
+
+        <!-- Overlay de Loading -->
+        <div id="loading-overlay" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="flex flex-col items-center">
+                <svg class="animate-spin h-10 w-10 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p id="loading-text" class="text-white text-lg mt-4"></p>
+            </div>
+        </div>
+
+        <!-- Resultados e Ações -->
+        <div id="result-container" class="bg-white p-4 rounded-lg shadow-md mt-4 hidden">
+            <h2 class="text-xl font-bold text-gray-700 border-b pb-2">Produto Encontrado</h2>
+            <div class="mt-4">
+                <p class="text-sm text-gray-500">Descrição</p>
+                <p id="product-description" class="text-lg font-semibold text-gray-800"></p>
+            </div>
+            <div class="mt-4">
+                <p class="text-sm text-gray-500">Estoque Atual</p>
+                <p id="product-stock" class="text-lg font-semibold text-gray-800"></p>
+            </div>
+            <div class="mt-6">
+                <label for="new-quantity" class="block text-sm font-bold text-gray-700 mb-2">Nova Quantidade (Balanço)</label>
+                <input type="number" id="new-quantity" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-2xl text-center font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0">
+            </div>
+             <div class="mt-6">
+                <button id="save-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-green-700 transition-all duration-200 text-lg">
+                    Salvar Novo Estoque
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Importa as URLs da sua configuração de API existente
+        import { API_URLS } from './js/apiConfig.js';
+
+        const startScanBtn = document.getElementById('start-scan-btn');
+        const stopScanBtn = document.getElementById('stop-scan-btn');
+        const resultContainer = document.getElementById('result-container');
+        const productDescription = document.getElementById('product-description');
+        const productStock = document.getElementById('product-stock');
+        const newQuantityInput = document.getElementById('new-quantity');
+        const saveBtn = document.getElementById('save-btn');
+        const scannerContainer = document.getElementById('scanner-container');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+
+        let allProducts = [];
+        let selectedProduct = null;
+        let html5QrCode = null;
+
+        // Função para mostrar/esconder o loading
+        function toggleLoading(show, text = '') {
+            loadingText.textContent = text;
+            loadingOverlay.classList.toggle('hidden', !show);
+        }
+        
+        // Pega todos os produtos da API para busca local
+        async function fetchAllProducts() {
+            if (allProducts.length > 0) return true;
+            toggleLoading(true, 'Carregando produtos...');
+            try {
+                const response = await fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`);
+                const data = await response.json();
+                if (data.error || !data.data) {
+                    throw new Error(data.message || 'Erro ao carregar produtos.');
+                }
+                allProducts = data.data;
+                return true;
+            } catch (error) {
+                alert(`Falha ao carregar produtos: ${error.message}`);
+                return false;
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Função chamada quando um QR Code é lido com sucesso
+        async function onScanSuccess(decodedText, decodedResult) {
+            console.log(`Scan result: ${decodedText}`, decodedResult);
+            stopScanning();
+            
+            selectedProduct = allProducts.find(p => p.codigo === decodedText);
+
+            if (selectedProduct) {
+                productDescription.textContent = selectedProduct.descricao;
+                productStock.textContent = selectedProduct.estoque || 0;
+                resultContainer.classList.remove('hidden');
+                newQuantityInput.focus();
+            } else {
+                alert(`Produto com código "${decodedText}" não encontrado!`);
+                startScanning(); // Reinicia o scanner se o produto não for encontrado
+            }
+        }
+
+        // Função chamada em caso de falha na leitura
+        function onScanFailure(error) {
+            // console.warn(`Code scan error = ${error}`);
+        }
+
+        // Inicia o Scanner
+        async function startScanning() {
+            const productsLoaded = await fetchAllProducts();
+            if(!productsLoaded) return;
+
+            scannerContainer.classList.remove('hidden');
+            startScanBtn.classList.add('hidden');
+            stopScanBtn.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+
+            html5QrCode = new Html5Qrcode("reader");
+            try {
+                await html5QrCode.start(
+                    { facingMode: "environment" }, // Usa a câmera traseira
+                    {
+                        fps: 10,    // Quadros por segundo
+                        qrbox: { width: 250, height: 250 }  // Tamanho da caixa de scan
+                    },
+                    onScanSuccess,
+                    onScanFailure
+                );
+            } catch (err) {
+                alert("Erro ao iniciar a câmera. Verifique as permissões do navegador.");
+                console.error("Erro ao iniciar o QR Code scanner", err);
+                stopScanning();
+            }
+        }
+
+        // Para o Scanner
+        function stopScanning() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    console.log("QR Code scanning stopped.");
+                    scannerContainer.classList.add('hidden');
+                    stopScanBtn.classList.add('hidden');
+                    startScanBtn.classList.remove('hidden');
+                }).catch(err => {
+                    console.error("Failed to stop QR Code scanner.", err);
+                });
+            }
+        }
+
+        // Evento do botão Salvar
+        async function saveStockAdjustment() {
+            if (!selectedProduct) {
+                alert("Nenhum produto selecionado.");
+                return;
+            }
+
+            const newQuantityStr = newQuantityInput.value;
+            if (newQuantityStr === '' || newQuantityStr === null) {
+                alert("Por favor, insira a nova quantidade.");
+                return;
+            }
+
+            const newQuantity = parseFloat(String(newQuantityStr).replace(',', '.'));
+            if (isNaN(newQuantity) || newQuantity < 0) {
+                alert("Por favor, insira uma quantidade válida (número maior ou igual a zero).");
+                return;
+            }
+
+            // Pega o nome do usuário do localStorage, se existir
+            let userName = 'AppMobile'; // Padrão se não encontrar
+            try {
+                const userInfoString = localStorage.getItem('userInfo');
+                if (userInfoString) {
+                    const userInfo = JSON.parse(userInfoString);
+                    userName = userInfo.nome || userName;
+                }
+            } catch (e) { console.error("Erro ao ler nome do usuário.", e); }
+
+
+            // Payload para a API - baseado no que já existe no seu sistema
+            const payload = {
+                produto: { id: selectedProduct.id, codigo: selectedProduct.codigo },
+                operacaoBling: "B", // "B" para Balanço
+                quantidadeMovimento: 0, 
+                quantidadeFinal: newQuantity,
+                tipoEntrada: "Balanço",
+                observacoes: `Ajuste de balanço via AppMobile por \"${userName}\"`,
+                orderCode: 'BALANCO',
+                codigoService: selectedProduct.codigo,
+                newStatus: 'N/A',
+                requisitionType: 'balanco',
+                dataEntrega: new Date().toLocaleDateString('pt-BR'),
+                diasCorridos: '0'
+            };
+
+            console.log("Enviando payload:", JSON.stringify(payload, null, 2));
+            toggleLoading(true, 'Salvando...');
+
+            try {
+                // A URL para atualização de estoque parece ser a ORDERS_UPDATE, vamos usá-la
+                const response = await fetch(API_URLS.ORDERS_UPDATE, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`);
+                }
+                
+                await response.json();
+                
+                alert(`Estoque do produto ${selectedProduct.descricao} ajustado para ${newQuantity} com sucesso!`);
+
+                // Reseta a interface
+                resultContainer.classList.add('hidden');
+                newQuantityInput.value = '';
+                selectedProduct = null;
+                allProducts = []; // Força recarregar os produtos na próxima leitura
+                startScanning(); // Reinicia o scanner para a próxima leitura
+
+            } catch (error) {
+                alert(`Falha ao ajustar o estoque: ${error.message}`);
+                console.error("Erro ao salvar:", error);
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Vincula os eventos
+        startScanBtn.addEventListener('click', startScanning);
+        stopScanBtn.addEventListener('click', stopScanning);
+        saveBtn.addEventListener('click', saveStockAdjustment);
+
+    </script>
+    
+    <script>
+      // Registra o Service Worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').then(registration => {
+            console.log('ServiceWorker registrado com sucesso:', registration);
+          }).catch(err => {
+            console.log('Falha no registro do ServiceWorker:', err);
+          });
+        });
+      }
+    </script>
+
+</body>
+</html>

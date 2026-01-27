@@ -1,0 +1,10 @@
+{
+  "short_name": "AjusteEstoque",
+  "name": "Ajuste de Estoque",
+  "start_url": "./ajustaEstoqueApp.html",
+  "background_color": "#FFFFFF",
+  "display": "standalone",
+  "scope": ".",
+  "theme_color": "#2563EB",
+  "description": "Aplicativo para ajuste de estoque."
+}
