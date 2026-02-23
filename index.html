@@ -202,6 +202,14 @@
                 <input type="date" id="dashboard-end-date"
                     class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
             </div>
+
+            <div>
+                <label for="dashboard-year-filter" class="block text-sm font-medium text-gray-700">Filtrar por Ano:</label>
+                <select id="dashboard-year-filter" class="mt-1 block w-full pl-3 pr-8 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                    <!-- As opções serão preenchidas por JavaScript -->
+                </select>
+            </div>
+            
             <!-- ATUALIZADO: Filtros de data em duas linhas -->
             <div class="flex flex-col gap-2 text-sm self-end">
                 <div class="flex items-center justify-start gap-x-4">
@@ -1180,8 +1188,8 @@
             let _stockAdjustmentModal, _closeStockAdjustmentModalBtn, _stockAdjustmentProductInfo, _stockAdjustmentCurrentStock, _stockAdjustmentNewQuantity, _stockAdjustmentReason, _confirmStockAdjustmentBtn, _cancelStockAdjustmentBtn; // NOVO: Modal de Ajuste de Estoque
             let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageSaidaReport, _pageReport, _pageGerenciarSaida, _pageDashboards, _pageAtendimento;
             let _productReportModal, _openProductReportModalBtn, _closeProductReportModalBtn, _cancelProductReportBtn, _generateProductReportBtn;
+    
             // --- FUNÇÕES DE UTILIDADE PRIVADAS ---
-// --- FUNÇÕES DE UTILIDADE PRIVADAS ---
 
 /**
  * NOVO: Função genérica para exportar dados para um arquivo CSV.

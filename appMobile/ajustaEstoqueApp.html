@@ -10,38 +10,17 @@
     <!-- Biblioteca para leitura de QR Code -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
-        body {
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-        #reader {
-            width: 100%;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        #reader video {
-            width: 100% !important;
-            height: auto !important;
-        }
-        .scanner-container {
-            position: relative;
-            width: 100%;
-        }
+        body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; }
+        #reader video { width: 100% !important; height: auto !important; }
+        .scanner-container { position: relative; width: 100%; }
         .scanner-container .overlay-line {
-            position: absolute;
-            left: 5%;
-            right: 5%;
-            top: 50%;
-            height: 2px;
+            position: absolute; left: 5%; right: 5%; top: 50%; height: 2px;
             background-color: rgba(255, 0, 0, 0.7);
             box-shadow: 0 0 10px rgba(255, 0, 0, 0.9);
             animation: scan 1.5s infinite ease-in-out;
         }
-        @keyframes scan {
-            0% { top: 20%; }
-            50% { top: 80%; }
-            100% { top: 20%; }
-        }
+        @keyframes scan { 0% { top: 20%; } 50% { top: 80%; } 100% { top: 20%; } }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -50,7 +29,7 @@
         <!-- Cabeçalho -->
         <div class="bg-white p-4 rounded-lg shadow-md mb-4 text-center">
             <h1 class="text-2xl font-bold text-gray-800">Ajuste de Estoque</h1>
-            <p class="text-sm text-gray-500">Aponte a câmera para o QR Code da prateleira</p>
+            <p class="text-sm text-gray-500">Aponte a câmera para o QR Code do produto</p>
         </div>
 
         <!-- Leitor de QR Code -->
@@ -63,7 +42,6 @@
             Iniciar Câmera
         </button>
         <button id="stop-scan-btn" class="w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-red-700 transition-all duration-200 hidden mt-2">Parar Câmera</button>
-
 
         <!-- Overlay de Loading -->
         <div id="loading-overlay" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -84,22 +62,45 @@
                 <p class="text-sm text-gray-500">Estoque Atual</p>
                 <p id="product-stock" class="text-lg font-semibold text-gray-800"></p>
             </div>
+
+            <!-- NOVO: Detalhes do Produto Acordeão -->
+            <div id="product-details-accordion" class="mt-4 border-t pt-4">
+                <button id="accordion-toggle" class="w-full flex justify-between items-center text-left font-semibold text-gray-700 py-2">
+                    <span>Detalhes do Produto</span>
+                    <svg id="accordion-icon" class="w-5 h-5 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                </button>
+                <div id="accordion-content" class="hidden mt-2 space-y-3 text-sm border-l-2 border-gray-200 pl-3">
+                    <p><strong>Código:</strong> <span id="detail-codigo"></span></p>
+                    <p><strong>Custo:</strong> <span id="detail-custo"></span></p>
+                    <p><strong>Venda:</strong> <span id="detail-venda"></span></p>
+                    <p><strong>Estoque Mín/Máx:</strong> <span id="detail-estoque-min-max"></span></p>
+                    <p><strong>Localização:</strong> <span id="detail-localizacao"></span></p>
+                    <p><strong>Grupo de Tags:</strong> <span id="detail-tags"></span></p>
+                </div>
+            </div>
+
             <div class="mt-6">
                 <label for="new-quantity" class="block text-sm font-bold text-gray-700 mb-2">Nova Quantidade (Balanço)</label>
                 <input type="number" id="new-quantity" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-2xl text-center font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0">
             </div>
-             <div class="mt-6">
-                <button id="save-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-green-700 transition-all duration-200 text-lg">
-                    Salvar Novo Estoque
+
+             <!-- ATUALIZADO: Grupo de botões -->
+             <div class="mt-6 flex items-center space-x-2">
+                <button id="cancel-btn" class="w-1/3 bg-gray-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-gray-600 transition-all duration-200 text-base">
+                    Cancelar
+                </button>
+                <button id="save-btn" class="w-2/3 bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-green-700 transition-all duration-200 text-base">
+                    Salvar
                 </button>
             </div>
         </div>
     </div>
 
     <script type="module">
-        // Importa as URLs da sua configuração de API existente
-        import { API_URLS } from './js/apiConfig.js';
+        // Importa as URLs da sua configuração de API
+        import { API_URLS } from '../js/apiConfig.js';
 
+        // --- DOM ELEMENTS ---
         const startScanBtn = document.getElementById('start-scan-btn');
         const stopScanBtn = document.getElementById('stop-scan-btn');
         const resultContainer = document.getElementById('result-container');
@@ -107,30 +108,76 @@
         const productStock = document.getElementById('product-stock');
         const newQuantityInput = document.getElementById('new-quantity');
         const saveBtn = document.getElementById('save-btn');
+        const cancelBtn = document.getElementById('cancel-btn'); // NOVO
         const scannerContainer = document.getElementById('scanner-container');
         const loadingOverlay = document.getElementById('loading-overlay');
         const loadingText = document.getElementById('loading-text');
+        // NOVO: Elementos do acordeão
+        const accordionToggle = document.getElementById('accordion-toggle');
+        const accordionContent = document.getElementById('accordion-content');
+        const accordionIcon = document.getElementById('accordion-icon');
+        const detailCodigo = document.getElementById('detail-codigo');
+        const detailCusto = document.getElementById('detail-custo');
+        const detailVenda = document.getElementById('detail-venda');
+        const detailEstoqueMinMax = document.getElementById('detail-estoque-min-max');
+        const detailLocalizacao = document.getElementById('detail-localizacao');
+        const detailTags = document.getElementById('detail-tags');
 
+        // --- APP STATE ---
         let allProducts = [];
         let selectedProduct = null;
         let html5QrCode = null;
 
-        // Função para mostrar/esconder o loading
+        // --- LÓGICA DE BANCO DE DADOS LOCAL (INDEXEDDB) ---
+        const DB_NAME = 'ajuste-estoque-db';
+        const STORE_NAME = 'pending-adjustments';
+        let db;
+
+        function initDB() {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onupgradeneeded = event => {
+                const dbInstance = event.target.result;
+                if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
+                    dbInstance.createObjectStore(STORE_NAME, { autoIncrement: true });
+                }
+            };
+            request.onsuccess = event => { db = event.target.result; console.log('Banco de dados local inicializado.'); };
+            request.onerror = event => { console.error('Erro no DB local:', event.target.error); };
+        }
+
+        function saveAdjustmentToDB(payload) {
+            return new Promise((resolve, reject) => {
+                if (!db) return reject('O banco de dados não está disponível.');
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.add(payload);
+                request.onsuccess = () => resolve();
+                request.onerror = event => reject(event.target.error);
+            });
+        }
+        
+        // --- FUNÇÕES DA APLICAÇÃO ---
+
         function toggleLoading(show, text = '') {
             loadingText.textContent = text;
             loadingOverlay.classList.toggle('hidden', !show);
         }
+
+        // NOVO: Helper para formatar moeda
+        function formatCurrency(value) {
+            const number = parseFloat(String(value || '0').replace(',', '.'));
+            if (isNaN(number)) return "R$ 0,00";
+            return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
         
-        // Pega todos os produtos da API para busca local
         async function fetchAllProducts() {
             if (allProducts.length > 0) return true;
             toggleLoading(true, 'Carregando produtos...');
             try {
                 const response = await fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`);
+                if (!response.ok) throw new Error(`Status: ${response.status}`);
                 const data = await response.json();
-                if (data.error || !data.data) {
-                    throw new Error(data.message || 'Erro ao carregar produtos.');
-                }
+                if (data.error || !data.data) throw new Error(data.message || 'Formato de dados inválido.');
                 allProducts = data.data;
                 return true;
             } catch (error) {
@@ -141,166 +188,170 @@
             }
         }
 
-        // Função chamada quando um QR Code é lido com sucesso
         async function onScanSuccess(decodedText, decodedResult) {
-            console.log(`Scan result: ${decodedText}`, decodedResult);
             stopScanning();
-            
             selectedProduct = allProducts.find(p => p.codigo === decodedText);
 
             if (selectedProduct) {
+                // Preenche dados principais
                 productDescription.textContent = selectedProduct.descricao;
                 productStock.textContent = selectedProduct.estoque || 0;
+
+                // ATUALIZADO: Preenche os detalhes do produto
+                detailCodigo.textContent = selectedProduct.codigo || 'N/A';
+                detailCusto.textContent = formatCurrency(selectedProduct.preco_de_custo);
+                detailVenda.textContent = formatCurrency(selectedProduct.preco);
+                detailEstoqueMinMax.textContent = `${selectedProduct.estoque_minimo || 0} / ${selectedProduct.estoque_maximo || 0}`;
+                detailLocalizacao.textContent = selectedProduct.localizacao || 'N/A';
+                
+                const tags = selectedProduct.grupo_de_tags_tags;
+                detailTags.textContent = (Array.isArray(tags) && tags.length > 0 && tags[0]) ? tags.join(', ') : 'Nenhuma';
+                
+                // Mostra o container e foca no input
                 resultContainer.classList.remove('hidden');
+                newQuantityInput.value = '';
                 newQuantityInput.focus();
+                
+                // Garante que o acordeão comece fechado
+                accordionContent.classList.add('hidden');
+                accordionIcon.classList.remove('rotate-180');
+
             } else {
                 alert(`Produto com código "${decodedText}" não encontrado!`);
-                startScanning(); // Reinicia o scanner se o produto não for encontrado
+                startScanning(); 
             }
         }
 
-        // Função chamada em caso de falha na leitura
-        function onScanFailure(error) {
-            // console.warn(`Code scan error = ${error}`);
-        }
+        function onScanFailure(error) { /* Ignora */ }
 
-        // Inicia o Scanner
         async function startScanning() {
-            const productsLoaded = await fetchAllProducts();
-            if(!productsLoaded) return;
-
+            // Esconde a tela de resultado e volta para o botão de iniciar
+            resultContainer.classList.add('hidden');
             scannerContainer.classList.remove('hidden');
             startScanBtn.classList.add('hidden');
             stopScanBtn.classList.remove('hidden');
-            resultContainer.classList.add('hidden');
+
+            const productsLoaded = await fetchAllProducts();
+            if(!productsLoaded) {
+                stopScanning(); // Para se os produtos não carregarem
+                return;
+            };
 
             html5QrCode = new Html5Qrcode("reader");
             try {
                 await html5QrCode.start(
-                    { facingMode: "environment" }, // Usa a câmera traseira
-                    {
-                        fps: 10,    // Quadros por segundo
-                        qrbox: { width: 250, height: 250 }  // Tamanho da caixa de scan
-                    },
+                    { facingMode: "environment" }, 
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
                     onScanSuccess,
                     onScanFailure
                 );
             } catch (err) {
-                alert("Erro ao iniciar a câmera. Verifique as permissões do navegador.");
-                console.error("Erro ao iniciar o QR Code scanner", err);
+                alert("Erro ao iniciar a câmera. Verifique as permissões.");
                 stopScanning();
             }
         }
 
-        // Para o Scanner
         function stopScanning() {
-            if (html5QrCode) {
-                html5QrCode.stop().then(() => {
-                    console.log("QR Code scanning stopped.");
-                    scannerContainer.classList.add('hidden');
-                    stopScanBtn.classList.add('hidden');
-                    startScanBtn.classList.remove('hidden');
-                }).catch(err => {
-                    console.error("Failed to stop QR Code scanner.", err);
-                });
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().catch(err => console.error("Falha ao parar scanner.", err));
             }
+            // Garante que a UI sempre volte ao estado inicial
+            scannerContainer.classList.add('hidden');
+            stopScanBtn.classList.add('hidden');
+            startScanBtn.classList.remove('hidden');
         }
-
-        // Evento do botão Salvar
+        
         async function saveStockAdjustment() {
-            if (!selectedProduct) {
-                alert("Nenhum produto selecionado.");
-                return;
-            }
-
+            if (!selectedProduct) return alert("Nenhum produto selecionado.");
             const newQuantityStr = newQuantityInput.value;
-            if (newQuantityStr === '' || newQuantityStr === null) {
-                alert("Por favor, insira a nova quantidade.");
-                return;
-            }
-
+            if (newQuantityStr === '' || newQuantityStr === null) return alert("Por favor, insira a nova quantidade.");
             const newQuantity = parseFloat(String(newQuantityStr).replace(',', '.'));
-            if (isNaN(newQuantity) || newQuantity < 0) {
-                alert("Por favor, insira uma quantidade válida (número maior ou igual a zero).");
-                return;
-            }
+            if (isNaN(newQuantity) || newQuantity < 0) return alert("Quantidade inválida.");
 
-            // Pega o nome do usuário do localStorage, se existir
-            let userName = 'AppMobile'; // Padrão se não encontrar
+            let userName = 'AppMobile';
             try {
-                const userInfoString = localStorage.getItem('userInfo');
-                if (userInfoString) {
-                    const userInfo = JSON.parse(userInfoString);
-                    userName = userInfo.nome || userName;
-                }
-            } catch (e) { console.error("Erro ao ler nome do usuário.", e); }
+                const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+                userName = userInfo.nome || userName;
+            } catch (e) {}
 
-
-            // Payload para a API - baseado no que já existe no seu sistema
             const payload = {
                 produto: { id: selectedProduct.id, codigo: selectedProduct.codigo },
-                operacaoBling: "B", // "B" para Balanço
-                quantidadeMovimento: 0, 
+                operacaoBling: "B",
                 quantidadeFinal: newQuantity,
                 tipoEntrada: "Balanço",
-                observacoes: `Ajuste de balanço via AppMobile por \"${userName}\"`,
-                orderCode: 'BALANCO',
-                codigoService: selectedProduct.codigo,
-                newStatus: 'N/A',
-                requisitionType: 'balanco',
-                dataEntrega: new Date().toLocaleDateString('pt-BR'),
+                observacoes: `Ajuste de balanço via AppMobile por \\"${userName}\\"`,
+                quantidadeMovimento: 0, orderCode: 'BALANCO', codigoService: selectedProduct.codigo,
+                newStatus: 'N/A', requisitionType: 'balanco', dataEntrega: new Date().toLocaleDateString('pt-BR'),
                 diasCorridos: '0'
             };
 
-            console.log("Enviando payload:", JSON.stringify(payload, null, 2));
             toggleLoading(true, 'Salvando...');
-
+            
             try {
-                // A URL para atualização de estoque parece ser a ORDERS_UPDATE, vamos usá-la
                 const response = await fetch(API_URLS.ORDERS_UPDATE, {
-                    method: 'POST',
-                    mode: 'cors',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`);
-                }
+                if (!response.ok) throw new Error(`Erro da API: Status ${response.status}`);
                 
                 await response.json();
+                alert(`Estoque ajustado para ${newQuantity}! (Enviado para o sistema)`);
                 
-                alert(`Estoque do produto ${selectedProduct.descricao} ajustado para ${newQuantity} com sucesso!`);
-
-                // Reseta a interface
-                resultContainer.classList.add('hidden');
-                newQuantityInput.value = '';
-                selectedProduct = null;
-                allProducts = []; // Força recarregar os produtos na próxima leitura
-                startScanning(); // Reinicia o scanner para a próxima leitura
+                // NOVO: Limpa a lista de produtos para forçar a busca de dados atualizados
+                allProducts = []; 
+                cancelAndRescan();
 
             } catch (error) {
-                alert(`Falha ao ajustar o estoque: ${error.message}`);
-                console.error("Erro ao salvar:", error);
+                console.error("Falha ao enviar para API:", error);
+                if (!navigator.onLine && 'serviceWorker' in navigator && 'SyncManager' in window) {
+                    try {
+                        await saveAdjustmentToDB(payload);
+                        const swRegistration = await navigator.serviceWorker.ready;
+                        await swRegistration.sync.register('sync-adjustments');
+                        alert(`Sem conexão. Ajuste para ${newQuantity} foi SALVO LOCALMENTE e será sincronizado depois.`);
+                        cancelAndRescan();
+                    } catch (dbError) {
+                        alert(`Falha ao salvar localmente: ${dbError.message}.`);
+                    }
+                } else {
+                    alert(`Falha ao ajustar estoque: ${error.message}.`);
+                }
             } finally {
                 toggleLoading(false);
             }
         }
 
-        // Vincula os eventos
-        startScanBtn.addEventListener('click', startScanning);
-        stopScanBtn.addEventListener('click', stopScanning);
-        saveBtn.addEventListener('click', saveStockAdjustment);
+        // NOVO: Função para cancelar a edição e voltar a escanear
+        function cancelAndRescan() {
+            resultContainer.classList.add('hidden');
+            newQuantityInput.value = '';
+            selectedProduct = null;
+            startScanning();
+        }
 
+        // --- INICIALIZAÇÃO ---
+        function initializeApp() {
+            initDB();
+            startScanBtn.addEventListener('click', startScanning);
+            stopScanBtn.addEventListener('click', stopScanning);
+            saveBtn.addEventListener('click', saveStockAdjustment);
+            cancelBtn.addEventListener('click', cancelAndRescan); // NOVO
+
+            // NOVO: Evento para o acordeão
+            accordionToggle.addEventListener('click', () => {
+                accordionContent.classList.toggle('hidden');
+                accordionIcon.classList.toggle('rotate-180');
+            });
+        }
+        initializeApp();
     </script>
     
     <script>
       // Registra o Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js').then(registration => {
-            console.log('ServiceWorker registrado com sucesso:', registration);
+          navigator.serviceWorker.register('./sw.js').then(reg => {
+            console.log('ServiceWorker registrado:', reg);
           }).catch(err => {
             console.log('Falha no registro do ServiceWorker:', err);
           });

@@ -33,6 +33,28 @@ export const DashboardApp = (function() {
     // --- Private Functions ---
 
 
+    /**
+     * NOVO: Converte uma string de moeda (BRL) para um número float de forma segura.
+     * Trata "R$", pontos de milhar e vírgula decimal.
+     * @param {string | number} value - A string ou número a ser convertido.
+     * @returns {number} O valor numérico.
+     */
+    function _parseCurrencyBRL(value) {
+        if (typeof value === 'number') {
+            return value;
+        }
+        if (typeof value !== 'string' || value.trim() === '') {
+            return 0;
+        }
+        // Remove "R$", espaços, e pontos de milhar. Troca a vírgula decimal por ponto.
+        const sanitizedString = value
+            .replace("R$", "")
+            .trim()
+            .replace(/\./g, "") // Remove pontos de milhar
+            .replace(",", "."); // Troca vírgula por ponto
+
+        return parseFloat(sanitizedString) || 0;
+    }
 
 
 
@@ -72,6 +94,7 @@ function _parseNfeItemsString(itemsString) {
      * Caches DOM elements used by this module.
      */
     function _cacheDom() {
+        _dom.yearFilter = document.getElementById('dashboard-year-filter');
         _dom.page = document.getElementById('page-dashboards');
         _dom.filterBar = document.getElementById('dashboard-filter-bar');
         _dom.startDateInput = document.getElementById('dashboard-start-date');
@@ -282,11 +305,51 @@ function _exportSalesDetailsItemsToCSV() {
     link.click();
     document.body.removeChild(link);
 }
+function _populateYearFilter() {
+    if (!_dom.yearFilter) return;
+
+    // Usa os dados que já estão no módulo (_allNFeData e _allLojaIntegradaOrders)
+    // para encontrar todos os anos em que houve vendas.
+    const allData = [..._allNFeData, ..._allLojaIntegradaOrders];
+    const years = new Set();
+
+    allData.forEach(item => {
+        const dateString = item.data_de_emissao || item.data_criacao; 
+        if (dateString) {
+            const date = _utils.parsePtBrDate(dateString); 
+            if (date && !isNaN(date)) {
+                years.add(date.getFullYear());
+            }
+        }
+    });
+
+    // Ordena os anos do mais recente para o mais antigo.
+    const sortedYears = Array.from(years).sort((a, b) => b - a);
+
+    // Limpa o seletor e adiciona as opções novas.
+    _dom.yearFilter.innerHTML = '<option value="all">Tudo</option>'; 
+    sortedYears.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        _dom.yearFilter.appendChild(option);
+    });
+}
 
 
 function _bindEvents() {
     // --- Listeners do Filtro de Data ---
-
+    if (_dom.yearFilter) {
+        _dom.yearFilter.addEventListener('change', (event) => {
+            _state.selectedYearFilter = event.target.value;
+    
+            // Limpa os outros filtros de data para evitar conflitos
+            if (_dom.startDateInput) _dom.startDateInput.value = '';
+            if (_dom.endDateInput) _dom.endDateInput.value = '';
+            _setDateRange('all'); // Reseta para o estado inicial
+        });
+    }
+    
     if (_dom.vendaTypeToggle) {
         _dom.vendaTypeToggle.addEventListener('change', (event) => {
             _state.chartDisplayMode = event.target.checked ? 'liquida' : 'bruta';
@@ -404,7 +467,7 @@ function _bindEvents() {
     function _handleDateInputChange() {
         _dom.filterBar.querySelectorAll('[name="date-range"]').forEach(radio => radio.checked = false);
         _state.currentDateFilterValue = 'custom';
-        _renderDashboardsPage();
+        _renderSalesView();
     }
     
 // AÇÃO: Substitua a função _setDateRange inteira pela versão corrigida.
@@ -461,64 +524,12 @@ function _setDateRange(value) {
     _dom.endDateInput.value = formattedEndDate;
 
     // Atualiza a página para refletir o novo intervalo de datas
-    _renderDashboardsPage();
+    _renderSalesView();
 }
 
 
     // >>> INÍCIO DO BLOCO DE SUBSTITUIÇÃO (Função _renderDashboardsPage) <<<
 
-    function _renderDashboardsPage() {
-        if (!_dom.salesChartCanvas) return;
-
-        const startDateValue = _dom.startDateInput.value;
-        const endDateValue = _dom.endDateInput.value;
-        const startDate = startDateValue ? new Date(startDateValue + 'T00:00:00') : null;
-        const endDate = endDateValue ? new Date(endDateValue + 'T23:59:59') : null;
-
-        // --- Bloco 1: Processar VENDAS (Notas Fiscais) ---
-        // CORREÇÃO: Adicionado 'Loja Integrada' ao array para gerar o card de NFe
-        const stores = ['Bling', 'Mercado Livre', 'Loja Integrada'];
-        
-        let filteredNFe = _allNFeData.filter(nfe => {
-            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-            if (!nfeDate) return false;
-            const startMatch = startDate ? nfeDate >= startDate : true;
-            const endMatch = endDate ? nfeDate <= endDate : true;
-            return startMatch && endMatch;
-        });
-
-        const storeData = stores.map(store => {
-            const notes = filteredNFe.filter(nfe => nfe.origem_loja === store);
-            const total = notes.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
-            return { name: `Vendas ${store}`, id: store.toLowerCase().replace(/ /g, '_'), count: notes.length, total: total };
-        });
-
-        const grandTotalVendas = storeData.reduce((sum, store) => sum + store.total, 0);
-        const grandTotalVendasCount = storeData.reduce((sum, store) => sum + store.count, 0);
-
- 
-
-        // --- Bloco 3: Renderizar os cards ---
-        const colors = { 
-            'bling': 'bg-green-500', 
-            'mercado_livre': 'bg-yellow-500',
-            'loja_integrada': 'bg-blue-500' // CORREÇÃO: Cor para o card de NFe da Loja Integrada
-        };
-        
-        // Gera os cards de NFe (agora incluindo Loja Integrada)
-        let cardsHtml = storeData.map(store =>
-            _createSummaryCard(store.id, store.name, "Notas", store.count, store.total, colors[store.id])
-        ).join('');
-        
-        // Card de Total Geral de Vendas (NFe)
-        cardsHtml += _createSummaryCard('total', 'Total Vendas (NFe)', "Notas", grandTotalVendasCount, grandTotalVendas, 'bg-gray-700');
-
-        if (_dom.summaryCards) _dom.summaryCards.innerHTML = cardsHtml;
-
-        // --- Bloco 4: Renderizar o gráfico e tabelas ---
-        // CORREÇÃO: Esta chamada garante que o gráfico seja atualizado com o filtro de canal correto
-        _updateDashboardChart(_state.selectedChannel);
-    }
 
 
     // AÇÃO: COLE ESTA FUNÇÃO DE VOLTA NO SEU CÓDIGO
@@ -553,12 +564,11 @@ function _updateDashboardChart(selectedChannel) {
     _renderSalesView(); 
 }
 
-// NOVO: Esta função desenha apenas o conteúdo da aba, sem tocar no gráfico.
 function _renderTabContent() {
     const tabContentContainer = document.getElementById('li-tab-content');
-    if (!tabContentContainer) return; // Sai se o container da aba não existir
+    if (!tabContentContainer) return; 
 
-    // 1. Atualiza o estilo visual da aba ativa
+    // 1. Estilo da aba ativa (lógica original)
     _dom.salesTableContainer.querySelectorAll('[data-tab]').forEach(tab => {
         const tabName = tab.dataset.tab;
         const isActive = _state.activeLiTab === tabName;
@@ -570,22 +580,46 @@ function _renderTabContent() {
         tab.classList.toggle('hover:border-gray-300', !isActive);
     });
 
-    // 2. Prepara os filtros de data
-    const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-    const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+    // --- NOVA LÓGICA DE FILTRAGEM UNIFICADA ---
+    let filteredNFeForTab = _allNFeData;
+    let filteredOrdersForTab = _allLojaIntegradaOrders;
+    const selectedYear = parseInt(_state.selectedYearFilter, 10);
+
+    if (selectedYear && !isNaN(selectedYear)) {
+        // Filtro por ano tem prioridade
+        filteredNFeForTab = _allNFeData.filter(nfe => {
+            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
+            return nfeDate && nfeDate.getFullYear() === selectedYear;
+        });
+        filteredOrdersForTab = _allLojaIntegradaOrders.filter(order => {
+            const orderDate = new Date(order.data_criação); // Usa 'new Date' para o formato original de pedidos
+            return !isNaN(orderDate.getTime()) && orderDate.getFullYear() === selectedYear;
+        });
+    } else {
+        // Se ano for "Tudo", usa o filtro de data (lógica original)
+        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+        if (startDate || endDate) {
+            filteredNFeForTab = _allNFeData.filter(nfe => {
+                const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
+                return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
+            });
+            filteredOrdersForTab = _allLojaIntegradaOrders.filter(order => {
+                const orderDate = new Date(order.data_criação);
+                return !isNaN(orderDate.getTime()) && (!startDate || orderDate >= startDate) && (!endDate || orderDate <= endDate);
+            });
+        }
+    }
+    // --- FIM DA FILTRAGEM ---
+
     let contentHtml = '';
 
-    // 3. Gera o HTML do conteúdo correto
+    // 3. Gera o HTML usando os dados já filtrados
     if (_state.activeLiTab === 'vendas') {
-        const filteredNFe = _allNFeData.filter(nfe => {
-            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-            return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
-        });
         const salesByPeriod = {};
-        filteredNFe.forEach(nfe => {
+        filteredNFeForTab.forEach(nfe => {
             const date = _utils.parsePtBrDate(nfe.data_de_emissao);
             if (!date) return;
-            // Agrega por mês para a tabela de vendas
             const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
             const store = nfe.origem_loja;
@@ -595,85 +629,95 @@ function _renderTabContent() {
         const sortedKeys = Object.keys(salesByPeriod).sort();
         contentHtml = _getSalesTableHTML(sortedKeys, salesByPeriod);
     } else { // Aba de 'pedidos'
-        const allowedStatus = ["Pedido Entregue", "Pedido Enviado"];
-        const filteredOrders = _allLojaIntegradaOrders.filter(order => {
-            const orderDate = new Date(order.data_criação);
-            const statusMatch = order.situação && allowedStatus.includes(order.situação.trim());
-            const dateMatch = !isNaN(orderDate.getTime()) && (!startDate || orderDate >= startDate) && (!endDate || orderDate <= endDate);
-            return statusMatch && dateMatch;
+        const allowedStatus = ["Pedido Entregue", "Pedido Enviado", "Pedido Pago", "Em produção"];
+        let filteredOrdersByStatus = filteredOrdersForTab.filter(order => {
+            return order.situação && allowedStatus.includes(order.situação.trim());
         });
+        
         const { key: sortKey, direction: sortDirStr } = _state.lojaIntegradaSort;
         const sortDir = sortDirStr === 'asc' ? 1 : -1;
-        filteredOrders.sort((a, b) => {
+        filteredOrdersByStatus.sort((a, b) => {
             const valA = a[sortKey], valB = b[sortKey];
             if (sortKey === 'valor_total' || sortKey === 'numero_pedido') return ((parseFloat(valA) || 0) - (parseFloat(valB) || 0)) * sortDir;
             if (sortKey === 'data_criação') return (new Date(valA) - new Date(valB)) * sortDir;
             return String(valA || '').localeCompare(String(valB || '')) * sortDir;
         });
-        contentHtml = _getLojaIntegradaOrdersTableHTML(filteredOrders);
+
+        contentHtml = _getLojaIntegradaOrdersTableHTML(filteredOrdersByStatus);
     }
     
-    // 4. Insere o HTML no container de conteúdo
+    // 4. Insere o HTML no container
     tabContentContainer.innerHTML = contentHtml;
 }
 
 function _renderSalesView() {
     if (!_dom.salesChartCanvas || !_allNFeData) return;
 
-    // 1. LIMPEZA E PREPARAÇÃO DOS DADOS
+    // 1. LIMPEZA INICIAL
     if (_salesChartInstance) { _salesChartInstance.destroy(); _salesChartInstance = null; }
     _dom.salesTableContainer.innerHTML = '';
     
-    const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-    const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+    // --- LÓGICA DE FILTRO UNIFICADA ---
+    let filteredNFe;
+    const selectedYear = parseInt(_state.selectedYearFilter, 10);
 
-    let filteredNFe = _allNFeData.filter(nfe => {
-        const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-        return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
-    });
+    if (selectedYear && !isNaN(selectedYear)) {
+        filteredNFe = _allNFeData.filter(nfe => {
+            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
+            return nfeDate && nfeDate.getFullYear() === selectedYear;
+        });
+    } else {
+        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+        filteredNFe = _allNFeData.filter(nfe => {
+            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
+            return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
+        });
+    }
     
-    // 2. DESENHA O GRÁFICO (LÓGICA DE CÁLCULO ATUALIZADA)
+    // --- RENDERIZAÇÃO DOS CARDS ---
+    const stores = ['Bling', 'Mercado Livre', 'Loja Integrada'];
+    const storeData = stores.map(store => {
+        const notes = filteredNFe.filter(nfe => nfe.origem_loja === store);
+        const total = notes.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
+        return { name: `Vendas ${store}`, id: store.toLowerCase().replace(/ /g, '_'), count: notes.length, total: total };
+    });
+
+    const grandTotalVendas = storeData.reduce((sum, store) => sum + store.total, 0);
+    const grandTotalVendasCount = storeData.reduce((sum, store) => sum + store.count, 0);
+    
+    const colors = { 'bling': 'bg-green-500', 'mercado_livre': 'bg-yellow-500', 'loja_integrada': 'bg-blue-500' };
+    let cardsHtml = storeData.map(store => _createSummaryCard(store.id, store.name, "Notas", store.count, store.total, colors[store.id])).join('');
+    cardsHtml += _createSummaryCard('total', 'Total Vendas (NFe)', "Notas", grandTotalVendasCount, grandTotalVendas, 'bg-gray-700');
+    
+    if (_dom.summaryCards) _dom.summaryCards.innerHTML = cardsHtml;
+
+    // --- RENDERIZAÇÃO DO GRÁFICO E TABELA ---
     const aggregationLevel = ['current_month', 'last_month', '30'].includes(_state.currentDateFilterValue) ? 'day' : 'month';
     const salesByPeriod = {};
     
     filteredNFe.forEach(nfe => {
         const date = _utils.parsePtBrDate(nfe.data_de_emissao);
         if (!date) return;
-        
-        const key = aggregationLevel === 'day' 
-            ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` 
-            : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        
+        const key = aggregationLevel === 'day' ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
-        
         const store = nfe.origem_loja;
         let value;
-
-        // --- INÍCIO DA GRANDE MUDANÇA: CÁLCULO BRUTO vs LÍQUIDO ---
         if (_state.chartDisplayMode === 'liquida') {
-            // --- CÁLCULO DA VENDA LÍQUIDA (LUCRO) ---
             const items = _parseNfeItemsString(nfe.itens);
             let totalCostOfGoods = 0;
-            
             items.forEach(item => {
                 const product = _allProducts.find(p => p.codigo === item.codigo);
-                // Usa o nome correto do campo: preco_de_custo
-                const cost = product ? (parseFloat(String(product.preco_de_custo || '0').replace(',', '.')) || 0) : 0;
+                // AQUI ESTÁ A CORREÇÃO! Usando a nova função de limpeza.
+                const cost = product ? _parseCurrencyBRL(product.preco_de_custo) : 0;
                 totalCostOfGoods += cost * item.quantidade;
             });
-            
             const grossSale = parseFloat(nfe.valor_da_nota) || 0;
             value = grossSale - totalCostOfGoods;
-
         } else {
-            // --- CÁLCULO DA VENDA BRUTA (COMO JÁ ESTAVA) ---
             value = parseFloat(nfe.valor_da_nota) || 0;
         }
-        // --- FIM DA GRANDE MUDANÇA ---
-
-        if (salesByPeriod[key][store] !== undefined) {
-            salesByPeriod[key][store] += value;
-        }
+        if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += value;
     });
 
     const sortedKeys = Object.keys(salesByPeriod).sort();
@@ -694,7 +738,6 @@ function _renderSalesView() {
         options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { anchor: 'end', align: 'top', color: '#374151', font: { weight: 'bold' }, formatter: (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value), display: (context) => context.dataset.data[context.dataIndex] > 0 } }, scales: { y: { beginAtZero: true } } }
     });
 
-    // 3. DESENHA A ESTRUTURA DAS ABAS E O CONTEÚDO (O resto da função permanece igual)
     if (_state.selectedChannel === 'loja_integrada') {
         const tabsHtml = `
             <div class="border-b border-gray-200 mt-6">
@@ -704,10 +747,8 @@ function _renderSalesView() {
                 </nav>
             </div>
             <div id="li-tab-content"></div>`;
-        
         _dom.salesTableContainer.innerHTML = tabsHtml;
         _renderTabContent();
-
     } else {
         const salesTableHtml = _getSalesTableHTML(sortedKeys, salesByPeriod);
         _dom.salesTableContainer.innerHTML = salesTableHtml;
@@ -1019,7 +1060,7 @@ start: function(allNFeData, allLojaIntegradaOrders) {
         _bindEvents();
         _state.isInitialized = true;
     }
-
+    _populateYearFilter();
     // Se já estiver rodando, não faz nada. A função stop() reseta isso.
     if (_state.isStarted) return; 
 
