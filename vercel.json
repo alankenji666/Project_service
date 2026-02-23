@@ -1,0 +1,9 @@
+
+{
+  "rewrites": [
+    {
+      "source": "/mobile",
+      "destination": "/appMobile/ajustaEstoqueApp.html"
+    }
+  ]
+}
