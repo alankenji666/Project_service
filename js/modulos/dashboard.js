@@ -629,7 +629,7 @@ function _renderTabContent() {
         const sortedKeys = Object.keys(salesByPeriod).sort();
         contentHtml = _getSalesTableHTML(sortedKeys, salesByPeriod);
     } else { // Aba de 'pedidos'
-        const allowedStatus = ["Pedido Entregue", "Pedido Enviado", "Pedido Pago", "Em produção"];
+        const allowedStatus = ["Pedido Entregue", "Pedido Enviado","Pedido em separação", "Pedido Pago", "Em produção"];
         let filteredOrdersByStatus = filteredOrdersForTab.filter(order => {
             return order.situação && allowedStatus.includes(order.situação.trim());
         });
