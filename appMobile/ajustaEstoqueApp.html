@@ -44,7 +44,6 @@
 
         <!-- TELA DO APP DE AJUSTE DE ESTOQUE -->
         <div id="adjust-view" class="hidden">
-            <!-- Conteúdo da tela de ajuste (inalterado) -->
             <div class="bg-white p-4 rounded-lg shadow-md mb-4 flex items-center relative">
                 <button id="adjust-back-to-menu-btn" class="absolute left-4 text-blue-600 hover:text-blue-800">
                     <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
@@ -129,7 +128,7 @@
         const loadingOverlay = document.getElementById('loading-overlay');
         const loadingText = document.getElementById('loading-text');
 
-        // --- Adjust View Elements ---
+        // Adjust View Elements
         const adjustBackToMenuBtn = document.getElementById('adjust-back-to-menu-btn');
         const startScanBtn = document.getElementById('start-scan-btn');
         const stopScanBtn = document.getElementById('stop-scan-btn');
@@ -150,7 +149,7 @@
         const detailLocalizacao = document.getElementById('detail-localizacao');
         const detailTags = document.getElementById('detail-tags');
         
-        // --- Requisition View Elements ---
+        // Requisition View Elements
         const reqBackToMenuBtn = document.getElementById('req-back-to-menu-btn');
         const reqStartScanBtn = document.getElementById('req-start-scan-btn');
         const reqStopScanBtn = document.getElementById('req-stop-scan-btn');
@@ -159,7 +158,7 @@
         const launchFactoryBtn = document.getElementById('launch-factory-btn');
         const launchTerceirosBtn = document.getElementById('launch-terceiros-btn');
 
-        // --- App State ---
+        // App State
         let allProducts = [];
         let adjustSelectedProduct = null;
         let requisitionItems = [];
@@ -200,10 +199,31 @@
         }
 
         // --- General Helpers & DB ---
-        function initDB() { /* ...código inalterado... */ }
-        function saveAdjustmentToDB(payload) { /* ...código inalterado... */ }
-        function toggleLoading(show, text = '') { /* ...código inalterado... */ }
-        function formatCurrency(value) { /* ...código inalterado... */ }
+        function initDB() {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onupgradeneeded = e => { if (!e.target.result.objectStoreNames.contains(STORE_NAME)) e.target.result.createObjectStore(STORE_NAME, { autoIncrement: true }); };
+            request.onsuccess = e => { db = e.target.result; console.log('DB inicializado.'); };
+            request.onerror = e => console.error('DB erro:', e.target.error);
+        }
+
+        function saveAdjustmentToDB(payload) {
+            return new Promise((resolve, reject) => {
+                if (!db) return reject('DB não disponível.');
+                const tx = db.transaction([STORE_NAME], 'readwrite');
+                tx.objectStore(STORE_NAME).add(payload).onsuccess = resolve;
+                tx.onerror = e => reject(e.target.error);
+            });
+        }
+        
+        function toggleLoading(show, text = '') {
+            loadingText.textContent = text;
+            loadingOverlay.classList.toggle('hidden', !show);
+        }
+
+        function formatCurrency(value) {
+            const num = parseFloat(String(value || '0').replace(',', '.'));
+            return isNaN(num) ? "R$ 0,00" : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
         
         async function fetchAllProducts() {
             if (allProducts.length > 0) return true;
@@ -224,11 +244,101 @@
         }
 
         // --- ADJUST STOCK LOGIC ---
-        // --- (Toda a lógica de Ajuste de Estoque permanece aqui, inalterada) ---
-        async function onAdjustScanSuccess(decodedText) { /* ...código inalterado... */ }
-        async function startAdjustScan() { /* ...código inalterado... */ }
-        async function saveStockAdjustment() { /* ...código inalterado... */ }
-        function cancelAdjustAndRescan() { /* ...código inalterado... */ }
+        async function onAdjustScanSuccess(decodedText) {
+            stopAllScanners();
+            adjustSelectedProduct = allProducts.find(p => p.codigo === decodedText);
+
+            if (adjustSelectedProduct) {
+                productDescription.textContent = adjustSelectedProduct.descricao;
+                productStock.textContent = adjustSelectedProduct.estoque || 0;
+                detailCodigo.textContent = adjustSelectedProduct.codigo || 'N/A';
+                detailCusto.textContent = formatCurrency(adjustSelectedProduct.preco_de_custo);
+                detailVenda.textContent = formatCurrency(adjustSelectedProduct.preco);
+                detailEstoqueMinMax.textContent = `${adjustSelectedProduct.estoque_minimo || 0} / ${adjustSelectedProduct.estoque_maximo || 0}`;
+                detailLocalizacao.textContent = adjustSelectedProduct.localizacao || 'N/A';
+                const tags = adjustSelectedProduct.grupo_de_tags_tags;
+                detailTags.textContent = (Array.isArray(tags) && tags.length > 0 && tags[0]) ? tags.join(', ') : 'Nenhuma';
+                
+                resultContainer.classList.remove('hidden');
+                newQuantityInput.value = '';
+                newQuantityInput.focus();
+                accordionContent.classList.add('hidden');
+                accordionIcon.classList.remove('rotate-180');
+            } else {
+                alert(`Produto com código "${decodedText}" não encontrado!`);
+                startAdjustScan(); 
+            }
+        }
+
+        async function startAdjustScan() {
+            const productsLoaded = await fetchAllProducts();
+            if(!productsLoaded) return;
+
+            resultContainer.classList.add('hidden');
+            scannerContainer.classList.remove('hidden');
+            startScanBtn.classList.add('hidden');
+            stopScanBtn.classList.remove('hidden');
+
+            adjustScanner = new Html5Qrcode("reader");
+            try {
+                await adjustScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onAdjustScanSuccess, () => {});
+            } catch (err) {
+                alert("Erro ao iniciar a câmera. Verifique as permissões.");
+                stopAllScanners();
+            }
+        }
+        
+        async function saveStockAdjustment() {
+            if (!adjustSelectedProduct) return alert("Nenhum produto selecionado.");
+            const newQuantity = parseFloat(String(newQuantityInput.value || '').replace(',', '.'));
+            if (isNaN(newQuantity) || newQuantity < 0) return alert("Quantidade inválida.");
+            
+            let userName = 'AppMobile';
+            try { userName = JSON.parse(localStorage.getItem('userInfo')).nome || userName; } catch(e){}
+
+            const payload = {
+                produto: { id: adjustSelectedProduct.id, codigo: adjustSelectedProduct.codigo },
+                operacaoBling: "B", quantidadeFinal: newQuantity, tipoEntrada: "Balanço",
+                observacoes: `Ajuste de balanço via AppMobile por \\"${userName}\\"`,
+                quantidadeMovimento: 0, orderCode: 'BALANCO', codigoService: adjustSelectedProduct.codigo,
+                newStatus: 'N/A', requisitionType: 'balanco', dataEntrega: new Date().toLocaleDateString('pt-BR'),
+                diasCorridos: '0'
+            };
+
+            toggleLoading(true, 'Salvando...');
+            try {
+                const res = await fetch(API_URLS.ORDERS_UPDATE, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!res.ok) throw new Error(`Erro da API: ${res.status}`);
+                await res.json();
+                alert(`Estoque ajustado para ${newQuantity}!`);
+                allProducts = []; 
+                cancelAdjustAndRescan();
+            } catch (error) {
+                console.error("Falha ao enviar:", error);
+                if (!navigator.onLine && 'serviceWorker' in navigator && 'SyncManager' in window) {
+                    try {
+                        await saveAdjustmentToDB(payload);
+                        const swReg = await navigator.serviceWorker.ready;
+                        await swReg.sync.register('sync-adjustments');
+                        alert(`Sem conexão. Ajuste salvo localmente e será enviado depois.`);
+                        cancelAdjustAndRescan();
+                    } catch (dbError) {
+                        alert(`Falha ao salvar localmente: ${dbError.message}.`);
+                    }
+                } else {
+                    alert(`Falha ao ajustar estoque: ${error.message}.`);
+                }
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        function cancelAdjustAndRescan() {
+            resultContainer.classList.add('hidden');
+            newQuantityInput.value = '';
+            adjustSelectedProduct = null;
+            startAdjustScan();
+        }
 
         // --- REQUISITION LOGIC ---
         async function onReqScanSuccess(decodedText) {
@@ -334,8 +444,8 @@
                 await response.json();
                 
                 alert('Requisição lançada com sucesso!');
-                requisitionItems = []; // Limpa a lista
-                showView('menu-view'); // Volta para o menu
+                requisitionItems = []; 
+                showView('menu-view'); 
 
             } catch (error) {
                 console.error("Falha ao lançar requisição:", error);
@@ -384,7 +494,11 @@
     </script>
     
     <script>
-      // Service Worker registration...
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').then(reg => console.log('SW reg.')).catch(err => console.log('SW err:', err));
+        });
+      }
     </script>
 </body>
 </html>
