@@ -342,7 +342,7 @@
 
         // --- REQUISITION LOGIC ---
         async function onReqScanSuccess(decodedText) {
-            await reqScanner.pause(true);
+            await reqScanner.pause(); // CORREÇÃO: Pausa 'leve' sem desligar a câmera
             const product = allProducts.find(p => p.codigo === decodedText);
 
             if (product) {
