@@ -342,39 +342,61 @@
 
         // --- REQUISITION LOGIC ---
         async function onReqScanSuccess(decodedText) {
-            await reqScanner.pause(); // CORREÇÃO: Pausa 'leve' sem desligar a câmera
+            // Parar o scanner para o usuário poder interagir com o prompt
+            if (reqScanner && reqScanner.isScanning) {
+                await reqScanner.stop();
+            }
+
             const product = allProducts.find(p => p.codigo === decodedText);
 
             if (product) {
                 const quantityStr = prompt(`Adicionar à requisição:\n${product.descricao}\n\nQuantidade:`, "1");
-                if (quantityStr) {
+                if (quantityStr) { // Verifica se o usuário não clicou em "Cancelar"
                     const quantity = parseInt(quantityStr, 10);
                     if (!isNaN(quantity) && quantity > 0) {
                         const existingItem = requisitionItems.find(item => item.id === product.id);
-                        if (existingItem) existingItem.quantity += quantity;
-                        else requisitionItems.push({ ...product, quantity });
+                        if (existingItem) {
+                            existingItem.quantity += quantity;
+                        } else {
+                            requisitionItems.push({ ...product, quantity });
+                        }
                         renderRequisitionList();
-                    } else alert("Quantidade inválida.");
+                    } else {
+                        alert("Quantidade inválida.");
+                    }
                 }
-            } else alert(`Produto com código "${decodedText}" não encontrado!`);
+            } else {
+                alert(`Produto com código "${decodedText}" não encontrado!`);
+            }
             
-            if(reqScanner && reqScanner.getState() === "PAUSED") await reqScanner.resume();
+            // Reinicia o scanner para o próximo item, contanto que o usuário não tenha parado manualmente a câmera
+            if (!reqScannerContainer.classList.contains('hidden')) {
+                startReqScan();
+            }
         }
 
         async function startReqScan() {
             const productsLoaded = await fetchAllProducts();
             if (!productsLoaded) return;
 
+            // Garante que a interface do scanner esteja visível
             reqScannerContainer.classList.remove('hidden');
             reqStartScanBtn.classList.add('hidden');
             reqStopScanBtn.classList.remove('hidden');
 
+            // Cria uma nova instância para garantir um estado limpo
             reqScanner = new Html5Qrcode("req-reader");
             try {
-                await reqScanner.start({ facingMode: "environment" }, { fps: 5, qrbox: { width: 250, height: 250 } }, onReqScanSuccess, () => {});
+                // Inicia o scanner
+                await reqScanner.start(
+                    { facingMode: "environment" }, 
+                    { fps: 5, qrbox: { width: 250, height: 250 } }, 
+                    onReqScanSuccess, 
+                    () => {} // Função de erro de scan (ignorar)
+                );
             } catch (err) {
                 alert("Erro ao iniciar a câmera. Verifique as permissões.");
-                stopAllScanners();
+                stopAllScanners(); // Limpa tudo em caso de erro
             }
         }
 
