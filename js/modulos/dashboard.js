@@ -991,6 +991,7 @@ function _getLojaIntegradaOrdersTableHTML(orders) {
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nº da Nota</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente / Data Emissão</th>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendedor</th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Situação</th>
                         <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações / Obs.</th>
@@ -1011,6 +1012,8 @@ function _getLojaIntegradaOrdersTableHTML(orders) {
                         <div class="text-sm font-medium text-gray-900">${nfe.nome_do_cliente || 'N/A'}</div>
                         <div class="text-xs text-gray-500">${formattedDate}</div>
                     </td>
+                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${nfe.nome_do_vendedor || 'N/A'}</td>
+                   
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${(parseFloat(nfe.valor_da_nota) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">${nfe.situacao || 'N/A'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm">

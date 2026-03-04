@@ -1,7 +1,7 @@
 // appMobile/sw.js
 
 // Importa as configurações da API para que a URL de update esteja disponível no Service Worker
-importScripts('../js/apiConfig.js');
+importScripts('js/apiConfig-sw.js');
 
 // 1. Definições do Cache
 const CACHE_NAME = 'ajusta-estoque-app-v1';
@@ -10,8 +10,7 @@ const CACHE_FILES = [
     '../css/styles.css',
     'https://cdn.tailwindcss.com',
     'https://unpkg.com/html5-qrcode',
-    '../js/apiConfig.js',
-    '../js/utils.js'
+    './js/apiConfig-sw.js',
     // Adicione aqui um ícone para notificações, se tiver. Ex: 'images/icon-192x192.png'
 ];
 
@@ -99,7 +98,7 @@ self.addEventListener('activate', (event) => {
 // 4. Interceptação de Requisições (Estratégia Cache-First para GET)
 self.addEventListener('fetch', (event) => {
     // Ignora requisições que não são GET (ex: POST para a API)
-    if (event.request.method !== 'GET') {
+    if (event.request.method !== 'GET' || event.request.url.includes('manifest.json')) {
         return;
     }
     

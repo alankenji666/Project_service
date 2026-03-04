@@ -5,7 +5,7 @@
  * Isso facilita a manutenção e a troca entre ambientes (desenvolvimento/produção).
  */
 
-export const API_URLS = {
+const API_URLS = {
     // APIs de Autenticação e Usuários
     LOGIN: 'https://bling-proxy-api-255108547424.southamerica-east1.run.app/auth/login',
     GET_ALL_USERS: 'https://bling-proxy-api-255108547424.southamerica-east1.run.app/auth/get-all-users',
@@ -30,7 +30,7 @@ export const API_URLS = {
     // APIs de Observações
     TERCEIROS_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/add-requisition-observation",
     FABRICA_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/add-fabrica-observation",
-      SAIDA_FABRICA_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/add-fabrica-observation", // Reutiliza a mesma API de fábrica
+    SAIDA_FABRICA_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/add-fabrica-observation", // Reutiliza a mesma API de fábrica
     SAIDA_GARANTIA_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/add-garantia-observation",
 
     // APIs de Atendimento WhatsApp

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MKS Service</title>
-    <link rel="manifest" href="manifest.json">
+    <!-- <link rel="manifest" href="manifest.json"> -->
     <meta name="theme-color" content="#1E3A8A"/>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -117,7 +117,7 @@
     </div>
 
     <script type="module">
-        import { API_URLS } from '../js/apiConfig.js';
+        import { API_URLS } from '/appMobile/js/apiConfig.js';
 
         // --- DOM Elements ---
         const menuView = document.getElementById('menu-view');
@@ -299,7 +299,7 @@
             const payload = {
                 produto: { id: adjustSelectedProduct.id, codigo: adjustSelectedProduct.codigo },
                 operacaoBling: "B", quantidadeFinal: newQuantity, tipoEntrada: "Balanço",
-                observacoes: `Ajuste de balanço via AppMobile por \\"${userName}\\"`,
+                observacoes: `Ajuste de balanço via AppMobile por '''${userName}'''`,
                 quantidadeMovimento: 0, orderCode: 'BALANCO', codigoService: adjustSelectedProduct.codigo,
                 newStatus: 'N/A', requisitionType: 'balanco', dataEntrega: new Date().toLocaleDateString('pt-BR'),
                 diasCorridos: '0'
@@ -342,7 +342,6 @@
 
         // --- REQUISITION LOGIC ---
         async function onReqScanSuccess(decodedText) {
-            // Parar o scanner para o usuário poder interagir com o prompt
             if (reqScanner && reqScanner.isScanning) {
                 await reqScanner.stop();
             }
@@ -350,8 +349,11 @@
             const product = allProducts.find(p => p.codigo === decodedText);
 
             if (product) {
-                const quantityStr = prompt(`Adicionar à requisição:\n${product.descricao}\n\nQuantidade:`, "1");
-                if (quantityStr) { // Verifica se o usuário não clicou em "Cancelar"
+                const quantityStr = prompt(`Adicionar à requisição:
+${product.descricao}
+
+Quantidade:`, "1");
+                if (quantityStr) {
                     const quantity = parseInt(quantityStr, 10);
                     if (!isNaN(quantity) && quantity > 0) {
                         const existingItem = requisitionItems.find(item => item.id === product.id);
@@ -369,7 +371,6 @@
                 alert(`Produto com código "${decodedText}" não encontrado!`);
             }
             
-            // Reinicia o scanner para o próximo item, contanto que o usuário não tenha parado manualmente a câmera
             if (!reqScannerContainer.classList.contains('hidden')) {
                 startReqScan();
             }
@@ -379,24 +380,21 @@
             const productsLoaded = await fetchAllProducts();
             if (!productsLoaded) return;
 
-            // Garante que a interface do scanner esteja visível
             reqScannerContainer.classList.remove('hidden');
             reqStartScanBtn.classList.add('hidden');
             reqStopScanBtn.classList.remove('hidden');
 
-            // Cria uma nova instância para garantir um estado limpo
             reqScanner = new Html5Qrcode("req-reader");
             try {
-                // Inicia o scanner
                 await reqScanner.start(
                     { facingMode: "environment" }, 
                     { fps: 5, qrbox: { width: 250, height: 250 } }, 
                     onReqScanSuccess, 
-                    () => {} // Função de erro de scan (ignorar)
+                    () => {}
                 );
             } catch (err) {
                 alert("Erro ao iniciar a câmera. Verifique as permissões.");
-                stopAllScanners(); // Limpa tudo em caso de erro
+                stopAllScanners();
             }
         }
 
@@ -433,11 +431,21 @@
         async function launchRequisition(type) {
             if (requisitionItems.length === 0) return alert("A lista de requisição está vazia.");
 
-            const requiredTag = type; // 'fabrica' ou 'terceiros'
-            const isValid = requisitionItems.every(item => item.grupo_de_tags_tags && item.grupo_de_tags_tags.includes(requiredTag));
+            // VALIDAÇÃO CORRIGIDA: Checa se o código do produto começa com '6' (Fábrica) ou '5' (Terceiros)
+            const isFabrica = type === 'fabrica';
+            const expectedStartChar = isFabrica ? '6' : '5';
+            const typeName = isFabrica ? 'Fábrica' : 'Terceiros';
+            
+            const isValid = requisitionItems.every(item => item.codigo && String(item.codigo).startsWith(expectedStartChar));
 
             if (!isValid) {
-                return alert(`Todos os itens da lista devem ser do tipo '${requiredTag}'. Por favor, verifique a lista e tente novamente.`);
+                const invalidItems = requisitionItems.filter(item => !(item.codigo && String(item.codigo).startsWith(expectedStartChar)));
+                const invalidItemCodes = invalidItems.map(item => `${item.codigo} (${item.descricao.substring(0, 15)}...)`).join('');
+                const errorMessage = `Todos os itens para uma requisição de '${typeName}' devem ter códigos iniciados com '${expectedStartChar}'.
+
+Itens inválidos:
+${invalidItemCodes}`;
+                return alert(errorMessage);
             }
 
             let userName = 'AppMobile';
@@ -445,7 +453,6 @@
 
             const payload = {
                 requisitionType: type,
-                orderCode: `REQ-${Date.now()}`,
                 observacoes: `Requisição via AppMobile por "${userName}"`,
                 items: requisitionItems.map(item => ({
                     id: item.id,
@@ -458,7 +465,8 @@
 
             toggleLoading(true, 'Lançando Requisição...');
             try {
-                const response = await fetch(API_URLS.ORDERS_UPDATE, {
+                const url = `${API_URLS.WEBHOOK_LAUNCH}/requisition`;
+                const response = await fetch(url, {
                     method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
