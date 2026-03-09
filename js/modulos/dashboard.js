@@ -178,6 +178,36 @@ function _showObservationTooltip(event) {
     if (_utils.positionTooltip) _utils.positionTooltip(event, _dom.customProductTooltip);
 }
 
+function _showSellerSalesTooltip(event) {
+    const targetElement = event.target.closest('.seller-tooltip-trigger');
+    if (!targetElement || !_dom.customProductTooltip) return;
+
+    const sellerName = targetElement.dataset.sellerName;
+    if (!sellerName) return;
+
+    // Filtra as vendas do vendedor e calcula o total
+    const sellerSales = _currentSalesDetails.filter(nfe => nfe.nome_do_vendedor === sellerName);
+    const totalSalesValue = sellerSales.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
+
+    const tooltipContent = `
+        <div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 max-w-md">
+            <h4 class="font-bold text-center text-sm mb-2 pb-1 border-b">Vendas de ${sellerName}</h4>
+            <div class="space-y-1 text-xs">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-700">Total Vendas:</span>
+                    <span class="font-semibold text-gray-800 ml-4">${totalSalesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-700">Notas no Período:</span>
+                    <span class="font-semibold text-gray-800 ml-4">${sellerSales.length}</span>
+                </div>
+            </div>
+        </div>`;
+
+    _dom.customProductTooltip.innerHTML = tooltipContent;
+    if (_utils.positionTooltip) _utils.positionTooltip(event, _dom.customProductTooltip);
+}
+
 function _exportSalesDetailsNotesToCSV() {
     if (!_currentSalesDetails || _currentSalesDetails.length === 0) {
         _utils.showMessageModal("Nenhum Dado", "Não há notas para exportar.");
@@ -446,6 +476,10 @@ function _bindEvents() {
         _dom.salesDetailsModalContent.addEventListener('mouseover', (event) => {
             const exclamationIcon = event.target.closest('.nfe-observation-status-icon');
             if (exclamationIcon) { _showObservationTooltip(event); return; }
+
+            const sellerTrigger = event.target.closest('.seller-tooltip-trigger');
+            if (sellerTrigger) { _showSellerSalesTooltip(event); return; }
+
             const itemsTrigger = event.target.closest('.nfe-items-tooltip-trigger');
             if (itemsTrigger) _showNfeItemsTooltip(event);
         });
@@ -1012,7 +1046,11 @@ function _getLojaIntegradaOrdersTableHTML(orders) {
                         <div class="text-sm font-medium text-gray-900">${nfe.nome_do_cliente || 'N/A'}</div>
                         <div class="text-xs text-gray-500">${formattedDate}</div>
                     </td>
-                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${nfe.nome_do_vendedor || 'N/A'}</td>
+                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+    <span class="seller-tooltip-trigger cursor-pointer" data-seller-name="${nfe.nome_do_vendedor || ''}">
+        ${nfe.nome_do_vendedor || 'N/A'}
+    </span>
+</td>
                    
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${(parseFloat(nfe.valor_da_nota) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">${nfe.situacao || 'N/A'}</td>
