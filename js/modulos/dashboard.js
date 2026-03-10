@@ -110,6 +110,13 @@ function _parseNfeItemsString(itemsString) {
         _dom.noSalesDetailsMessage = document.getElementById('no-sales-details-message');
         _dom.customProductTooltip = document.getElementById('custom-product-tooltip');
     
+        // Novos elementos de seleção de dashboard
+        _dom.selectorContainer = document.getElementById('dashboard-selector-container');
+        _dom.vendasContainer = document.getElementById('dashboard-vendas-container');
+        _dom.selectVendasBtn = document.getElementById('select-vendas-dashboard');
+        _dom.selectEstoqueBtn = document.getElementById('select-estoque-dashboard');
+        _dom.backToSelectorBtn = document.getElementById('back-to-selector-btn');
+
         // ADICIONE AS 4 LINHAS ABAIXO
         _dom.exportNotesBtn = document.getElementById('export-sales-details-notes-csv-btn');
         _dom.exportItemsBtn = document.getElementById('export-sales-details-items-csv-btn');
@@ -117,6 +124,19 @@ function _parseNfeItemsString(itemsString) {
         _dom.exportDropdown = document.getElementById('sales-details-export-dropdown');
         _dom.vendaTypeToggle = document.getElementById('venda-type-toggle');
 
+    }
+
+    function _showSalesDashboard() {
+        if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
+        if (_dom.vendasContainer) _dom.vendasContainer.classList.remove('hidden');
+        if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
+        _setDateRange('all');
+    }
+
+    function _showSelector() {
+        if (_dom.selectorContainer) _dom.selectorContainer.classList.remove('hidden');
+        if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
+        if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
     }
 
     // ADICIONADO: Funções de tooltip
@@ -368,6 +388,28 @@ function _populateYearFilter() {
 
 
 function _bindEvents() {
+    // --- Listeners de Seleção de Dashboard ---
+    if (_dom.selectVendasBtn) {
+        _dom.selectVendasBtn.addEventListener('click', () => {
+            _showSalesDashboard();
+        });
+    }
+
+    if (_dom.selectEstoqueBtn) {
+        _dom.selectEstoqueBtn.addEventListener('click', () => {
+            // Lógica para o dashboard de estoque (futuro)
+            if (_utils.showMessageModal) {
+                _utils.showMessageModal("Em Manutenção", "O dashboard de estoque está em desenvolvimento e estará disponível em breve.");
+            }
+        });
+    }
+
+    if (_dom.backToSelectorBtn) {
+        _dom.backToSelectorBtn.addEventListener('click', () => {
+            _showSelector();
+        });
+    }
+
     // --- Listeners do Filtro de Data ---
     if (_dom.yearFilter) {
         _dom.yearFilter.addEventListener('change', (event) => {
@@ -1101,16 +1143,6 @@ start: function(allNFeData, allLojaIntegradaOrders) {
         _bindEvents();
         _state.isInitialized = true;
     }
-    _populateYearFilter();
-    // Se já estiver rodando, não faz nada. A função stop() reseta isso.
-    if (_state.isStarted) return; 
-
-    console.log('[DashboardApp] Starting...');
-    
-    // Mostra a barra de filtro
-    if (_dom.filterBar) {
-        _dom.filterBar.classList.remove('hidden');
-    }
 
     // Atualiza os dados recebidos
     if (allNFeData) {
@@ -1120,8 +1152,16 @@ start: function(allNFeData, allLojaIntegradaOrders) {
         _allLojaIntegradaOrders = allLojaIntegradaOrders;
     }
 
-    // Define um filtro de data inicial para o gráfico
-    _setDateRange('all'); 
+    _populateYearFilter();
+
+    // Se já estiver rodando, não faz nada.
+    if (_state.isStarted) return; 
+
+    console.log('[DashboardApp] Starting...');
+    
+    // Mostra a tela de seleção inicial (Cards Vendas/Estoque)
+    _showSelector();
+    
     _state.isStarted = true;
 },
 
@@ -1133,9 +1173,11 @@ start: function(allNFeData, allLojaIntegradaOrders) {
                 _salesChartInstance.destroy();
                 _salesChartInstance = null;
             }
-            if (_dom.filterBar) {
-                _dom.filterBar.classList.add('hidden');
-            }
+            // Esconde todos os containers do dashboard ao parar
+            if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
+            if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
+            if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
+            
              _state.isStarted = false;
         },
 

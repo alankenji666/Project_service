@@ -412,33 +412,76 @@
 
         <!-- NOVA PÁGINA: DASHBOARDS -->
         <main id="page-dashboards" class="hidden p-8 h-full overflow-y-auto">
-            <div class="text-center">
-                <h1 class="text-4xl font-bold text-gray-800 mb-2">Dashboard de Vendas</h1>
-                <p class="text-lg text-gray-600 mb-6">Evolução de vendas por canal.</p>
-            </div>
-            <div id="dashboard-content" class="w-full">
-                <div id="dashboard-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Tela de Seleção de Dashboard -->
+            <div id="dashboard-selector-container" class="flex flex-col items-center justify-center min-h-[60vh]">
+                <div class="text-center mb-12">
+                    <h1 class="text-4xl font-bold text-gray-800 mb-2">Painéis de Controle</h1>
+                    <p class="text-lg text-gray-600">Selecione o dashboard que deseja visualizar.</p>
                 </div>
-               <!-- ATUALIZADO: Container do gráfico com o novo flip switch -->
-<!-- ATUALIZADO: Container do gráfico com o novo flip switch -->
-<div class="relative bg-white p-4 rounded-lg shadow-md h-[500px]">
-    
-    <!-- NOVO: Flip Switch para Venda Bruta/Líquida -->
-    <div class="absolute top-4 right-4 flex items-center z-10">
-        <span class="mr-3 text-sm font-medium text-gray-700">Venda Bruta</span>
-        <label for="venda-type-toggle" class="inline-flex relative items-center cursor-pointer">
-            <input type="checkbox" id="venda-type-toggle" class="sr-only peer">
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-        </label>
-        <span class="ml-3 text-sm font-medium text-gray-700">Venda Líquida</span>
-    </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
+                    <!-- Card Dashboard de Vendas -->
+                    <div id="select-vendas-dashboard" class="bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all cursor-pointer border-2 border-transparent hover:border-blue-500 group">
+                        <div class="flex flex-col items-center text-center">
+                            <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-500 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-600 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="LineChart" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                            </div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-3">Dashboard de Vendas</h2>
+                            <p class="text-gray-600">Visualize a evolução de vendas por canal, ticket médio e performance de vendedores.</p>
+                        </div>
+                    </div>
 
-    <canvas id="sales-chart"></canvas>
-</div>
+                    <!-- Card Dashboard de Estoque -->
+                    <div id="select-estoque-dashboard" class="bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all cursor-pointer border-2 border-transparent hover:border-green-500 group">
+                        <div class="flex flex-col items-center text-center">
+                            <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-green-500 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-green-600 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                            </div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-3">Dashboard de Estoque</h2>
+                            <p class="text-gray-600">Acompanhe níveis de estoque, reposição de produtos e análise de giro.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
+            <!-- Conteúdo do Dashboard de Vendas (Oculto Inicialmente) -->
+            <div id="dashboard-vendas-container" class="hidden">
+                <div class="flex items-center mb-6">
+                    <button id="back-to-selector-btn" class="mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-600" title="Voltar para seleção">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                    </button>
+                    <div>
+                        <h1 class="text-4xl font-bold text-gray-800 mb-1">Dashboard de Vendas</h1>
+                        <p class="text-lg text-gray-600">Evolução de vendas por canal.</p>
+                    </div>
+                </div>
 
-                <!-- NOVO: Container para a tabela de vendas -->
-                <div id="sales-table-container" class="mt-8"></div>
+                <div id="dashboard-content" class="w-full">
+                    <div id="dashboard-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    </div>
+                    
+                    <div class="relative bg-white p-4 rounded-lg shadow-md h-[500px]">
+                        <!-- Flip Switch para Venda Bruta/Líquida -->
+                        <div class="absolute top-4 right-4 flex items-center z-10">
+                            <span class="mr-3 text-sm font-medium text-gray-700">Venda Bruta</span>
+                            <label for="venda-type-toggle" class="inline-flex relative items-center cursor-pointer">
+                                <input type="checkbox" id="venda-type-toggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                            <span class="ml-3 text-sm font-medium text-gray-700">Venda Líquida</span>
+                        </div>
+                        <canvas id="sales-chart"></canvas>
+                    </div>
+
+                    <div id="sales-table-container" class="mt-8"></div>
+                </div>
             </div>
         </main>
 
