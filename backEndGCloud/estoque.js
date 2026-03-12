@@ -117,39 +117,40 @@ const createEstoqueRouter = (
     /**
      * Rota unificada para movimentação de estoque e atualização de status de pedido.
      */
-    router.post('/update-stock', async (req, res) => {
+    router.post('/update-stock', async (req, res, next) => {
         const { 
             produto, operacaoBling, quantidadeMovimento, quantidadeFinal, 
             tipoEntrada, observacoes, orderCode, newStatus, 
             requisitionType, codigoService, dataEntrega, diasCorridos 
         } = req.body;
 
-        // --- LÓGICA DE VALIDAÇÃO ---
-        const isStockUpdate = operacaoBling === 'B' || (typeof quantidadeMovimento !== 'undefined' && Number(quantidadeMovimento) > 0);
-        const isStatusUpdate = orderCode && newStatus && requisitionType && codigoService;
-
-        if (isStockUpdate && (!produto || !produto.id || !produto.codigo || !operacaoBling || typeof quantidadeFinal === 'undefined' || !tipoEntrada)) {
-             return res.status(400).send({ status: 'error', message: "Payload inválido. Para atualizar o estoque, campos (produto.id, produto.codigo, operacaoBling, quantidadeFinal, tipoEntrada) são obrigatórios."});
-        }
-        
-        if (isStockUpdate && !['E', 'S', 'B'].includes(operacaoBling)) {
-            return res.status(400).send({ status: 'error', message: "Valor inválido para 'operacaoBling'. Use 'E', 'S' ou 'B'."});
-        }
-        
-        if (!isStockUpdate && !isStatusUpdate) {
-            return res.status(400).send({ 
-                status: 'error', 
-                message: "Payload inválido. Forneça dados de estoque (operação 'B' ou 'quantidadeMovimento' > 0) OU dados de status (orderCode, newStatus, requisitionType, codigoService)."
-            });
-        }
-        // --- FIM DA VALIDAÇÃO ---
-
-        let sheets;
-        let blingResponseData = null;
         try {
-            sheets = await getSheetsClient();
-            const accessToken = await getTokenWithRetry(axios, APPS_SCRIPT_TOKEN_URL);
+            // --- LÓGICA DE VALIDAÇÃO ---
+            const isStockUpdate = operacaoBling === 'B' || (typeof quantidadeMovimento !== 'undefined' && Number(quantidadeMovimento) > 0);
+            const isStatusUpdate = orderCode && newStatus && requisitionType && codigoService;
+
+            if (isStockUpdate && (!produto || !produto.id || !produto.codigo || !operacaoBling || typeof quantidadeFinal === 'undefined' || !tipoEntrada)) {
+                const error = new Error("Payload inválido. Para atualizar o estoque, campos (produto.id, produto.codigo, operacaoBling, quantidadeFinal, tipoEntrada) são obrigatórios.");
+                error.statusCode = 400;
+                throw error;
+            }
             
+            if (isStockUpdate && !['E', 'S', 'B'].includes(operacaoBling)) {
+                const error = new Error("Valor inválido para 'operacaoBling'. Use 'E', 'S' ou 'B'.");
+                error.statusCode = 400;
+                throw error;
+            }
+            
+            if (!isStockUpdate && !isStatusUpdate) {
+                const error = new Error("Payload inválido. Forneça dados de estoque (operação 'B' ou 'quantidadeMovimento' > 0) OU dados de status (orderCode, newStatus, requisitionType, codigoService).");
+                error.statusCode = 400;
+                throw error;
+            }
+            // --- FIM DA VALIDAÇÃO ---
+
+            const sheets = await getSheetsClient();
+            const accessToken = await getTokenWithRetry(axios, APPS_SCRIPT_TOKEN_URL);
+            let blingResponseData = null;
             
             // --- TAREFA 1: ATUALIZAR ESTOQUE (BLING + PLANILHA DE ESTOQUE) ---
             if (isStockUpdate) {
@@ -187,7 +188,9 @@ const createEstoqueRouter = (
 
                 if (blingResponse.status >= 400) {
                     console.error("Erro na chamada da API do Bling:", blingResponse.data);
-                    throw { response: blingResponse };
+                    const error = new Error(blingResponse.data?.error?.message || 'Falha ao atualizar estoque no Bling.');
+                    error.statusCode = blingResponse.status;
+                    throw error;
                 }
                 
                 blingResponseData = blingResponse.data; 
@@ -228,8 +231,6 @@ const createEstoqueRouter = (
                     console.error(`[TAREFA 1 - ESTOQUE] ERRO CRÍTICO: Cabeçalho não encontrado na planilha de estoque.`);
                 }
                 console.log('Tarefa 1 concluída.');
-            } else {
-                console.log('Pulando Tarefa 1: Atualização de Estoque.');
             }
 
 
@@ -237,17 +238,11 @@ const createEstoqueRouter = (
             if (isStatusUpdate) {
                 console.log(`Iniciando Tarefa 2: Atualização de Status para o tipo: ${requisitionType}...`);
                 let reqSheetId, reqSheetName;
-                
-                // Define os nomes dos cabeçalhos requeridos.
-                // Usamos as strings com acento para compatibilidade máxima com a planilha,
-                // mas a função findHeaderInfo os normalizará para a comparação.
                 let headerCheck = [];
                 
-                // Mapeamento das planilhas de destino
                 if (requisitionType === 'saidas-garantia') {
                     reqSheetId = SPREADSHEET_ID_SAIDA_GARANTIA;
                     reqSheetName = SHEET_NAME_SAIDA_GARANTIA;
-                    // O cabeçalho na planilha de Garantia (imagem) usa acento/cedilha.
                     headerCheck = ['Requisição', 'Codigo Service', 'Situação']; 
                 } else if (requisitionType === 'saidas-fabrica') {
                     reqSheetId = SPREADSHEET_ID_SAIDA_FABRICA;
@@ -262,20 +257,15 @@ const createEstoqueRouter = (
                     reqSheetName = SHEET_NAME_REQUISICAO_GERAL_TERCEIROS;
                     headerCheck = ['requisição', 'codigo service', 'situação']; 
                 } else {
-                     console.warn(`Tipo de requisição "${requisitionType}" inválido. Pulando Tarefa 2.`);
-                     return res.status(200).send({ 
-                         status: 'success_with_warning', 
-                         message: 'Operação de estoque concluída, mas o tipo de requisição para atualização de status não foi reconhecido.', 
-                         blingResponse: blingResponseData 
-                     });
+                     const error = new Error(`Tipo de requisição "${requisitionType}" inválido.`);
+                     error.statusCode = 400;
+                     throw error;
                 }
                 
                 const reqHeaderInfo = await findHeaderInfo(sheets, reqSheetId, reqSheetName, headerCheck);
                 
                 if (reqHeaderInfo) {
                     const { rowIndex: headerRowIndex, headers } = reqHeaderInfo;
-                    
-                    // Os headers (índices) são obtidos procurando pelo nome normalizado.
                     const orderCodeCol = headers.indexOf(normalizeString('requisição')); 
                     const itemCodeCol = headers.indexOf(normalizeString('codigo service'));
                     const statusCol = headers.indexOf(normalizeString('situação'));
@@ -283,7 +273,6 @@ const createEstoqueRouter = (
                     const diasCorridosCol = headers.indexOf(normalizeString('dias corridos')); 
                     
                     if (orderCodeCol === -1 || itemCodeCol === -1 || statusCol === -1) {
-                         // Se cair aqui, a normalização dos headers da planilha não bateu com o esperado.
                          console.error(`[TAREFA 2 - ERRO] Colunas essenciais não encontradas em ${reqSheetName} após normalização.`);
                     } else {
                         const allDataRange = `${reqSheetName}!A${headerRowIndex + 1}:Z`;
@@ -291,32 +280,20 @@ const createEstoqueRouter = (
                         const reqRows = allDataResponse.data.values;
 
                         let rowIndexToUpdate = -1;
-                        // Normaliza os dados do payload para a busca
                         const orderCodeToFind = normalizeString(orderCode);
                         const itemCodeToFind = normalizeString(codigoService);
-                        
-                        console.log(`[TAREFA 2 - REQUISIÇÃO] Buscando por Req (Norm): "${orderCodeToFind}" e Código (Norm): "${itemCodeToFind}"`);
                         
                         if (reqRows) {
                             for (let i = 0; i < reqRows.length; i++) {
                                 const row = reqRows[i];
-                                
-                                // NORMALIZAÇÃO ROBUSTA para comparação da linha
-                                // Usamos o índice da coluna diretamente na linha de dados (row)
                                 const sheetOrderCode = normalizeString(row[orderCodeCol]);
                                 const sheetItemCode = normalizeString(row[itemCodeCol]);
-                                
-                                // NORMALIZAÇÃO ROBUSTA para o Status
                                 const currentStatus = normalizeString(row[statusCol]).toUpperCase(); 
                                 
-                                // Checagem: Encontra a linha que corresponde e que está PENDENTE
                                 if (sheetOrderCode === orderCodeToFind && sheetItemCode === itemCodeToFind) {
                                     if (currentStatus === 'PENDENTE') {
                                         rowIndexToUpdate = headerRowIndex + 1 + i;
-                                        console.log(`[TAREFA 2 - REQUISIÇÃO] Item PENDENTE encontrado na linha ${rowIndexToUpdate}.`);
                                         break;
-                                    } else {
-                                        console.warn(`[TAREFA 2 - DEBUG] Linha ${headerRowIndex + 1 + i}: Match Req/Code, Status ATUAL é "${currentStatus}". Esperado "PENDENTE". NÃO ATUALIZADO.`);
                                     }
                                 }
                             }
@@ -324,38 +301,26 @@ const createEstoqueRouter = (
 
                         if (rowIndexToUpdate !== -1) {
                             const updates = [];
-                            
-                            // 1. Atualiza Status
                             const statusRange = `${reqSheetName}!${String.fromCharCode(65 + statusCol)}${rowIndexToUpdate}`;
                             updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: statusRange, valueInputOption: 'RAW', resource: { values: [[newStatus]] }}));
-                            console.log(`[TAREFA 2 - REQUISIÇÃO] Status atualizado para "${newStatus}" no range ${statusRange}.`);
 
-                            // 2. Atualiza Data Entrega (se OK e coluna existir)
                             if (newStatus.toLowerCase() === 'ok' && deliveryDateCol !== -1) {
                                 const dateRange = `${reqSheetName}!${String.fromCharCode(65 + deliveryDateCol)}${rowIndexToUpdate}`;
                                 const finalDate = dataEntrega || new Date().toLocaleDateString('pt-BR');
                                 updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: dateRange, valueInputOption: 'RAW', resource: { values: [[finalDate]] }}));
-                                console.log(`[TAREFA 2 - REQUISIÇÃO] Data de entrega preenchida com "${finalDate}".`);
                             }
                             
-                            // 3. Atualiza Dias Corridos (se coluna existir)
                             if (diasCorridosCol !== -1 && diasCorridos) {
                                 const diasRange = `${reqSheetName}!${String.fromCharCode(65 + diasCorridosCol)}${rowIndexToUpdate}`;
                                 updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: diasRange, valueInputOption: 'RAW', resource: { values: [[diasCorridos]] }}));
-                                console.log(`[TAREFA 2 - REQUISIÇÃO] Dias Corridos preenchidos: ${diasCorridos}.`);
                             }
                             
                             await Promise.all(updates);
-                            console.log(`[TAREFA 2 - REQUISIÇÃO] SUCESSO: Status do item atualizado.`);
                         } else {
                             console.warn(`[TAREFA 2 - REQUISIÇÃO] AVISO: Item PENDENTE não encontrado para Req: ${orderCodeToFind} / Cód: ${itemCodeToFind} em "${reqSheetName}".`);
                         }
                     }
-                } else {
-                    console.error(`[TAREFA 2 - REQUISIÇÃO] ERRO: Cabeçalho não encontrado na planilha de requisição "${reqSheetName}".`);
                 }
-            } else {
-                console.log('Pulando Tarefa 2: Atualização de Status (dados do pedido não fornecidos).');
             }
             
             res.status(200).send({
@@ -365,38 +330,33 @@ const createEstoqueRouter = (
             });
 
         } catch (error) {
-            console.error('[estoque.js] Erro na rota unificada:', error.message, error.stack);
-            const errorMessage = error.response ? (error.response.data?.error?.message || JSON.stringify(error.response.data)) : `Erro interno: ${error.message}`;
-            const statusCode = error.response ? error.response.status : 500;
-            res.status(statusCode).send({ status: 'error', message: errorMessage });
+            next(error);
         }
     });
 
-    // As outras rotas (/depositos, /find-product-id) continuam as mesmas
-    router.get('/depositos', async (req, res) => {
+    router.get('/depositos', async (req, res, next) => {
         try {
             const accessToken = await getTokenWithRetry(axios, APPS_SCRIPT_TOKEN_URL);
-
             const blingUrl = `${BLING_API_BASE_URL}/depositos`;
             const blingResponse = await axios.get(blingUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
             
             const depositos = blingResponse.data.data.map(d => ({ id: d.id, descricao: d.descricao }));
             res.status(200).send({ status: 'success', data: depositos });
         } catch (error) {
-            console.error('[estoque.js] Erro ao obter lista de depósitos:', error.message);
-            const statusCode = error.response ? error.response.status : 500;
-            const errorMessage = error.response ? JSON.stringify(error.response.data) : `Erro interno: ${error.message}`;
-            res.status(statusCode).send({ status: 'error', message: errorMessage });
+            next(error);
         }
     });
 
-    router.get('/find-product-id', async (req, res) => {
+    router.get('/find-product-id', async (req, res, next) => {
         const { codigo } = req.query;
-        if (!codigo) return res.status(400).send({ status: 'error', message: "O parâmetro 'codigo' é obrigatório." });
+        if (!codigo) {
+            const error = new Error("O parâmetro 'codigo' é obrigatório.");
+            error.statusCode = 400;
+            return next(error);
+        }
 
         try {
             const accessToken = await getTokenWithRetry(axios, APPS_SCRIPT_TOKEN_URL);
-
             const blingUrl = `${BLING_API_BASE_URL}/produtos?codigo=${codigo}`;
             const blingResponse = await axios.get(blingUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
 
@@ -404,13 +364,12 @@ const createEstoqueRouter = (
                 const produto = blingResponse.data.data[0];
                 res.status(200).send({ status: 'success', data: { id: produto.id, codigo: produto.codigo } });
             } else {
-                res.status(404).send({ status: 'error', message: `Produto com código "${codigo}" não encontrado.` });
+                const error = new Error(`Produto com código "${codigo}" não encontrado.`);
+                error.statusCode = 404;
+                throw error;
             }
         } catch (error) {
-            console.error('[estoque.js] Erro ao buscar ID do produto:', error.message);
-            const statusCode = error.response ? error.response.status : 500;
-            const errorMessage = error.response ? JSON.stringify(error.response.data) : `Erro interno: ${error.message}`;
-            res.status(statusCode).send({ status: 'error', message: errorMessage });
+            next(error);
         }
     });
 

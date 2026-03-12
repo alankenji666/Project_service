@@ -46,22 +46,18 @@ const createSaidaFabricaRouter = (
     const router = express.Router();
     const DEPOSITO_PADRAO_ID = 14887835380; // ID do depósito padrão do Bling
 
-    router.post('/', async (req, res) => {
+    router.post('/', async (req, res, next) => {
         console.log('Requisição POST recebida em /saida-fabrica:', JSON.stringify(req.body, null, 2));
-
-        let sheets;
-        try {
-            sheets = await getInitializedSheetsClient();
-        } catch (error) {
-            console.error('Erro ao obter cliente do Google Sheets:', error);
-            return res.status(500).send({ status: 'error', message: 'Serviço de planilha não disponível.' });
-        }
 
         try {
             const { data } = req.body;
             if (!data || !Array.isArray(data) || data.length === 0) {
-                return res.status(400).send({ status: 'error', message: 'Payload inválido. O corpo deve conter um array "data".' });
+                const error = new Error('Payload inválido. O corpo deve conter um array "data".');
+                error.statusCode = 400;
+                throw error;
             }
+
+            const sheets = await getInitializedSheetsClient();
 
             // ETAPA 1: Registrar a saída na planilha de saídas.
             console.log('[ETAPA 1] Iniciando registro na planilha de saídas...');
@@ -195,9 +191,7 @@ const createSaidaFabricaRouter = (
             });
 
         } catch (error) {
-            console.error('Erro fatal na rota /saida-fabrica:', error.message, error.stack);
-            const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-            res.status(500).send({ status: 'error', message: `Falha ao registrar saída: ${errorMessage}` });
+            next(error);
         }
     });
 

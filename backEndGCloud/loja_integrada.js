@@ -150,7 +150,7 @@ const createLojaIntegradaRouter = (
         };
     };
 
-    router.post('/webhook', async (req, res) => {
+    router.post('/webhook', async (req, res, next) => {
         console.log('--- WEBHOOK RECEBIDO ---');
         try {
             const pedido = req.body;
@@ -160,7 +160,9 @@ const createLojaIntegradaRouter = (
             const authHeader = req.headers['authorization'];
             if (config.WEBHOOK_TOKEN && authHeader !== `Bearer ${config.WEBHOOK_TOKEN}`) {
                 console.warn('Token Webhook Inválido');
-                return res.status(401).send({ status: "não autorizado" });
+                const error = new Error('não autorizado');
+                error.statusCode = 401;
+                throw error;
             }
 
             // Ignorar se não houve mudança real de situação
@@ -171,7 +173,9 @@ const createLojaIntegradaRouter = (
 
             const sheets = await getSheetsClient();
             const headerInfo = await findHeaderInfo(sheets, spreadsheetIdNFE, sheetNameVendas, REQUIRED_HEADERS);
-            if (!headerInfo) throw new Error("Cabeçalhos não localizados.");
+            if (!headerInfo) {
+                throw new Error("Cabeçalhos não localizados na planilha de vendas.");
+            }
 
             const pedidoNumeroStr = String(pedido.numero).trim();
             const colIndexPedido = headerInfo.headers.map(h => h.toLowerCase().trim().replace(/\s/g, '').replace(/[^a-z0-9]/g, '')).indexOf("numeropedido");
@@ -195,7 +199,6 @@ const createLojaIntegradaRouter = (
 
             const pedidoObj = formatarPedidoParaObjeto(pedido);
             const rowData = headerInfo.headers.map(h => {
-                // Normaliza o cabeçalho da mesma forma que as chaves do objeto
                 const key = h.toLowerCase().trim().replace(/\s/g, '').replace(/\//g, '').replace(/[^a-z0-9]/g, '');
                 return pedidoObj[key] !== undefined ? pedidoObj[key] : "";
             });
@@ -223,19 +226,22 @@ const createLojaIntegradaRouter = (
 
             res.status(200).send({ status: "recebido" });
         } catch (error) {
-            console.error('Erro no Webhook:', error.message);
-            res.status(200).send({ status: "erro", message: error.message });
+            next(error);
         }
     });
 
     // Rota de Sincronização Histórica
-    router.get('/sync-historical-orders', async (req, res) => {
+    router.get('/sync-historical-orders', async (req, res, next) => {
         try {
             console.log('--- SINCRONIZAÇÃO TOTAL ---');
             const config = await getLojaIntegradaConfig(true); 
             const sheets = await getSheetsClient();
             const headerInfo = await findHeaderInfo(sheets, spreadsheetIdNFE, sheetNameVendas, REQUIRED_HEADERS);
-            if (!headerInfo) return res.status(500).send({ message: 'Planilha sem cabeçalhos.' });
+            if (!headerInfo) {
+                const error = new Error('Planilha sem cabeçalhos.');
+                error.statusCode = 500;
+                throw error;
+            }
             
             const apiHeaders = { 'Authorization': `chave_api ${config.LOJA_INTEGRADA_CHAVE_API} aplicacao ${config.LOJA_INTEGRADA_CHAVE_APLICACAO}` };
             let allOrders = [];
@@ -271,17 +277,20 @@ const createLojaIntegradaRouter = (
 
             res.status(200).send({ status: 'success', message: `Sincronizados ${allOrders.length} pedidos.` });
         } catch (error) {
-            console.error('Erro Sync:', error.message);
-            res.status(500).send({ status: 'error', message: error.message });
+            next(error);
         }
     });
 
     // Rota para o App frontend
-    router.get('/orders', async (req, res) => {
+    router.get('/orders', async (req, res, next) => {
         try {
             const sheets = await getSheetsClient();
             const headerInfo = await findHeaderInfo(sheets, spreadsheetIdNFE, sheetNameVendas, REQUIRED_HEADERS);
-            if (!headerInfo) return res.status(500).send({ message: 'Planilha inválida.' });
+            if (!headerInfo) {
+                const error = new Error('Planilha inválida.');
+                error.statusCode = 500;
+                throw error;
+            }
 
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId: spreadsheetIdNFE,
@@ -300,7 +309,7 @@ const createLojaIntegradaRouter = (
 
             res.status(200).send({ status: 'success', data: orders });
         } catch (error) {
-            res.status(500).send({ message: error.message });
+            next(error);
         }
     });
 

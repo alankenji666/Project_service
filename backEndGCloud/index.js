@@ -110,23 +110,17 @@ const COLUMNS_NFE = {
 };
 
 // Rota para Lançamento de Requisição - TERCEIROS
-app.post('/', async (req, res) => {
+app.post('/', async (req, res, next) => {
     console.log('Requisição POST recebida na Cloud Function (para Google Sheets - Requisição Terceiros):', JSON.stringify(req.body, null, 2));
 
-    let sheets;
     try {
-        sheets = await getInitializedSheetsClient();
-    } catch (error) {
-        console.error('Erro ao obter cliente do Google Sheets na rota principal (Terceiros):', error);
-        return res.status(500).send({ status: 'error', message: 'Serviço de planilha não disponível. Erro de inicialização.' });
-    }
-
-    try {
+        const sheets = await getInitializedSheetsClient();
         const { phoenixCode, items } = req.body;
 
         if (!phoenixCode || !items || !Array.isArray(items) || items.length === 0) {
-            console.error('Payload inválido:', req.body);
-            return res.status(400).send({ status: 'error', message: 'Payload inválido. Certifique-se de que "phoenixCode" e "items" estão presentes.' });
+            const error = new Error('Payload inválido. Certifique-se de que "phoenixCode" e "items" estão presentes.');
+            error.statusCode = 400;
+            throw error;
         }
 
         const today = new Date();
@@ -197,29 +191,22 @@ app.post('/', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erro ao processar requisição e inserir na planilha de Requisição Terceiros:', error.message, error.stack);
-        res.status(500).send({ status: 'error', message: `Falha ao lançar requisição para Terceiros: ${error.message}` });
+        next(error);
     }
 });
 
 // Rota para Lançamento de Requisição - FÁBRICA
-app.post('/launch-fabrica', async (req, res) => {
+app.post('/launch-fabrica', async (req, res, next) => {
     console.log('Requisição POST recebida na Cloud Function (para Google Sheets - Requisição Fábrica):', JSON.stringify(req.body, null, 2));
 
-    let sheets;
     try {
-        sheets = await getInitializedSheetsClient();
-    } catch (error) {
-        console.error('Erro ao obter cliente do Google Sheets na rota de Fábrica:', error);
-        return res.status(500).send({ status: 'error', message: 'Serviço de planilha não disponível. Erro de inicialização.' });
-    }
-
-    try {
+        const sheets = await getInitializedSheetsClient();
         const { phoenixCode, items } = req.body;
 
         if (!phoenixCode || !items || !Array.isArray(items) || items.length === 0) {
-            console.error('Payload inválido:', req.body);
-            return res.status(400).send({ status: 'error', message: 'Payload inválido. Certifique-se de que "phoenixCode" e "items" estão presentes.' });
+            const error = new Error('Payload inválido. Certifique-se de que "phoenixCode" e "items" estão presentes.');
+            error.statusCode = 400;
+            throw error;
         }
 
         const today = new Date();
@@ -290,31 +277,24 @@ app.post('/launch-fabrica', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erro ao processar requisição e inserir na planilha de Requisição Fábrica:', error.message, error.stack);
-        res.status(500).send({ status: 'error', message: `Falha ao lançar requisição para Fábrica: ${error.message}` });
+        next(error);
     }
 });
 
 // Rota para Atualizar Status do Item do Pedido
-app.post('/update-order-status', async (req, res) => {
+app.post('/update-order-status', async (req, res, next) => {
     console.log('Requisição POST recebida na Cloud Function para /update-order-status:', JSON.stringify(req.body, null, 2));
-
-    let sheets;
-    try {
-        sheets = await getInitializedSheetsClient();
-    } catch (error) {
-        console.error('Erro ao obter cliente do Google Sheets na rota de atualização de status:', error);
-        return res.status(500).send({ status: 'error', message: 'Serviço de planilha não disponível. Erro de inicialização.' });
-    }
 
     try {
         const { orderCode, codigoService, newStatus, requisitionType, diasCorridos } = req.body;
 
         if (!orderCode || !codigoService || !newStatus || !requisitionType) {
-            console.error('Dados incompletos para atualização de status:', req.body);
-            return res.status(400).send({ status: 'error', message: "Dados incompletos: 'orderCode', 'codigoService', 'newStatus' e 'requisitionType' são obrigatórios." });
+            const error = new Error("Dados incompletos: 'orderCode', 'codigoService', 'newStatus' e 'requisitionType' são obrigatórios.");
+            error.statusCode = 400;
+            throw error;
         }
 
+        const sheets = await getInitializedSheetsClient();
         let spreadsheetId;
         let sheetName;
         if (requisitionType === 'terceiros') {
@@ -324,8 +304,9 @@ app.post('/update-order-status', async (req, res) => {
             spreadsheetId = SPREADSHEET_ID_REQUISICAO_FABRICA;
             sheetName = SHEET_NAME_REQUISICAO_FABRICA;
         } else {
-            console.error('Tipo de requisição inválido para atualização de status:', requisitionType);
-            return res.status(400).send({ status: 'error', message: `Tipo de requisição inválido: ${requisitionType}.` });
+            const error = new Error(`Tipo de requisição inválido: ${requisitionType}.`);
+            error.statusCode = 400;
+            throw error;
         }
 
         const response = await sheets.spreadsheets.values.get({
@@ -335,8 +316,9 @@ app.post('/update-order-status', async (req, res) => {
 
         const rows = response.data.values;
         if (!rows || rows.length === 0) {
-            console.warn(`Planilha de Requisição (${requisitionType}) vazia ou sem dados.`);
-            return res.status(404).send({ status: 'error', message: `Nenhum dado encontrado na planilha de Requisição (${requisitionType}).` });
+            const error = new Error(`Nenhum dado encontrado na planilha de Requisição (${requisitionType}).`);
+            error.statusCode = 404;
+            throw error;
         }
 
         const headers = rows[0].map(h => h ? h.toLowerCase().trim() : '');
@@ -347,8 +329,7 @@ app.post('/update-order-status', async (req, res) => {
         const dataEntregaColIndex = headers.indexOf('data entrega');
 
         if (orderCodeColIndex === -1 || codigoServiceColIndex === -1 || situacaoColIndex === -1 || dataEntregaColIndex === -1) {
-            console.error(`Colunas essenciais não encontradas na planilha de Requisição (${requisitionType}):`, headers);
-            return res.status(500).send({ status: 'error', message: `Uma ou mais colunas essenciais (Requisição, Codigo Service, Situação ou Data Entrega) não foram encontradas na planilha de Requisição (${requisitionType}).` });
+            throw new Error(`Uma ou mais colunas essenciais não foram encontradas na planilha de Requisição (${requisitionType}).`);
         }
 
         let rowIndexToUpdate = -1;
@@ -364,8 +345,9 @@ app.post('/update-order-status', async (req, res) => {
         }
 
         if (rowIndexToUpdate === -1) {
-            console.warn(`Item não encontrado para Requisição: ${orderCode}, Código Service: ${codigoService} na planilha de Requisição (${requisitionType}).`);
-            return res.status(404).send({ status: 'error', message: `Item de pedido não encontrado na planilha para Requisição: ${orderCode}, Código Service: ${codigoService}.` });
+            const error = new Error(`Item de pedido não encontrado na planilha para Requisição: ${orderCode}, Código Service: ${codigoService}.`);
+            error.statusCode = 404;
+            throw error;
         }
 
         const updates = [];
@@ -409,34 +391,27 @@ app.post('/update-order-status', async (req, res) => {
         const updateResponses = await Promise.all(updatePromises);
 
         console.log(`Status do item ${codigoService} da requisição ${orderCode} atualizado para '${newStatus}' na linha ${rowIndexToUpdate + 1} da planilha de Requisição (${requisitionType}).`, updateResponses.map(r => r.data));
-        res.status(200).send({ status: 'success', message: 'Status do item (e dias corridos/data de entrega, se aplicável) atualizado com sucesso!', data: updateResponses.map(r => r.data) });
+        res.status(200).send({ status: 'success', message: 'Status do item atualizado com sucesso!', data: updateResponses.map(r => r.data) });
 
     } catch (error) {
-        console.error(`Erro ao atualizar status do item na planilha de Requisição (${requisitionType}):`, error.message, error.stack);
-        res.status(500).send({ status: 'error', message: `Falha ao atualizar status do pedido: ${error.message}` });
+        next(error);
     }
 });
 
 // Rota para Adicionar Observação a um Item de Requisição (Geral/Terceiros)
-app.post('/add-requisition-observation', async (req, res) => {
+app.post('/add-requisition-observation', async (req, res, next) => {
     console.log('Requisição POST recebida para /add-requisition-observation:', JSON.stringify(req.body, null, 2));
-
-    let sheets;
-    try {
-        sheets = await getInitializedSheetsClient();
-    } catch (error) {
-        console.error('Erro ao obter cliente do Google Sheets na rota de observação de requisição:', error);
-        return res.status(500).send({ status: 'error', message: 'Serviço de planilha não disponível. Erro de inicialização.' });
-    }
 
     try {
         const { id_requisicao, codigo_service, observacao } = req.body;
 
         if (!id_requisicao || !codigo_service || !observacao) {
-            console.error('Dados incompletos para adicionar observação:', req.body);
-            return res.status(400).send({ status: 'error', message: "Dados incompletos: 'id_requisicao', 'codigo_service' e 'observacao' são obrigatórios." });
+            const error = new Error("Dados incompletos: 'id_requisicao', 'codigo_service' e 'observacao' são obrigatórios.");
+            error.statusCode = 400;
+            throw error;
         }
 
+        const sheets = await getInitializedSheetsClient();
         const spreadsheetId = SPREADSHEET_ID_REQUISICAO_GERAL_TERCEIROS;
         const sheetName = SHEET_NAME_REQUISICAO_GERAL_TERCEIROS;
 
@@ -447,8 +422,9 @@ app.post('/add-requisition-observation', async (req, res) => {
 
         const rows = response.data.values;
         if (!rows || rows.length === 0) {
-            console.warn(`Planilha de Requisição ("${sheetName}") vazia ou sem dados.`);
-            return res.status(404).send({ status: 'error', message: `Nenhum dado encontrado na planilha de Requisição.` });
+            const error = new Error(`Nenhum dado encontrado na planilha de Requisição.`);
+            error.statusCode = 404;
+            throw error;
         }
 
         const headers = rows[0].map(h => h ? h.toLowerCase().trim() : '');
@@ -457,8 +433,7 @@ app.post('/add-requisition-observation', async (req, res) => {
         const observacaoColIndex = headers.indexOf('observação');
 
         if (requisicaoColIndex === -1 || codigoServiceColIndex === -1 || observacaoColIndex === -1) {
-            console.error(`Colunas essenciais não encontradas na planilha "${sheetName}":`, headers);
-            return res.status(500).send({ status: 'error', message: `Uma ou mais colunas essenciais (Requisição, Codigo Service, Observação) não foram encontradas na planilha.` });
+            throw new Error(`Uma ou mais colunas essenciais (Requisição, Codigo Service, Observação) não foram encontradas na planilha.`);
         }
 
         let rowIndexToUpdate = -1;
@@ -476,8 +451,9 @@ app.post('/add-requisition-observation', async (req, res) => {
         }
 
         if (rowIndexToUpdate === -1) {
-            console.warn(`Item não encontrado para Requisição: ${id_requisicao}, Código Service: ${codigo_service}.`);
-            return res.status(404).send({ status: 'error', message: `Item não encontrado para a requisição ${id_requisicao} e código ${codigo_service}.` });
+            const error = new Error(`Item não encontrado para a requisição ${id_requisicao} e código ${codigo_service}.`);
+            error.statusCode = 404;
+            throw error;
         }
 
         const timestamp = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
@@ -502,31 +478,24 @@ app.post('/add-requisition-observation', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erro ao adicionar observação na requisição:', error.message, error.stack);
-        res.status(500).send({ status: 'error', message: `Falha ao adicionar observação: ${error.message}` });
+        next(error);
     }
 });
 
 // Rota para Adicionar Observação a um Item de Requisição da FÁBRICA
-app.post('/add-fabrica-observation', async (req, res) => {
+app.post('/add-fabrica-observation', async (req, res, next) => {
     console.log('Requisição POST recebida para /add-fabrica-observation:', JSON.stringify(req.body, null, 2));
-
-    let sheets;
-    try {
-        sheets = await getInitializedSheetsClient();
-    } catch (error) {
-        console.error('Erro ao obter cliente do Google Sheets na rota de observação de fábrica:', error);
-        return res.status(500).send({ status: 'error', message: 'Serviço de planilha não disponível. Erro de inicialização.' });
-    }
 
     try {
         const { id_requisicao, codigo_service, observacao } = req.body;
 
         if (!id_requisicao || !codigo_service || !observacao) {
-            console.error('Dados incompletos para adicionar observação de fábrica:', req.body);
-            return res.status(400).send({ status: 'error', message: "Dados incompletos: 'id_requisicao', 'codigo_service' e 'observacao' são obrigatórios." });
+            const error = new Error("Dados incompletos: 'id_requisicao', 'codigo_service' e 'observacao' são obrigatórios.");
+            error.statusCode = 400;
+            throw error;
         }
 
+        const sheets = await getInitializedSheetsClient();
         const spreadsheetId = SPREADSHEET_ID_REQUISICAO_FABRICA;
         const sheetName = SHEET_NAME_REQUISICAO_FABRICA;
 
@@ -537,8 +506,9 @@ app.post('/add-fabrica-observation', async (req, res) => {
 
         const rows = response.data.values;
         if (!rows || rows.length === 0) {
-            console.warn(`Planilha de Requisição Fábrica ("${sheetName}") vazia ou sem dados.`);
-            return res.status(404).send({ status: 'error', message: `Nenhum dado encontrado na planilha de Requisição Fábrica.` });
+            const error = new Error(`Nenhum dado encontrado na planilha de Requisição Fábrica.`);
+            error.statusCode = 404;
+            throw error;
         }
 
         const headers = rows[0].map(h => h ? h.toLowerCase().trim() : '');
@@ -547,8 +517,7 @@ app.post('/add-fabrica-observation', async (req, res) => {
         const observacaoColIndex = headers.indexOf('observação');
 
         if (requisicaoColIndex === -1 || codigoServiceColIndex === -1 || observacaoColIndex === -1) {
-            console.error(`Colunas essenciais não encontradas na planilha "${sheetName}":`, headers);
-            return res.status(500).send({ status: 'error', message: `Uma ou mais colunas essenciais (Requisição, Codigo Service, Observação) não foram encontradas na planilha de Fábrica.` });
+            throw new Error(`Uma ou mais colunas essenciais (Requisição, Codigo Service, Observação) não foram encontradas na planilha de Fábrica.`);
         }
 
         let rowIndexToUpdate = -1;
@@ -566,8 +535,9 @@ app.post('/add-fabrica-observation', async (req, res) => {
         }
 
         if (rowIndexToUpdate === -1) {
-            console.warn(`Item de fábrica não encontrado para Requisição: ${id_requisicao}, Código Service: ${codigo_service}.`);
-            return res.status(404).send({ status: 'error', message: `Item de fábrica não encontrado para a requisição ${id_requisicao} e código ${codigo_service}.` });
+            const error = new Error(`Item de fábrica não encontrado para a requisição ${id_requisicao} e código ${codigo_service}.`);
+            error.statusCode = 404;
+            throw error;
         }
 
         const timestamp = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
@@ -592,31 +562,24 @@ app.post('/add-fabrica-observation', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erro ao adicionar observação na requisição de fábrica:', error.message, error.stack);
-        res.status(500).send({ status: 'error', message: `Falha ao adicionar observação de fábrica: ${error.message}` });
+        next(error);
     }
 });
 
 // Rota para Adicionar Observação a um Item de GARANTIA
-app.post('/add-garantia-observation', async (req, res) => {
+app.post('/add-garantia-observation', async (req, res, next) => {
     console.log('Requisição POST recebida para /add-garantia-observation:', JSON.stringify(req.body, null, 2));
-
-    let sheets;
-    try {
-        sheets = await getInitializedSheetsClient();
-    } catch (error) {
-        console.error('Erro ao obter cliente do Google Sheets na rota de observação de garantia:', error);
-        return res.status(500).send({ status: 'error', message: 'Serviço de planilha não disponível. Erro de inicialização.' });
-    }
 
     try {
         const { id_requisicao, codigo_service, observacao } = req.body;
 
         if (!id_requisicao || !codigo_service || !observacao) {
-            console.error('Dados incompletos para adicionar observação de garantia:', req.body);
-            return res.status(400).send({ status: 'error', message: "Dados incompletos: 'id_requisicao', 'codigo_service' e 'observacao' são obrigatórios." });
+            const error = new Error("Dados incompletos: 'id_requisicao', 'codigo_service' e 'observacao' são obrigatórios.");
+            error.statusCode = 400;
+            throw error;
         }
         
+        const sheets = await getInitializedSheetsClient();
         const spreadsheetId = SPREADSHEET_ID_SAIDA_GARANTIA;
         const sheetName = SHEET_NAME_SAIDA_GARANTIA;
 
@@ -627,8 +590,9 @@ app.post('/add-garantia-observation', async (req, res) => {
 
         const rows = response.data.values;
         if (!rows || rows.length === 0) {
-            console.warn(`Planilha de Saída de Garantia ("${sheetName}") vazia ou sem dados.`);
-            return res.status(404).send({ status: 'error', message: `Nenhum dado encontrado na planilha de Saída de Garantia.` });
+            const error = new Error(`Nenhum dado encontrado na planilha de Saída de Garantia.`);
+            error.statusCode = 404;
+            throw error;
         }
 
         const headers = rows[0].map(h => h ? h.toLowerCase().trim() : '');
@@ -637,8 +601,7 @@ app.post('/add-garantia-observation', async (req, res) => {
         const observacaoColIndex = headers.indexOf('observação');
 
         if (requisicaoColIndex === -1 || codigoServiceColIndex === -1 || observacaoColIndex === -1) {
-            console.error(`Colunas essenciais não encontradas na planilha de Garantia "${sheetName}":`, headers);
-            return res.status(500).send({ status: 'error', message: `Uma ou mais colunas essenciais (Requisição, Codigo Service, Observação) não foram encontradas na planilha de Garantia.` });
+            throw new Error(`Uma ou mais colunas essenciais (Requisição, Codigo Service, Observação) não foram encontradas na planilha de Garantia.`);
         }
 
         let rowIndexToUpdate = -1;
@@ -656,8 +619,9 @@ app.post('/add-garantia-observation', async (req, res) => {
         }
 
         if (rowIndexToUpdate === -1) {
-            console.warn(`Item de garantia não encontrado para Requisição: ${id_requisicao}, Código Service: ${codigo_service}.`);
-            return res.status(404).send({ status: 'error', message: `Item de garantia não encontrado para a requisição ${id_requisicao} e código ${codigo_service}.` });
+            const error = new Error(`Item de garantia não encontrado para a requisição ${id_requisicao} e código ${codigo_service}.`);
+            error.statusCode = 404;
+            throw error;
         }
 
         const timestamp = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
@@ -682,23 +646,14 @@ app.post('/add-garantia-observation', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erro ao adicionar observação na requisição de garantia:', error.message, error.stack);
-        res.status(500).send({ status: 'error', message: `Falha ao adicionar observação de garantia: ${error.message}` });
+        next(error);
     }
 });
 
 // Rota de Teste CORS
 const APPS_SCRIPT_TARGET_URL_TEST = 'https://script.google.com/macros/s/AKfycbwYWSPrgMdA5IGVYnH5EVJ3FLnU1THcI6SQa8opOHkjN_CZO-G2S2JJDuTqZQDd0Y2s/exec';
-app.get('/test-apps-script-cors', async (req, res) => {
+app.get('/test-apps-script-cors', async (req, res, next) => {
     console.log('Recebida requisição para /test-apps-script-cors');
-    let sheets;
-    try {
-        sheets = await getInitializedSheetsClient();
-    } catch (error) {
-        console.error('Erro ao obter cliente do Google Sheets na rota de teste CORS:', error);
-        return res.status(500).send({ status: 'error', message: 'Serviço de planilha não disponível. Erro de inicialização.' });
-    }
-
     try {
         const response = await axios.options(APPS_SCRIPT_TARGET_URL_TEST);
 
@@ -715,22 +670,7 @@ app.get('/test-apps-script-cors', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erro ao testar OPTIONS para Apps Script:', error.message);
-        if (error.response) {
-            console.error('Dados do erro (Apps Script OPTIONS):', error.response.data);
-            console.error('Status do erro (Apps Script OPTIONS):', error.response.status);
-            res.status(error.response.status).send({
-                status: 'error',
-                message: `Falha no teste OPTIONS: ${error.message}`,
-                appsScriptErrorStatus: error.response.status,
-                appsScriptErrorData: error.response.data
-            });
-        } else if (error.request) {
-            console.error('Requisição do erro (sem resposta para OPTIONS):', error.request);
-            res.status(502).send({ error: 'Bad Gateway: Nenhuma resposta do Apps Script para OPTIONS.' });
-        } else {
-            res.status(500).send({ error: 'Erro interno: Falha ao configurar requisição OPTIONS.' });
-        }
+        next(error);
     }
 });
 
@@ -850,4 +790,21 @@ app.use('/loja-integrada', lojaIntegradaRouter);
 
 
 // --- EXPORTAÇÃO DA APLICAÇÃO EXPRESS ---
+// Middleware de Erro Global - Captura todos os erros lançados nas rotas
+app.use((err, req, res, next) => {
+    console.error('--- ERRO DETECTADO NO BACKEND ---');
+    console.error('Rota:', req.originalUrl);
+    console.error('Mensagem:', err.message);
+    if (err.stack) console.error('Stack:', err.stack);
+
+    const statusCode = err.statusCode || 500;
+    const message = err.message || 'Ocorreu um erro interno no servidor.';
+
+    res.status(statusCode).json({
+        status: 'error',
+        message: message,
+        code: statusCode
+    });
+});
+
 exports.app = app;

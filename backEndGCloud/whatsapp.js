@@ -100,8 +100,7 @@ const createWhatsAppRouter = (
     /**
      * Rota de Webhook. GET para verificação, POST para receber mensagens.
      */
-    router.all('/webhook', async (req, res) => {
-        // (código do webhook permanece o mesmo)
+    router.all('/webhook', async (req, res, next) => {
         if (req.method === 'GET') {
             try {
                 const config = await getWhatsAppConfig(true); 
@@ -113,8 +112,7 @@ const createWhatsAppRouter = (
                     res.sendStatus(403);
                 }
             } catch (error) {
-                console.error('Erro ao verificar webhook:', error.message);
-                res.sendStatus(500);
+                next(error);
             }
             return;
         }
@@ -170,20 +168,27 @@ const createWhatsAppRouter = (
                 }
             } catch (error) {
                 console.error('Erro ao processar webhook do WhatsApp:', error.message, error.stack);
+                // Webhook POST errors are usually logged but not passed to next(error) if we already sent 200 OK
             }
         }
     });
 
     // Rota para envio manual de mensagens pelo sistema/vendedores
-    router.post('/send-message', async (req, res) => {
+    router.post('/send-message', async (req, res, next) => {
         const { to, message, codigoVendedor, codigoAtendimento } = req.body;
-        if (!to || !message || !codigoVendedor || !codigoAtendimento) {
-            return res.status(400).send({ status: 'error', message: 'Campos "to", "message", "codigoVendedor" e "codigoAtendimento" são obrigatórios.' });
-        }
+        
         try {
+            if (!to || !message || !codigoVendedor || !codigoAtendimento) {
+                const error = new Error('Campos "to", "message", "codigoVendedor" e "codigoAtendimento" são obrigatórios.');
+                error.statusCode = 400;
+                throw error;
+            }
+
             const config = await getWhatsAppConfig();
             if (config.IS_ACTIVE !== 'TRUE') {
-                return res.status(403).send({ status: 'error', message: 'A integração com o WhatsApp está desativada.' });
+                const error = new Error('A integração com o WhatsApp está desativada.');
+                error.statusCode = 403;
+                throw error;
             }
             const apiResponse = await sendMessage(config, to, message);
             const sheets = await getSheetsClient();
@@ -202,7 +207,6 @@ const createWhatsAppRouter = (
                 },
             });
             
-            // --- RESPOSTA MELHORADA ---
             const successMessage = apiResponse.isSimulation 
                 ? "MENSAGEM SIMULADA com sucesso e registrada no histórico!"
                 : "Mensagem enviada e registrada com sucesso!";
@@ -210,19 +214,20 @@ const createWhatsAppRouter = (
             res.status(200).send({ status: 'success', message: successMessage, apiResponse });
 
         } catch (error) {
-            console.error('[WhatsApp] Falha ao enviar mensagem manual:', error.response ? JSON.stringify(error.response.data) : error.message);
-            const errorData = error.response ? error.response.data : { message: error.message };
-            const statusCode = error.response ? error.response.status : 500;
-            res.status(statusCode).send({ status: 'error', message: 'Falha ao enviar a mensagem.', errorDetails: errorData });
+            next(error);
         }
     });
     
-    router.post('/simulate-incoming-message', async (req, res) => {
+    router.post('/simulate-incoming-message', async (req, res, next) => {
         const { from, customerName, message } = req.body;
-        if (!from || !customerName || !message) {
-            return res.status(400).send({ status: 'error', message: 'Campos "from", "customerName" e "message" são obrigatórios para a simulação.' });
-        }
+        
         try {
+            if (!from || !customerName || !message) {
+                const error = new Error('Campos "from", "customerName" e "message" são obrigatórios para a simulação.');
+                error.statusCode = 400;
+                throw error;
+            }
+
             const sheets = await getSheetsClient();
             const messageId = `wamid.simulated_incoming_${Date.now()}`;
             const timestamp = new Date().toISOString();
@@ -261,20 +266,18 @@ const createWhatsAppRouter = (
                 resource: { values: [[messageId, codigoAtendimento, 'CLIENTE', message, timestamp]] },
             });
 
-            // --- RESPOSTA MELHORADA ---
             res.status(200).send({ 
                 status: 'success', 
                 message: 'Simulação de mensagem recebida concluída com sucesso. O sistema está em modo de simulação.' 
             });
 
         } catch (error) {
-            console.error('[SIMULAÇÃO] Erro ao processar simulação:', error.message, error.stack);
-            res.status(500).send({ status: 'error', message: `Erro na simulação: ${error.message}` });
+            next(error);
         }
     });
 
     // --- ROTAS DE POLLING E CONTROLE ---
-    router.get('/get-atendimentos', async (req, res) => {
+    router.get('/get-atendimentos', async (req, res, next) => {
         try {
             const sheets = await getSheetsClient();
             const clientesResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${sheetNameClientes}'!A:Z` });
@@ -287,8 +290,7 @@ const createWhatsAppRouter = (
             const requiredClientHeaders = ['codigoatendimento', 'numerocliente', 'nomecliente', 'codigovendedor', 'status', 'ultimainteracao'];
             for (const header of requiredClientHeaders) {
                 if (!clientesHeaders.includes(header)) {
-                    const errorMsg = `Erro de config: A coluna "${header}" não foi encontrada na aba "${sheetNameClientes}".`;
-                    return res.status(500).send({ status: 'error', message: errorMsg });
+                    throw new Error(`Erro de config: A coluna "${header}" não foi encontrada na aba "${sheetNameClientes}".`);
                 }
             }
             const [codigoAtendimentoIndex, numeroClienteIndex, nomeClienteIndex, vendedorAtribuidoIndex, statusIndex, timestampIndex] = requiredClientHeaders.map(h => clientesHeaders.indexOf(h));
@@ -299,12 +301,10 @@ const createWhatsAppRouter = (
             
             if (historicoRows.length > 1) {
                 const historicoHeaders = historicoRows[0].map(h => h.toLowerCase());
-                // --- MELHORIA APLICADA ---
                 const requiredHistoryHeaders = ['codigoatendimento', 'remetente', 'mensagem', 'timestamp'];
                 for (const header of requiredHistoryHeaders) {
                     if (!historicoHeaders.includes(header)) {
-                        const errorMsg = `Erro de config: A coluna "${header}" não foi encontrada na aba "${sheetNameHistorico}".`;
-                        return res.status(500).send({ status: 'error', message: errorMsg });
+                        throw new Error(`Erro de config: A coluna "${header}" não foi encontrada na aba "${sheetNameHistorico}".`);
                     }
                 }
                 const [histCodigoIndex, histRemetenteIndex, histMsgIndex, histTimestampIndex] = requiredHistoryHeaders.map(h => historicoHeaders.indexOf(h));
@@ -313,12 +313,8 @@ const createWhatsAppRouter = (
                     const row = historicoRows[i];
                     const codigo = row[histCodigoIndex];
                     const remetente = row[histRemetenteIndex];
-                    // --- CORREÇÃO APLICADA AQUI ---
-                    // Agora inclui mensagens do SISTEMA e do CLIENTE no preview.
                     if ((remetente === 'CLIENTE' || remetente === 'SISTEMA') && codigo) {
                         if (!clientMessagesMap[codigo]) clientMessagesMap[codigo] = [];
-                        // --- MELHORIA APLICADA ---
-                        // Adiciona um objeto com mais detalhes, em vez de só o texto.
                         clientMessagesMap[codigo].push({
                             remetente: remetente,
                             mensagem: row[histMsgIndex],
@@ -344,19 +340,21 @@ const createWhatsAppRouter = (
                 });
             res.status(200).send({ status: 'success', atendimentos: activeClients });
         } catch (error) {
-            console.error('[Polling] ERRO ao buscar atendimentos:', error.message, error.stack);
-            res.status(500).send({ status: 'error', message: 'Falha ao buscar atendimentos.' });
+            next(error);
         }
     });
 
-    router.post('/iniciar-atendimento', async (req, res) => {
+    router.post('/iniciar-atendimento', async (req, res, next) => {
         const { codigoAtendimento, codigoVendedor } = req.body;
-        if (!codigoAtendimento || !codigoVendedor) {
-            return res.status(400).send({ status: 'error', message: 'Campos "codigoAtendimento" e "codigoVendedor" são obrigatórios.' });
-        }
+        
         try {
+            if (!codigoAtendimento || !codigoVendedor) {
+                const error = new Error('Campos "codigoAtendimento" e "codigoVendedor" são obrigatórios.');
+                error.statusCode = 400;
+                throw error;
+            }
+
             const sheets = await getSheetsClient();
-            
             const clientesResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${sheetNameClientes}'!A:Z` });
             const clientesRows = clientesResponse.data.values || [];
             
@@ -368,11 +366,12 @@ const createWhatsAppRouter = (
             const rowIndex = clientesRows.findIndex((row, index) => index > 0 && row[codigoAtendimentoIndex] === codigoAtendimento);
 
             if (rowIndex === -1) {
-                return res.status(404).send({ status: 'error', message: `Atendimento ${codigoAtendimento} não encontrado.` });
+                const error = new Error(`Atendimento ${codigoAtendimento} não encontrado.`);
+                error.statusCode = 404;
+                throw error;
             }
 
             const sheetRowNumber = rowIndex + 1;
-            
             const rangeVendedor = `'${sheetNameClientes}'!${String.fromCharCode(65 + vendedorIndex)}${sheetRowNumber}`;
             const rangeStatus = `'${sheetNameClientes}'!${String.fromCharCode(65 + statusIndex)}${sheetRowNumber}`;
             
@@ -390,20 +389,21 @@ const createWhatsAppRouter = (
             res.status(200).send({ status: 'success', message: `Atendimento ${codigoAtendimento} iniciado por ${codigoVendedor}. Status atualizado para EM ATENDIMENTO.` });
 
         } catch (error) {
-            console.error('[Iniciar Atendimento] ERRO:', error.message);
-            res.status(500).send({ status: 'error', message: 'Falha ao iniciar atendimento.' });
+            next(error);
         }
     });
 
-    router.post('/finalizar-atendimento', async (req, res) => {
+    router.post('/finalizar-atendimento', async (req, res, next) => {
         const { codigoAtendimento } = req.body;
-        if (!codigoAtendimento) {
-            return res.status(400).send({ status: 'error', message: 'Campo "codigoAtendimento" é obrigatório.' });
-        }
         
         try {
+            if (!codigoAtendimento) {
+                const error = new Error('Campo "codigoAtendimento" é obrigatório.');
+                error.statusCode = 400;
+                throw error;
+            }
+
             const sheets = await getSheetsClient();
-            
             const clientesResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${sheetNameClientes}'!A:Z` });
             const clientesRows = clientesResponse.data.values || [];
             
@@ -414,7 +414,9 @@ const createWhatsAppRouter = (
             const rowIndex = clientesRows.findIndex((row, index) => index > 0 && row[codigoAtendimentoIndex] === codigoAtendimento);
 
             if (rowIndex === -1) {
-                return res.status(404).send({ status: 'error', message: `Atendimento ${codigoAtendimento} não encontrado.` });
+                const error = new Error(`Atendimento ${codigoAtendimento} não encontrado.`);
+                error.statusCode = 404;
+                throw error;
             }
 
             const sheetRowNumber = rowIndex + 1;
@@ -430,18 +432,20 @@ const createWhatsAppRouter = (
             res.status(200).send({ status: 'success', message: `Atendimento ${codigoAtendimento} finalizado. Status atualizado para FINALIZADO.` });
 
         } catch (error) {
-            console.error('[Finalizar Atendimento] ERRO:', error.message);
-            res.status(500).send({ status: 'error', message: 'Falha ao finalizar atendimento.' });
+            next(error);
         }
     });
 
-    router.get('/get-historico/:codigoAtendimento', async (req, res) => {
+    router.get('/get-historico/:codigoAtendimento', async (req, res, next) => {
         const { codigoAtendimento } = req.params;
-        if (!codigoAtendimento) {
-            return res.status(400).send({ status: 'error', message: 'O código do atendimento é obrigatório.' });
-        }
         
         try {
+            if (!codigoAtendimento) {
+                const error = new Error('O código do atendimento é obrigatório.');
+                error.statusCode = 400;
+                throw error;
+            }
+
             const sheets = await getSheetsClient();
             const historicoResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${sheetNameHistorico}'!A:E` });
             const historicoRows = historicoResponse.data.values || [];
@@ -465,8 +469,7 @@ const createWhatsAppRouter = (
             res.status(200).send({ status: 'success', historico: historicoFiltrado });
 
         } catch (error) {
-            console.error(`[Histórico] ERRO ao buscar histórico para ${codigoAtendimento}:`, error.message);
-            res.status(500).send({ status: 'error', message: 'Falha ao buscar histórico do atendimento.' });
+            next(error);
         }
     });
 

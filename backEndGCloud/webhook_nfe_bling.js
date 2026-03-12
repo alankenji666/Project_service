@@ -78,12 +78,16 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
         } catch (e) { return `ID: ${vIdStr}`; }
     }
 
-    router.post('/', async (req, res) => {
+    router.post('/', async (req, res, next) => {
         console.log('--- [WEBHOOK] PROCESSANDO NOTA ---');
         try {
             const { event, data } = req.body;
             const nfeId = data ? data.id : null;
-            if (!nfeId) return res.status(400).send({ status: 'error', message: 'ID ausente' });
+            if (!nfeId) {
+                const error = new Error('ID da nota ausente no payload.');
+                error.statusCode = 400;
+                throw error;
+            }
 
             const tokenRes = await axios.get(APPS_SCRIPT_TOKEN_URL);
             const token = tokenRes.data.access_token;
@@ -96,7 +100,11 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 n = blingRes.data.data;
-                if (!n) throw new Error("Nota não encontrada no Bling");
+                if (!n) {
+                    const error = new Error("Nota não encontrada no Bling.");
+                    error.statusCode = 404;
+                    throw error;
+                }
             }
 
             const sheets = await getInitializedSheetsClient();
@@ -190,8 +198,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
 
             res.status(200).send({ status: 'success' });
         } catch (error) {
-            console.error('[ERRO]', error.message);
-            res.status(500).send({ status: 'error', message: error.message });
+            next(error);
         }
     });
 

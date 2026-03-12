@@ -34,22 +34,15 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
      * GET /
      * Retorna o JSON processado dos produtos.
      */
-    router.get('/', async (req, res) => {
+    router.get('/', async (req, res, next) => {
         console.log('--- INICIANDO A GERAÇÃO DO JSON DE PRODUTOS (via API Cloud) ---');
-        let sheets;
         try {
-            sheets = await getSheetsClient();
-        } catch (error) {
-            console.error('Erro ao inicializar cliente do Google Sheets:', error);
-            return res.status(500).json({ error: true, message: 'Erro ao conectar com o Google Sheets.' });
-        }
-
-        try {
+            const sheets = await getSheetsClient();
+            
             // --- PASSO 1: LER OS DADOS DA ABA 'PRODUTOS ESTOQUE' E CRIAR UM MAPA DE VENDAS ---
             const vendasMap = {};
             let estoqueData;
             try {
-                // ATUALIZADO: Agora lê da linha 9, colunas B até I (8 colunas) para incluir o Mês Atual
                 const estoqueResponse = await sheets.spreadsheets.values.get({
                     spreadsheetId,
                     range: `'${sheetNameEstoque}'!B9:I`, 
@@ -57,15 +50,15 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 estoqueData = estoqueResponse.data.values;
             } catch (e) {
                 console.warn(`AVISO: Não foi possível ler a aba "${sheetNameEstoque}". ${e.message}`);
-                estoqueData = []; // Continua a execução sem os dados de vendas
+                estoqueData = [];
             }
 
             if (estoqueData && estoqueData.length > 0) {
                 estoqueData.forEach(row => {
-                    const codigo = String(row[0] || '').trim(); // Coluna B (índice 0)
-                    const vendas30dias = parseInt(row[5]) || 0; // Coluna G (índice 5)
-                    const vendas90dias = parseInt(row[6]) || 0; // Coluna H (índice 6)
-                    const vendasMesAtual = parseInt(row[7]) || 0; // Coluna I (índice 7) - NOVO CAMPO
+                    const codigo = String(row[0] || '').trim();
+                    const vendas30dias = parseInt(row[5]) || 0;
+                    const vendas90dias = parseInt(row[6]) || 0;
+                    const vendasMesAtual = parseInt(row[7]) || 0;
                     
                     if (codigo) {
                         vendasMap[codigo] = {
@@ -79,28 +72,21 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             }
 
             // --- PASSO 2: PROCESSAR A ABA 'PRODUTOS' ---
-            let headers, data;
-            try {
-                // Lê os cabeçalhos (Linha 4, Colunas B até BH)
-                const headersResponse = await sheets.spreadsheets.values.get({
-                    spreadsheetId,
-                    range: `'${sheetNameProdutos}'!B4:BH4`,
-                });
-                headers = headersResponse.data.values[0];
+            // Lê os cabeçalhos (Linha 4, Colunas B até BH)
+            const headersResponse = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${sheetNameProdutos}'!B4:BH4`,
+            });
+            const headers = headersResponse.data.values[0];
 
-                // Lê os dados (Linha 5 até o fim, Colunas B até BH)
-                const dataResponse = await sheets.spreadsheets.values.get({
-                    spreadsheetId,
-                    range: `'${sheetNameProdutos}'!B5:BH`,
-                    valueRenderOption: 'FORMATTED_VALUE', // Equivalente ao getDisplayValues()
-                });
-                data = dataResponse.data.values;
+            // Lê os dados (Linha 5 até o fim, Colunas B até BH)
+            const dataResponse = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${sheetNameProdutos}'!B5:BH`,
+                valueRenderOption: 'FORMATTED_VALUE',
+            });
+            const data = dataResponse.data.values;
 
-            } catch (e) {
-                console.error(`ERRO: A aba "${sheetNameProdutos}" não foi encontrada ou está vazia.`, e.message);
-                throw new Error(`A aba "${sheetNameProdutos}" não foi encontrada.`);
-            }
-            
             if (!data || data.length === 0) {
                 console.log("A lista de produtos está vazia.");
                 return res.status(200).json({
@@ -171,7 +157,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 if (productCode && vendasMap[productCode]) {
                     productObject.vendas_ultimos_30_dias = vendasMap[productCode].vendas_ultimos_30_dias;
                     productObject.vendas_ultimos_90_dias = vendasMap[productCode].vendas_ultimos_90_dias;
-                    productObject.vendas_mes_atual = vendasMap[productCode].vendas_mes_atual; // ADICIONADO AQUI
+                    productObject.vendas_mes_atual = vendasMap[productCode].vendas_mes_atual;
                 } else {
                     productObject.vendas_ultimos_30_dias = null;
                     productObject.vendas_ultimos_90_dias = null;
@@ -201,8 +187,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             res.status(200).json({ data: productsArray });
 
         } catch (error) {
-            console.error(`ERRO FATAL: ${error.message} - Stack: ${error.stack}`);
-            res.status(500).json({ "error": true, "message": error.message });
+            next(error);
         }
     });
 
