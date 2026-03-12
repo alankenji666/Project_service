@@ -11,31 +11,34 @@ export const DashboardApp = (function() {
     let _allLojaIntegradaOrders = [];
     let _currentSalesDetails = []; // Armazena os dados para o modal de detalhes
     let _salesChartInstance = null;
- // Ação: Substitua seu objeto _state por este bloco completo.
 
- let _state = {
-    isInitialized: false,
-    isStarted: false,
-    selectedChannel: 'total',
-    currentDateFilterValue: 'all',
-    startDate: null,
-    endDate: null,
-    lojaIntegradaSort: { key: 'numero_pedido', direction: 'desc' },
-    activeLiTab: 'vendas',
-    selectedYearFilter: 'all',
-    chartDisplayMode: 'bruta', // NOVO: 'bruta' ou 'liquida'
-};
-
+    let _state = {
+        isInitialized: false,
+        isStarted: false,
+        selectedChannel: 'total',
+        currentDateFilterValue: 'all',
+        startDate: null,
+        endDate: null,
+        lojaIntegradaSort: { key: 'numero_pedido', direction: 'desc' },
+        estoqueSort: { key: 'valor', direction: 'desc' },
+        activeLiTab: 'vendas',
+        selectedYearFilter: 'all',
+        chartDisplayMode: 'bruta', // 'bruta' ou 'liquida'
+        activeEstoqueFilter: 'all', // Filtro ativo no dashboard de estoque
+        estoqueTopLimit: 'all', // Limite de itens no Top Itens (all, 10, 20, 30)
+        estoqueCurrentPage: 1, // Página atual da tabela de estoque
+        estoquePageSize: 30, // Itens por página
+        charts: {} // Armazena instâncias de outros gráficos (ex: estoque)
+    };
 
     let _dom = {}; // Cache for DOM elements
     let _utils = {}; // To hold utility functions passed from main App
 
     // --- Private Functions ---
 
-
     /**
-     * NOVO: Converte uma string de moeda (BRL) para um número float de forma segura.
-     * Trata "R$", pontos de milhar e vírgula decimal.
+     * Converte uma string de moeda (BRL) para um número float de forma segura.
+     * Trata "R$", espaços, pontos de milhar e vírgula decimal.
      * @param {string | number} value - A string ou número a ser convertido.
      * @returns {number} O valor numérico.
      */
@@ -46,49 +49,56 @@ export const DashboardApp = (function() {
         if (typeof value !== 'string' || value.trim() === '') {
             return 0;
         }
-        // Remove "R$", espaços, e pontos de milhar. Troca a vírgula decimal por ponto.
-        const sanitizedString = value
-            .replace("R$", "")
-            .trim()
-            .replace(/\./g, "") // Remove pontos de milhar
-            .replace(",", "."); // Troca vírgula por ponto
 
-        return parseFloat(sanitizedString) || 0;
+        let cleanValue = value.replace("R$", "").trim();
+        
+        const hasComma = cleanValue.includes(',');
+        const hasDot = cleanValue.includes('.');
+
+        if (hasComma) {
+            // Formato brasileiro: 1.234,56 ou 23,95
+            cleanValue = cleanValue
+                .replace(/\./g, "") // Remove pontos de milhar
+                .replace(",", "."); // Troca vírgula por ponto
+        } else if (hasDot) {
+            // Formato internacional ou já limpo
+            const parts = cleanValue.split('.');
+            if (parts.length > 2) {
+                cleanValue = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
+            }
+        }
+
+        const result = parseFloat(cleanValue);
+        return isNaN(result) ? 0 : result;
     }
 
-
-
-/**
- * NOVO: Processa a string de itens da NFe.
- * @param {string} itemsString - A string no formato "(codigo, qtd, valor);(codigo, qtd, valor)".
- * @returns {Array} Um array de objetos, cada um com {codigo, quantidade, valor}.
- */
-function _parseNfeItemsString(itemsString) {
-    if (!itemsString || typeof itemsString !== 'string') {
-        return [];
+    /**
+     * Processa a string de itens da NFe.
+     * @param {string} itemsString - A string no formato "(codigo, qtd, valor);(codigo, qtd, valor)".
+     * @returns {Array} Um array de objetos, cada um com {codigo, quantidade, valor}.
+     */
+    function _parseNfeItemsString(itemsString) {
+        if (!itemsString || typeof itemsString !== 'string') {
+            return [];
+        }
+        try {
+            return itemsString
+                .replace(/[()]/g, '')
+                .split(';')
+                .filter(s => s.trim() !== '')
+                .map(itemStr => {
+                    const parts = itemStr.split(',');
+                    return {
+                        codigo: parts[0]?.trim() || '',
+                        quantidade: parseFloat(parts[1]?.trim() || 0),
+                        valor: parseFloat(parts[2]?.trim() || 0)
+                    };
+                });
+        } catch (e) {
+            console.error("Erro ao processar string de itens da NFe:", itemsString, e);
+            return [];
+        }
     }
-    try {
-        return itemsString
-            .replace(/[()]/g, '') // Remove parênteses
-            .split(';') // Divide em itens
-            .filter(s => s.trim() !== '') // Remove partes vazias
-            .map(itemStr => {
-                const parts = itemStr.split(',');
-                return {
-                    codigo: parts[0]?.trim() || '',
-                    quantidade: parseFloat(parts[1]?.trim() || 0),
-                    valor: parseFloat(parts[2]?.trim() || 0)
-                };
-            });
-    } catch (e) {
-        console.error("Erro ao processar string de itens da NFe:", itemsString, e);
-        return [];
-    }
-}
-
-
-
-
 
     /**
      * Caches DOM elements used by this module.
@@ -110,509 +120,379 @@ function _parseNfeItemsString(itemsString) {
         _dom.noSalesDetailsMessage = document.getElementById('no-sales-details-message');
         _dom.customProductTooltip = document.getElementById('custom-product-tooltip');
     
-        // Novos elementos de seleção de dashboard
         _dom.selectorContainer = document.getElementById('dashboard-selector-container');
         _dom.vendasContainer = document.getElementById('dashboard-vendas-container');
         _dom.selectVendasBtn = document.getElementById('select-vendas-dashboard');
         _dom.selectEstoqueBtn = document.getElementById('select-estoque-dashboard');
         _dom.backToSelectorBtn = document.getElementById('back-to-selector-btn');
 
-        // ADICIONE AS 4 LINHAS ABAIXO
         _dom.exportNotesBtn = document.getElementById('export-sales-details-notes-csv-btn');
         _dom.exportItemsBtn = document.getElementById('export-sales-details-items-csv-btn');
         _dom.exportMenuBtn = document.getElementById('sales-details-export-button');
         _dom.exportDropdown = document.getElementById('sales-details-export-dropdown');
         _dom.vendaTypeToggle = document.getElementById('venda-type-toggle');
 
+        _dom.estoqueContainer = document.getElementById('dashboard-estoque-container');
+        _dom.estoqueSummaryCards = document.getElementById('estoque-summary-cards');
+        _dom.estoqueChartCanvas = document.getElementById('estoque-distribution-chart');
+        _dom.estoqueTopItemsContainer = document.getElementById('estoque-top-items-container');
+        _dom.backToSelectorFromEstoqueBtn = document.getElementById('back-to-selector-from-estoque-btn');
+        _dom.estoqueTypeToggle = document.getElementById('estoque-type-toggle');
+        _dom.estoqueTopLimitSelect = document.getElementById('estoque-top-limit-select');
     }
+
+    // --- Navigation Functions ---
 
     function _showSalesDashboard() {
         if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
         if (_dom.vendasContainer) _dom.vendasContainer.classList.remove('hidden');
+        if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
         _setDateRange('all');
+    }
+
+    function _showEstoqueDashboard() {
+        if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
+        if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
+        if (_dom.estoqueContainer) _dom.estoqueContainer.classList.remove('hidden');
+        if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
+        _state.activeEstoqueFilter = 'all';
+        _state.estoqueCurrentPage = 1; // Reseta para a primeira página
+        _renderEstoqueDashboard();
     }
 
     function _showSelector() {
         if (_dom.selectorContainer) _dom.selectorContainer.classList.remove('hidden');
         if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
+        if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
     }
 
-    // ADICIONADO: Funções de tooltip
-function _showNfeItemsTooltip(event) {
-    const targetElement = event.target.closest('.nfe-items-tooltip-trigger');
-    if (!targetElement || !_dom.customProductTooltip) return;
+    // --- Inventory Dashboard Logic ---
 
-    const itemsString = targetElement.dataset.itens;
-    if (!itemsString || itemsString === "undefined") return;
+    function _calculateEstoqueData() {
+        const categories = {
+            'Estoque - Terceiros': { id: 'Estoque - Terceiros', label: 'Terceiros', total: 0, count: 0, color: '#8b5cf6' },
+            'Estoque - Fábrica': { id: 'Estoque - Fábrica', label: 'Fábrica', total: 0, count: 0, color: '#10b981' },
+            'Sob Demanda - Fábrica': { id: 'Sob Demanda - Fábrica', label: 'Sob Demanda', total: 0, count: 0, color: '#f59e0b' },
+            'Estoque - Consumo': { id: 'Estoque - Consumo', label: 'Consumo', total: 0, count: 0, color: '#64748b' }
+        };
 
-    try {
-        const items = itemsString.replace(/[()]/g, '').split(';').filter(s => s.trim() !== '').map(itemStr => {
-            const parts = itemStr.split(',');
-            const codigo = parts[0]?.trim();
-            const product = _allProducts.find(p => p.codigo === codigo);
-            return {
-                codigo: codigo,
-                descricao: product ? product.descricao : 'Produto não encontrado',
-                quantidade: parseFloat(parts[1]?.trim() || 0),
-                valor: parseFloat(parts[2]?.trim() || 0)
-            };
-        });
+        const isLiquido = _dom.estoqueTypeToggle ? _dom.estoqueTypeToggle.checked : true;
+        let totalGeralValue = 0;
+        const topItems = [];
+        let debugCount = 0;
 
-        if (items.length === 0) return;
+        _allProducts.forEach(p => {
+            const tags = p.grupo_de_tags_tags || [];
+            const isConsumo = tags.includes('Estoque - Consumo');
+            const hasValidTag = Object.keys(categories).some(catTag => tags.includes(catTag));
 
-        const valorFrete = parseFloat(targetElement.dataset.frete || 0);
-        const valorTotalItens = items.reduce((sum, item) => sum + (item.valor * item.quantidade), 0);
-        const valorTotalNota = valorTotalItens + valorFrete;
+            if (!hasValidTag || (p.codigo && p.codigo.startsWith('7') && !hasValidTag)) return;
 
-        let tooltipContent = `<div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 max-w-md"><h4 class="font-bold text-center text-sm mb-2 pb-1 border-b">Itens da Nota Fiscal</h4><ul class="space-y-1 text-xs">`;
-        items.forEach(item => {
-            tooltipContent += `<li class="flex justify-between items-center"><span class="text-gray-700">${item.quantidade}x ${item.descricao} (${item.codigo})</span><span class="font-semibold text-gray-800 ml-4">${item.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></li>`;
-        });
-        tooltipContent += `</ul><div class="mt-2 pt-2 border-t border-gray-200 text-xs space-y-1">
-            <div class="flex justify-between"><span class="text-gray-600">Subtotal Itens:</span><span class="font-medium text-gray-800">${valorTotalItens.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-            <div class="flex justify-between"><span class="text-gray-600">Frete:</span><span class="font-medium text-gray-800">${valorFrete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-            <div class="flex justify-between"><span class="font-bold text-gray-900">Total da Nota:</span><span class="font-bold text-gray-900">${valorTotalNota.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-        </div></div>`;
-        _dom.customProductTooltip.innerHTML = tooltipContent;
-        if (_utils.positionTooltip) _utils.positionTooltip(event, _dom.customProductTooltip);
-    } catch (e) {
-        console.error("Erro ao processar itens da NFe para tooltip:", e);
-    }
-}
-
-function _showObservationTooltip(event) {
-    const targetElement = event.target.closest('.nfe-observation-status-icon');
-    if (!targetElement || !_dom.customProductTooltip) return;
-
-    let observationText = "Nenhuma Observação";
-    try {
-        const observationData = JSON.parse(targetElement.dataset.observation || '[]');
-        if (Array.isArray(observationData) && observationData.length > 0) {
-            observationText = observationData[observationData.length - 1];
-        }
-    } catch (e) { /* Ignora erros de parse */ }
-
-    _dom.customProductTooltip.innerHTML = `<div class="p-2 bg-white rounded-lg shadow-xl border border-gray-400 max-w-sm"><p class="text-sm font-semibold text-gray-800 text-center break-words">${observationText}</p></div>`;
-    if (_utils.positionTooltip) _utils.positionTooltip(event, _dom.customProductTooltip);
-}
-
-function _showSellerSalesTooltip(event) {
-    const targetElement = event.target.closest('.seller-tooltip-trigger');
-    if (!targetElement || !_dom.customProductTooltip) return;
-
-    const sellerName = targetElement.dataset.sellerName;
-    if (!sellerName) return;
-
-    // Filtra as vendas do vendedor e calcula o total
-    const sellerSales = _currentSalesDetails.filter(nfe => nfe.nome_do_vendedor === sellerName);
-    const totalSalesValue = sellerSales.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
-
-    const tooltipContent = `
-        <div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 max-w-md">
-            <h4 class="font-bold text-center text-sm mb-2 pb-1 border-b">Vendas de ${sellerName}</h4>
-            <div class="space-y-1 text-xs">
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-700">Total Vendas:</span>
-                    <span class="font-semibold text-gray-800 ml-4">${totalSalesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-700">Notas no Período:</span>
-                    <span class="font-semibold text-gray-800 ml-4">${sellerSales.length}</span>
-                </div>
-            </div>
-        </div>`;
-
-    _dom.customProductTooltip.innerHTML = tooltipContent;
-    if (_utils.positionTooltip) _utils.positionTooltip(event, _dom.customProductTooltip);
-}
-
-function _exportSalesDetailsNotesToCSV() {
-    if (!_currentSalesDetails || _currentSalesDetails.length === 0) {
-        _utils.showMessageModal("Nenhum Dado", "Não há notas para exportar.");
-        return;
-    }
-
-    const headers = [
-        "Numero da Nota", "Data de Emissao", "Situacao", "Valor da Nota",
-        "Valor do Frete", "Nome do Cliente", "CNPJ/CPF Cliente",
-        "Nome do Vendedor", "Numero Pedido Loja", "Transportadora",
-        "Frete por Conta", "Origem Loja", "Observacoes"
-    ];
-
-    const escapeCSV = (field) => {
-        if (field === null || field === undefined) return '""';
-        let str = String(field);
-        if (str.search(/("|;|\n)/g) >= 0) {
-            str = `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-    };
-
-    const rows = _currentSalesDetails.map(nfe => {
-        const rowData = [
-            nfe.numero_da_nota,
-            _utils.parsePtBrDate(nfe.data_de_emissao)?.toLocaleDateString('pt-BR') || '',
-            nfe.situacao,
-            String(nfe.valor_da_nota || '0').replace('.', ','),
-            String(nfe.valor_do_frete || '0').replace('.', ','),
-            nfe.nome_do_cliente,
-            _utils.formatCnpjCpf ? _utils.formatCnpjCpf(String(nfe.cnpjcpf_cliente || '')) : String(nfe.cnpjcpf_cliente || ''),
-            nfe.nome_do_vendedor,
-            nfe.numero_pedido_loja,
-            nfe.transportadora,
-            nfe.frete_por_conta,
-            nfe.origem_loja,
-            (Array.isArray(nfe.observacao) ? nfe.observacao.join(' | ') : (nfe.observacao || ''))
-        ];
-        return rowData.map(escapeCSV).join(';');
-    });
-
-    // A CORREÇÃO ESTÁ AQUI: Usa '\r\n' para a quebra de linha, igual à função que funciona.
-    const csvContent = [headers.join(';'), ...rows].join('\r\n');
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "detalhes_vendas_notas.csv");
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-
-function _exportSalesDetailsItemsToCSV() {
-    if (!_currentSalesDetails || _currentSalesDetails.length === 0) {
-        _utils.showMessageModal("Nenhum Dado", "Não há itens para exportar.");
-        return;
-    }
-
-    const headers = [
-        "Numero da Nota", "Data de Emissao", "Nome do Cliente",
-        "Codigo do Item", "Descricao do Item", "Quantidade", "Valor Unitario"
-    ];
-    
-    const allItems = [];
-    _currentSalesDetails.forEach(nfe => {
-        const itemsString = nfe.itens;
-        if (!itemsString || itemsString.trim() === '') return;
-
-        const items = itemsString.replace(/[()]/g, '').split(';').filter(s => s.trim() !== '').map(itemStr => {
-            const parts = itemStr.split(',');
-            const codigo = parts[0]?.trim();
-            const product = _allProducts.find(p => p.codigo === codigo);
-            return {
-                numero_da_nota: nfe.numero_da_nota,
-                data_de_emissao: _utils.parsePtBrDate(nfe.data_de_emissao)?.toLocaleDateString('pt-BR') || '',
-                nome_do_cliente: nfe.nome_do_cliente,
-                codigo: codigo,
-                descricao: product ? product.descricao : 'Produto não encontrado',
-                quantidade: parseFloat(parts[1]?.trim() || 0),
-                valor: parseFloat(parts[2]?.trim() || 0)
-            };
-        });
-        allItems.push(...items);
-    });
-
-    if (allItems.length === 0) {
-        _utils.showMessageModal("Nenhum Dado", "Não foram encontrados itens de produtos nas notas selecionadas.");
-        return;
-    }
-
-    const escapeCSV = (field) => {
-         if (field === null || field === undefined) return '""';
-        let str = String(field);
-        if (str.search(/("|;|\n)/g) >= 0) {
-            str = `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-    };
-
-    const rows = allItems.map(item => [
-        item.numero_da_nota,
-        item.data_de_emissao,
-        item.nome_do_cliente,
-        item.codigo,
-        item.descricao,
-        String(item.quantidade).replace('.',','),
-        String(item.valor).replace('.',','),
-
-    ].map(escapeCSV).join(';'));
-    
-    const csvContent = [headers.join(';'), ...rows].join('\r\n');
-
-
-    const blob = new Blob(['\\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "detalhes_vendas_itens.csv");
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-function _populateYearFilter() {
-    if (!_dom.yearFilter) return;
-
-    // Usa os dados que já estão no módulo (_allNFeData e _allLojaIntegradaOrders)
-    // para encontrar todos os anos em que houve vendas.
-    const allData = [..._allNFeData, ..._allLojaIntegradaOrders];
-    const years = new Set();
-
-    allData.forEach(item => {
-        const dateString = item.data_de_emissao || item.data_criacao; 
-        if (dateString) {
-            const date = _utils.parsePtBrDate(dateString); 
-            if (date && !isNaN(date)) {
-                years.add(date.getFullYear());
+            const estoque = parseFloat(p.estoque) || 0;
+            const precoCusto = _parseCurrencyBRL(p.preco_de_custo);
+            const precoVenda = _parseCurrencyBRL(p.preco);
+            
+            let precoBase;
+            if (isConsumo) {
+                precoBase = precoCusto;
+            } else {
+                precoBase = isLiquido ? precoCusto : precoVenda;
             }
-        }
-    });
 
-    // Ordena os anos do mais recente para o mais antigo.
-    const sortedYears = Array.from(years).sort((a, b) => b - a);
+            const estoqueConsiderado = estoque > 0 ? estoque : 0;
+            const valorItem = estoqueConsiderado * precoBase;
 
-    // Limpa o seletor e adiciona as opções novas.
-    _dom.yearFilter.innerHTML = '<option value="all">Tudo</option>'; 
-    sortedYears.forEach(year => {
-        const option = document.createElement('option');
-        option.value = year;
-        option.textContent = year;
-        _dom.yearFilter.appendChild(option);
-    });
-}
-
-
-function _bindEvents() {
-    // --- Listeners de Seleção de Dashboard ---
-    if (_dom.selectVendasBtn) {
-        _dom.selectVendasBtn.addEventListener('click', () => {
-            _showSalesDashboard();
-        });
-    }
-
-    if (_dom.selectEstoqueBtn) {
-        _dom.selectEstoqueBtn.addEventListener('click', () => {
-            // Lógica para o dashboard de estoque (futuro)
-            if (_utils.showMessageModal) {
-                _utils.showMessageModal("Em Manutenção", "O dashboard de estoque está em desenvolvimento e estará disponível em breve.");
+            if (debugCount < 5 && valorItem > 0) {
+                console.log('[DEBUG] Calculando item estoque:', {
+                    codigo: p.codigo,
+                    descricao: p.descricao,
+                    estoque,
+                    precoCusto,
+                    precoVenda,
+                    precoBase,
+                    isLiquido,
+                    valorItem
+                });
+                debugCount++;
             }
-        });
-    }
 
-    if (_dom.backToSelectorBtn) {
-        _dom.backToSelectorBtn.addEventListener('click', () => {
-            _showSelector();
-        });
-    }
-
-    // --- Listeners do Filtro de Data ---
-    if (_dom.yearFilter) {
-        _dom.yearFilter.addEventListener('change', (event) => {
-            _state.selectedYearFilter = event.target.value;
-    
-            // Limpa os outros filtros de data para evitar conflitos
-            if (_dom.startDateInput) _dom.startDateInput.value = '';
-            if (_dom.endDateInput) _dom.endDateInput.value = '';
-            _setDateRange('all'); // Reseta para o estado inicial
-        });
-    }
-    
-    if (_dom.vendaTypeToggle) {
-        _dom.vendaTypeToggle.addEventListener('change', (event) => {
-            _state.chartDisplayMode = event.target.checked ? 'liquida' : 'bruta';
-            _renderSalesView(); // Redesenha o gráfico com o novo modo
-        });
-    }
-
-    if (_dom.filterBar) {
-        _dom.startDateInput.addEventListener('change', _handleDateInputChange);
-        _dom.endDateInput.addEventListener('change', _handleDateInputChange);
-        _dom.clearFiltersBtn.addEventListener('click', () => _setDateRange('all'));
-        _dom.filterBar.querySelectorAll('[name="date-range"]').forEach(radio => {
-            radio.addEventListener('change', (event) => {
-                if (event.target.checked) _setDateRange(event.target.value);
+            Object.keys(categories).forEach(catTag => {
+                if (tags.includes(catTag) && estoque !== 0) {
+                    categories[catTag].total += valorItem;
+                    categories[catTag].count++;
+                }
             });
+
+            totalGeralValue += valorItem;
+
+            const activeFilter = _state.activeEstoqueFilter;
+            if (activeFilter === 'all' || tags.includes(activeFilter)) {
+                topItems.push({
+                    codigo: p.codigo,
+                    descricao: p.descricao,
+                    estoque: Math.max(0, estoque),
+                    precoUnitario: precoBase,
+                    precoCusto: precoCusto,
+                    precoVenda: precoVenda,
+                    valor: valorItem
+                });
+            }
         });
+
+        const sortKey = _state.estoqueSort.key;
+        const sortDir = _state.estoqueSort.direction === 'asc' ? 1 : -1;
+        topItems.sort((a, b) => {
+            let valA = a[sortKey];
+            let valB = b[sortKey];
+            if (typeof valA === 'string') {
+                return valA.localeCompare(valB) * sortDir;
+            }
+            return (valA - valB) * sortDir;
+        });
+
+        return {
+            totalGeralValue,
+            isLiquido,
+            categories: Object.values(categories),
+            topItems: topItems
+        };
     }
 
-    // --- Listener dos Cards de Resumo ---
-    if (_dom.summaryCards) {
-        _dom.summaryCards.addEventListener('click', (event) => {
-            const selectedCard = event.target.closest('[data-id]');
-            if (selectedCard) {
-                const channelId = selectedCard.dataset.id;
-                _updateDashboardChart(channelId);
-            }
-        });
-    }
+    function _renderEstoqueDashboard() {
+        const data = _calculateEstoqueData();
+        const activeFilter = _state.activeEstoqueFilter;
+        const limit = _state.estoqueTopLimit;
 
-    if (_dom.salesTableContainer) {
-        _dom.salesTableContainer.addEventListener('click', function(event) {
-            const tabLink = event.target.closest('[data-tab]');
-            const sortHeader = event.target.closest('[data-sort-key]');
+        // Cards
+        let cardsHtml = `
+            <div data-filter="all" class="cursor-pointer transition-all duration-200 transform hover:scale-105 ${activeFilter === 'all' ? 'ring-4 ring-blue-300 shadow-lg' : ''} bg-blue-600 text-white p-4 rounded-xl shadow-md">
+                <p class="text-xs font-bold uppercase opacity-80">Valor Total (${data.isLiquido ? 'Líquido' : 'Bruto'})</p>
+                <p class="text-xl font-black">${data.totalGeralValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+            </div>
+        `;
 
-            if (tabLink) {
-                event.preventDefault(); 
-                const newTab = tabLink.dataset.tab;
-                if (_state.activeLiTab !== newTab) {
-                    _state.activeLiTab = newTab;
-                    _renderTabContent(); // Chama a função leve
-                }
-                return;
-            }
+        data.categories.forEach(cat => {
+            const isActive = activeFilter === cat.id;
+            cardsHtml += `
+                <div data-filter="${cat.id}" class="cursor-pointer transition-all duration-200 transform hover:scale-105 ${isActive ? 'ring-4 shadow-lg border-opacity-50' : ''} bg-white p-4 rounded-xl shadow-md border-t-4" style="border-color: ${cat.color}; ${isActive ? 'box-shadow: 0 0 0 4px ' + cat.color + '44' : ''}">
+                    <p class="text-xs font-bold text-gray-500 uppercase">${cat.label}</p>
+                    <p class="text-xl font-bold text-gray-800">${cat.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    <p class="text-[10px] text-gray-400 font-medium">${cat.count} itens com saldo</p>
+                </div>
+            `;
+        });
+        if (_dom.estoqueSummaryCards) _dom.estoqueSummaryCards.innerHTML = cardsHtml;
 
-            if (sortHeader && _state.selectedChannel === 'loja_integrada' && _state.activeLiTab === 'pedidos') {
-                const newKey = sortHeader.dataset.sortKey;
-                let newDirection = 'asc';
-                if (_state.lojaIntegradaSort.key === newKey && _state.lojaIntegradaSort.direction === 'asc') {
-                    newDirection = 'desc';
-                }
-                _state.lojaIntegradaSort = { key: newKey, direction: newDirection };
-                _renderTabContent(); // Chama a função leve
-                return;
-            }
-        });
-    }
-    
-    // --- Outros Listeners (Modal, Tooltips, etc.) ---
-    if (_dom.page) {
-        _dom.page.addEventListener('click', (event) => {
-            const clickedCell = event.target.closest('.clickable-sales-cell');
-            if (clickedCell) {
-                const monthKey = clickedCell.dataset.monthKey;
-                const channel = clickedCell.dataset.channel;
-                _showSalesDetailsModal(monthKey, channel);
-            }
-        });
-    }
-    if (_dom.salesDetailsModal) {
-        _dom.salesDetailsModal.addEventListener('click', (event) => {
-            if (event.target.closest('#close-sales-details-modal-btn')) _dom.salesDetailsModal.classList.add('hidden');
-            if (event.target.closest('#sales-details-export-button')) {
-                event.stopPropagation();
-                _dom.exportDropdown.classList.toggle('hidden');
-            }
-            if (event.target.closest('#export-sales-details-notes-csv-btn')) {
-                event.preventDefault();
-                _exportSalesDetailsNotesToCSV();
-                _dom.exportDropdown.classList.add('hidden');
-            }
-            if (event.target.closest('#export-sales-details-items-csv-btn')) {
-                event.preventDefault();
-                _exportSalesDetailsItemsToCSV();
-                _dom.exportDropdown.classList.add('hidden');
-            }
-            const viewBtn = event.target.closest('.view-nfe-observation-btn');
-            if (viewBtn) {
-                const nfeId = viewBtn.dataset.nfeId;
-                if (_utils.openNfeObservationModal) _utils.openNfeObservationModal(nfeId);
-            }
-        });
-    }
-    if (_dom.salesDetailsModalContent) {
-        _dom.salesDetailsModalContent.addEventListener('mouseover', (event) => {
-            const exclamationIcon = event.target.closest('.nfe-observation-status-icon');
-            if (exclamationIcon) { _showObservationTooltip(event); return; }
+        // Gráfico
+        if (_dom.estoqueChartCanvas) {
+            const ctx = _dom.estoqueChartCanvas.getContext('2d');
+            if (_state.charts.estoque) _state.charts.estoque.destroy();
 
-            const sellerTrigger = event.target.closest('.seller-tooltip-trigger');
-            if (sellerTrigger) { _showSellerSalesTooltip(event); return; }
-
-            const itemsTrigger = event.target.closest('.nfe-items-tooltip-trigger');
-            if (itemsTrigger) _showNfeItemsTooltip(event);
-        });
-        _dom.salesDetailsModalContent.addEventListener('mouseout', () => {
-            if (_dom.customProductTooltip) {
-                _dom.customProductTooltip.style.opacity = '0';
-                setTimeout(() => {
-                    if (_dom.customProductTooltip.style.opacity === '0') {
-                        _dom.customProductTooltip.classList.add('hidden');
-                        _dom.customProductTooltip.innerHTML = '';
+            _state.charts.estoque = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.categories.map(c => c.label),
+                    datasets: [{
+                        data: data.categories.map(c => c.total),
+                        backgroundColor: data.categories.map(c => c.color),
+                        borderWidth: 0,
+                        hoverOffset: 15
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: { 
+                        legend: { 
+                            position: 'right',
+                            labels: { boxWidth: 12, padding: 20, font: { size: 12, weight: 'bold' } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((ctx.parsed / total) * 100).toFixed(1);
+                                    return ` ${ctx.label}: ${ctx.parsed.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (${percentage}%)`;
+                                }
+                            }
+                        }
                     }
-                }, 200);
+                }
+            });
+        }
+
+        // Top Itens com Paginação
+        if (_dom.estoqueTopItemsContainer) {
+            const filterLabel = activeFilter === 'all' ? 'Geral' : data.categories.find(c => c.id === activeFilter)?.label;
+            
+            // Lógica de Paginação e Limite
+            let baseItems = data.topItems;
+            if (limit !== 'all') {
+                baseItems = baseItems.slice(0, parseInt(limit));
+            }
+            
+            const totalItems = baseItems.length;
+            const totalPages = Math.ceil(totalItems / _state.estoquePageSize);
+            const startIndex = (_state.estoqueCurrentPage - 1) * _state.estoquePageSize;
+            const itemsToDisplay = baseItems.slice(startIndex, startIndex + _state.estoquePageSize);
+            
+            const limitLabel = limit === 'all' ? 'Todos os Itens' : `Top ${limit} Itens`;
+
+            let paginationHtml = '';
+            if (totalPages > 1) {
+                paginationHtml = `
+                    <div class="mt-4 flex items-center justify-between bg-gray-50 px-4 py-3 sm:px-6 rounded-lg border border-gray-200">
+                        <div class="flex flex-1 justify-between sm:hidden">
+                            <button id="estoque-prev-page-mobile" class="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 ${_state.estoqueCurrentPage === 1 ? 'opacity-50 cursor-not-allowed' : ''}">Anterior</button>
+                            <button id="estoque-next-page-mobile" class="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 ${_state.estoqueCurrentPage === totalPages ? 'opacity-50 cursor-not-allowed' : ''}">Próximo</button>
+                        </div>
+                        <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                            <div>
+                                <p class="text-sm text-gray-700">
+                                    Mostrando <span class="font-bold">${startIndex + 1}</span> a <span class="font-bold">${Math.min(startIndex + _state.estoquePageSize, totalItems)}</span> de <span class="font-bold">${totalItems}</span> itens
+                                </p>
+                            </div>
+                            <div>
+                                <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                    <button id="estoque-prev-page" class="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 ${_state.estoqueCurrentPage === 1 ? 'opacity-50 cursor-not-allowed' : ''}">
+                                        <span class="sr-only">Anterior</span>
+                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" /></svg>
+                                    </button>
+                                    <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 focus:outline-offset-0">Página ${_state.estoqueCurrentPage} de ${totalPages}</span>
+                                    <button id="estoque-next-page" class="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 ${_state.estoqueCurrentPage === totalPages ? 'opacity-50 cursor-not-allowed' : ''}">
+                                        <span class="sr-only">Próximo</span>
+                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" /></svg>
+                                    </button>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
+            _dom.estoqueTopItemsContainer.innerHTML = `
+                <div class="mb-4 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-gray-700">${limitLabel} - <span class="text-blue-600">${filterLabel}</span></h3>
+                </div>
+                ${paginationHtml}
+                <div class="overflow-x-auto mt-4">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th data-estoque-sort="descricao" class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                                    Produto ${_state.estoqueSort.key === 'descricao' ? (_state.estoqueSort.direction === 'asc' ? '▲' : '▼') : ''}
+                                </th>
+                                <th data-estoque-sort="estoque" class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                                    Qtd. ${_state.estoqueSort.key === 'estoque' ? (_state.estoqueSort.direction === 'asc' ? '▲' : '▼') : ''}
+                                </th>
+                                <th data-estoque-sort="precoUnitario" class="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                                    Unit. (${data.isLiquido ? 'Custo' : 'Venda'}) ${_state.estoqueSort.key === 'precoUnitario' ? (_state.estoqueSort.direction === 'asc' ? '▲' : '▼') : ''}
+                                </th>
+                                <th data-estoque-sort="valor" class="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                                    Total ${_state.estoqueSort.key === 'valor' ? (_state.estoqueSort.direction === 'asc' ? '▲' : '▼') : ''}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            ${itemsToDisplay.length > 0 ? itemsToDisplay.map(item => `
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-4 py-3">
+                                        <p class="text-sm font-bold text-gray-800 line-clamp-1">${item.descricao}</p>
+                                        <p class="text-[10px] text-gray-400 font-mono">${item.codigo}</p>
+                                    </td>
+                                    <td class="px-4 py-3 text-center text-sm font-mono">${item.estoque}</td>
+                                    <td class="px-4 py-3 text-right text-sm text-gray-600">
+                                        ${item.precoUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </td>
+                                    <td class="px-4 py-3 text-right text-sm font-bold ${item.precoUnitario === 0 ? 'text-red-600' : 'text-blue-600'}">
+                                        ${item.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </td>
+                                </tr>
+                            `).join('') : `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 italic">Nenhum item com saldo nesta categoria</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4">
+                    ${paginationHtml}
+                </div>
+            `;
+        }
+    }
+
+    // --- Sales Dashboard Logic ---
+
+    function _populateYearFilter() {
+        if (!_dom.yearFilter) return;
+
+        const allData = [..._allNFeData, ..._allLojaIntegradaOrders];
+        const years = new Set();
+
+        allData.forEach(item => {
+            const dateString = item.data_de_emissao || item.data_criacao || item.data_criação; 
+            if (dateString) {
+                const date = _utils.parsePtBrDate ? _utils.parsePtBrDate(dateString) : new Date(dateString); 
+                if (date && !isNaN(date.getTime())) {
+                    years.add(date.getFullYear());
+                }
             }
         });
+
+        const sortedYears = Array.from(years).sort((a, b) => b - a);
+        _dom.yearFilter.innerHTML = '<option value="all">Tudo</option>'; 
+        sortedYears.forEach(year => {
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = year;
+            _dom.yearFilter.appendChild(option);
+        });
     }
-}
 
+    function _setDateRange(value) {
+        const today = new Date();
+        let startDate, endDate;
+        const formatDate = (date) => date.toISOString().split('T')[0];
 
-    function _handleDateInputChange() {
-        _dom.filterBar.querySelectorAll('[name="date-range"]').forEach(radio => radio.checked = false);
-        _state.currentDateFilterValue = 'custom';
+        const days = parseInt(value, 10);
+        if (!isNaN(days)) {
+            endDate = today;
+            startDate = new Date();
+            startDate.setDate(endDate.getDate() - days);
+        } else {
+            switch (value) {
+                case 'all': startDate = null; endDate = null; break;
+                case 'current_month': 
+                    startDate = new Date(today.getFullYear(), today.getMonth(), 1); 
+                    endDate = today; 
+                    break;
+                case 'last_month': 
+                    startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1); 
+                    endDate = new Date(today.getFullYear(), today.getMonth(), 0); 
+                    break;
+                case 'last_3_months': 
+                    endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); 
+                    startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 2, 1); 
+                    break;
+                case 'last_6_months': 
+                    endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                    startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 5, 1);
+                    break;
+            }
+        }
+
+        _state.currentDateFilterValue = value;
+        _state.startDate = startDate ? formatDate(startDate) : '';
+        _state.endDate = endDate ? formatDate(endDate) : '';
+        
+        if (_dom.startDateInput) _dom.startDateInput.value = _state.startDate;
+        if (_dom.endDateInput) _dom.endDateInput.value = _state.endDate;
+
         _renderSalesView();
     }
-    
-// AÇÃO: Substitua a função _setDateRange inteira pela versão corrigida.
-
-function _setDateRange(value) {
-    const today = new Date();
-    let startDate, endDate;
-    // Helper para formatar data para o input (YYYY-MM-DD)
-    const formatDate = (date) => date.toISOString().split('T')[0];
-
-    // Lógica para calcular o intervalo de datas
-    const days = parseInt(value, 10);
-    if (!isNaN(days)) {
-        endDate = today;
-        startDate = new Date();
-        startDate.setDate(endDate.getDate() - days);
-    } else {
-        switch (value) {
-            case 'all': 
-                startDate = null; 
-                endDate = null; 
-                break;
-            case 'current_month': 
-                startDate = new Date(today.getFullYear(), today.getMonth(), 1); 
-                endDate = today; 
-                break;
-            case 'last_month': 
-                startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1); 
-                endDate = new Date(today.getFullYear(), today.getMonth(), 0); 
-                break;
-            case 'last_3_months': 
-                endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); 
-                startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 2, 1); 
-                break;
-            case 'last_6_months': 
-                endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-                startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 5, 1);
-                break;
-        }
-    }
-
-    _state.currentDateFilterValue = value;
-
-    // CORREÇÃO: Armazena as datas no estado (_state) e também atualiza os inputs no DOM
-    const formattedStartDate = startDate ? formatDate(startDate) : '';
-    const formattedEndDate = endDate ? formatDate(endDate) : '';
-
-    // Atualiza o ESTADO, que é a fonte da verdade para o gráfico
-    _state.startDate = formattedStartDate;
-    _state.endDate = formattedEndDate;
-    
-    // Atualiza o DOM para o usuário ver a mudança
-    _dom.startDateInput.value = formattedStartDate;
-    _dom.endDateInput.value = formattedEndDate;
-
-    // Atualiza a página para refletir o novo intervalo de datas
-    _renderSalesView();
-}
-
-
-    // >>> INÍCIO DO BLOCO DE SUBSTITUIÇÃO (Função _renderDashboardsPage) <<<
-
-
-
-    // AÇÃO: COLE ESTA FUNÇÃO DE VOLTA NO SEU CÓDIGO
 
     function _createSummaryCard(id, title, countLabel, count, totalValue, color) {
         const valueFormatted = (totalValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        // Adicionado: transição e efeito de escala ao passar o mouse
         return `<div data-id="${id}" class="${color} text-white p-4 rounded-lg shadow-lg flex flex-col justify-between cursor-pointer transform transition-transform duration-200 hover:scale-105">
                 <div>
                     <h3 class="text-md font-semibold">${title}</h3>
@@ -622,582 +502,575 @@ function _setDateRange(value) {
             </div>`;
     }
 
-// AÇÃO 1: Substitua a função _updateDashboardChart inteira
+    function _updateDashboardChart(selectedChannel) {
+        if (selectedChannel) _state.selectedChannel = selectedChannel;
 
-function _updateDashboardChart(selectedChannel) {
-    if (selectedChannel) {
-        _state.selectedChannel = selectedChannel;
+        if (_dom.summaryCards) {
+            _dom.summaryCards.querySelectorAll('[data-id]').forEach(card => card.classList.remove('ring-4', 'ring-offset-2', 'ring-white', 'ring-opacity-75'));
+            const activeCard = _dom.summaryCards.querySelector(`[data-id="${_state.selectedChannel}"]`);
+            if (activeCard) activeCard.classList.add('ring-4', 'ring-offset-2', 'ring-white', 'ring-opacity-75');
+        }
+
+        _renderSalesView(); 
     }
 
-    // Destaque visual para o card ativo
-    if (_dom.summaryCards) {
-        _dom.summaryCards.querySelectorAll('[data-id]').forEach(card => card.classList.remove('ring-4', 'ring-offset-2', 'ring-white', 'ring-opacity-75'));
-        const activeCard = _dom.summaryCards.querySelector(`[data-id="${_state.selectedChannel}"]`);
-        if (activeCard) activeCard.classList.add('ring-4', 'ring-offset-2', 'ring-white', 'ring-opacity-75');
-    }
+    function _renderSalesView() {
+        if (!_dom.salesChartCanvas || !_allNFeData) return;
 
-    // Roteamento foi removido. Sempre chamará a função principal de visualização.
-    _renderSalesView(); 
-}
+        if (_salesChartInstance) { _salesChartInstance.destroy(); _salesChartInstance = null; }
+        _dom.salesTableContainer.innerHTML = '';
+        
+        let filteredNFe;
+        const selectedYear = parseInt(_state.selectedYearFilter, 10);
 
-function _renderTabContent() {
-    const tabContentContainer = document.getElementById('li-tab-content');
-    if (!tabContentContainer) return; 
-
-    // 1. Estilo da aba ativa (lógica original)
-    _dom.salesTableContainer.querySelectorAll('[data-tab]').forEach(tab => {
-        const tabName = tab.dataset.tab;
-        const isActive = _state.activeLiTab === tabName;
-        tab.classList.toggle('border-blue-500', isActive);
-        tab.classList.toggle('text-blue-600', isActive);
-        tab.classList.toggle('border-transparent', !isActive);
-        tab.classList.toggle('text-gray-500', !isActive);
-        tab.classList.toggle('hover:text-gray-700', !isActive);
-        tab.classList.toggle('hover:border-gray-300', !isActive);
-    });
-
-    // --- NOVA LÓGICA DE FILTRAGEM UNIFICADA ---
-    let filteredNFeForTab = _allNFeData;
-    let filteredOrdersForTab = _allLojaIntegradaOrders;
-    const selectedYear = parseInt(_state.selectedYearFilter, 10);
-
-    if (selectedYear && !isNaN(selectedYear)) {
-        // Filtro por ano tem prioridade
-        filteredNFeForTab = _allNFeData.filter(nfe => {
-            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-            return nfeDate && nfeDate.getFullYear() === selectedYear;
-        });
-        filteredOrdersForTab = _allLojaIntegradaOrders.filter(order => {
-            const orderDate = new Date(order.data_criação); // Usa 'new Date' para o formato original de pedidos
-            return !isNaN(orderDate.getTime()) && orderDate.getFullYear() === selectedYear;
-        });
-    } else {
-        // Se ano for "Tudo", usa o filtro de data (lógica original)
-        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
-        if (startDate || endDate) {
-            filteredNFeForTab = _allNFeData.filter(nfe => {
+        if (selectedYear && !isNaN(selectedYear)) {
+            filteredNFe = _allNFeData.filter(nfe => {
+                const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
+                return nfeDate && nfeDate.getFullYear() === selectedYear;
+            });
+        } else {
+            const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+            const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+            filteredNFe = _allNFeData.filter(nfe => {
                 const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
                 return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
             });
-            filteredOrdersForTab = _allLojaIntegradaOrders.filter(order => {
-                const orderDate = new Date(order.data_criação);
-                return !isNaN(orderDate.getTime()) && (!startDate || orderDate >= startDate) && (!endDate || orderDate <= endDate);
-            });
         }
-    }
-    // --- FIM DA FILTRAGEM ---
-
-    let contentHtml = '';
-
-    // 3. Gera o HTML usando os dados já filtrados
-    if (_state.activeLiTab === 'vendas') {
-        const salesByPeriod = {};
-        filteredNFeForTab.forEach(nfe => {
-            const date = _utils.parsePtBrDate(nfe.data_de_emissao);
-            if (!date) return;
-            const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
-            const store = nfe.origem_loja;
-            const value = parseFloat(nfe.valor_da_nota) || 0;
-            if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += value;
-        });
-        const sortedKeys = Object.keys(salesByPeriod).sort();
-        contentHtml = _getSalesTableHTML(sortedKeys, salesByPeriod);
-    } else { // Aba de 'pedidos'
-        const allowedStatus = ["Pedido Entregue", "Pedido Enviado","Pedido em separação", "Pedido Pago", "Em produção"];
-        let filteredOrdersByStatus = filteredOrdersForTab.filter(order => {
-            return order.situação && allowedStatus.includes(order.situação.trim());
-        });
         
-        const { key: sortKey, direction: sortDirStr } = _state.lojaIntegradaSort;
-        const sortDir = sortDirStr === 'asc' ? 1 : -1;
-        filteredOrdersByStatus.sort((a, b) => {
-            const valA = a[sortKey], valB = b[sortKey];
-            if (sortKey === 'valor_total' || sortKey === 'numero_pedido') return ((parseFloat(valA) || 0) - (parseFloat(valB) || 0)) * sortDir;
-            if (sortKey === 'data_criação') return (new Date(valA) - new Date(valB)) * sortDir;
-            return String(valA || '').localeCompare(String(valB || '')) * sortDir;
+        const stores = ['Bling', 'Mercado Livre', 'Loja Integrada'];
+        const storeData = stores.map(store => {
+            const notes = filteredNFe.filter(nfe => nfe.origem_loja === store);
+            const total = notes.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
+            return { name: `Vendas ${store}`, id: store.toLowerCase().replace(/ /g, '_'), count: notes.length, total: total };
         });
 
-        contentHtml = _getLojaIntegradaOrdersTableHTML(filteredOrdersByStatus);
-    }
-    
-    // 4. Insere o HTML no container
-    tabContentContainer.innerHTML = contentHtml;
-}
+        const grandTotalVendas = storeData.reduce((sum, store) => sum + store.total, 0);
+        const grandTotalVendasCount = storeData.reduce((sum, store) => sum + store.count, 0);
+        
+        const colors = { 'bling': 'bg-green-500', 'mercado_livre': 'bg-yellow-500', 'loja_integrada': 'bg-blue-500' };
+        let cardsHtml = storeData.map(store => _createSummaryCard(store.id, store.name, "Notas", store.count, store.total, colors[store.id])).join('');
+        cardsHtml += _createSummaryCard('total', 'Total Vendas (NFe)', "Notas", grandTotalVendasCount, grandTotalVendas, 'bg-gray-700');
+        
+        if (_dom.summaryCards) _dom.summaryCards.innerHTML = cardsHtml;
 
-function _renderSalesView() {
-    if (!_dom.salesChartCanvas || !_allNFeData) return;
-
-    // 1. LIMPEZA INICIAL
-    if (_salesChartInstance) { _salesChartInstance.destroy(); _salesChartInstance = null; }
-    _dom.salesTableContainer.innerHTML = '';
-    
-    // --- LÓGICA DE FILTRO UNIFICADA ---
-    let filteredNFe;
-    const selectedYear = parseInt(_state.selectedYearFilter, 10);
-
-    if (selectedYear && !isNaN(selectedYear)) {
-        filteredNFe = _allNFeData.filter(nfe => {
-            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-            return nfeDate && nfeDate.getFullYear() === selectedYear;
-        });
-    } else {
-        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
-        filteredNFe = _allNFeData.filter(nfe => {
-            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-            return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
-        });
-    }
-    
-    // --- RENDERIZAÇÃO DOS CARDS ---
-    const stores = ['Bling', 'Mercado Livre', 'Loja Integrada'];
-    const storeData = stores.map(store => {
-        const notes = filteredNFe.filter(nfe => nfe.origem_loja === store);
-        const total = notes.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
-        return { name: `Vendas ${store}`, id: store.toLowerCase().replace(/ /g, '_'), count: notes.length, total: total };
-    });
-
-    const grandTotalVendas = storeData.reduce((sum, store) => sum + store.total, 0);
-    const grandTotalVendasCount = storeData.reduce((sum, store) => sum + store.count, 0);
-    
-    const colors = { 'bling': 'bg-green-500', 'mercado_livre': 'bg-yellow-500', 'loja_integrada': 'bg-blue-500' };
-    let cardsHtml = storeData.map(store => _createSummaryCard(store.id, store.name, "Notas", store.count, store.total, colors[store.id])).join('');
-    cardsHtml += _createSummaryCard('total', 'Total Vendas (NFe)', "Notas", grandTotalVendasCount, grandTotalVendas, 'bg-gray-700');
-    
-    if (_dom.summaryCards) _dom.summaryCards.innerHTML = cardsHtml;
-
-    // --- RENDERIZAÇÃO DO GRÁFICO E TABELA ---
-    const aggregationLevel = ['current_month', 'last_month', '30'].includes(_state.currentDateFilterValue) ? 'day' : 'month';
-    const salesByPeriod = {};
-    
-    filteredNFe.forEach(nfe => {
-        const date = _utils.parsePtBrDate(nfe.data_de_emissao);
-        if (!date) return;
-        const key = aggregationLevel === 'day' ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
-        const store = nfe.origem_loja;
-        let value;
-        if (_state.chartDisplayMode === 'liquida') {
-            const items = _parseNfeItemsString(nfe.itens);
-            let totalCostOfGoods = 0;
-            items.forEach(item => {
-                const product = _allProducts.find(p => p.codigo === item.codigo);
-                // AQUI ESTÁ A CORREÇÃO! Usando a nova função de limpeza.
-                const cost = product ? _parseCurrencyBRL(product.preco_de_custo) : 0;
-                totalCostOfGoods += cost * item.quantidade;
-            });
-            const grossSale = parseFloat(nfe.valor_da_nota) || 0;
-            value = grossSale - totalCostOfGoods;
-        } else {
-            value = parseFloat(nfe.valor_da_nota) || 0;
-        }
-        if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += value;
-    });
-
-    const sortedKeys = Object.keys(salesByPeriod).sort();
-    const chartLabels = sortedKeys.map(key => {
-        if (aggregationLevel === 'day') { const [, month, day] = key.split('-'); return `${day}/${month}`; }
-        const [year, month] = key.split('-');
-        return new Date(year, month - 1).toLocaleString('pt-BR', { month: 'short', year: '2-digit' });
-    });
-    const allDatasets = ['Bling', 'Mercado Livre', 'Loja Integrada'].map(store => {
-        const channelId = store.toLowerCase().replace(/ /g, '_');
-        return { label: store, data: sortedKeys.map(k => (salesByPeriod[k] ? salesByPeriod[k][store] || 0 : 0)), borderColor: { 'Bling': 'rgba(34, 197, 94, 1)', 'Mercado Livre': 'rgba(234, 179, 8, 1)', 'Loja Integrada': 'rgba(59, 130, 246, 1)' }[store], backgroundColor: { 'Bling': 'rgba(34, 197, 94, 0.2)', 'Mercado Livre': 'rgba(234, 179, 8, 0.2)', 'Loja Integrada': 'rgba(59, 130, 246, 0.2)' }[store], fill: true, tension: 0.1, hidden: _state.selectedChannel !== 'total' && channelId !== _state.selectedChannel };
-    });
-    const ctx = _dom.salesChartCanvas.getContext('2d');
-    Chart.register(ChartDataLabels);
-    _salesChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: { labels: chartLabels, datasets: allDatasets },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { anchor: 'end', align: 'top', color: '#374151', font: { weight: 'bold' }, formatter: (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value), display: (context) => context.dataset.data[context.dataIndex] > 0 } }, scales: { y: { beginAtZero: true } } }
-    });
-
-    if (_state.selectedChannel === 'loja_integrada') {
-        const tabsHtml = `
-            <div class="border-b border-gray-200 mt-6">
-                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                    <a href="#" data-tab="vendas" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Vendas (NFe)</a>
-                    <a href="#" data-tab="pedidos" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Pedidos da Loja</a>
-                </nav>
-            </div>
-            <div id="li-tab-content"></div>`;
-        _dom.salesTableContainer.innerHTML = tabsHtml;
-        _renderTabContent();
-    } else {
-        const salesTableHtml = _getSalesTableHTML(sortedKeys, salesByPeriod);
-        _dom.salesTableContainer.innerHTML = salesTableHtml;
-    }
-}
-
-
-
- // AÇÃO: Substitua a função _renderLojaIntegradaView inteira por esta versão.
-
-    function _renderLojaIntegradaView() {
-        // Garante que o gráfico seja destruído e a área limpa para a tabela
-        if (_salesChartInstance) {
-            _salesChartInstance.destroy();
-            _salesChartInstance = null;
-        }
-        if (_dom.salesTableContainer) {
-            _dom.salesTableContainer.innerHTML = '';
-        }
-
-        // Calcula os dados de Vendas (NFe) para o período selecionado
-        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
-
-        let filteredNFe = _allNFeData.filter(nfe => {
-            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-            return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
-        });
-
+        const aggregationLevel = ['current_month', 'last_month', '30'].includes(_state.currentDateFilterValue) ? 'day' : 'month';
         const salesByPeriod = {};
+        
         filteredNFe.forEach(nfe => {
             const date = _utils.parsePtBrDate(nfe.data_de_emissao);
             if (!date) return;
-            // Agrega sempre por mês para esta visualização
-            const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            if (!salesByPeriod[key]) {
-                salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
-            }
+            const key = aggregationLevel === 'day' ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
             const store = nfe.origem_loja;
-            const value = parseFloat(nfe.valor_da_nota) || 0;
-            if (salesByPeriod[key][store] !== undefined) {
-                salesByPeriod[key][store] += value;
+            let value;
+            if (_state.chartDisplayMode === 'liquida') {
+                const items = _parseNfeItemsString(nfe.itens);
+                let totalCostOfGoods = 0;
+                items.forEach(item => {
+                    const product = _allProducts.find(p => p.codigo === item.codigo);
+                    const cost = product ? _parseCurrencyBRL(product.preco_de_custo) : 0;
+                    totalCostOfGoods += cost * item.quantidade;
+                });
+                const grossSale = parseFloat(nfe.valor_da_nota) || 0;
+                value = grossSale - totalCostOfGoods;
+            } else {
+                value = parseFloat(nfe.valor_da_nota) || 0;
+            }
+            if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += value;
+        });
+
+        const sortedKeys = Object.keys(salesByPeriod).sort();
+        const chartLabels = sortedKeys.map(key => {
+            if (aggregationLevel === 'day') { const parts = key.split('-'); return `${parts[2]}/${parts[1]}`; }
+            const parts = key.split('-');
+            return new Date(parts[0], parts[1] - 1).toLocaleString('pt-BR', { month: 'short', year: '2-digit' });
+        });
+        const allDatasets = stores.map(store => {
+            const channelId = store.toLowerCase().replace(/ /g, '_');
+            return { 
+                label: store, 
+                data: sortedKeys.map(k => (salesByPeriod[k] ? salesByPeriod[k][store] || 0 : 0)), 
+                borderColor: { 'Bling': 'rgba(34, 197, 94, 1)', 'Mercado Livre': 'rgba(234, 179, 8, 1)', 'Loja Integrada': 'rgba(59, 130, 246, 1)' }[store], 
+                backgroundColor: { 'Bling': 'rgba(34, 197, 94, 0.2)', 'Mercado Livre': 'rgba(234, 179, 8, 0.2)', 'Loja Integrada': 'rgba(59, 130, 246, 0.2)' }[store], 
+                fill: true, 
+                tension: 0.1, 
+                hidden: _state.selectedChannel !== 'total' && channelId !== _state.selectedChannel 
+            };
+        });
+
+        const ctx = _dom.salesChartCanvas.getContext('2d');
+        Chart.register(ChartDataLabels);
+        _salesChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { labels: chartLabels, datasets: allDatasets },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    datalabels: { 
+                        anchor: 'end', 
+                        align: 'top', 
+                        color: '#374151', 
+                        font: { weight: 'bold' }, 
+                        formatter: (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value), 
+                        display: (context) => context.dataset.data[context.dataIndex] > 0 
+                    } 
+                }, 
+                scales: { y: { beginAtZero: true } } 
             }
         });
-        
-        const sortedKeys = Object.keys(salesByPeriod).sort();
 
-        // Desenha a tabela "Vendas Mensais Detalhadas"
-        _renderSalesTable(sortedKeys, salesByPeriod);
-
-        // A tabela "Pedidos - Loja Integrada" será adicionada aqui na próxima etapa.
-    }
-
-// AÇÃO: Substitua a função _renderLojaIntegradaView inteira por esta versão.
-
-function _renderLojaIntegradaView() {
-    // 1. Limpeza
-    if (_salesChartInstance) {
-        _salesChartInstance.destroy();
-        _salesChartInstance = null;
-    }
-    if (_dom.salesTableContainer) {
-        _dom.salesTableContainer.innerHTML = '';
-    }
-
-    // 2. Preparação de dados de Vendas (NFe)
-    const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-    const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
-
-    let filteredNFe = _allNFeData.filter(nfe => {
-        const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-        return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
-    });
-
-    // 3. LÓGICA CORRIGIDA: Agrupa os dados para a tabela de vendas SEMPRE por mês.
-    const salesByPeriodForTable = {};
-    filteredNFe.forEach(nfe => {
-        const date = _utils.parsePtBrDate(nfe.data_de_emissao);
-        if (!date) return;
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; // Chave sempre mensal
-        
-        if (!salesByPeriodForTable[key]) {
-            salesByPeriodForTable[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+        if (_state.selectedChannel === 'loja_integrada') {
+            _dom.salesTableContainer.innerHTML = `
+                <div class="border-b border-gray-200 mt-6">
+                    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                        <a href="#" data-tab="vendas" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Vendas (NFe)</a>
+                        <a href="#" data-tab="pedidos" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Pedidos da Loja</a>
+                    </nav>
+                </div>
+                <div id="li-tab-content"></div>`;
+            _renderTabContent();
+        } else {
+            _dom.salesTableContainer.innerHTML = _getSalesTableHTML(sortedKeys, salesByPeriod);
         }
-        const store = nfe.origem_loja;
-        const value = parseFloat(nfe.valor_da_nota) || 0;
-        if (salesByPeriodForTable[key][store] !== undefined) {
-            salesByPeriodForTable[key][store] += value;
-        }
-    });
-    const sortedTableKeys = Object.keys(salesByPeriodForTable).sort();
-
-    // 4. Desenha a tabela "Vendas Mensais Detalhadas" com os dados mensais corretos.
-    _renderSalesTable(sortedTableKeys, salesByPeriodForTable);
-
-    // 5. Adiciona a tabela "Pedidos - Loja Integrada" logo abaixo, como antes.
-    const filteredOrders = _allLojaIntegradaOrders.filter(order => {
-        const orderDate = new Date(order.data_criação);
-        return !isNaN(orderDate.getTime()) && (!startDate || orderDate >= startDate) && (!endDate || orderDate <= endDate);
-    });
-
-    const { key: sortKey, direction: sortDirStr } = _state.lojaIntegradaSort;
-    const sortDir = sortDirStr === 'asc' ? 1 : -1;
-    filteredOrders.sort((a, b) => {
-        let valA = a[sortKey], valB = b[sortKey];
-        if (sortKey === 'valor_total' || sortKey === 'numero_pedido') {
-            return ((parseFloat(valA) || 0) - (parseFloat(valB) || 0)) * sortDir;
-        } else if (sortKey === 'data_criacao') {
-            return (new Date(a.data_criação) - new Date(b.data_criação)) * sortDir;
-        }
-        return String(valA || '').localeCompare(String(valB || '')) * sortDir;
-    });
-
-    const ordersTableHtml = _getLojaIntegradaOrdersTableHTML(filteredOrders);
-    if (_dom.salesTableContainer) {
-        _dom.salesTableContainer.insertAdjacentHTML('beforeend', ordersTableHtml);
     }
-}
 
+    // --- Tab & Table Rendering Logic ---
 
-function _getSalesTableHTML(sortedMonths, salesData) {
-    const formatCurrency = (value) => (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    let totalBling = 0, totalML = 0, totalLI = 0;
+    function _renderTabContent() {
+        const tabContentContainer = document.getElementById('li-tab-content');
+        if (!tabContentContainer) return; 
 
-    let tableHeader = `<div class="bg-white p-4 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Vendas Mensais Detalhadas</h3><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mês/Ano</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bling</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Mercado Livre</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Loja Integrada (NFe)</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Mês</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
-    
-    let rowsHtml = sortedMonths.map(monthKey => {
-        const monthData = salesData[monthKey] || { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
-        totalBling += monthData['Bling'];
-        totalML += monthData['Mercado Livre'];
-        totalLI += monthData['Loja Integrada'];
-        const monthTotal = monthData['Bling'] + monthData['Mercado Livre'] + monthData['Loja Integrada'];
-        const [year, month] = monthKey.split('-');
-        const monthLabel = new Date(year, month - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-        return `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell" data-month-key="${monthKey}" data-channel="Bling">${formatCurrency(monthData['Bling'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell" data-month-key="${monthKey}" data-channel="Mercado Livre">${formatCurrency(monthData['Mercado Livre'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell" data-month-key="${monthKey}" data-channel="Loja Integrada">${formatCurrency(monthData['Loja Integrada'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-right">${formatCurrency(monthTotal)}</td></tr>`;
-    }).join('');
-    
-    let tableFooter = `</tbody><tfoot class="bg-gray-100\"><tr><th class="px-6 py-3 text-left text-sm font-bold text-gray-700 uppercase">Total Período</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700 clickable-sales-cell" data-month-key="period-total" data-channel="Bling">${formatCurrency(totalBling)}</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700 clickable-sales-cell" data-month-key="period-total" data-channel="Mercado Livre">${formatCurrency(totalML)}</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700 clickable-sales-cell" data-month-key="period-total" data-channel="Loja Integrada">${formatCurrency(totalLI)}</th><th class="px-6 py-3 text-right text-sm font-extrabold text-gray-900 clickable-sales-cell" data-month-key="period-total" data-channel="Total">${formatCurrency(totalBling + totalML + totalLI)}</th></tr></tfoot></table></div></div>`;
-    
-    return tableHeader + rowsHtml + tableFooter;
-}
-
-
-// AÇÃO: Substitua a função _getLojaIntegradaOrdersTableHTML inteira por esta versão.
-
-function _getLojaIntegradaOrdersTableHTML(orders) {
-    const createHeader = (key, title, isNumeric = false) => {
-        const isSorted = _state.lojaIntegradaSort.key === key;
-        const icon = isSorted ? (_state.lojaIntegradaSort.direction === 'asc' ? '▲' : '▼') : '';
-        const textAlign = isNumeric ? 'text-right' : 'text-left';
-        return `<th class="px-6 py-3 ${textAlign} text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" data-sort-key="${key}">${title} ${icon}</th>`;
-    };
-
-    let tableHTML = `
-        <div class="bg-white p-4 rounded-lg shadow-md mt-8">
-            <h3 class="text-xl font-bold text-gray-800 mb-4">Pedidos - Loja Integrada</h3>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            ${createHeader('numero_pedido', 'Pedido Nº')}
-                            ${createHeader('cliente', 'Cliente')}
-                            ${createHeader('cupom', 'Cupom')}
-                            ${createHeader('situação', 'Situação')}
-                            ${createHeader('valor_total', 'Valor Total', true)}
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">`;
-
-    if (orders.length === 0) {
-        tableHTML += `<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Nenhum pedido encontrado com a situação "Pedido Entregue" ou "Pedido Enviado".</td></tr>`;
-    } else {
-        orders.forEach(order => {
-            const hasCupom = order.cupom && order.cupom !== 'N/A';
-            const cupomText = hasCupom ? order.cupom : 'Nenhum';
-            const cupomClass = hasCupom ? 'text-green-600 font-semibold' : 'text-gray-500';
-
-            tableHTML += `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.numero_pedido || 'N/A'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.cliente || 'N/A'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm ${cupomClass}">${cupomText}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.situação || 'N/A'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right text-gray-900">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.valor_total)}</td>
-                </tr>`;
+        _dom.salesTableContainer.querySelectorAll('[data-tab]').forEach(tab => {
+            const isActive = _state.activeLiTab === tab.dataset.tab;
+            tab.classList.toggle('border-blue-500', isActive);
+            tab.classList.toggle('text-blue-600', isActive);
+            tab.classList.toggle('border-transparent', !isActive);
+            tab.classList.toggle('text-gray-500', !isActive);
         });
+
+        let filteredNFe, filteredOrders;
+        const selectedYear = parseInt(_state.selectedYearFilter, 10);
+
+        if (selectedYear && !isNaN(selectedYear)) {
+            filteredNFe = _allNFeData.filter(nfe => _utils.parsePtBrDate(nfe.data_de_emissao)?.getFullYear() === selectedYear);
+            filteredOrders = _allLojaIntegradaOrders.filter(order => new Date(order.data_criação || order.data_criacao).getFullYear() === selectedYear);
+        } else {
+            const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+            const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+            filteredNFe = _allNFeData.filter(nfe => {
+                const d = _utils.parsePtBrDate(nfe.data_de_emissao);
+                return d && (!startDate || d >= startDate) && (!endDate || d <= endDate);
+            });
+            filteredOrders = _allLojaIntegradaOrders.filter(order => {
+                const d = new Date(order.data_criação || order.data_criacao);
+                return !isNaN(d.getTime()) && (!startDate || d >= startDate) && (!endDate || d <= endDate);
+            });
+        }
+
+        if (_state.activeLiTab === 'vendas') {
+            const salesByPeriod = {};
+            filteredNFe.forEach(nfe => {
+                const d = _utils.parsePtBrDate(nfe.data_de_emissao);
+                if (!d) return;
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+                const store = nfe.origem_loja;
+                if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += parseFloat(nfe.valor_da_nota) || 0;
+            });
+            tabContentContainer.innerHTML = _getSalesTableHTML(Object.keys(salesByPeriod).sort(), salesByPeriod);
+        } else {
+            const allowedStatus = ["Pedido Entregue", "Pedido Enviado", "Pedido em separação", "Pedido Pago", "Em produção"];
+            let orders = filteredOrders.filter(order => order.situação && allowedStatus.includes(order.situação.trim()));
+            const { key, direction } = _state.lojaIntegradaSort;
+            const dir = direction === 'asc' ? 1 : -1;
+            orders.sort((a, b) => {
+                const valA = a[key], valB = b[key];
+                if (key === 'valor_total' || key === 'numero_pedido') return (parseFloat(valA || 0) - parseFloat(valB || 0)) * dir;
+                if (key === 'data_criação' || key === 'data_criacao') return (new Date(valA) - new Date(valB)) * dir;
+                return String(valA || '').localeCompare(String(valB || '')) * dir;
+            });
+            tabContentContainer.innerHTML = _getLojaIntegradaOrdersTableHTML(orders);
+        }
     }
 
-    tableHTML += `</tbody></table></div></div>`;
-    return tableHTML;
-}
+    function _getSalesTableHTML(sortedMonths, salesData) {
+        const formatCurrency = (v) => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        let totals = { Bling: 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+
+        let html = `<div class="bg-white p-4 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Vendas Mensais Detalhadas</h3><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mês/Ano</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bling</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Mercado Livre</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Loja Integrada (NFe)</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Mês</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+        
+        sortedMonths.forEach(monthKey => {
+            const data = salesData[monthKey] || { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+            Object.keys(totals).forEach(k => totals[k] += data[k]);
+            const monthTotal = data['Bling'] + data['Mercado Livre'] + data['Loja Integrada'];
+            const [y, m] = monthKey.split('-');
+            const label = new Date(y, m - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+            html += `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${label.charAt(0).toUpperCase() + label.slice(1)}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell cursor-pointer hover:bg-gray-50" data-month-key="${monthKey}" data-channel="Bling">${formatCurrency(data['Bling'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell cursor-pointer hover:bg-gray-50" data-month-key="${monthKey}" data-channel="Mercado Livre">${formatCurrency(data['Mercado Livre'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell cursor-pointer hover:bg-gray-50" data-month-key="${monthKey}" data-channel="Loja Integrada">${formatCurrency(data['Loja Integrada'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-right">${formatCurrency(monthTotal)}</td></tr>`;
+        });
+        
+        const grandTotal = totals.Bling + totals['Mercado Livre'] + totals['Loja Integrada'];
+        html += `</tbody><tfoot class="bg-gray-100\"><tr><th class="px-6 py-3 text-left text-sm font-bold text-gray-700 uppercase">Total Período</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700">${formatCurrency(totals.Bling)}</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700">${formatCurrency(totals['Mercado Livre'])}</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700">${formatCurrency(totals['Loja Integrada'])}</th><th class="px-6 py-3 text-right text-sm font-extrabold text-gray-900">${formatCurrency(grandTotal)}</th></tr></tfoot></table></div></div>`;
+        return html;
+    }
+
+    function _getLojaIntegradaOrdersTableHTML(orders) {
+        const createHeader = (key, title, isNumeric = false) => {
+            const isSorted = _state.lojaIntegradaSort.key === key;
+            const icon = isSorted ? (_state.lojaIntegradaSort.direction === 'asc' ? '▲' : '▼') : '';
+            return `<th class="px-6 py-3 ${isNumeric ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" data-sort-key="${key}">${title} ${icon}</th>`;
+        };
+
+        let html = `
+            <div class="bg-white p-4 rounded-lg shadow-md mt-8">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">Pedidos - Loja Integrada</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                ${createHeader('numero_pedido', 'Pedido Nº')}
+                                ${createHeader('cliente', 'Cliente')}
+                                ${createHeader('cupom', 'Cupom')}
+                                ${createHeader('situação', 'Situação')}
+                                ${createHeader('valor_total', 'Valor Total', true)}
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">`;
+
+        if (orders.length === 0) {
+            html += `<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Nenhum pedido encontrado.</td></tr>`;
+        } else {
+            orders.forEach(order => {
+                const hasCupom = order.cupom && order.cupom !== 'N/A';
+                html += `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.numero_pedido || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.cliente || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm ${hasCupom ? 'text-green-600 font-semibold' : 'text-gray-500'}">${hasCupom ? order.cupom : 'Nenhum'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.situação || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right text-gray-900">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.valor_total)}</td>
+                    </tr>`;
+            });
+        }
+        html += `</tbody></table></div></div>`;
+        return html;
+    }
+
+    // --- Modal, Tooltips & Export Functions ---
 
     function _showSalesDetailsModal(monthKey, channel) {
-        let startFilterDate, endFilterDate;
-        let titleDatePart;
-        const titleChannelPart = channel === 'Total' ? 'Todos os Canais' : channel;
-    
+        let start, end, titleDate;
         if (monthKey === 'period-total') {
-            const startDateValue = _dom.startDateInput.value;
-            const endDateValue = _dom.endDateInput.value;
-            startFilterDate = startDateValue ? new Date(startDateValue + 'T00:00:00') : null;
-            endFilterDate = endDateValue ? new Date(endDateValue + 'T23:59:59') : null;
-            titleDatePart = (startDateValue && endDateValue) ? `de ${_utils.parsePtBrDate(startDateValue).toLocaleDateString('pt-BR')} a ${_utils.parsePtBrDate(endDateValue).toLocaleDateString('pt-BR')}` : "em todo o período";
+            start = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+            end = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+            titleDate = (start && end) ? `de ${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')}` : "em todo o período";
         } else {
-            const [year, month] = monthKey.split('-');
-            startFilterDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-            endFilterDate = new Date(parseInt(year), parseInt(month), 0);
-            titleDatePart = `de ${new Date(year, month - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}`;
+            const [y, m] = monthKey.split('-');
+            start = new Date(parseInt(y), parseInt(m) - 1, 1);
+            end = new Date(parseInt(y), parseInt(m), 0);
+            titleDate = `de ${new Date(y, m - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}`;
         }
     
-        const filteredNFe = _allNFeData.filter(nfe => {
-            const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-            if (!nfeDate) return false;
-            
-            const nfeDateOnly = new Date(nfeDate.getFullYear(), nfeDate.getMonth(), nfeDate.getDate());
-            nfeDateOnly.setHours(0,0,0,0); // Zera a hora para comparação de data
-    
-            const channelMatch = (channel === 'Total') ? true : (nfe.origem_loja === channel);
-            
-            const startDateMatch = startFilterDate ? nfeDateOnly >= startFilterDate : true;
-            const endDateMatch = endFilterDate ? nfeDateOnly <= endFilterDate : true;
-    
-            return channelMatch && startDateMatch && endDateMatch;
+        _currentSalesDetails = _allNFeData.filter(nfe => {
+            const d = _utils.parsePtBrDate(nfe.data_de_emissao);
+            if (!d) return false;
+            const channelMatch = (channel === 'Total' || channel === 'total') ? true : (nfe.origem_loja === channel);
+            return channelMatch && (!start || d >= start) && (!end || d <= end);
         });
         
-        _currentSalesDetails = filteredNFe;
+        const total = _currentSalesDetails.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
+        _dom.salesDetailsModalTitle.textContent = `Vendas Detalhadas (${channel}) ${titleDate} - Total: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
     
-        const totalValue = filteredNFe.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
-        const formattedTotal = totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        _dom.salesDetailsModalTitle.textContent = `Vendas Detalhadas para ${titleChannelPart} ${titleDatePart} - Total: ${formattedTotal}`;
-    
-        if (filteredNFe.length === 0) {
+        if (_currentSalesDetails.length === 0) {
             _dom.salesDetailsModalContent.innerHTML = '';
             _dom.noSalesDetailsMessage.classList.remove('hidden');
         } else {
             _dom.noSalesDetailsMessage.classList.add('hidden');
-            let tableHtml = `
+            let html = `
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nº da Nota</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente / Data Emissão</th>
-                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendedor</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente / Data</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendedor</th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Situação</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações / Obs.</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">`;
     
-            filteredNFe.forEach(nfe => {
-                const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-                const hasObservation = Array.isArray(nfe.observacao) && nfe.observacao.length > 0;
-                const formattedDate = nfeDate ? nfeDate.toLocaleDateString('pt-BR') : 'N/A';
-                const observacaoJson = JSON.stringify(nfe.observacao || []);
-    
-                tableHtml += `
+            _currentSalesDetails.forEach(nfe => {
+                const obs = JSON.stringify(nfe.observacao || []);
+                const hasObs = Array.isArray(nfe.observacao) && nfe.observacao.length > 0;
+                html += `
                 <tr id="sales-detail-row-${nfe.id_nota}">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600"><a href="${nfe.link_danfe || '#'}" target="_blank" rel="noopener noreferrer" title="Abrir DANFE">${nfe.numero_da_nota || 'N/A'}</a></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600"><a href="${nfe.link_danfe || '#'}" target="_blank">${nfe.numero_da_nota}</a></td>
                     <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" data-itens="${nfe.itens}" data-frete="${nfe.valor_do_frete}">
-                        <div class="text-sm font-medium text-gray-900">${nfe.nome_do_cliente || 'N/A'}</div>
-                        <div class="text-xs text-gray-500">${formattedDate}</div>
+                        <div class="text-sm font-medium text-gray-900">${nfe.nome_do_cliente}</div>
+                        <div class="text-xs text-gray-500">${nfe.data_de_emissao}</div>
                     </td>
-                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-    <span class="seller-tooltip-trigger cursor-pointer" data-seller-name="${nfe.nome_do_vendedor || ''}">
-        ${nfe.nome_do_vendedor || 'N/A'}
-    </span>
-</td>
-                   
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${(parseFloat(nfe.valor_da_nota) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                        <span class="seller-tooltip-trigger cursor-pointer underline decoration-dotted" data-seller-name="${nfe.nome_do_vendedor || ''}">${nfe.nome_do_vendedor || 'N/A'}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold">${(parseFloat(nfe.valor_da_nota) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">${nfe.situacao || 'N/A'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
                         <div class="flex items-center justify-center space-x-2">
-                            <button class="view-nfe-observation-btn text-gray-500 hover:text-blue-600 p-1" data-nfe-id="${nfe.id_nota}" title="Visualizar/Editar Observações">
-                               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            <button class="view-nfe-observation-btn text-gray-400 hover:text-blue-600" data-nfe-id="${nfe.id_nota}" title="Obs.">
+                               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                             </button>
-                            <span class="nfe-observation-status-icon cursor-pointer" data-nfe-id="${nfe.id_nota}" data-observation='${observacaoJson}' title="${hasObservation ? 'Possui observações' : 'Nenhuma observação'}">
-                               <svg class="h-5 w-5 ${hasObservation ? 'text-red-500' : 'text-gray-400'}" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                            <span class="nfe-observation-status-icon cursor-pointer" data-nfe-id="${nfe.id_nota}" data-observation='${obs}'>
+                               <svg class="h-5 w-5 ${hasObs ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor"><path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/></svg>
                             </span>
                         </div>
                     </td>
                 </tr>`;
             });
-            tableHtml += `</tbody></table>`;
-            _dom.salesDetailsModalContent.innerHTML = tableHtml;
+            html += `</tbody></table>`;
+            _dom.salesDetailsModalContent.innerHTML = html;
         }
-    
         _dom.salesDetailsModal.classList.remove('hidden');
     }
-    
-    
 
+    function _showNfeItemsTooltip(event) {
+        const trigger = event.target.closest('.nfe-items-tooltip-trigger');
+        if (!trigger || !_dom.customProductTooltip) return;
 
-    // --- Public API ---
-    return {
-        init: function(config) {
-            // A função init agora SÓ guarda as configurações
-            console.log('[DashboardApp] Initializing config...');
-            _allNFeData = config.allNFeData || [];
-            _allProducts = config.allProducts || [];
-            _utils.parsePtBrDate = config.parsePtBrDate;
-            _utils.showMessageModal = config.showMessageModal;
-            _utils.positionTooltip = config.positionTooltip;
-            _utils.openNfeObservationModal = config.openNfeObservationModal;
-            _utils.formatCnpjCpf = config.formatCnpjCpf;
-        },
-      // Ação: Substitua sua função start por esta versão corrigida
+        const items = _parseNfeItemsString(trigger.dataset.itens);
+        if (items.length === 0) return;
 
-// Ação: Substitua completamente a sua função start por este bloco
+        const frete = parseFloat(trigger.dataset.frete || 0);
+        const subtotal = items.reduce((s, i) => s + (i.valor * i.quantidade), 0);
 
-start: function(allNFeData, allLojaIntegradaOrders) {
-    // Garante que o setup do DOM e dos eventos rode apenas uma vez.
-    if (!_state.isInitialized) {
-        console.log('[DashboardApp] Performing one-time setup...');
-        _cacheDom();
-        _bindEvents();
-        _state.isInitialized = true;
+        let html = `<div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 max-w-md"><h4 class="font-bold text-sm mb-2 pb-1 border-b">Itens da NFe</h4><ul class="space-y-1 text-xs">`;
+        items.forEach(i => {
+            const p = _allProducts.find(prod => prod.codigo === i.codigo);
+            html += `<li class="flex justify-between"><span>${i.quantidade}x ${p ? p.descricao : i.codigo}</span><span class="font-semibold ml-4">${i.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></li>`;
+        });
+        html += `</ul><div class="mt-2 pt-2 border-t text-xs">
+            <div class="flex justify-between"><span>Subtotal:</span><span>${subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+            <div class="flex justify-between"><span>Frete:</span><span>${frete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+            <div class="flex justify-between font-bold"><span>Total:</span><span>${(subtotal + frete).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+        </div></div>`;
+
+        _dom.customProductTooltip.innerHTML = html;
+        _dom.customProductTooltip.classList.remove('hidden');
+        _dom.customProductTooltip.style.opacity = '1';
+        if (_utils.positionTooltip) _utils.positionTooltip(event, _dom.customProductTooltip);
     }
 
-    // Atualiza os dados recebidos
-    if (allNFeData) {
-        _allNFeData = allNFeData;
+    function _showSellerSalesTooltip(event) {
+        const trigger = event.target.closest('.seller-tooltip-trigger');
+        if (!trigger || !_dom.customProductTooltip) return;
+
+        const name = trigger.dataset.sellerName;
+        const sales = _currentSalesDetails.filter(n => n.nome_do_vendedor === name);
+        const total = sales.reduce((s, n) => s + (parseFloat(n.valor_da_nota) || 0), 0);
+
+        _dom.customProductTooltip.innerHTML = `
+            <div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 text-xs">
+                <h4 class="font-bold border-b mb-1 pb-1">Vendas: ${name}</h4>
+                <div class="flex justify-between"><span>Total:</span><span class="font-bold ml-4">${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                <div class="flex justify-between"><span>Notas:</span><span>${sales.length}</span></div>
+            </div>`;
+        _dom.customProductTooltip.classList.remove('hidden');
+        _dom.customProductTooltip.style.opacity = '1';
+        if (_utils.positionTooltip) _utils.positionTooltip(event, _dom.customProductTooltip);
     }
-    if (allLojaIntegradaOrders) {
-        _allLojaIntegradaOrders = allLojaIntegradaOrders;
+
+    function _exportToCSV(type) {
+        if (!_currentSalesDetails.length) return;
+        
+        let headers, rows;
+        if (type === 'notes') {
+            headers = ["Nº Nota", "Data", "Cliente", "Vendedor", "Valor", "Situação", "Origem"];
+            rows = _currentSalesDetails.map(n => [
+                n.numero_da_nota, n.data_de_emissao, n.nome_do_cliente, n.nome_do_vendedor, 
+                String(n.valor_da_nota).replace('.',','), n.situacao, n.origem_loja
+            ]);
+        } else {
+            headers = ["Nº Nota", "Data", "Cliente", "Código Item", "Quantidade", "Valor Unit"];
+            rows = [];
+            _currentSalesDetails.forEach(n => {
+                _parseNfeItemsString(n.itens).forEach(i => {
+                    rows.push([n.numero_da_nota, n.data_de_emissao, n.nome_do_cliente, i.codigo, i.quantidade, String(i.valor).replace('.',',')]);
+                });
+            });
+        }
+
+        const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\r\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `vendas_${type}.csv`;
+        link.click();
     }
 
-    _populateYearFilter();
+    // --- Event Binding ---
 
-    // Se já estiver rodando, não faz nada.
-    if (_state.isStarted) return; 
+    function _bindEvents() {
+        _dom.selectVendasBtn?.addEventListener('click', _showSalesDashboard);
+        _dom.selectEstoqueBtn?.addEventListener('click', _showEstoqueDashboard);
+        _dom.backToSelectorBtn?.addEventListener('click', _showSelector);
+        _dom.backToSelectorFromEstoqueBtn?.addEventListener('click', _showSelector);
 
-    console.log('[DashboardApp] Starting...');
-    
-    // Mostra a tela de seleção inicial (Cards Vendas/Estoque)
-    _showSelector();
-    
-    _state.isStarted = true;
-},
+        _dom.estoqueTypeToggle?.addEventListener('change', () => { _state.estoqueCurrentPage = 1; _renderEstoqueDashboard(); });
+        _dom.estoqueTopLimitSelect?.addEventListener('change', e => { _state.estoqueTopLimit = e.target.value; _state.estoqueCurrentPage = 1; _renderEstoqueDashboard(); });
+        
+        _dom.estoqueSummaryCards?.addEventListener('click', e => {
+            const card = e.target.closest('[data-filter]');
+            if (card) { _state.activeEstoqueFilter = card.dataset.filter; _state.estoqueCurrentPage = 1; _renderEstoqueDashboard(); }
+        });
 
-
-
-        stop: function() {
-            console.log('[DashboardApp] Stopping...');
-            if (_salesChartInstance) {
-                _salesChartInstance.destroy();
-                _salesChartInstance = null;
+        _dom.estoqueTopItemsContainer?.addEventListener('click', e => {
+            const header = e.target.closest('[data-estoque-sort]');
+            if (header) {
+                const key = header.dataset.estoqueSort;
+                _state.estoqueSort = { key, direction: (_state.estoqueSort.key === key && _state.estoqueSort.direction === 'desc') ? 'asc' : 'desc' };
+                _state.estoqueCurrentPage = 1;
+                _renderEstoqueDashboard();
+                return;
             }
-            // Esconde todos os containers do dashboard ao parar
-            if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
-            if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
-            if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
-            
-             _state.isStarted = false;
-        },
 
-        updateNfeObservationStatus: function(nfeId, newObservation) {
-            const rowToUpdate = document.getElementById(`sales-detail-row-${nfeId}`);
-            if (rowToUpdate) {
-                const statusIcon = rowToUpdate.querySelector('.nfe-observation-status-icon');
-                const newObservationJson = JSON.stringify(newObservation || []);
-                if (statusIcon) {
-                    statusIcon.dataset.observation = newObservationJson;
-                    const svgIcon = statusIcon.querySelector('svg');
-                    const hasObservation = Array.isArray(newObservation) && newObservation.length > 0;
-                    if (svgIcon) {
-                        svgIcon.classList.toggle('text-red-500', hasObservation);
-                        svgIcon.classList.toggle('text-gray-400', !hasObservation);
-                        statusIcon.title = hasObservation ? 'Esta nota possui observações' : 'Nenhuma observação';
-                    }
+            // Listeners de Paginação
+            if (e.target.closest('#estoque-prev-page') || e.target.closest('#estoque-prev-page-mobile')) {
+                if (_state.estoqueCurrentPage > 1) { 
+                    _state.estoqueCurrentPage--; 
+                    _renderEstoqueDashboard(); 
+                    _dom.estoqueTopItemsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             }
-        }  
+            if (e.target.closest('#estoque-next-page') || e.target.closest('#estoque-next-page-mobile')) {
+                const data = _calculateEstoqueData();
+                const limit = _state.estoqueTopLimit;
+                const baseItems = limit === 'all' ? data.topItems : data.topItems.slice(0, parseInt(limit));
+                const totalPages = Math.ceil(baseItems.length / _state.estoquePageSize);
+                if (_state.estoqueCurrentPage < totalPages) { 
+                    _state.estoqueCurrentPage++; 
+                    _renderEstoqueDashboard(); 
+                    _dom.estoqueTopItemsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+        });
+
+        _dom.yearFilter?.addEventListener('change', e => {
+            _state.selectedYearFilter = e.target.value;
+            if (_dom.startDateInput) _dom.startDateInput.value = '';
+            if (_dom.endDateInput) _dom.endDateInput.value = '';
+            _setDateRange('all');
+        });
+
+        _dom.vendaTypeToggle?.addEventListener('change', e => {
+            _state.chartDisplayMode = e.target.checked ? 'liquida' : 'bruta';
+            _renderSalesView();
+        });
+
+        _dom.startDateInput?.addEventListener('change', () => { _state.currentDateFilterValue = 'custom'; _renderSalesView(); });
+        _dom.endDateInput?.addEventListener('change', () => { _state.currentDateFilterValue = 'custom'; _renderSalesView(); });
+        _dom.clearFiltersBtn?.addEventListener('click', () => _setDateRange('all'));
+
+        _dom.filterBar?.querySelectorAll('[name="date-range"]').forEach(r => {
+            r.addEventListener('change', e => { if (e.target.checked) _setDateRange(e.target.value); });
+        });
+
+        _dom.summaryCards?.addEventListener('click', e => {
+            const card = e.target.closest('[data-id]');
+            if (card) _updateDashboardChart(card.dataset.id);
+        });
+
+        _dom.salesTableContainer?.addEventListener('click', e => {
+            const tab = e.target.closest('[data-tab]');
+            if (tab) {
+                e.preventDefault();
+                _state.activeLiTab = tab.dataset.tab;
+                _renderTabContent();
+                return;
+            }
+            const sort = e.target.closest('[data-sort-key]');
+            if (sort && _state.selectedChannel === 'loja_integrada' && _state.activeLiTab === 'pedidos') {
+                const key = sort.dataset.sortKey;
+                _state.lojaIntegradaSort = { key, direction: (_state.lojaIntegradaSort.key === key && _state.lojaIntegradaSort.direction === 'asc') ? 'desc' : 'asc' };
+                _renderTabContent();
+            }
+        });
+
+        _dom.page?.addEventListener('click', e => {
+            const cell = e.target.closest('.clickable-sales-cell');
+            if (cell) _showSalesDetailsModal(cell.dataset.monthKey, cell.dataset.channel);
+        });
+
+        _dom.salesDetailsModal?.addEventListener('click', e => {
+            if (e.target.closest('#close-sales-details-modal-btn')) _dom.salesDetailsModal.classList.add('hidden');
+            if (e.target.closest('#sales-details-export-button')) { e.stopPropagation(); _dom.exportDropdown.classList.toggle('hidden'); }
+            if (e.target.closest('#export-sales-details-notes-csv-btn')) { e.preventDefault(); _exportToCSV('notes'); _dom.exportDropdown.classList.add('hidden'); }
+            if (e.target.closest('#export-sales-details-items-csv-btn')) { e.preventDefault(); _exportToCSV('items'); _dom.exportDropdown.classList.add('hidden'); }
+            const viewBtn = e.target.closest('.view-nfe-observation-btn');
+            if (viewBtn && _utils.openNfeObservationModal) _utils.openNfeObservationModal(viewBtn.dataset.nfeId);
+        });
+
+        _dom.salesDetailsModalContent?.addEventListener('mouseover', e => {
+            if (e.target.closest('.seller-tooltip-trigger')) _showSellerSalesTooltip(e);
+            else if (e.target.closest('.nfe-items-tooltip-trigger')) _showNfeItemsTooltip(e);
+        });
+
+        _dom.salesDetailsModalContent?.addEventListener('mouseout', () => {
+            if (_dom.customProductTooltip) {
+                _dom.customProductTooltip.style.opacity = '0';
+                setTimeout(() => { if (_dom.customProductTooltip.style.opacity === '0') _dom.customProductTooltip.classList.add('hidden'); }, 200);
+            }
+        });
+    }
+
+    // --- Public API ---
+
+    return {
+        init: function(config) {
+            _allNFeData = config.allNFeData || [];
+            _allProducts = config.allProducts || [];
+            _utils = config;
+        },
+
+        start: function(nfeData, liOrders) {
+            if (!_state.isInitialized) {
+                _cacheDom();
+                _bindEvents();
+                _state.isInitialized = true;
+            }
+            if (nfeData) _allNFeData = nfeData;
+            if (liOrders) _allLojaIntegradaOrders = liOrders;
+
+            _populateYearFilter();
+            
+            // Sempre mostra o seletor ao iniciar (ou clicar no menu novamente)
+            _showSelector();
+            _state.isStarted = true;
+        },
+
+        stop: function() {
+            if (_salesChartInstance) { _salesChartInstance.destroy(); _salesChartInstance = null; }
+            Object.values(_state.charts).forEach(c => c?.destroy());
+            _dom.filterBar?.classList.add('hidden');
+            _dom.selectorContainer?.classList.add('hidden');
+            _dom.vendasContainer?.classList.add('hidden');
+            _dom.estoqueContainer?.classList.add('hidden');
+            _state.isStarted = false;
+        },
+
+        updateNfeObservationStatus: function(id, obs) {
+            const row = document.getElementById(`sales-detail-row-${id}`);
+            if (row) {
+                const icon = row.querySelector('.nfe-observation-status-icon');
+                if (icon) {
+                    icon.dataset.observation = JSON.stringify(obs || []);
+                    const svg = icon.querySelector('svg');
+                    const has = Array.isArray(obs) && obs.length > 0;
+                    svg?.classList.toggle('text-red-500', has);
+                    svg?.classList.toggle('text-gray-300', !has);
+                }
+            }
+        }
     };
 })();
+
 
