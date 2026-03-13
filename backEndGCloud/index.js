@@ -9,9 +9,35 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const { google } = require('googleapis');
+const http = require('http'); // Adicionado para Socket.io
+const { Server } = require('socket.io'); // Adicionado para Socket.io
 
 // Inicializa a aplicação Express.
 const app = express();
+const server = http.createServer(app); // Servidor HTTP para o Socket.io
+
+// Inicializa o Socket.io com configurações de CORS
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Em produção, restrinja para suas origens permitidas
+        methods: ["GET", "POST"]
+    }
+});
+
+// Evento de conexão do Socket.io
+io.on('connection', (socket) => {
+    console.log('Novo cliente conectado via WebSocket:', socket.id);
+    
+    socket.on('disconnect', () => {
+        console.log('Cliente desconectado do WebSocket:', socket.id);
+    });
+});
+
+// Middleware para disponibilizar o io em todas as rotas se necessário
+app.use((req, res, next) => {
+    req.io = io;
+    next();
+});
 
 // --- Middlewares ---
 // Habilita o CORS para todas as origens. Em um ambiente de produção,
@@ -716,7 +742,8 @@ const estoqueRouter = createEstoqueRouter(
     SPREADSHEET_ID_SAIDA_FABRICA, 
     SHEET_NAME_SAIDA_FABRICA,
     SPREADSHEET_ID_SAIDA_GARANTIA,
-    SHEET_NAME_SAIDA_GARANTIA
+    SHEET_NAME_SAIDA_GARANTIA,
+    io // Injetando Socket.io para atualizações em tempo real
 );
 app.use('/estoque', estoqueRouter);
 
@@ -773,7 +800,8 @@ const produtosRouter = createProdutosRouter(
     getInitializedSheetsClient,
     SPREADSHEET_ID_ESTOQUE,       // '11EqlFOTNfCiCl-sVlTjNzAK7feWcMJH8VFfOAgUXRSo'
     SHEET_NAME_ESTOQUE,           // 'Produtos'
-    SHEET_NAME_PRODUTOS_ESTOQUE   // 'Produtos Estoque'
+    SHEET_NAME_PRODUTOS_ESTOQUE,  // 'Produtos Estoque'
+    io                            // Injetando Socket.io para atualizações em tempo real
 );
 app.use('/produtos', produtosRouter);
 
@@ -811,6 +839,6 @@ exports.app = app;
 
 // --- INICIALIZAÇÃO DO SERVIDOR (Para Cloud Run) ---
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-    console.log(`Servidor Express rodando na porta ${PORT}`);
+server.listen(PORT, () => {
+    console.log(`Servidor HTTP e WebSocket rodando na porta ${PORT}`);
 });

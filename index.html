@@ -12,6 +12,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script
         src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <!-- WebSocket Socket.io Client -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <!-- NOVO: Carrega a folha de estilos externa -->
     <link rel="stylesheet" href="css/styles.css">
 
@@ -1214,6 +1216,7 @@
             let _allLojaIntegradaOrders = [];
             let _selectedSaidaItems = new Set();
             let _selectedStockItems = new Set();
+            let _socket; // NOVO: Variável para o Socket.io
             let _reportState = {
                 sortColumn: 'descricao',
                 sortDirection: 'asc',

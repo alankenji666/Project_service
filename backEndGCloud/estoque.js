@@ -61,7 +61,8 @@ const createEstoqueRouter = (
     SPREADSHEET_ID_SAIDA_FABRICA, 
     SHEET_NAME_SAIDA_FABRICA,
     SPREADSHEET_ID_SAIDA_GARANTIA,
-    SHEET_NAME_SAIDA_GARANTIA
+    SHEET_NAME_SAIDA_GARANTIA,
+    io // Injetando Socket.io
 ) => {
     const router = express.Router();
 
@@ -321,6 +322,18 @@ const createEstoqueRouter = (
                         }
                     }
                 }
+            }
+            
+            // --- TAREFA 3: NOTIFICAR CLIENTES VIA WEBSOCKET (TEMPO REAL) ---
+            if (isStockUpdate && io) {
+                console.log(`[WebSocket] Emitindo atualização de estoque para o código: ${produto.codigo}`);
+                io.emit('stockUpdated', {
+                    codigo: produto.codigo,
+                    id: produto.id,
+                    novoEstoque: quantidadeFinal,
+                    origem: tipoEntrada,
+                    timestamp: new Date().toISOString()
+                });
             }
             
             res.status(200).send({

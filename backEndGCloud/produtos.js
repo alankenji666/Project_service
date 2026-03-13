@@ -8,7 +8,7 @@ const express = require('express');
  * @param {string} sheetNameEstoque - Nome da aba com dados de vendas (ex: 'Produtos Estoque').
  * @returns {object} O roteador Express.
  */
-const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos, sheetNameEstoque) => {
+const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos, sheetNameEstoque, io) => {
     const router = express.Router();
 
     /**
