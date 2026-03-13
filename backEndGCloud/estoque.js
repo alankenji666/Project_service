@@ -257,67 +257,67 @@ const createEstoqueRouter = (
                     reqSheetName = SHEET_NAME_REQUISICAO_GERAL_TERCEIROS;
                     headerCheck = ['requisição', 'codigo service', 'situação']; 
                 } else {
-                     const error = new Error(`Tipo de requisição "${requisitionType}" inválido.`);
-                     error.statusCode = 400;
-                     throw error;
+                     console.warn(`Tipo de requisição "${requisitionType}" não mapeado para planilhas. Pulando atualização de status.`);
                 }
                 
-                const reqHeaderInfo = await findHeaderInfo(sheets, reqSheetId, reqSheetName, headerCheck);
-                
-                if (reqHeaderInfo) {
-                    const { rowIndex: headerRowIndex, headers } = reqHeaderInfo;
-                    const orderCodeCol = headers.indexOf(normalizeString('requisição')); 
-                    const itemCodeCol = headers.indexOf(normalizeString('codigo service'));
-                    const statusCol = headers.indexOf(normalizeString('situação'));
-                    const deliveryDateCol = headers.indexOf(normalizeString('data entrega')); 
-                    const diasCorridosCol = headers.indexOf(normalizeString('dias corridos')); 
+                if (reqSheetId) {
+                    const reqHeaderInfo = await findHeaderInfo(sheets, reqSheetId, reqSheetName, headerCheck);
                     
-                    if (orderCodeCol === -1 || itemCodeCol === -1 || statusCol === -1) {
-                         console.error(`[TAREFA 2 - ERRO] Colunas essenciais não encontradas em ${reqSheetName} após normalização.`);
-                    } else {
-                        const allDataRange = `${reqSheetName}!A${headerRowIndex + 1}:Z`;
-                        const allDataResponse = await sheets.spreadsheets.values.get({ spreadsheetId: reqSheetId, range: allDataRange });
-                        const reqRows = allDataResponse.data.values;
-
-                        let rowIndexToUpdate = -1;
-                        const orderCodeToFind = normalizeString(orderCode);
-                        const itemCodeToFind = normalizeString(codigoService);
+                    if (reqHeaderInfo) {
+                        const { rowIndex: headerRowIndex, headers } = reqHeaderInfo;
+                        const orderCodeCol = headers.indexOf(normalizeString('requisição')); 
+                        const itemCodeCol = headers.indexOf(normalizeString('codigo service'));
+                        const statusCol = headers.indexOf(normalizeString('situação'));
+                        const deliveryDateCol = headers.indexOf(normalizeString('data entrega')); 
+                        const diasCorridosCol = headers.indexOf(normalizeString('dias corridos')); 
                         
-                        if (reqRows) {
-                            for (let i = 0; i < reqRows.length; i++) {
-                                const row = reqRows[i];
-                                const sheetOrderCode = normalizeString(row[orderCodeCol]);
-                                const sheetItemCode = normalizeString(row[itemCodeCol]);
-                                const currentStatus = normalizeString(row[statusCol]).toUpperCase(); 
-                                
-                                if (sheetOrderCode === orderCodeToFind && sheetItemCode === itemCodeToFind) {
-                                    if (currentStatus === 'PENDENTE') {
-                                        rowIndexToUpdate = headerRowIndex + 1 + i;
-                                        break;
+                        if (orderCodeCol === -1 || itemCodeCol === -1 || statusCol === -1) {
+                             console.error(`[TAREFA 2 - ERRO] Colunas essenciais não encontradas em ${reqSheetName} após normalização.`);
+                        } else {
+                            const allDataRange = `${reqSheetName}!A${headerRowIndex + 1}:Z`;
+                            const allDataResponse = await sheets.spreadsheets.values.get({ spreadsheetId: reqSheetId, range: allDataRange });
+                            const reqRows = allDataResponse.data.values;
+
+                            let rowIndexToUpdate = -1;
+                            const orderCodeToFind = normalizeString(orderCode);
+                            const itemCodeToFind = normalizeString(codigoService);
+                            
+                            if (reqRows) {
+                                for (let i = 0; i < reqRows.length; i++) {
+                                    const row = reqRows[i];
+                                    const sheetOrderCode = normalizeString(row[orderCodeCol]);
+                                    const sheetItemCode = normalizeString(row[itemCodeCol]);
+                                    const currentStatus = normalizeString(row[statusCol]).toUpperCase(); 
+                                    
+                                    if (sheetOrderCode === orderCodeToFind && sheetItemCode === itemCodeToFind) {
+                                        if (currentStatus === 'PENDENTE') {
+                                            rowIndexToUpdate = headerRowIndex + 1 + i;
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (rowIndexToUpdate !== -1) {
-                            const updates = [];
-                            const statusRange = `${reqSheetName}!${String.fromCharCode(65 + statusCol)}${rowIndexToUpdate}`;
-                            updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: statusRange, valueInputOption: 'RAW', resource: { values: [[newStatus]] }}));
+                            if (rowIndexToUpdate !== -1) {
+                                const updates = [];
+                                const statusRange = `${reqSheetName}!${String.fromCharCode(65 + statusCol)}${rowIndexToUpdate}`;
+                                updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: statusRange, valueInputOption: 'RAW', resource: { values: [[newStatus]] }}));
 
-                            if (newStatus.toLowerCase() === 'ok' && deliveryDateCol !== -1) {
-                                const dateRange = `${reqSheetName}!${String.fromCharCode(65 + deliveryDateCol)}${rowIndexToUpdate}`;
-                                const finalDate = dataEntrega || new Date().toLocaleDateString('pt-BR');
-                                updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: dateRange, valueInputOption: 'RAW', resource: { values: [[finalDate]] }}));
+                                if (newStatus.toLowerCase() === 'ok' && deliveryDateCol !== -1) {
+                                    const dateRange = `${reqSheetName}!${String.fromCharCode(65 + deliveryDateCol)}${rowIndexToUpdate}`;
+                                    const finalDate = dataEntrega || new Date().toLocaleDateString('pt-BR');
+                                    updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: dateRange, valueInputOption: 'RAW', resource: { values: [[finalDate]] }}));
+                                }
+                                
+                                if (diasCorridosCol !== -1 && diasCorridos) {
+                                    const diasRange = `${reqSheetName}!${String.fromCharCode(65 + diasCorridosCol)}${rowIndexToUpdate}`;
+                                    updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: diasRange, valueInputOption: 'RAW', resource: { values: [[diasCorridos]] }}));
+                                }
+                                
+                                await Promise.all(updates);
+                            } else {
+                                console.warn(`[TAREFA 2 - REQUISIÇÃO] AVISO: Item PENDENTE não encontrado para Req: ${orderCodeToFind} / Cód: ${itemCodeToFind} em "${reqSheetName}".`);
                             }
-                            
-                            if (diasCorridosCol !== -1 && diasCorridos) {
-                                const diasRange = `${reqSheetName}!${String.fromCharCode(65 + diasCorridosCol)}${rowIndexToUpdate}`;
-                                updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: diasRange, valueInputOption: 'RAW', resource: { values: [[diasCorridos]] }}));
-                            }
-                            
-                            await Promise.all(updates);
-                        } else {
-                            console.warn(`[TAREFA 2 - REQUISIÇÃO] AVISO: Item PENDENTE não encontrado para Req: ${orderCodeToFind} / Cód: ${itemCodeToFind} em "${reqSheetName}".`);
                         }
                     }
                 }

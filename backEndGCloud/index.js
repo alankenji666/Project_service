@@ -808,3 +808,9 @@ app.use((err, req, res, next) => {
 });
 
 exports.app = app;
+
+// --- INICIALIZAÇÃO DO SERVIDOR (Para Cloud Run) ---
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+    console.log(`Servidor Express rodando na porta ${PORT}`);
+});
