@@ -3,6 +3,7 @@ export const PesquisarProduto = (function() {
     let _allProducts = [];
     let _dom = {};
     let _utils = {};
+    let _config = {}; // Adicionado: Armazena configurações como API_BASE_URL
     let _activeProductId = null;
     let _onProductSelectCallback = null;
 
@@ -13,7 +14,12 @@ export const PesquisarProduto = (function() {
         if (!_dom.product_details || !_utils.createDetailItem) return;
     
         _dom.product_details.innerHTML = `
-            <h2 class="text-2xl font-bold text-gray-800 mb-2">${product.descricao}</h2>
+            <div class="flex items-start justify-between mb-2">
+                <h2 class="text-2xl font-bold text-gray-800 product-detail-name">${product.descricao}</h2>
+                <button class="read-only-disable edit-product-name-btn p-2 rounded-full hover:bg-gray-100 text-blue-600" data-product-id="${product.id}" data-product-codigo="${product.codigo}" title="Editar Nome do Produto">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
+                </button>
+            </div>
             <p class="text-sm text-gray-500 mb-6">Código: ${product.codigo}</p>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
@@ -90,6 +96,80 @@ export const PesquisarProduto = (function() {
         }
     }
 
+    /**
+     * Retorna o ID do produto que está sendo exibido nos detalhes no momento.
+     */
+    function getSelectedProductId() {
+        return _activeProductId;
+    }
+
+    /**
+     * Atualiza o nome do produto exibido na tela sem re-renderizar tudo.
+     * @param {string|number} productId 
+     * @param {string} novoNome 
+     */
+    function updateProductNameDisplay(productId, novoNome) {
+        // 1. Atualiza no painel de detalhes se for o produto ativo
+        if (String(_activeProductId) === String(productId) && _dom.product_details) {
+            const nameElement = _dom.product_details.querySelector('.product-detail-name');
+            if (nameElement) {
+                nameElement.textContent = novoNome;
+                nameElement.classList.add('text-green-600', 'scale-105', 'transition-all', 'duration-300');
+                setTimeout(() => nameElement.classList.remove('text-green-600', 'scale-105'), 2000);
+            }
+        }
+
+        // 2. Atualiza na lista lateral (sempre, se o item estiver lá)
+        if (_dom.product_list_container) {
+            const listItem = _dom.product_list_container.querySelector(`.product-item[data-product-id="${productId}"]`);
+            if (listItem) {
+                const titleElement = listItem.querySelector('h3');
+                if (titleElement) {
+                    titleElement.textContent = novoNome;
+                    titleElement.setAttribute('title', novoNome);
+                }
+            }
+        }
+    }
+
+    /**
+     * Manipula a edição do nome do produto.
+     */
+    async function _handleEditName(productId, codigo) {
+        const product = _allProducts.find(p => String(p.id) === String(productId));
+        if (!product) return;
+
+        const novoNome = prompt(`Editar descrição do produto (${codigo}):`, product.descricao);
+        if (novoNome === null || novoNome.trim() === "" || novoNome === product.descricao) return;
+
+        try {
+            // Desabilita o botão temporariamente
+            const btn = _dom.product_details.querySelector('.edit-product-name-btn');
+            if (btn) btn.disabled = true;
+
+            const response = await fetch(`${_config.API_BASE_URL}/produtos/${productId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nome: novoNome.trim(), codigo: codigo })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Erro ao atualizar nome do produto.");
+            }
+
+            console.log("[PesquisarProduto] Nome atualizado com sucesso no backend.");
+            // Não precisamos atualizar o estado local aqui, o WebSocket fará isso para todos.
+
+        } catch (error) {
+            console.error("[PesquisarProduto] Erro ao editar nome:", error);
+            alert(`Falha ao atualizar nome: ${error.message}`);
+        } finally {
+            const btn = _dom.product_details.querySelector('.edit-product-name-btn');
+            if (btn) btn.disabled = false;
+        }
+    }
+
     // --- Funções Públicas ---
     
     /**
@@ -132,6 +212,7 @@ export const PesquisarProduto = (function() {
      * Inicializa o módulo.
      */
     function init(config) {
+        _config = config;
         _dom = config.domElements;
         _utils = config.utilities;
         _onProductSelectCallback = config.onProductSelect;
@@ -156,6 +237,11 @@ export const PesquisarProduto = (function() {
                 const adjustmentBtn = event.target.closest('.open-stock-adjustment-modal-btn');
                 if (adjustmentBtn && typeof config.openStockAdjustmentModal === 'function') {
                     config.openStockAdjustmentModal(adjustmentBtn.dataset.productId);
+                }
+
+                const editNameBtn = event.target.closest('.edit-product-name-btn');
+                if (editNameBtn) {
+                    _handleEditName(editNameBtn.dataset.productId, editNameBtn.dataset.productCodigo);
                 }
             });
         }
@@ -195,6 +281,8 @@ export const PesquisarProduto = (function() {
         render,
         renderDetails: _renderProductDetails,
         getSelectedProductCodigo,
-        updateStockDisplay
+        getSelectedProductId,
+        updateStockDisplay,
+        updateProductNameDisplay
     };
 })();

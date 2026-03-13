@@ -6,9 +6,13 @@ const express = require('express');
  * @param {string} spreadsheetId - ID da planilha que contém as abas de produtos.
  * @param {string} sheetNameProdutos - Nome da aba principal de produtos (ex: 'Produtos').
  * @param {string} sheetNameEstoque - Nome da aba com dados de vendas (ex: 'Produtos Estoque').
+ * @param {object} axios - Cliente HTTP para requisições externas.
+ * @param {string} tokenUrl - URL para obter o token do Bling.
+ * @param {string} blingBaseUrl - URL base da API do Bling.
+ * @param {object} io - Instância do Socket.io para tempo real.
  * @returns {object} O roteador Express.
  */
-const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos, sheetNameEstoque, io) => {
+const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos, sheetNameEstoque, axios, tokenUrl, blingBaseUrl, io) => {
     const router = express.Router();
 
     /**
@@ -187,6 +191,129 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             res.status(200).json({ data: productsArray });
 
         } catch (error) {
+            next(error);
+        }
+    });
+
+    /**
+     * Rota para atualizar o nome (descrição) de um produto.
+     * PUT /:id
+     */
+    router.put('/:id', async (req, res, next) => {
+        const idProduto = req.params.id;
+        const { nome, codigo } = req.body;
+
+        console.log(`--- ATUALIZANDO NOME DO PRODUTO: ID ${idProduto}, Novo Nome: ${nome} ---`);
+
+        if (!nome) {
+            return res.status(400).json({ error: "O nome do produto é obrigatório." });
+        }
+
+        try {
+            // 1. Obter Token do Bling
+            const tokenResponse = await axios.get(tokenUrl);
+            const accessToken = tokenResponse.data.access_token;
+
+            if (!accessToken) {
+                throw new Error("Não foi possível obter o token do Bling.");
+            }
+
+            // 2. Buscar dados atuais do produto no Bling para garantir os campos obrigatórios no PUT
+            console.log(`[Bling] Buscando dados atuais do produto ID ${idProduto}...`);
+            const getBlingUrl = `${blingBaseUrl}/produtos/${idProduto}`;
+            const getBlingRes = await axios.get(getBlingUrl, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            const currentProduct = getBlingRes.data.data;
+            if (!currentProduct) {
+                throw new Error("Produto não encontrado no Bling para atualização.");
+            }
+
+            // 3. Montar o Payload de atualização mantendo campos obrigatórios
+            const blingUrl = `${blingBaseUrl}/produtos/${idProduto}`;
+            const blingPayload = {
+                nome: nome,
+                tipo: currentProduct.tipo || 'P',
+                situacao: currentProduct.situacao || 'A',
+                formato: currentProduct.formato || 'S'
+            };
+
+            console.log(`[Bling] Enviando atualização para ${blingUrl} com payload:`, JSON.stringify(blingPayload));
+            const blingResponse = await axios.put(blingUrl, blingPayload, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            console.log(`[Bling] SUCESSO! Resposta: ${blingResponse.status}`);
+
+            // 4. Atualizar na Planilha do Google
+            const sheets = await getSheetsClient();
+            
+            // Lê a aba 'Produtos' para encontrar a linha correta
+            const rangeHeader = `'${sheetNameProdutos}'!B4:BH4`;
+            const headerRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: rangeHeader });
+            const headers = headerRes.data.values[0];
+            const normalizedHeaders = headers.map(h => normalizeKey(h));
+            
+            const idColIndex = normalizedHeaders.indexOf('id');
+            const descricaoColIndex = normalizedHeaders.indexOf('descricao');
+
+            if (idColIndex === -1 || descricaoColIndex === -1) {
+                throw new Error("Colunas 'ID' ou 'Descrição' não encontradas na planilha.");
+            }
+
+            // Lê a coluna de IDs para encontrar a linha
+            const rangeIds = `'${sheetNameProdutos}'!${String.fromCharCode(66 + idColIndex)}5:${String.fromCharCode(66 + idColIndex)}`;
+            const idsRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: rangeIds });
+            const ids = idsRes.data.values || [];
+            
+            let rowIndex = -1;
+            for (let i = 0; i < ids.length; i++) {
+                if (String(ids[i][0]) === String(idProduto)) {
+                    rowIndex = i + 5; // +5 porque começa na linha 5
+                    break;
+                }
+            }
+
+            if (rowIndex !== -1) {
+                const updateRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + descricaoColIndex)}${rowIndex}`;
+                console.log(`[Sheets] Atualizando descrição na linha ${rowIndex}, range ${updateRange}`);
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: updateRange,
+                    valueInputOption: 'RAW',
+                    resource: { values: [[nome]] }
+                });
+            } else {
+                console.warn(`[Sheets] Produto ID ${idProduto} não encontrado na planilha para atualização de nome.`);
+            }
+
+            // 5. Notificar via WebSocket
+            if (io) {
+                console.log(`[WebSocket] Emitindo atualização de produto: ${codigo || idProduto}`);
+                io.emit('productUpdated', {
+                    id: idProduto,
+                    codigo: codigo,
+                    novoNome: nome,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            res.status(200).json({ 
+                status: 'success', 
+                message: 'Produto atualizado com sucesso no Bling e na planilha.',
+                blingResponse: blingResponse.data 
+            });
+
+        } catch (error) {
+            if (error.response && error.response.data) {
+                console.error("[Bling] Erro detalhado da API:", JSON.stringify(error.response.data, null, 2));
+                const errorMessage = error.response.data.error?.message || error.response.data.message || "Erro desconhecido na API do Bling.";
+                const err = new Error(errorMessage);
+                err.statusCode = error.response.status;
+                return next(err);
+            }
+            console.error("Erro ao atualizar produto:", error.message);
             next(error);
         }
     });

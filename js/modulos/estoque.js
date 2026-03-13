@@ -292,6 +292,25 @@ export const EstoqueApp = (function() {
         }
     }
 
+    /**
+     * Atualiza o nome de um produto diretamente na tabela se ela estiver visível.
+     * @param {string} codigo 
+     * @param {string} novoNome 
+     */
+    function updateProductNameInTable(codigo, novoNome) {
+        if (!_dom.pageEstoque) return;
+
+        const row = _dom.pageEstoque.querySelector(`tr[data-product-code="${codigo}"]`);
+        if (row) {
+            const nameElement = row.querySelector('.text-sm.font-medium.text-gray-900');
+            if (nameElement) {
+                nameElement.textContent = novoNome;
+                nameElement.classList.add('text-blue-600', 'transition-all', 'duration-500');
+                setTimeout(() => nameElement.classList.remove('text-blue-600'), 2000);
+            }
+        }
+    }
+
     // --- Funções Públicas (API do Módulo) ---
     function init(config) {
         _allProducts = config.allProducts;
@@ -318,6 +337,7 @@ export const EstoqueApp = (function() {
         render: render,
         clearSelection: _clearSelection,
         updateSelectedCountDisplay: _updateSelectedCountDisplay,
-        updateProductStockInTable: updateProductStockInTable
+        updateProductStockInTable: updateProductStockInTable,
+        updateProductNameInTable: updateProductNameInTable
     };
 })();

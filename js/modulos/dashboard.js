@@ -806,7 +806,7 @@ export const DashboardApp = (function() {
                 html += `
                 <tr id="sales-detail-row-${nfe.id_nota}">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600"><a href="${nfe.link_danfe || '#'}" target="_blank">${nfe.numero_da_nota}</a></td>
-                    <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" data-itens="${nfe.itens}" data-frete="${nfe.valor_do_frete}">
+                    <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" data-itens="${nfe.itens}" data-frete="${nfe.valor_do_frete}" data-desconto="${nfe.valor_do_desconto || 0}" data-valor-total="${nfe.valor_da_nota || 0}">
                         <div class="text-sm font-medium text-gray-900">${nfe.nome_do_cliente}</div>
                         <div class="text-xs text-gray-500">${nfe.data_de_emissao}</div>
                     </td>
@@ -841,7 +841,15 @@ export const DashboardApp = (function() {
         if (items.length === 0) return;
 
         const frete = parseFloat(trigger.dataset.frete || 0);
+        const valorNotaReal = parseFloat(trigger.dataset.valorTotal || 0);
         const subtotal = items.reduce((s, i) => s + (i.valor * i.quantidade), 0);
+
+        // Calcula o desconto pela diferença (Fórmula: Desconto = (Subtotal + Frete) - Valor Total Real)
+        let descontoCalculado = (subtotal + frete) - valorNotaReal;
+        
+        // Trata arredondamentos minúsculos e evita valores negativos
+        if (Math.abs(descontoCalculado) < 0.01) descontoCalculado = 0;
+        if (descontoCalculado < 0) descontoCalculado = 0;
 
         let html = `<div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 max-w-md"><h4 class="font-bold text-sm mb-2 pb-1 border-b">Itens da NFe</h4><ul class="space-y-1 text-xs">`;
         items.forEach(i => {
@@ -851,7 +859,8 @@ export const DashboardApp = (function() {
         html += `</ul><div class="mt-2 pt-2 border-t text-xs">
             <div class="flex justify-between"><span>Subtotal:</span><span>${subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
             <div class="flex justify-between"><span>Frete:</span><span>${frete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-            <div class="flex justify-between font-bold"><span>Total:</span><span>${(subtotal + frete).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+            ${descontoCalculado > 0 ? `<div class="flex justify-between text-red-600 font-medium"><span>Desconto:</span><span>-${descontoCalculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
+            <div class="flex justify-between font-bold border-t mt-1 pt-1 text-sm"><span>Total da Nota:</span><span>${valorNotaReal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
         </div></div>`;
 
         _dom.customProductTooltip.innerHTML = html;
@@ -1086,6 +1095,24 @@ export const DashboardApp = (function() {
                 // 2. Se o dashboard de estoque estiver sendo exibido, re-renderiza para atualizar gráficos e tabelas
                 if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
                     console.log('[Dashboard] Re-renderizando dashboard de estoque em tempo real.');
+                    _renderEstoqueDashboard();
+                }
+            }
+        },
+
+        /**
+         * Atualiza o nome de um produto em tempo real no Dashboard.
+         * @param {string} codigo 
+         * @param {string} novoNome 
+         */
+        updateProductNameRealTime: function(codigo, novoNome) {
+            const product = _allProducts.find(p => p.codigo === codigo);
+            if (product) {
+                product.descricao = novoNome;
+                console.log(`[Dashboard] Nome do produto ${codigo} atualizado para "${novoNome}" na memória.`);
+
+                // Se o dashboard de estoque estiver sendo exibido, re-renderiza para atualizar os nomes na tabela
+                if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
                     _renderEstoqueDashboard();
                 }
             }

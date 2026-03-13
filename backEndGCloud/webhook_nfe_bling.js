@@ -159,6 +159,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
                 rowValues[COLUMNS_NFE.SITUACAO] = traduzirSituacaoNFe(n.situacao);
                 rowValues[COLUMNS_NFE.VALOR_NOTA] = n.valorNota || 0;
                 rowValues[COLUMNS_NFE.VALOR_FRETE] = n.valorFrete || 0;
+                rowValues[COLUMNS_NFE.VALOR_DESCONTO] = n.valorDesconto || 0;
                 rowValues[COLUMNS_NFE.NOME_CLIENTE] = n.contato?.nome || "";
                 rowValues[COLUMNS_NFE.CNPJ_CPF_CLIENTE] = n.contato?.numeroDocumento || "";
                 rowValues[COLUMNS_NFE.NOME_VENDEDOR] = vendedorFinal;
@@ -168,7 +169,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
                 rowValues[COLUMNS_NFE.ORIGEM_LOJA] = origemLoja;
                 rowValues[COLUMNS_NFE.LINK_DANFE] = n.linkDanfe || "";
                 rowValues[COLUMNS_NFE.OBSERVACAO] = dadosManuais.observacao;
-                rowValues[18] = n.itens ? n.itens.map(i => {
+                rowValues[19] = n.itens ? n.itens.map(i => {
                     const cod = i.codigo || 0;
                     const qtd = parseFloat(i.quantidade || 0).toFixed(2);
                     const vlr = parseFloat(i.valor || 0).toFixed(2);

@@ -540,6 +540,39 @@ export const SaidaItens = (function() {
         }
     }
 
+    /**
+     * Atualiza o nome de um produto em tempo real nas tabelas de saída se estiverem visíveis.
+     * @param {string} codigo 
+     * @param {string} novoNome 
+     */
+    function updateProductNameInTable(codigo, novoNome) {
+        // 1. Tenta atualizar na página de listagem principal de saída
+        if (_dom.pageGerenciarSaida) {
+            const row = _dom.pageGerenciarSaida.querySelector(`tr[data-product-code="${codigo}"]`);
+            if (row) {
+                const nameElement = row.querySelector('.text-sm.font-medium.text-gray-900');
+                if (nameElement) {
+                    nameElement.textContent = novoNome;
+                    nameElement.classList.add('text-blue-600', 'transition-all', 'duration-500');
+                    setTimeout(() => nameElement.classList.remove('text-blue-600'), 2000);
+                }
+            }
+        }
+
+        // 2. Tenta atualizar na página de relatório/revisão de saída
+        if (_dom.pageSaidaReport) {
+            const row = _dom.pageSaidaReport.querySelector(`tr[data-product-code="${codigo}"]`);
+            if (row) {
+                const nameElement = row.querySelector('.text-xs.font-medium.text-gray-900');
+                if (nameElement) {
+                    nameElement.textContent = novoNome;
+                    nameElement.classList.add('text-blue-600', 'transition-all', 'duration-500');
+                    setTimeout(() => nameElement.classList.remove('text-blue-600'), 2000);
+                }
+            }
+        }
+    }
+
     return {
         init: init,
         render: render,
@@ -547,7 +580,8 @@ export const SaidaItens = (function() {
         clearSelection: clearSelection,
         updateSelectedCountDisplay: updateSelectedCountDisplay,
         handleLaunchSaida: _handleLaunchSaida,
-        updateProductStockInTable: updateProductStockInTable
+        updateProductStockInTable: updateProductStockInTable,
+        updateProductNameInTable: updateProductNameInTable
     };
 })();
 ""

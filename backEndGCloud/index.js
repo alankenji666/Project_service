@@ -124,15 +124,16 @@ const COLUMNS_NFE = {
     SITUACAO: 6,
     VALOR_NOTA: 7,
     VALOR_FRETE: 8,
-    NOME_CLIENTE: 9,
-    CNPJ_CPF_CLIENTE: 10,
-    NOME_VENDEDOR: 11,
-    NUMERO_PEDIDO_LOJA: 12,
-    TRANSPORTADORA: 13,
-    FRETE_POR_CONTA: 14,
-    ORIGEM_LOJA: 15,
-    LINK_DANFE: 16,
-    OBSERVACAO: 17
+    VALOR_DESCONTO: 9, // NOVO CAMPO
+    NOME_CLIENTE: 10,
+    CNPJ_CPF_CLIENTE: 11,
+    NOME_VENDEDOR: 12,
+    NUMERO_PEDIDO_LOJA: 13,
+    TRANSPORTADORA: 14,
+    FRETE_POR_CONTA: 15,
+    ORIGEM_LOJA: 16,
+    LINK_DANFE: 17,
+    OBSERVACAO: 18
 };
 
 // Rota para Lançamento de Requisição - TERCEIROS
@@ -853,6 +854,9 @@ const produtosRouter = createProdutosRouter(
     SPREADSHEET_ID_ESTOQUE,       // '11EqlFOTNfCiCl-sVlTjNzAK7feWcMJH8VFfOAgUXRSo'
     SHEET_NAME_ESTOQUE,           // 'Produtos'
     SHEET_NAME_PRODUTOS_ESTOQUE,  // 'Produtos Estoque'
+    axios,                        // Injetando axios
+    APPS_SCRIPT_TOKEN_URL,        // Injetando URL do Token
+    BLING_API_BASE_URL,           // Injetando Base URL do Bling
     io                            // Injetando Socket.io para atualizações em tempo real
 );
 app.use('/produtos', produtosRouter);

@@ -1317,6 +1317,40 @@
                         // Por enquanto, apenas logamos para garantir que o evento chegou.
                     });
 
+                    // Ouvindo atualização de dados de produto (ex: nome/descrição)
+                    _socket.on('productUpdated', (data) => {
+                        console.log('[WebSocket] Dados de produto atualizados recebidos:', data);
+                        
+                        // 1. Atualiza na lista global de produtos
+                        const product = _allProducts.find(p => p.codigo === data.codigo || String(p.id) === String(data.id));
+                        if (product) {
+                            const antigoNome = product.descricao;
+                            product.descricao = data.novoNome;
+                            console.log(`[WebSocket] Produto ${product.codigo} renomeado: "${antigoNome}" -> "${product.descricao}"`);
+                            
+                            // 2. Se o produto alterado estiver sendo exibido no módulo de pesquisa, atualiza o nome na tela
+                            if (typeof PesquisarProduto !== 'undefined' && typeof PesquisarProduto.updateProductNameDisplay === 'function') {
+                                console.log('[WebSocket] Atualizando nome do produto na tela de pesquisa.');
+                                PesquisarProduto.updateProductNameDisplay(data.id, data.novoNome);
+                            }
+                            
+                            // 3. Se o modal de ajuste de estoque estiver aberto para este produto, atualiza o título
+                            if (_stockAdjustmentModal && !_stockAdjustmentModal.classList.contains('hidden') && String(_stockAdjustmentModal.dataset.productId) === String(data.id)) {
+                                _stockAdjustmentProductInfo.innerHTML = `<strong>Produto:</strong> ${data.novoNome} (Cód: ${data.codigo || 'N/A'})`;
+                            }
+
+                            // 4. Atualiza na tabela de estoque se estiver visível
+                            if (typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.updateProductNameInTable === 'function') {
+                                EstoqueApp.updateProductNameInTable(data.codigo, data.novoNome);
+                            }
+
+                            // 5. Atualiza na tabela de saída se estiver visível
+                            if (typeof SaidaItens !== 'undefined' && typeof SaidaItens.updateProductNameInTable === 'function') {
+                                SaidaItens.updateProductNameInTable(data.codigo, data.novoNome);
+                            }
+                        }
+                    });
+
                 } catch (error) {
                     console.error('[WebSocket] Erro ao inicializar Socket.io:', error);
                 }
@@ -4858,8 +4892,10 @@ _generateProductReportBtn = document.getElementById('generate-product-report-btn
                     }
 
 
+                    const API_BASE_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
                     if (typeof PesquisarProduto !== 'undefined') {
                         PesquisarProduto.init({
+                            API_BASE_URL: API_BASE_URL,
                             domElements: {
                                 product_list_container: _product_list_container,
                                 product_details_container: _product_details_container,
