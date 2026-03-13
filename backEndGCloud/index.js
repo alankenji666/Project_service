@@ -416,6 +416,55 @@ app.post('/update-order-status', async (req, res, next) => {
         );
         const updateResponses = await Promise.all(updatePromises);
 
+        // --- NOTIFICAÇÃO WEBSOCKET ---
+        if (req.io) {
+            console.log(`[WebSocket] Emitindo atualização de status da requisição ${orderCode} (Item: ${codigoService}) para '${newStatus}'`);
+            
+            // Notifica mudança de status
+            req.io.emit('requisitionStatusUpdated', {
+                orderCode: orderCode,
+                codigoService: codigoService,
+                newStatus: newStatus,
+                requisitionType: requisitionType,
+                timestamp: new Date().toISOString()
+            });
+
+            // Se o status for OK, também notifica que o estoque mudou (assumindo que o estoque foi incrementado)
+            if (newStatus.toLowerCase() === 'ok') {
+                console.log(`[WebSocket] Status OK detectado para ${codigoService}. Solicitando atualização de estoque em tempo real.`);
+                
+                try {
+                    // Busca o estoque atualizado na planilha de produtos para enviar o valor real
+                    const productSheetResponse = await sheets.spreadsheets.values.get({
+                        spreadsheetId: SPREADSHEET_ID_ESTOQUE,
+                        range: `${SHEET_NAME_ESTOQUE}!A:Z`,
+                    });
+                    const productRows = productSheetResponse.data.values;
+                    if (productRows && productRows.length > 0) {
+                        const productHeaders = productRows[0].map(h => h ? h.toLowerCase().trim() : '');
+                        const pCodigoCol = productHeaders.indexOf('código');
+                        const pEstoqueCol = productHeaders.indexOf('estoque');
+                        
+                        if (pCodigoCol !== -1 && pEstoqueCol !== -1) {
+                            const productRow = productRows.find(r => r[pCodigoCol] && r[pCodigoCol].toString().trim() === codigoService);
+                            if (productRow) {
+                                const novoEstoque = Number(productRow[pEstoqueCol]) || 0;
+                                req.io.emit('stockUpdated', {
+                                    codigo: codigoService,
+                                    novoEstoque: novoEstoque,
+                                    origem: `baixa_requisicao_${requisitionType}`,
+                                    timestamp: new Date().toISOString()
+                                });
+                                console.log(`[WebSocket] Sucesso: Evento stockUpdated enviado para ${codigoService} com valor ${novoEstoque}`);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('[WebSocket] Erro ao buscar estoque atualizado para emitir evento:', err.message);
+                }
+            }
+        }
+
         console.log(`Status do item ${codigoService} da requisição ${orderCode} atualizado para '${newStatus}' na linha ${rowIndexToUpdate + 1} da planilha de Requisição (${requisitionType}).`, updateResponses.map(r => r.data));
         res.status(200).send({ status: 'success', message: 'Status do item atualizado com sucesso!', data: updateResponses.map(r => r.data) });
 
@@ -759,7 +808,8 @@ const saidaFabricaRouter = createSaidaFabricaRouter(
     SPREADSHEET_ID_ESTOQUE,
     SHEET_NAME_ESTOQUE,
     SPREADSHEET_ID_REQUISICAO_FABRICA,
-    SHEET_NAME_REQUISICAO_FABRICA
+    SHEET_NAME_REQUISICAO_FABRICA,
+    io // Injetando Socket.io
 );
 app.use('/saida-fabrica', saidaFabricaRouter);
 
@@ -773,7 +823,8 @@ const saidaGarantiaRouter = createSaidaGarantiaRouter(
     APPS_SCRIPT_TOKEN_URL, // Usando a URL de token unificada
     BLING_API_BASE_URL,
     SPREADSHEET_ID_ESTOQUE,
-    SHEET_NAME_ESTOQUE
+    SHEET_NAME_ESTOQUE,
+    io // Injetando Socket.io
 );
 app.use('/saida-garantia', saidaGarantiaRouter);
 
@@ -789,7 +840,8 @@ const whatsAppRouter = createWhatsAppRouter(
     SPREADSHEET_ID_WHATSAPP, // ID da planilha principal do WhatsApp
     SHEET_NAME_WHATSAPP_CONFIG,
     SHEET_NAME_WHATSAPP_CLIENTES,
-    SHEET_NAME_WHATSAPP_HISTORICO
+    SHEET_NAME_WHATSAPP_HISTORICO,
+    io // Injetando Socket.io para mensagens do WhatsApp
 );
 app.use('/whatsapp', whatsAppRouter);
 
@@ -812,7 +864,8 @@ const lojaIntegradaRouter = createLojaIntegradaRouter(
     SPREADSHEET_ID_NFE, // Planilha onde a aba 'VendasLojaIntegrada' está
     SHEET_NAME_VENDAS_LOJA_INTEGRADA,
     SPREADSHEET_ID_NFE, // <-- ATUALIZADO: Planilha onde as chaves de API estão
-    SHEET_NAME_LOJA_INTEGRADA_CONFIG // <-- ATUALIZADO: Aba de configuração
+    SHEET_NAME_LOJA_INTEGRADA_CONFIG, // <-- ATUALIZADO: Aba de configuração
+    io // Injetando Socket.io para atualizações de pedidos
 );
 app.use('/loja-integrada', lojaIntegradaRouter);
 

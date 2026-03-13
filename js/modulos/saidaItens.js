@@ -340,7 +340,7 @@ export const SaidaItens = (function() {
             paginatedProducts.forEach(p => {
                 const isChecked = _selectedSaidaItems.has(p.id) ? 'checked' : '';
                 const imageUrl = p.url_imagens_externas?.[0] || 'https://placehold.co/50x50/e2e8f0/64748b?text=?';
-                html += `<tr>
+                html += `<tr data-product-code="${p.codigo}">
                     <td class="px-6 py-4 whitespace-nowrap">
                         <input type="checkbox" class="saida-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" data-product-id="${p.id}" ${isChecked}>
                     </td>
@@ -353,7 +353,7 @@ export const SaidaItens = (function() {
                             </div>
                         </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-gray-800">${p.estoque ?? 0}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-gray-800 stock-value">${p.estoque ?? 0}</td>
                 </tr>`;
             });
         }
@@ -444,7 +444,7 @@ export const SaidaItens = (function() {
             const currentQuantity = _saidaReportQuantities.get(p.id) || 0;
             const imageUrl = p.url_imagens_externas?.[0] || 'https://placehold.co/50x50/e2e8f0/64748b?text=?';
             reportContentHtml += `
-            <tr data-product-id="${p.id}">
+            <tr data-product-id="${p.id}" data-product-code="${p.codigo}">
                 <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-medium">
                     <button class="remove-saida-item-btn text-red-600 hover:text-red-800 p-1 rounded-full" title="Remover item" data-product-id="${p.id}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
@@ -459,7 +459,7 @@ export const SaidaItens = (function() {
                         </div>
                     </div>
                 </td>
-                <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-bold text-gray-800">${p.estoque ?? 0}</td>
+                <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-bold text-gray-800 stock-value">${p.estoque ?? 0}</td>
                 <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-medium">
                     <input type="number" value="${currentQuantity}" data-product-id="${p.id}" class="w-20 px-2 py-1 border border-gray-300 rounded-md text-center text-xs saida-report-quantity-input" min="0">
                 </td>
@@ -507,13 +507,47 @@ export const SaidaItens = (function() {
         }
     }
 
+    /**
+     * Atualiza o estoque de um produto em tempo real nas tabelas de saída se estiverem visíveis.
+     * @param {string} codigo 
+     * @param {number} novoEstoque 
+     */
+    function updateProductStockInTable(codigo, novoEstoque) {
+        // 1. Tenta atualizar na página de listagem principal de saída
+        if (_dom.pageGerenciarSaida) {
+            const row = _dom.pageGerenciarSaida.querySelector(`tr[data-product-code="${codigo}"]`);
+            if (row) {
+                const stockCell = row.querySelector('.stock-value');
+                if (stockCell) {
+                    stockCell.textContent = novoEstoque;
+                    stockCell.classList.add('text-green-600', 'transition-all', 'duration-500');
+                    setTimeout(() => stockCell.classList.remove('text-green-600'), 2000);
+                }
+            }
+        }
+
+        // 2. Tenta atualizar na página de relatório/revisão de saída
+        if (_dom.pageSaidaReport) {
+            const row = _dom.pageSaidaReport.querySelector(`tr[data-product-code="${codigo}"]`);
+            if (row) {
+                const stockCell = row.querySelector('.stock-value');
+                if (stockCell) {
+                    stockCell.textContent = novoEstoque;
+                    stockCell.classList.add('text-green-600', 'transition-all', 'duration-500');
+                    setTimeout(() => stockCell.classList.remove('text-green-600'), 2000);
+                }
+            }
+        }
+    }
+
     return {
         init: init,
         render: render,
         generateReport: generateReport,
         clearSelection: clearSelection,
         updateSelectedCountDisplay: updateSelectedCountDisplay,
-        handleLaunchSaida: _handleLaunchSaida
+        handleLaunchSaida: _handleLaunchSaida,
+        updateProductStockInTable: updateProductStockInTable
     };
 })();
 ""

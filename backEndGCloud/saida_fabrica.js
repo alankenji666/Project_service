@@ -41,7 +41,10 @@ const createSaidaFabricaRouter = (
     APPS_SCRIPT_TOKEN_URL,
     BLING_API_BASE_URL,
     SPREADSHEET_ID_ESTOQUE,
-    SHEET_NAME_ESTOQUE
+    SHEET_NAME_ESTOQUE,
+    SPREADSHEET_ID_REQUISICAO_FABRICA,
+    SHEET_NAME_REQUISICAO_FABRICA,
+    io // Injetando Socket.io
 ) => {
     const router = express.Router();
     const DEPOSITO_PADRAO_ID = 14887835380; // ID do depósito padrão do Bling
@@ -173,6 +176,17 @@ const createSaidaFabricaRouter = (
                         });
                         console.log(`[Planilha - ${codigoService}] SUCESSO: Planilha de estoque atualizada.`);
                         stockUpdateResults.push({ codigo: codigoService, status: 'success', newStock: estoqueFinal });
+                        
+                        // --- NOTIFICAÇÃO WEBSOCKET ---
+                        if (io) {
+                            console.log(`[WebSocket] Emitindo atualização de estoque (Saída Fábrica) para o código: ${codigoService}`);
+                            io.emit('stockUpdated', {
+                                codigo: codigoService,
+                                novoEstoque: estoqueFinal,
+                                origem: 'saida_fabrica',
+                                timestamp: new Date().toISOString()
+                            });
+                        }
                     } else {
                         throw new Error(`Produto não encontrado na planilha de estoque.`);
                     }

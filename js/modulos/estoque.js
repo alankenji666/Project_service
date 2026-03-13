@@ -129,7 +129,7 @@ export const EstoqueApp = (function() {
                 const imageUrl = p.url_imagens_externas && p.url_imagens_externas[0]
                     ? p.url_imagens_externas[0]
                     : 'https://placehold.co/50x50/e2e8f0/64748b?text=?';
-                html += `<tr>
+                html += `<tr data-product-code="${p.codigo}">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="checkbox" class="stock-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" data-product-id="${p.id}" ${isChecked}>
                         </td>
@@ -146,7 +146,7 @@ export const EstoqueApp = (function() {
                                 </div>
                             </div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-gray-800">${p.estoque ?? 0}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-gray-800 stock-value">${p.estoque ?? 0}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-blue-600">${p.aguardandoChegar}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-gray-600">${p.vendas_ultimos_90_dias ?? 0}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">${p.estoque_minimo ?? 0} / ${p.estoque_maximo ?? 0}</td>
@@ -268,6 +268,30 @@ export const EstoqueApp = (function() {
         }
     }
 
+    /**
+     * Atualiza o estoque de um produto diretamente na tabela se ela estiver visível.
+     * @param {string} codigo 
+     * @param {number} novoEstoque 
+     */
+    function updateProductStockInTable(codigo, novoEstoque) {
+        if (!_dom.pageEstoque) return;
+
+        // Procura a linha que contém o código do produto
+        const row = _dom.pageEstoque.querySelector(`tr[data-product-code="${codigo}"]`);
+        if (row) {
+            const stockCell = row.querySelector('.stock-value');
+            if (stockCell) {
+                stockCell.textContent = novoEstoque;
+                
+                // Animação visual de atualização
+                stockCell.classList.add('text-green-600', 'transition-all', 'duration-500');
+                setTimeout(() => {
+                    stockCell.classList.remove('text-green-600');
+                }, 2000);
+            }
+        }
+    }
+
     // --- Funções Públicas (API do Módulo) ---
     function init(config) {
         _allProducts = config.allProducts;
@@ -293,6 +317,7 @@ export const EstoqueApp = (function() {
         init: init,
         render: render,
         clearSelection: _clearSelection,
-        updateSelectedCountDisplay: _updateSelectedCountDisplay
+        updateSelectedCountDisplay: _updateSelectedCountDisplay,
+        updateProductStockInTable: updateProductStockInTable
     };
 })();

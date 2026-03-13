@@ -1069,6 +1069,26 @@ export const DashboardApp = (function() {
                     svg?.classList.toggle('text-gray-300', !has);
                 }
             }
+        },
+
+        /**
+         * Atualiza o estoque de um produto em tempo real no Dashboard.
+         * @param {string} codigo 
+         * @param {number} novoEstoque 
+         */
+        updateStockRealTime: function(codigo, novoEstoque) {
+            // 1. Atualiza no array interno de produtos do dashboard
+            const product = _allProducts.find(p => p.codigo === codigo);
+            if (product) {
+                product.estoque = novoEstoque;
+                console.log(`[Dashboard] Estoque do produto ${codigo} atualizado para ${novoEstoque} na memória.`);
+
+                // 2. Se o dashboard de estoque estiver sendo exibido, re-renderiza para atualizar gráficos e tabelas
+                if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
+                    console.log('[Dashboard] Re-renderizando dashboard de estoque em tempo real.');
+                    _renderEstoqueDashboard();
+                }
+            }
         }
     };
 })();

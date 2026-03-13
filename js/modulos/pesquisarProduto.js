@@ -161,10 +161,40 @@ export const PesquisarProduto = (function() {
         }
     }
 
+    /**
+     * Retorna o código do produto que está sendo exibido nos detalhes no momento.
+     */
+    function getSelectedProductCodigo() {
+        if (!_activeProductId) return null;
+        const product = _allProducts.find(p => String(p.id) === String(_activeProductId));
+        return product ? product.codigo : null;
+    }
+
+    /**
+     * Atualiza o valor do estoque exibido na tela de detalhes sem re-renderizar tudo.
+     * @param {number} novoEstoque 
+     */
+    function updateStockDisplay(novoEstoque) {
+        if (!_dom.product_details) return;
+        
+        // Procura o elemento que contém o texto "Estoque Atual" e seu valor
+        const estoqueContainer = _dom.product_details.querySelector('div.bg-gray-50 p.text-lg.font-bold');
+        if (estoqueContainer) {
+            // Adiciona uma animação suave de brilho para indicar a mudança
+            estoqueContainer.textContent = novoEstoque;
+            estoqueContainer.classList.add('text-green-600', 'scale-110', 'transition-all', 'duration-300');
+            setTimeout(() => {
+                estoqueContainer.classList.remove('text-green-600', 'scale-110');
+            }, 2000);
+        }
+    }
+
     // Expõe as funções públicas
     return {
         init,
         render,
-        renderDetails: _renderProductDetails
+        renderDetails: _renderProductDetails,
+        getSelectedProductCodigo,
+        updateStockDisplay
     };
 })();

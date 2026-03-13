@@ -70,7 +70,8 @@ const createLojaIntegradaRouter = (
     spreadsheetIdNFE,
     sheetNameVendas,
     spreadsheetIdConfig,
-    sheetNameConfig
+    sheetNameConfig,
+    io // Injetando Socket.io
 ) => {
     const router = express.Router();
 
@@ -221,6 +222,18 @@ const createLojaIntegradaRouter = (
                     valueInputOption: 'USER_ENTERED',
                     insertDataOption: 'INSERT_ROWS',
                     resource: { values: [rowData] }
+                });
+            }
+
+            // --- NOTIFICAÇÃO WEBSOCKET ---
+            if (io) {
+                console.log(`[WebSocket] Emitindo atualização de pedido ${pedidoNumeroStr} com status ${pedido.situacao ? (pedido.situacao.nome || pedido.situacao.codigo) : 'N/A'}`);
+                io.emit('orderUpdated', {
+                    numeroPedido: pedidoNumeroStr,
+                    novaSituacao: pedido.situacao ? (pedido.situacao.nome || pedido.situacao.codigo || 'N/A') : 'N/A',
+                    cliente: pedidoObj.cliente,
+                    valorTotal: pedidoObj.valortotal,
+                    timestamp: new Date().toISOString()
                 });
             }
 

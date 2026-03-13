@@ -1217,6 +1217,110 @@
             let _selectedSaidaItems = new Set();
             let _selectedStockItems = new Set();
             let _socket; // NOVO: Variável para o Socket.io
+
+            /**
+             * Inicializa a conexão WebSocket com o backend para atualizações em tempo real.
+             */
+            function _initWebSocket() {
+                // Usa a URL base do Cloud Run a partir de uma das URLs de API
+                const socketUrl = "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
+                
+                console.log(`[WebSocket] Tentando conectar em: ${socketUrl}`);
+                
+                try {
+                    _socket = io(socketUrl);
+
+                    _socket.on('connect', () => {
+                        console.log('[WebSocket] Conectado ao servidor com sucesso! ID:', _socket.id);
+                    });
+
+                    _socket.on('disconnect', () => {
+                        console.log('[WebSocket] Desconectado do servidor.');
+                    });
+
+                    _socket.on('connect_error', (error) => {
+                        console.error('[WebSocket] Erro na conexão:', error);
+                    });
+
+                    // Ouvindo o evento de atualização de estoque
+                    _socket.on('stockUpdated', (data) => {
+                        console.log('[WebSocket] Atualização de estoque recebida:', data);
+                        
+                        // 1. Atualiza na lista global de produtos
+                        const product = _allProducts.find(p => p.codigo === data.codigo);
+                        if (product) {
+                            const antigoEstoque = product.estoque;
+                            product.estoque = data.novoEstoque;
+                            console.log(`[WebSocket] Produto ${product.codigo} atualizado: ${antigoEstoque} -> ${product.estoque}`);
+                            
+                            // 2. Se o produto alterado estiver sendo exibido no módulo de pesquisa, atualiza os detalhes
+                            if (typeof PesquisarProduto !== 'undefined' && PesquisarProduto.getSelectedProductCodigo() === data.codigo) {
+                                console.log('[WebSocket] Atualizando detalhes do produto na tela de pesquisa.');
+                                PesquisarProduto.updateStockDisplay(data.novoEstoque);
+                            }
+                            
+                            // 3. Se estiver na página de estoque, atualiza a linha na tabela se estiver visível
+                            if (typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.updateProductStockInTable === 'function') {
+                                console.log('[WebSocket] Atualizando linha na tabela de estoque.');
+                                EstoqueApp.updateProductStockInTable(data.codigo, data.novoEstoque);
+                            }
+                            
+                            // 4. Se estiver na página de saída, atualiza a linha na tabela se estiver visível
+                            if (typeof SaidaItens !== 'undefined' && typeof SaidaItens.updateProductStockInTable === 'function') {
+                                console.log('[WebSocket] Atualizando linha na tabela de saída.');
+                                SaidaItens.updateProductStockInTable(data.codigo, data.novoEstoque);
+                            }
+                            
+                            // 5. Se o dashboard estiver ativo, atualiza os dados de estoque dele
+                            if (typeof DashboardApp !== 'undefined' && typeof DashboardApp.updateStockRealTime === 'function') {
+                                console.log('[WebSocket] Atualizando estoque no Dashboard.');
+                                DashboardApp.updateStockRealTime(data.codigo, data.novoEstoque);
+                            }
+                            
+                            // 6. Mostrar um pequeno alerta (toast) ou log
+                            console.log(`Estoque de "${product.descricao}" atualizado para ${data.novoEstoque} por outro usuário.`);
+                        }
+                    });
+
+                    // Ouvindo atualização de pedidos da Loja Integrada
+                    _socket.on('orderUpdated', (data) => {
+                        console.log('[WebSocket] Atualização de pedido Loja Integrada recebida:', data);
+                        
+                        // Atualiza na lista local
+                        const orderIndex = _allLojaIntegradaOrders.findIndex(o => String(o.numeropedido) === String(data.numeroPedido));
+                        if (orderIndex !== -1) {
+                            _allLojaIntegradaOrders[orderIndex].situao = data.novaSituacao;
+                            console.log(`[WebSocket] Pedido ${data.numeroPedido} atualizado na lista local.`);
+                        } else {
+                            // Adiciona novo pedido no topo
+                            _allLojaIntegradaOrders.unshift({
+                                numeropedido: data.numeroPedido,
+                                situao: data.novaSituacao,
+                                cliente: data.cliente,
+                                valortotal: data.valorTotal,
+                                datacriao: data.timestamp
+                            });
+                            console.log(`[WebSocket] Novo pedido ${data.numeroPedido} adicionado à lista local.`);
+                        }
+
+                        // Se o dashboard estiver visível, atualiza
+                        if (!_pageDashboards.classList.contains('hidden') && typeof DashboardApp !== 'undefined') {
+                            console.log('[WebSocket] Atualizando Dashboard...');
+                            DashboardApp.start(null, _allLojaIntegradaOrders);
+                        }
+                    });
+
+                    // Ouvindo atualização de status de requisição
+                    _socket.on('requisitionStatusUpdated', (data) => {
+                        console.log('[WebSocket] Status de requisição atualizado:', data);
+                        // Aqui poderíamos atualizar a linha da tabela de requisições se estivesse visível
+                        // Por enquanto, apenas logamos para garantir que o evento chegou.
+                    });
+
+                } catch (error) {
+                    console.error('[WebSocket] Erro ao inicializar Socket.io:', error);
+                }
+            }
             let _reportState = {
                 sortColumn: 'descricao',
                 sortDirection: 'asc',
@@ -4679,6 +4783,7 @@ _generateProductReportBtn = document.getElementById('generate-product-report-btn
                  */
                 init: function () {
                     console.log('[App] init: Aplicação inicializando...');
+                    _initWebSocket(); // NOVO: Inicia a conexão WebSocket
                     _cacheDomElements();
                     _bindEvents();
                     // NOVO: Inicializa o módulo de Atendimento com as configurações necessárias
