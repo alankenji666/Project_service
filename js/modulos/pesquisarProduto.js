@@ -40,7 +40,17 @@ export const PesquisarProduto = (function() {
                 </div>
                 ${_utils.createDetailItem('Estoque Mínimo', product.estoque_minimo)}
                 ${_utils.createDetailItem('Estoque Máximo', product.estoque_maximo)}
-                ${_utils.createDetailItem('Localização', product.localizacao || 'N/A')}
+                
+                <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Localização</p>
+                        <p class="text-lg text-gray-800 font-semibold product-detail-location">${product.localizacao || 'N/A'}</p>
+                    </div>
+                    <button class="read-only-disable edit-product-location-btn p-2 rounded-full hover:bg-gray-200 text-blue-600" data-product-id="${product.id}" data-product-codigo="${product.codigo}" title="Editar Localização">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
+                    </button>
+                </div>
+
                 ${_utils.createDetailItem('Grupo de Tags', product.grupo_de_tags_tags?.join(', ') || 'N/A')}
                 ${_utils.createDetailItem('Vendas (90d)', product.vendas_ultimos_90_dias || '0')}
             </div>
@@ -133,40 +143,42 @@ export const PesquisarProduto = (function() {
     }
 
     /**
-     * Manipula a edição do nome do produto.
+     * Atualiza a localização do produto exibida na tela sem re-renderizar tudo.
+     * @param {string|number} productId 
+     * @param {string} novaLocalizacao 
+     */
+    function updateProductLocationDisplay(productId, novaLocalizacao) {
+        if (String(_activeProductId) === String(productId) && _dom.product_details) {
+            const locationElement = _dom.product_details.querySelector('.product-detail-location');
+            if (locationElement) {
+                locationElement.textContent = novaLocalizacao || 'N/A';
+                locationElement.classList.add('text-green-600', 'scale-105', 'transition-all', 'duration-300');
+                setTimeout(() => locationElement.classList.remove('text-green-600', 'scale-105'), 2000);
+            }
+        }
+    }
+
+    /**
+     * Manipula a edição do nome do produto abrindo o modal configurado no App principal.
      */
     async function _handleEditName(productId, codigo) {
-        const product = _allProducts.find(p => String(p.id) === String(productId));
-        if (!product) return;
+        if (typeof _config.openProductNameEditModal === 'function') {
+            _config.openProductNameEditModal(productId);
+        } else {
+            console.error("[PesquisarProduto] Erro: Função openProductNameEditModal não foi passada no init.");
+            alert("Erro interno: O modal de edição não está disponível.");
+        }
+    }
 
-        const novoNome = prompt(`Editar descrição do produto (${codigo}):`, product.descricao);
-        if (novoNome === null || novoNome.trim() === "" || novoNome === product.descricao) return;
-
-        try {
-            // Desabilita o botão temporariamente
-            const btn = _dom.product_details.querySelector('.edit-product-name-btn');
-            if (btn) btn.disabled = true;
-
-            const response = await fetch(`${_config.API_BASE_URL}/produtos/${productId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nome: novoNome.trim(), codigo: codigo })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Erro ao atualizar nome do produto.");
-            }
-
-            console.log("[PesquisarProduto] Nome atualizado com sucesso no backend.");
-            // Não precisamos atualizar o estado local aqui, o WebSocket fará isso para todos.
-
-        } catch (error) {
-            console.error("[PesquisarProduto] Erro ao editar nome:", error);
-            alert(`Falha ao atualizar nome: ${error.message}`);
-        } finally {
-            const btn = _dom.product_details.querySelector('.edit-product-name-btn');
-            if (btn) btn.disabled = false;
+    /**
+     * Manipula a edição da localização do produto abrindo o modal configurado no App principal.
+     */
+    async function _handleEditLocation(productId, codigo) {
+        if (typeof _config.openProductLocationEditModal === 'function') {
+            _config.openProductLocationEditModal(productId);
+        } else {
+            console.error("[PesquisarProduto] Erro: Função openProductLocationEditModal não foi passada no init.");
+            alert("Erro interno: O modal de edição de localização não está disponível.");
         }
     }
 
@@ -243,6 +255,11 @@ export const PesquisarProduto = (function() {
                 if (editNameBtn) {
                     _handleEditName(editNameBtn.dataset.productId, editNameBtn.dataset.productCodigo);
                 }
+
+                const editLocationBtn = event.target.closest('.edit-product-location-btn');
+                if (editLocationBtn) {
+                    _handleEditLocation(editLocationBtn.dataset.productId, editLocationBtn.dataset.productCodigo);
+                }
             });
         }
     }
@@ -283,6 +300,7 @@ export const PesquisarProduto = (function() {
         getSelectedProductCodigo,
         getSelectedProductId,
         updateStockDisplay,
-        updateProductNameDisplay
+        updateProductNameDisplay,
+        updateProductLocationDisplay
     };
 })();

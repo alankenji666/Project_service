@@ -967,6 +967,104 @@
         </div>
     </div>
 
+    <!-- NOVO: Modal para Editar Nome do Produto -->
+    <div id="product-name-edit-modal"
+        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[65] p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full relative">
+            <button id="close-product-name-edit-modal-btn"
+                class="absolute top-3 right-3 text-gray-500 hover:text-gray-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                    </path>
+                </svg>
+            </button>
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Editar Descrição</h3>
+            <p id="product-name-edit-info" class="text-gray-700 mb-6 text-left"></p>
+            <div class="space-y-4 text-left">
+                <div>
+                    <label for="product-name-edit-input" class="block text-sm font-bold text-gray-700">Novo Nome do Produto:</label>
+                    <textarea id="product-name-edit-input" rows="3"
+                        class="mt-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-blue-500"
+                        placeholder="Digite o novo nome..."></textarea>
+                </div>
+            </div>
+
+            <!-- Feedback de Carregamento -->
+            <div id="product-name-edit-loading" class="hidden mt-4 flex items-center justify-center space-x-2 text-blue-600">
+                <svg class="w-6 h-6 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="font-medium">Atualizando no Bling...</span>
+            </div>
+
+            <!-- Mensagem de Sucesso -->
+            <div id="product-name-edit-success" class="hidden mt-4 p-3 bg-green-100 text-green-700 rounded-lg flex items-center space-x-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                <span>Nome alterado com sucesso!</span>
+            </div>
+
+            <div class="flex justify-end space-x-4 mt-8">
+                <button id="cancel-product-name-edit-btn"
+                    class="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">Cancelar</button>
+                <button id="confirm-product-name-edit-btn"
+                    class="read-only-disable px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar Alteração</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOVO: Modal para Editar Localização do Produto -->
+    <div id="product-location-edit-modal"
+        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[65] p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full relative">
+            <button id="close-product-location-edit-modal-btn"
+                class="absolute top-3 right-3 text-gray-500 hover:text-gray-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                    </path>
+                </svg>
+            </button>
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Editar Localização</h3>
+            <p id="product-location-edit-info" class="text-gray-700 mb-6 text-left"></p>
+            <div class="space-y-4 text-left">
+                <div>
+                    <label for="product-location-edit-input" class="block text-sm font-bold text-gray-700">Nova Localização (Ex: 14A):</label>
+                    <input type="text" id="product-location-edit-input"
+                        class="mt-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-blue-500"
+                        placeholder="Digite a localização...">
+                </div>
+            </div>
+
+            <!-- Feedback de Carregamento -->
+            <div id="product-location-edit-loading" class="hidden mt-4 flex items-center justify-center space-x-2 text-blue-600">
+                <svg class="w-6 h-6 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="font-medium">Atualizando no Bling...</span>
+            </div>
+
+            <!-- Mensagem de Sucesso -->
+            <div id="product-location-edit-success" class="hidden mt-4 p-3 bg-green-100 text-green-700 rounded-lg flex items-center space-x-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                <span>Localização alterada com sucesso!</span>
+            </div>
+
+            <div class="flex justify-end space-x-4 mt-8">
+                <button id="cancel-product-location-edit-btn"
+                    class="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">Cancelar</button>
+                <button id="confirm-product-location-edit-btn"
+                    class="read-only-disable px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar Localização</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de Chat/Detalhes do Atendimento -->
     <div id="atendimento-chat-modal"
         class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
@@ -1207,6 +1305,7 @@
         // Início do padrão Revealing Module para a aplicação principal
         const App = (function () {
             // --- VARIÁVEIS DE ESTADO PRIVADAS ---
+            const API_BASE_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
             let _allProducts = [];
             let _allOrdersTerceiros = [];
             let _allOrdersFabrica = [];
@@ -1426,9 +1525,10 @@
             let _stockAdjustmentModal, _closeStockAdjustmentModalBtn, _stockAdjustmentProductInfo, _stockAdjustmentCurrentStock, _stockAdjustmentNewQuantity, _stockAdjustmentReason, _confirmStockAdjustmentBtn, _cancelStockAdjustmentBtn; // NOVO: Modal de Ajuste de Estoque
             let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageSaidaReport, _pageReport, _pageGerenciarSaida, _pageDashboards, _pageAtendimento;
             let _productReportModal, _openProductReportModalBtn, _closeProductReportModalBtn, _cancelProductReportBtn, _generateProductReportBtn;
-    
-            // --- FUNÇÕES DE UTILIDADE PRIVADAS ---
+            let _productNameEditModal, _closeProductNameEditModalBtn, _productNameEditInfo, _productNameEditInput, _productNameEditLoading, _productNameEditSuccess, _cancelProductNameEditBtn, _confirmProductNameEditBtn;
+            let _productLocationEditModal, _closeProductLocationEditModalBtn, _productLocationEditInfo, _productLocationEditInput, _productLocationEditLoading, _productLocationEditSuccess, _cancelProductLocationEditBtn, _confirmProductLocationEditBtn;
 
+            // --- FUNÇÕES DE UTILIDADE PRIVADAS ---
 /**
  * NOVO: Função genérica para exportar dados para um arquivo CSV.
  * @param {string} filename - O nome do arquivo a ser baixado (ex: "relatorio.csv").
@@ -4424,6 +4524,100 @@ const data = filteredProducts.map(product => {
                 }
             }
 
+            /**
+             * NOVO: Vincula os eventos dos botões do modal de edição de nome do produto.
+             */
+            function _bindProductNameEditModalEvents() {
+                if (_closeProductNameEditModalBtn) {
+                    _closeProductNameEditModalBtn.addEventListener('click', () => _productNameEditModal.classList.add('hidden'));
+                }
+                if (_cancelProductNameEditBtn) {
+                    _cancelProductNameEditBtn.addEventListener('click', () => _productNameEditModal.classList.add('hidden'));
+                }
+                if (_confirmProductNameEditBtn) {
+                    _confirmProductNameEditBtn.addEventListener('click', _saveProductNameEdit);
+                }
+            }
+
+            /**
+             * NOVO: Abre o modal para editar o nome (descrição) do produto.
+             */
+            function _openProductNameEditModal(productId) {
+                const product = _allProducts.find(p => String(p.id) === String(productId));
+                if (!product) {
+                    _showMessageModal("Erro", "Produto não encontrado para editar o nome.");
+                    return;
+                }
+
+                if (_productNameEditModal) {
+                    _productNameEditModal.dataset.productId = product.id;
+                    _productNameEditModal.dataset.codigo = product.codigo;
+                    if (_productNameEditInfo) _productNameEditInfo.innerHTML = `Editando descrição do produto código: <b>${product.codigo}</b>`;
+                    if (_productNameEditInput) _productNameEditInput.value = product.descricao;
+                    
+                    // Reseta estados de feedback
+                    if (_productNameEditLoading) _productNameEditLoading.classList.add('hidden');
+                    if (_productNameEditSuccess) _productNameEditSuccess.classList.add('hidden');
+                    if (_confirmProductNameEditBtn) _confirmProductNameEditBtn.disabled = false;
+                    
+                    _productNameEditModal.classList.remove('hidden');
+                    if (_productNameEditInput) _productNameEditInput.focus();
+                }
+            }
+
+            /**
+             * NOVO: Salva a alteração do nome do produto no backend.
+             */
+            async function _saveProductNameEdit() {
+                const productId = _productNameEditModal.dataset.productId;
+                const codigo = _productNameEditModal.dataset.codigo;
+                const novoNome = _productNameEditInput.value.trim();
+
+                if (!novoNome) {
+                    _showMessageModal("Campo Vazio", "Por favor, digite um nome para o produto.");
+                    return;
+                }
+
+                const product = _allProducts.find(p => String(p.id) === String(productId));
+                if (novoNome === product.descricao) {
+                    _productNameEditModal.classList.add('hidden');
+                    return;
+                }
+
+                // UI Feedback
+                _confirmProductNameEditBtn.disabled = true;
+                _productNameEditLoading.classList.remove('hidden');
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/produtos/${productId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nome: novoNome, codigo: codigo })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || "Erro ao atualizar nome do produto.");
+                    }
+
+                    // Feedback de Sucesso
+                    _productNameEditLoading.classList.add('hidden');
+                    _productNameEditSuccess.classList.remove('hidden');
+
+                    // Fecha o modal após um pequeno delay para o usuário ver o sucesso
+                    setTimeout(() => {
+                        _productNameEditModal.classList.add('hidden');
+                        // O WebSocket atualizará a lista global e a UI automaticamente.
+                    }, 1500);
+
+                } catch (error) {
+                    console.error("[App] Erro ao editar nome:", error);
+                    _productNameEditLoading.classList.add('hidden');
+                    _confirmProductNameEditBtn.disabled = false;
+                    _showMessageModal("Erro na Atualização", `Falha ao atualizar nome: ${error.message}`);
+                }
+            }
+
 
             /**
              * NOVO: Configura os campos de busca para terem um botão de limpar ("X").
@@ -4807,7 +5001,130 @@ _closeProductReportModalBtn = document.getElementById('close-product-report-moda
 _cancelProductReportBtn = document.getElementById('cancel-product-report-btn');
 _generateProductReportBtn = document.getElementById('generate-product-report-btn');
 
-            }
+// NOVO: Cache dos elementos do modal de edição de nome do produto
+_productNameEditModal = document.getElementById('product-name-edit-modal');
+_closeProductNameEditModalBtn = document.getElementById('close-product-name-edit-modal-btn');
+_productNameEditInfo = document.getElementById('product-name-edit-info');
+_productNameEditInput = document.getElementById('product-name-edit-input');
+_productNameEditLoading = document.getElementById('product-name-edit-loading');
+_productNameEditSuccess = document.getElementById('product-name-edit-success');
+_cancelProductNameEditBtn = document.getElementById('cancel-product-name-edit-btn');
+_confirmProductNameEditBtn = document.getElementById('confirm-product-name-edit-btn');
+
+// NOVO: Cache dos elementos do modal de edição de localização
+_productLocationEditModal = document.getElementById('product-location-edit-modal');
+_closeProductLocationEditModalBtn = document.getElementById('close-product-location-edit-modal-btn');
+_productLocationEditInfo = document.getElementById('product-location-edit-info');
+_productLocationEditInput = document.getElementById('product-location-edit-input');
+_productLocationEditLoading = document.getElementById('product-location-edit-loading');
+_productLocationEditSuccess = document.getElementById('product-location-edit-success');
+_cancelProductLocationEditBtn = document.getElementById('cancel-product-location-edit-btn');
+_confirmProductLocationEditBtn = document.getElementById('confirm-product-location-edit-btn');
+}
+
+/**
+* NOVO: Vincula os eventos dos botões do modal de edição de localização do produto.
+*/
+function _bindProductLocationEditModalEvents() {
+if (_closeProductLocationEditModalBtn) {
+    _closeProductLocationEditModalBtn.addEventListener('click', () => _productLocationEditModal.classList.add('hidden'));
+}
+if (_cancelProductLocationEditBtn) {
+    _cancelProductLocationEditBtn.addEventListener('click', () => _productLocationEditModal.classList.add('hidden'));
+}
+if (_confirmProductLocationEditBtn) {
+    _confirmProductLocationEditBtn.addEventListener('click', _saveProductLocationEdit);
+}
+}
+
+/**
+* NOVO: Abre o modal para editar a localização do produto.
+*/
+function _openProductLocationEditModal(productId) {
+const product = _allProducts.find(p => String(p.id) === String(productId));
+if (!product) {
+    _showMessageModal("Erro", "Produto não encontrado para editar a localização.");
+    return;
+}
+
+if (_productLocationEditModal) {
+    _productLocationEditModal.dataset.productId = product.id;
+    _productLocationEditModal.dataset.codigo = product.codigo;
+    if (_productLocationEditInfo) _productLocationEditInfo.innerHTML = `Editando localização do produto código: <b>${product.codigo}</b>`;
+    if (_productLocationEditInput) _productLocationEditInput.value = product.localizacao || "";
+
+    // Reseta estados de feedback
+    if (_productLocationEditLoading) _productLocationEditLoading.classList.add('hidden');
+    if (_productLocationEditSuccess) _productLocationEditSuccess.classList.add('hidden');
+    if (_confirmProductLocationEditBtn) _confirmProductLocationEditBtn.disabled = false;
+
+    _productLocationEditModal.classList.remove('hidden');
+    if (_productLocationEditInput) _productLocationEditInput.focus();
+}
+}
+
+/**
+* NOVO: Salva a alteração da localização do produto no backend.
+*/
+async function _saveProductLocationEdit() {
+const productId = _productLocationEditModal.dataset.productId;
+const codigo = _productLocationEditModal.dataset.codigo;
+const novaLocalizacao = _productLocationEditInput.value.trim();
+
+const product = _allProducts.find(p => String(p.id) === String(productId));
+if (novaLocalizacao === (product.localizacao || "")) {
+    _productLocationEditModal.classList.add('hidden');
+    return;
+}
+
+// UI Feedback
+_confirmProductLocationEditBtn.disabled = true;
+_productLocationEditLoading.classList.remove('hidden');
+
+try {
+    // Prepara o payload para atualizar a localização no Bling
+    // A API do Bling espera a localização dentro do objeto 'estoque'
+    const payload = {
+        localizacao: novaLocalizacao,
+        codigo: codigo
+    };
+
+    const response = await fetch(`${API_BASE_URL}/produtos/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro ao atualizar localização do produto.");
+    }
+
+    // Atualiza localmente o objeto _allProducts
+    if (product) product.localizacao = novaLocalizacao;
+
+    // Atualiza a interface se o módulo PesquisarProduto estiver ativo
+    if (typeof PesquisarProduto !== 'undefined') {
+        PesquisarProduto.updateProductLocationDisplay(productId, novaLocalizacao);
+    }
+
+    // Feedback de Sucesso
+    _productLocationEditLoading.classList.add('hidden');
+    _productLocationEditSuccess.classList.remove('hidden');
+
+    // Fecha o modal após um pequeno delay
+    setTimeout(() => {
+        _productLocationEditModal.classList.add('hidden');
+        // O WebSocket ou a atualização global cuidará do resto
+    }, 1500);
+
+} catch (error) {
+    console.error("[App] Erro ao editar localização:", error);
+    _productLocationEditLoading.classList.add('hidden');
+    _confirmProductLocationEditBtn.disabled = false;
+    _showMessageModal("Erro na Atualização", `Falha ao atualizar localização: ${error.message}`);
+}
+}
 
 
 
@@ -4838,6 +5155,8 @@ _generateProductReportBtn = document.getElementById('generate-product-report-btn
 
 
                     _bindStockAdjustmentModalEvents(); // NOVO
+                    _bindProductNameEditModalEvents(); // NOVO
+                    _bindProductLocationEditModalEvents(); // NOVO
                     if (typeof SaidaItens !== 'undefined') {
                         SaidaItens.init({
                             allProducts: _allProducts,
@@ -4907,7 +5226,9 @@ _generateProductReportBtn = document.getElementById('generate-product-report-btn
                                 showProductTooltip: _showProductTooltip,
                                 hideProductTooltip: _hideProductTooltip
                             },
-                            openStockAdjustmentModal: _openStockAdjustmentModal
+                            openStockAdjustmentModal: _openStockAdjustmentModal,
+                            openProductNameEditModal: _openProductNameEditModal,
+                            openProductLocationEditModal: _openProductLocationEditModal
                         });
                     }
                     else {

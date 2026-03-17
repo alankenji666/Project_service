@@ -70,7 +70,8 @@ const createLojaIntegradaRouter = (
     spreadsheetIdNFE,
     sheetNameVendas,
     spreadsheetIdConfig,
-    sheetNameConfig,
+sheetNameConfig,
+
     io // Injetando Socket.io
 ) => {
     const router = express.Router();

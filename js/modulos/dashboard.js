@@ -181,7 +181,6 @@ export const DashboardApp = (function() {
         const isLiquido = _dom.estoqueTypeToggle ? _dom.estoqueTypeToggle.checked : true;
         let totalGeralValue = 0;
         const topItems = [];
-        let debugCount = 0;
 
         _allProducts.forEach(p => {
             const tags = p.grupo_de_tags_tags || [];
@@ -203,20 +202,6 @@ export const DashboardApp = (function() {
 
             const estoqueConsiderado = estoque > 0 ? estoque : 0;
             const valorItem = estoqueConsiderado * precoBase;
-
-            if (debugCount < 5 && valorItem > 0) {
-                console.log('[DEBUG] Calculando item estoque:', {
-                    codigo: p.codigo,
-                    descricao: p.descricao,
-                    estoque,
-                    precoCusto,
-                    precoVenda,
-                    precoBase,
-                    isLiquido,
-                    valorItem
-                });
-                debugCount++;
-            }
 
             Object.keys(categories).forEach(catTag => {
                 if (tags.includes(catTag) && estoque !== 0) {

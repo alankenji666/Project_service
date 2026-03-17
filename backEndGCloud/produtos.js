@@ -196,17 +196,19 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
     });
 
     /**
-     * Rota para atualizar o nome (descrição) de um produto.
+     * Rota para atualizar o nome (descrição) ou a localização de um produto.
      * PUT /:id
      */
     router.put('/:id', async (req, res, next) => {
         const idProduto = req.params.id;
-        const { nome, codigo } = req.body;
+        const { nome, localizacao, codigo } = req.body;
 
-        console.log(`--- ATUALIZANDO NOME DO PRODUTO: ID ${idProduto}, Novo Nome: ${nome} ---`);
+        console.log(`--- ATUALIZANDO PRODUTO: ID ${idProduto} ---`);
+        if (nome) console.log(` > Novo Nome: ${nome}`);
+        if (localizacao !== undefined) console.log(` > Nova Localização: ${localizacao}`);
 
-        if (!nome) {
-            return res.status(400).json({ error: "O nome do produto é obrigatório." });
+        if (!nome && localizacao === undefined) {
+            return res.status(400).json({ error: "Nome ou localização do produto deve ser informado." });
         }
 
         try {
@@ -218,8 +220,8 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 throw new Error("Não foi possível obter o token do Bling.");
             }
 
-            // 2. Buscar dados atuais do produto no Bling para garantir os campos obrigatórios no PUT
-            console.log(`[Bling] Buscando dados atuais do produto ID ${idProduto}...`);
+            // 2. Buscar dados atuais do produto no Bling
+            console.log(`[Bling] Buscando dados atuais completos do produto ID ${idProduto}...`);
             const getBlingUrl = `${blingBaseUrl}/produtos/${idProduto}`;
             const getBlingRes = await axios.get(getBlingUrl, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -230,16 +232,24 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 throw new Error("Produto não encontrado no Bling para atualização.");
             }
 
-            // 3. Montar o Payload de atualização mantendo campos obrigatórios
+            // 3. Montar o Payload de atualização clonando o produto atual e alterando apenas o necessário
+            // Removemos campos que não devem ser enviados no corpo de um PUT (como IDs internos e timestamps)
+            const { id, dataCriacao, dataAlteracao, ...productData } = currentProduct;
+
             const blingUrl = `${blingBaseUrl}/produtos/${idProduto}`;
             const blingPayload = {
-                nome: nome,
-                tipo: currentProduct.tipo || 'P',
-                situacao: currentProduct.situacao || 'A',
-                formato: currentProduct.formato || 'S'
+                ...productData,
+                nome: nome || currentProduct.nome,
+                codigo: codigo || currentProduct.codigo
             };
 
-            console.log(`[Bling] Enviando atualização para ${blingUrl} com payload:`, JSON.stringify(blingPayload));
+            // Se localizacao foi informada, ela deve ir dentro de 'estoque'
+            if (localizacao !== undefined) {
+                if (!blingPayload.estoque) blingPayload.estoque = {};
+                blingPayload.estoque.localizacao = localizacao;
+            }
+
+            console.log(`[Bling] Enviando atualização completa para ${blingUrl}...`);
             const blingResponse = await axios.put(blingUrl, blingPayload, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
@@ -257,9 +267,10 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             
             const idColIndex = normalizedHeaders.indexOf('id');
             const descricaoColIndex = normalizedHeaders.indexOf('descricao');
+            const localizacaoColIndex = normalizedHeaders.indexOf('localizacao');
 
-            if (idColIndex === -1 || descricaoColIndex === -1) {
-                throw new Error("Colunas 'ID' ou 'Descrição' não encontradas na planilha.");
+            if (idColIndex === -1) {
+                throw new Error("Coluna 'ID' não encontrada na planilha.");
             }
 
             // Lê a coluna de IDs para encontrar a linha
@@ -276,16 +287,25 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             }
 
             if (rowIndex !== -1) {
-                const updateRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + descricaoColIndex)}${rowIndex}`;
-                console.log(`[Sheets] Atualizando descrição na linha ${rowIndex}, range ${updateRange}`);
-                await sheets.spreadsheets.values.update({
-                    spreadsheetId,
-                    range: updateRange,
-                    valueInputOption: 'RAW',
-                    resource: { values: [[nome]] }
-                });
+                // Atualiza Descrição se houver
+                if (nome && descricaoColIndex !== -1) {
+                    const updateDescRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + descricaoColIndex)}${rowIndex}`;
+                    console.log(`[Sheets] Atualizando descrição na linha ${rowIndex}`);
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId, range: updateDescRange, valueInputOption: 'RAW', resource: { values: [[nome]] }
+                    });
+                }
+
+                // Atualiza Localização se houver
+                if (localizacao !== undefined && localizacaoColIndex !== -1) {
+                    const updateLocRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + localizacaoColIndex)}${rowIndex}`;
+                    console.log(`[Sheets] Atualizando localização na linha ${rowIndex}`);
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId, range: updateLocRange, valueInputOption: 'RAW', resource: { values: [[localizacao]] }
+                    });
+                }
             } else {
-                console.warn(`[Sheets] Produto ID ${idProduto} não encontrado na planilha para atualização de nome.`);
+                console.warn(`[Sheets] Produto ID ${idProduto} não encontrado na planilha para atualização.`);
             }
 
             // 5. Notificar via WebSocket
@@ -293,8 +313,9 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 console.log(`[WebSocket] Emitindo atualização de produto: ${codigo || idProduto}`);
                 io.emit('productUpdated', {
                     id: idProduto,
-                    codigo: codigo,
-                    novoNome: nome,
+                    codigo: codigo || currentProduct.codigo,
+                    novoNome: nome || currentProduct.nome,
+                    novaLocalizacao: localizacao !== undefined ? localizacao : currentProduct.estoque?.localizacao,
                     timestamp: new Date().toISOString()
                 });
             }
