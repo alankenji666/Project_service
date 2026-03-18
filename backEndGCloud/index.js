@@ -9,33 +9,38 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const { google } = require('googleapis');
-const http = require('http'); // Adicionado para Socket.io
-const { Server } = require('socket.io'); // Adicionado para Socket.io
+const admin = require('firebase-admin');
+
+// Inicializa o Firebase Admin com as credenciais padrão do Google Cloud
+admin.initializeApp();
+const db = admin.firestore();
 
 // Inicializa a aplicação Express.
 const app = express();
-const server = http.createServer(app); // Servidor HTTP para o Socket.io
 
-// Inicializa o Socket.io com configurações de CORS
-const io = new Server(server, {
-    cors: {
-        origin: "*", // Em produção, restrinja para suas origens permitidas
-        methods: ["GET", "POST"]
+/**
+ * Função global para notificar o frontend via Firestore Sync.
+ * Em vez de manter WebSockets abertos (que são caros no Cloud Run),
+ * atualizamos um documento no Firestore. O frontend escuta esse documento.
+ */
+async function notifySync(type, data = {}) {
+    console.log(`[Firestore Sync] Notificando atualização do tipo: ${type}`);
+    try {
+        await db.collection('sync').doc('updates').set({
+            type: type,
+            data: data,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`[Firestore Sync] Sucesso ao notificar: ${type}`);
+    } catch (err) {
+        console.error(`[Firestore Sync] Erro ao notificar:`, err.message);
     }
-});
+}
 
-// Evento de conexão do Socket.io
-io.on('connection', (socket) => {
-    console.log('Novo cliente conectado via WebSocket:', socket.id);
-    
-    socket.on('disconnect', () => {
-        console.log('Cliente desconectado do WebSocket:', socket.id);
-    });
-});
-
-// Middleware para disponibilizar o io em todas as rotas se necessário
+// Middleware para disponibilizar o db e notifySync em todas as rotas
 app.use((req, res, next) => {
-    req.io = io;
+    req.db = db;
+    req.notifySync = notifySync;
     next();
 });
 
@@ -416,52 +421,24 @@ app.post('/update-order-status', async (req, res, next) => {
         );
         const updateResponses = await Promise.all(updatePromises);
 
-        // --- NOTIFICAÇÃO WEBSOCKET ---
-        if (req.io) {
-            console.log(`[WebSocket] Emitindo atualização de status da requisição ${orderCode} (Item: ${codigoService}) para '${newStatus}'`);
+        // --- NOTIFICAÇÃO FIRESTORE SYNC ---
+        if (req.notifySync) {
+            console.log(`[Firestore Sync] Notificando atualização de status da requisição ${orderCode} (Item: ${codigoService})`);
             
             // Notifica mudança de status
-            req.io.emit('requisitionStatusUpdated', {
+            req.notifySync('requisitionStatusUpdated', {
                 orderCode: orderCode,
                 codigoService: codigoService,
                 newStatus: newStatus,
-                requisitionType: requisitionType,
-                timestamp: new Date().toISOString()
+                requisitionType: requisitionType
             });
 
-            // Se o status for OK, também notifica que o estoque mudou (assumindo que o estoque foi incrementado)
+            // Se o status for OK, também notifica que o estoque mudou
             if (newStatus.toLowerCase() === 'ok') {
-                console.log(`[WebSocket] Status OK detectado para ${codigoService}. Solicitando atualização de estoque em tempo real.`);
-                
-                try {
-                    // Busca o estoque atualizado na planilha de produtos para enviar o valor real
-                    const productSheetResponse = await sheets.spreadsheets.values.get({
-                        spreadsheetId: SPREADSHEET_ID_ESTOQUE,
-                        range: `${SHEET_NAME_ESTOQUE}!A:Z`,
-                    });
-                    const productRows = productSheetResponse.data.values;
-                    if (productRows && productRows.length > 0) {
-                        const productHeaders = productRows[0].map(h => h ? h.toLowerCase().trim() : '');
-                        const pCodigoCol = productHeaders.indexOf('código');
-                        const pEstoqueCol = productHeaders.indexOf('estoque');
-                        
-                        if (pCodigoCol !== -1 && pEstoqueCol !== -1) {
-                            const productRow = productRows.find(r => r[pCodigoCol] && r[pCodigoCol].toString().trim() === codigoService);
-                            if (productRow) {
-                                const novoEstoque = Number(productRow[pEstoqueCol]) || 0;
-                                req.io.emit('stockUpdated', {
-                                    codigo: codigoService,
-                                    novoEstoque: novoEstoque,
-                                    origem: `baixa_requisicao_${requisitionType}`,
-                                    timestamp: new Date().toISOString()
-                                });
-                                console.log(`[WebSocket] Sucesso: Evento stockUpdated enviado para ${codigoService} com valor ${novoEstoque}`);
-                            }
-                        }
-                    }
-                } catch (err) {
-                    console.error('[WebSocket] Erro ao buscar estoque atualizado para emitir evento:', err.message);
-                }
+                req.notifySync('stockUpdated', {
+                    codigo: codigoService,
+                    origem: `baixa_requisicao_${requisitionType}`
+                });
             }
         }
 
@@ -792,7 +769,7 @@ const estoqueRouter = createEstoqueRouter(
     SHEET_NAME_SAIDA_FABRICA,
     SPREADSHEET_ID_SAIDA_GARANTIA,
     SHEET_NAME_SAIDA_GARANTIA,
-    io // Injetando Socket.io para atualizações em tempo real
+    notifySync // Injetando Firestore Sync para atualizações em tempo real
 );
 app.use('/estoque', estoqueRouter);
 
@@ -809,7 +786,7 @@ const saidaFabricaRouter = createSaidaFabricaRouter(
     SHEET_NAME_ESTOQUE,
     SPREADSHEET_ID_REQUISICAO_FABRICA,
     SHEET_NAME_REQUISICAO_FABRICA,
-    io // Injetando Socket.io
+    notifySync // Injetando Firestore Sync
 );
 app.use('/saida-fabrica', saidaFabricaRouter);
 
@@ -824,7 +801,7 @@ const saidaGarantiaRouter = createSaidaGarantiaRouter(
     BLING_API_BASE_URL,
     SPREADSHEET_ID_ESTOQUE,
     SHEET_NAME_ESTOQUE,
-    io // Injetando Socket.io
+    notifySync // Injetando Firestore Sync
 );
 app.use('/saida-garantia', saidaGarantiaRouter);
 
@@ -841,7 +818,7 @@ const whatsAppRouter = createWhatsAppRouter(
     SHEET_NAME_WHATSAPP_CONFIG,
     SHEET_NAME_WHATSAPP_CLIENTES,
     SHEET_NAME_WHATSAPP_HISTORICO,
-    io // Injetando Socket.io para mensagens do WhatsApp
+    notifySync // Injetando Firestore Sync
 );
 app.use('/whatsapp', whatsAppRouter);
 
@@ -856,7 +833,7 @@ const produtosRouter = createProdutosRouter(
     axios,                        // Injetando axios
     APPS_SCRIPT_TOKEN_URL,        // Injetando URL do Token
     BLING_API_BASE_URL,           // Injetando Base URL do Bling
-    io                            // Injetando Socket.io para atualizações em tempo real
+    notifySync                    // Injetando Firestore Sync
 );
 app.use('/produtos', produtosRouter);
 
@@ -868,7 +845,7 @@ const lojaIntegradaRouter = createLojaIntegradaRouter(
     SHEET_NAME_VENDAS_LOJA_INTEGRADA,
     SPREADSHEET_ID_NFE, // <-- ATUALIZADO: Planilha onde as chaves de API estão
     SHEET_NAME_LOJA_INTEGRADA_CONFIG, // <-- ATUALIZADO: Aba de configuração
-    io // Injetando Socket.io para atualizações de pedidos
+    notifySync // Injetando Firestore Sync
 );
 app.use('/loja-integrada', lojaIntegradaRouter);
 
@@ -895,6 +872,6 @@ exports.app = app;
 
 // --- INICIALIZAÇÃO DO SERVIDOR (Para Cloud Run) ---
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-    console.log(`Servidor HTTP e WebSocket rodando na porta ${PORT}`);
+app.listen(PORT, () => {
+    console.log(`Servidor Express com Firestore Sync rodando na porta ${PORT}`);
 });

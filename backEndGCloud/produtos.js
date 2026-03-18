@@ -9,10 +9,10 @@ const express = require('express');
  * @param {object} axios - Cliente HTTP para requisições externas.
  * @param {string} tokenUrl - URL para obter o token do Bling.
  * @param {string} blingBaseUrl - URL base da API do Bling.
- * @param {object} io - Instância do Socket.io para tempo real.
+ * @param {Function} notifySync - Função para notificação via Firestore Sync.
  * @returns {object} O roteador Express.
  */
-const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos, sheetNameEstoque, axios, tokenUrl, blingBaseUrl, io) => {
+const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos, sheetNameEstoque, axios, tokenUrl, blingBaseUrl, notifySync) => {
     const router = express.Router();
 
     /**
@@ -318,15 +318,14 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 console.warn(`[Sheets] Produto ID ${idProduto} não encontrado na planilha para atualização.`);
             }
 
-            // 5. Notificar via WebSocket
-            if (io) {
-                console.log(`[WebSocket] Emitindo atualização de produto: ${codigo || idProduto}`);
-                io.emit('productUpdated', {
+            // 5. Notificar via Firestore Sync
+            if (notifySync) {
+                console.log(`[Firestore Sync] Notificando atualização de produto: ${codigo || idProduto}`);
+                notifySync('productUpdated', {
                     id: idProduto,
                     codigo: codigo || currentProduct.codigo,
                     novoNome: nome || currentProduct.nome,
-                    novaLocalizacao: localizacao !== undefined ? localizacao : currentProduct.estoque?.localizacao,
-                    timestamp: new Date().toISOString()
+                    novaLocalizacao: localizacao !== undefined ? localizacao : currentProduct.estoque?.localizacao
                 });
             }
 

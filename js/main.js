@@ -25,143 +25,126 @@
             let _allLojaIntegradaOrders = [];
             let _selectedSaidaItems = new Set();
             let _selectedStockItems = new Set();
-            let _socket; // NOVO: Variável para o Socket.io
+            
+            // Variáveis do Firebase
+            let _db;
 
             /**
-             * Inicializa a conexão WebSocket com o backend para atualizações em tempo real.
+             * Inicializa a sincronização em tempo real via Firestore Sync.
+             * Substitui o Socket.io para reduzir custos no Cloud Run.
              */
-            function _initWebSocket() {
-                // Usa a URL base do Cloud Run a partir de uma das URLs de API
-                const socketUrl = "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
-                
-                console.log(`[WebSocket] Tentando conectar em: ${socketUrl}`);
+            async function _initFirestoreSync() {
+                console.log("[Firestore Sync] Inicializando sincronização em tempo real...");
                 
                 try {
-                    _socket = io(socketUrl);
+                    // Importa as funções necessárias do SDK carregado no index.html
+                    const { initializeApp } = await import("firebase/app");
+                    const { getFirestore, doc, onSnapshot } = await import("firebase/firestore");
 
-                    _socket.on('connect', () => {
-                        console.log('[WebSocket] Conectado ao servidor com sucesso! ID:', _socket.id);
-                    });
+                    // Configuração do Firebase (ID do projeto obtido do .firebaserc)
+                    const firebaseConfig = {
+                        projectId: "mksservice-71367430-58374"
+                    };
 
-                    _socket.on('disconnect', () => {
-                        console.log('[WebSocket] Desconectado do servidor.');
-                    });
+                    const app = initializeApp(firebaseConfig);
+                    _db = getFirestore(app);
 
-                    _socket.on('connect_error', (error) => {
-                        console.error('[WebSocket] Erro na conexão:', error);
-                    });
+                    console.log("[Firestore Sync] Conectado ao Firestore.");
 
-                    // Ouvindo o evento de atualização de estoque
-                    _socket.on('stockUpdated', (data) => {
-                        console.log('[WebSocket] Atualização de estoque recebida:', data);
-                        
-                        // 1. Atualiza na lista global de produtos
-                        const product = _allProducts.find(p => p.codigo === data.codigo);
-                        if (product) {
-                            const antigoEstoque = product.estoque;
-                            product.estoque = data.novoEstoque;
-                            console.log(`[WebSocket] Produto ${product.codigo} atualizado: ${antigoEstoque} -> ${product.estoque}`);
-                            
-                            // 2. Se o produto alterado estiver sendo exibido no módulo de pesquisa, atualiza os detalhes
-                            if (typeof PesquisarProduto !== 'undefined' && PesquisarProduto.getSelectedProductCodigo() === data.codigo) {
-                                console.log('[WebSocket] Atualizando detalhes do produto na tela de pesquisa.');
-                                PesquisarProduto.updateStockDisplay(data.novoEstoque);
-                            }
-                            
-                            // 3. Se estiver na página de estoque, atualiza a linha na tabela se estiver visível
-                            if (typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.updateProductStockInTable === 'function') {
-                                console.log('[WebSocket] Atualizando linha na tabela de estoque.');
-                                EstoqueApp.updateProductStockInTable(data.codigo, data.novoEstoque);
-                            }
-                            
-                            // 4. Se estiver na página de saída, atualiza a linha na tabela se estiver visível
-                            if (typeof SaidaItens !== 'undefined' && typeof SaidaItens.updateProductStockInTable === 'function') {
-                                console.log('[WebSocket] Atualizando linha na tabela de saída.');
-                                SaidaItens.updateProductStockInTable(data.codigo, data.novoEstoque);
-                            }
-                            
-                            // 5. Se o dashboard estiver ativo, atualiza os dados de estoque dele
-                            if (typeof DashboardApp !== 'undefined' && typeof DashboardApp.updateStockRealTime === 'function') {
-                                console.log('[WebSocket] Atualizando estoque no Dashboard.');
-                                DashboardApp.updateStockRealTime(data.codigo, data.novoEstoque);
-                            }
-                            
-                            // 6. Mostrar um pequeno alerta (toast) ou log
-                            console.log(`Estoque de "${product.descricao}" atualizado para ${data.novoEstoque} por outro usuário.`);
+                    // Escuta mudanças no documento de sincronização
+                    const syncDocRef = doc(_db, "sync", "updates");
+                    
+                    onSnapshot(syncDocRef, (snapshot) => {
+                        if (snapshot.exists()) {
+                            const update = snapshot.data();
+                            console.log("[Firestore Sync] Nova atualização detectada:", update.type, update);
+                            _handleSyncUpdate(update);
                         }
-                    });
-
-                    // Ouvindo atualização de pedidos da Loja Integrada
-                    _socket.on('orderUpdated', (data) => {
-                        console.log('[WebSocket] Atualização de pedido Loja Integrada recebida:', data);
-                        
-                        // Atualiza na lista local
-                        const orderIndex = _allLojaIntegradaOrders.findIndex(o => String(o.numeropedido) === String(data.numeroPedido));
-                        if (orderIndex !== -1) {
-                            _allLojaIntegradaOrders[orderIndex].situao = data.novaSituacao;
-                            console.log(`[WebSocket] Pedido ${data.numeroPedido} atualizado na lista local.`);
-                        } else {
-                            // Adiciona novo pedido no topo
-                            _allLojaIntegradaOrders.unshift({
-                                numeropedido: data.numeroPedido,
-                                situao: data.novaSituacao,
-                                cliente: data.cliente,
-                                valortotal: data.valorTotal,
-                                datacriao: data.timestamp
-                            });
-                            console.log(`[WebSocket] Novo pedido ${data.numeroPedido} adicionado à lista local.`);
-                        }
-
-                        // Se o dashboard estiver visível, atualiza
-                        if (!_pageDashboards.classList.contains('hidden') && typeof DashboardApp !== 'undefined') {
-                            console.log('[WebSocket] Atualizando Dashboard...');
-                            DashboardApp.start(null, _allLojaIntegradaOrders);
-                        }
-                    });
-
-                    // Ouvindo atualização de status de requisição
-                    _socket.on('requisitionStatusUpdated', (data) => {
-                        console.log('[WebSocket] Status de requisição atualizado:', data);
-                        // Aqui poderíamos atualizar a linha da tabela de requisições se estivesse visível
-                        // Por enquanto, apenas logamos para garantir que o evento chegou.
-                    });
-
-                    // Ouvindo atualização de dados de produto (ex: nome/descrição)
-                    _socket.on('productUpdated', (data) => {
-                        console.log('[WebSocket] Dados de produto atualizados recebidos:', data);
-                        
-                        // 1. Atualiza na lista global de produtos
-                        const product = _allProducts.find(p => p.codigo === data.codigo || String(p.id) === String(data.id));
-                        if (product) {
-                            const antigoNome = product.descricao;
-                            product.descricao = data.novoNome;
-                            console.log(`[WebSocket] Produto ${product.codigo} renomeado: "${antigoNome}" -> "${product.descricao}"`);
-                            
-                            // 2. Se o produto alterado estiver sendo exibido no módulo de pesquisa, atualiza o nome na tela
-                            if (typeof PesquisarProduto !== 'undefined' && typeof PesquisarProduto.updateProductNameDisplay === 'function') {
-                                console.log('[WebSocket] Atualizando nome do produto na tela de pesquisa.');
-                                PesquisarProduto.updateProductNameDisplay(data.id, data.novoNome);
-                            }
-                            
-                            // 3. Se o modal de ajuste de estoque estiver aberto para este produto, atualiza o título
-                            if (_stockAdjustmentModal && !_stockAdjustmentModal.classList.contains('hidden') && String(_stockAdjustmentModal.dataset.productId) === String(data.id)) {
-                                _stockAdjustmentProductInfo.innerHTML = `<strong>Produto:</strong> ${data.novoNome} (Cód: ${data.codigo || 'N/A'})`;
-                            }
-
-                            // 4. Atualiza na tabela de estoque se estiver visível
-                            if (typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.updateProductNameInTable === 'function') {
-                                EstoqueApp.updateProductNameInTable(data.codigo, data.novoNome);
-                            }
-
-                            // 5. Atualiza na tabela de saída se estiver visível
-                            if (typeof SaidaItens !== 'undefined' && typeof SaidaItens.updateProductNameInTable === 'function') {
-                                SaidaItens.updateProductNameInTable(data.codigo, data.novoNome);
-                            }
-                        }
+                    }, (error) => {
+                        console.error("[Firestore Sync] Erro no listener:", error);
                     });
 
                 } catch (error) {
-                    console.error('[WebSocket] Erro ao inicializar Socket.io:', error);
+                    console.error("[Firestore Sync] Erro ao inicializar Firestore Sync:", error);
+                }
+            }
+
+            /**
+             * Processa as atualizações recebidas do Firestore Sync.
+             */
+            function _handleSyncUpdate(update) {
+                const { type, data } = update;
+
+                switch (type) {
+                    case 'stockUpdated':
+                        console.log(`[Firestore Sync] Atualizando estoque do item ${data.codigo} para ${data.novoEstoque}`);
+                        
+                        // Atualiza na memória local
+                        const product = _allProducts.find(p => String(p.codigo) === String(data.codigo));
+                        if (product) {
+                            product.estoque = data.novoEstoque;
+                            
+                            // Notifica os módulos que precisam atualizar a interface
+                            if (typeof PesquisarProduto !== 'undefined' && PesquisarProduto.getSelectedProductCodigo() === data.codigo) {
+                                PesquisarProduto.updateStockDisplay(data.novoEstoque);
+                            }
+                            if (typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.updateProductStockInTable === 'function') {
+                                EstoqueApp.updateProductStockInTable(data.codigo, data.novoEstoque);
+                            }
+                            if (typeof SaidaItens !== 'undefined' && typeof SaidaItens.updateProductStockInTable === 'function') {
+                                SaidaItens.updateProductStockInTable(data.codigo, data.novoEstoque);
+                            }
+                            if (typeof DashboardApp !== 'undefined' && typeof DashboardApp.updateStockRealTime === 'function') {
+                                DashboardApp.updateStockRealTime(data.codigo, data.novoEstoque);
+                            }
+                        }
+                        break;
+
+                    case 'productUpdated':
+                        console.log(`[Firestore Sync] Produto ${data.id} atualizado.`);
+                        
+                        // Atualiza na memória local
+                        const pIdx = _allProducts.find(p => String(p.id) === String(data.id));
+                        if (pIdx) {
+                            if (data.novoNome) pIdx.descricao = data.novoNome;
+                            if (data.novaLocalizacao !== undefined) pIdx.localizacao = data.novaLocalizacao;
+                            if (data.codigo) pIdx.codigo = data.codigo;
+
+                            // Atualiza exibições
+                            if (typeof PesquisarProduto !== 'undefined') {
+                                if (data.novoNome) PesquisarProduto.updateProductNameDisplay(data.id, data.novoNome);
+                                if (data.novaLocalizacao !== undefined) PesquisarProduto.updateProductLocationDisplay(data.id, data.novaLocalizacao);
+                                if (data.codigo) PesquisarProduto.updateProductCodeDisplay(data.id, data.codigo);
+                            }
+                            
+                            if (data.novoNome) {
+                                if (typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.updateProductNameInTable === 'function') {
+                                    EstoqueApp.updateProductNameInTable(data.codigo, data.novoNome);
+                                }
+                                if (typeof SaidaItens !== 'undefined' && typeof SaidaItens.updateProductNameInTable === 'function') {
+                                    SaidaItens.updateProductNameInTable(data.codigo, data.novoNome);
+                                }
+                            }
+                        }
+                        break;
+
+                    case 'requisitionStatusUpdated':
+                        console.log(`[Firestore Sync] Status da requisição ${data.orderCode} mudou.`);
+                        // Para simplicificar, recarrega os dados de requisições se a página de diagnóstico estiver aberta
+                        if (!_pageOverviewRequisitions.classList.contains('hidden')) {
+                            _fetchData(); 
+                        }
+                        break;
+
+                    case 'orderUpdated':
+                        console.log(`[Firestore Sync] Pedido ${data.numeroPedido} atualizado.`);
+                        if (typeof LojaIntegradaApp !== 'undefined') {
+                            LojaIntegradaApp.fetchOrders();
+                        }
+                        break;
+
+                    default:
+                        console.log(`[Firestore Sync] Tipo de atualização não mapeado: ${type}`);
                 }
             }
             let _reportState = {
@@ -3958,7 +3941,7 @@ try {
                  */
                 init: function () {
                     console.log('[App] init: Aplicação inicializando...');
-                    _initWebSocket(); // NOVO: Inicia a conexão WebSocket
+                    _initFirestoreSync(); // NOVO: Inicia a sincronização via Firestore Sync
                     _cacheDomElements();
                     _bindEvents();
                     // NOVO: Inicializa o módulo de Atendimento com as configurações necessárias

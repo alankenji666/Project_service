@@ -72,7 +72,7 @@ const createLojaIntegradaRouter = (
     spreadsheetIdConfig,
 sheetNameConfig,
 
-    io // Injetando Socket.io
+    notifySync // Injetando Firestore Sync
 ) => {
     const router = express.Router();
 
@@ -226,15 +226,14 @@ sheetNameConfig,
                 });
             }
 
-            // --- NOTIFICAÇÃO WEBSOCKET ---
-            if (io) {
-                console.log(`[WebSocket] Emitindo atualização de pedido ${pedidoNumeroStr} com status ${pedido.situacao ? (pedido.situacao.nome || pedido.situacao.codigo) : 'N/A'}`);
-                io.emit('orderUpdated', {
+            // --- NOTIFICAÇÃO FIRESTORE SYNC ---
+            if (notifySync) {
+                console.log(`[Firestore Sync] Notificando atualização de pedido ${pedidoNumeroStr}`);
+                notifySync('orderUpdated', {
                     numeroPedido: pedidoNumeroStr,
                     novaSituacao: pedido.situacao ? (pedido.situacao.nome || pedido.situacao.codigo || 'N/A') : 'N/A',
                     cliente: pedidoObj.cliente,
-                    valorTotal: pedidoObj.valortotal,
-                    timestamp: new Date().toISOString()
+                    valorTotal: pedidoObj.valortotal
                 });
             }
 

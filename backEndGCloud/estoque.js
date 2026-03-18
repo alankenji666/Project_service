@@ -60,10 +60,11 @@ const createEstoqueRouter = (
     // NOVOS PARÂMETROS PARA AS PLANILHAS DE SAÍDA (ADICIONADOS PELO INDEX.JS)
     SPREADSHEET_ID_SAIDA_FABRICA, 
     SHEET_NAME_SAIDA_FABRICA,
-    SPREADSHEET_ID_SAIDA_GARANTIA,
+    SPREADSHEET_ID_SAIDA_GARANTIA, 
     SHEET_NAME_SAIDA_GARANTIA,
-    io // Injetando Socket.io
-) => {
+    notifySync // Injetando Firestore Sync
+    ) => {
+
     const router = express.Router();
 
     // ID do depósito padrão
@@ -324,15 +325,14 @@ const createEstoqueRouter = (
                 }
             }
             
-            // --- TAREFA 3: NOTIFICAR CLIENTES VIA WEBSOCKET (TEMPO REAL) ---
-            if (isStockUpdate && io) {
-                console.log(`[WebSocket] Emitindo atualização de estoque para o código: ${produto.codigo}`);
-                io.emit('stockUpdated', {
+            // --- TAREFA 3: NOTIFICAR CLIENTES VIA FIRESTORE SYNC (TEMPO REAL) ---
+            if (isStockUpdate && notifySync) {
+                console.log(`[Firestore Sync] Notificando atualização de estoque para o código: ${produto.codigo}`);
+                notifySync('stockUpdated', {
                     codigo: produto.codigo,
                     id: produto.id,
                     novoEstoque: quantidadeFinal,
-                    origem: tipoEntrada,
-                    timestamp: new Date().toISOString()
+                    origem: tipoEntrada
                 });
             }
             

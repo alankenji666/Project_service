@@ -44,7 +44,7 @@ const createSaidaFabricaRouter = (
     SHEET_NAME_ESTOQUE,
     SPREADSHEET_ID_REQUISICAO_FABRICA,
     SHEET_NAME_REQUISICAO_FABRICA,
-    io // Injetando Socket.io
+    notifySync // Injetando Firestore Sync
 ) => {
     const router = express.Router();
     const DEPOSITO_PADRAO_ID = 14887835380; // ID do depósito padrão do Bling
@@ -177,14 +177,13 @@ const createSaidaFabricaRouter = (
                         console.log(`[Planilha - ${codigoService}] SUCESSO: Planilha de estoque atualizada.`);
                         stockUpdateResults.push({ codigo: codigoService, status: 'success', newStock: estoqueFinal });
                         
-                        // --- NOTIFICAÇÃO WEBSOCKET ---
-                        if (io) {
-                            console.log(`[WebSocket] Emitindo atualização de estoque (Saída Fábrica) para o código: ${codigoService}`);
-                            io.emit('stockUpdated', {
+                        // --- NOTIFICAÇÃO FIRESTORE SYNC ---
+                        if (notifySync) {
+                            console.log(`[Firestore Sync] Notificando atualização de estoque (Saída Fábrica) para o código: ${codigoService}`);
+                            notifySync('stockUpdated', {
                                 codigo: codigoService,
                                 novoEstoque: estoqueFinal,
-                                origem: 'saida_fabrica',
-                                timestamp: new Date().toISOString()
+                                origem: 'saida_fabrica'
                             });
                         }
                     } else {

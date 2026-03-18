@@ -42,7 +42,7 @@ const createSaidaGarantiaRouter = (
     BLING_API_BASE_URL,
     SPREADSHEET_ID_ESTOQUE,
     SHEET_NAME_ESTOQUE,
-    io // Injetando Socket.io
+    notifySync // Injetando Firestore Sync
 ) => {
     const router = express.Router();
     const DEPOSITO_PADRAO_ID = 14887835380; // ID do depósito padrão do Bling
@@ -175,14 +175,13 @@ const createSaidaGarantiaRouter = (
                         console.log(`[GARANTIA - Planilha - ${codigoService}] SUCESSO: Planilha de estoque atualizada.`);
                         stockUpdateResults.push({ codigo: codigoService, status: 'success', newStock: estoqueFinal });
 
-                        // --- NOTIFICAÇÃO WEBSOCKET ---
-                        if (io) {
-                            console.log(`[WebSocket] Emitindo atualização de estoque (Saída Garantia) para o código: ${codigoService}`);
-                            io.emit('stockUpdated', {
+                        // --- NOTIFICAÇÃO FIRESTORE SYNC ---
+                        if (notifySync) {
+                            console.log(`[Firestore Sync] Notificando atualização de estoque (Saída Garantia) para o código: ${codigoService}`);
+                            notifySync('stockUpdated', {
                                 codigo: codigoService,
                                 novoEstoque: estoqueFinal,
-                                origem: 'saida_garantia',
-                                timestamp: new Date().toISOString()
+                                origem: 'saida_garantia'
                             });
                         }
                     } else {
