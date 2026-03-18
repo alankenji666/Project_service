@@ -11,8 +11,10 @@ const cors = require('cors');
 const { google } = require('googleapis');
 const admin = require('firebase-admin');
 
-// Inicializa o Firebase Admin com as credenciais padrão do Google Cloud
-admin.initializeApp();
+// Inicializa o Firebase Admin com o ID do projeto específico onde o Firestore está ativo
+admin.initializeApp({
+    projectId: "mksservice-71367430-58374"
+});
 const db = admin.firestore();
 
 // Inicializa a aplicação Express.

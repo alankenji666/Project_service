@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permite leitura pública apenas para o documento de sincronização
+    match /sync/updates {
+      allow read: if true;
+      allow write: if false; // Apenas o backend (Cloud Run) pode escrever
+    }
+    
+    // Bloqueia todo o resto por segurança
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
