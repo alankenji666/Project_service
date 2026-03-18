@@ -207,8 +207,8 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
         if (nome) console.log(` > Novo Nome: ${nome}`);
         if (localizacao !== undefined) console.log(` > Nova Localização: ${localizacao}`);
 
-        if (!nome && localizacao === undefined) {
-            return res.status(400).json({ error: "Nome ou localização do produto deve ser informado." });
+        if (!nome && localizacao === undefined && !codigo) {
+            return res.status(400).json({ error: "Nome, localização ou código do produto deve ser informado." });
         }
 
         try {
@@ -268,6 +268,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             const idColIndex = normalizedHeaders.indexOf('id');
             const descricaoColIndex = normalizedHeaders.indexOf('descricao');
             const localizacaoColIndex = normalizedHeaders.indexOf('localizacao');
+            const codigoColIndex = normalizedHeaders.indexOf('codigo'); // NOVO: Mapeia a coluna de código
 
             if (idColIndex === -1) {
                 throw new Error("Coluna 'ID' não encontrada na planilha.");
@@ -302,6 +303,15 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                     console.log(`[Sheets] Atualizando localização na linha ${rowIndex}`);
                     await sheets.spreadsheets.values.update({
                         spreadsheetId, range: updateLocRange, valueInputOption: 'RAW', resource: { values: [[localizacao]] }
+                    });
+                }
+
+                // NOVO: Atualiza Código se houver
+                if (codigo && codigoColIndex !== -1) {
+                    const updateCodeRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + codigoColIndex)}${rowIndex}`;
+                    console.log(`[Sheets] Atualizando código na linha ${rowIndex}`);
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId, range: updateCodeRange, valueInputOption: 'RAW', resource: { values: [[codigo]] }
                     });
                 }
             } else {

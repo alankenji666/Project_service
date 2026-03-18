@@ -20,7 +20,12 @@ export const PesquisarProduto = (function() {
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
                 </button>
             </div>
-            <p class="text-sm text-gray-500 mb-6">Código: ${product.codigo}</p>
+            <div class="flex items-center space-x-2 mb-6">
+                <p class="text-sm text-gray-500 product-detail-code">Código: ${product.codigo}</p>
+                <button class="read-only-disable edit-product-code-btn p-1 rounded-full hover:bg-gray-100 text-blue-600" data-product-id="${product.id}" title="Editar Código (SKU)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
+                </button>
+            </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                 ${_utils.createDetailItem('Preço', (product.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))}
@@ -159,6 +164,34 @@ export const PesquisarProduto = (function() {
     }
 
     /**
+     * Atualiza o código do produto exibido na tela sem re-renderizar tudo.
+     * @param {string|number} productId 
+     * @param {string} novoCodigo 
+     */
+    function updateProductCodeDisplay(productId, novoCodigo) {
+        // 1. Atualiza no painel de detalhes se for o produto ativo
+        if (String(_activeProductId) === String(productId) && _dom.product_details) {
+            const codeElement = _dom.product_details.querySelector('.product-detail-code');
+            if (codeElement) {
+                codeElement.textContent = `Código: ${novoCodigo}`;
+                codeElement.classList.add('text-green-600', 'scale-105', 'transition-all', 'duration-300');
+                setTimeout(() => codeElement.classList.remove('text-green-600', 'scale-105'), 2000);
+            }
+        }
+
+        // 2. Atualiza na lista lateral (sempre, se o item estiver lá)
+        if (_dom.product_list_container) {
+            const listItem = _dom.product_list_container.querySelector(`.product-item[data-product-id="${productId}"]`);
+            if (listItem) {
+                const codeElement = listItem.querySelector('p');
+                if (codeElement) {
+                    codeElement.textContent = novoCodigo;
+                }
+            }
+        }
+    }
+
+    /**
      * Manipula a edição do nome do produto abrindo o modal configurado no App principal.
      */
     async function _handleEditName(productId, codigo) {
@@ -179,6 +212,18 @@ export const PesquisarProduto = (function() {
         } else {
             console.error("[PesquisarProduto] Erro: Função openProductLocationEditModal não foi passada no init.");
             alert("Erro interno: O modal de edição de localização não está disponível.");
+        }
+    }
+
+    /**
+     * Manipula a edição do código do produto abrindo o modal configurado no App principal.
+     */
+    async function _handleEditCode(productId) {
+        if (typeof _config.openProductCodeEditModal === 'function') {
+            _config.openProductCodeEditModal(productId);
+        } else {
+            console.error("[PesquisarProduto] Erro: Função openProductCodeEditModal não foi passada no init.");
+            alert("Erro interno: O modal de edição de código não está disponível.");
         }
     }
 
@@ -260,6 +305,11 @@ export const PesquisarProduto = (function() {
                 if (editLocationBtn) {
                     _handleEditLocation(editLocationBtn.dataset.productId, editLocationBtn.dataset.productCodigo);
                 }
+
+                const editCodeBtn = event.target.closest('.edit-product-code-btn');
+                if (editCodeBtn) {
+                    _handleEditCode(editCodeBtn.dataset.productId);
+                }
             });
         }
     }
@@ -301,6 +351,7 @@ export const PesquisarProduto = (function() {
         getSelectedProductId,
         updateStockDisplay,
         updateProductNameDisplay,
-        updateProductLocationDisplay
+        updateProductLocationDisplay,
+        updateProductCodeDisplay
     };
 })();

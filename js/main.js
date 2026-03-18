@@ -1,0 +1,4072 @@
+        // Importa as funções utilitárias do novo módulo
+        import { debounce, addBusinessDays, getBusinessDaysDifference, formatCnpjCpf, createDetailItem, createStatusPill, positionTooltip } from './utils.js';
+
+
+        // URLs das suas APIs do Google Apps Script
+        // ATENÇÃO: Substitua estas URLs pelas URLs de IMPLANTAÇÃO dos seus respectivos scripts
+        import { API_URLS } from './apiConfig.js';
+        import { PesquisarProduto } from './modulos/pesquisarProduto.js';
+        import { Atendimento } from './modulos/atendimento.js';
+        import { DashboardApp } from './modulos/dashboard.js';
+        import { EstoqueApp } from './modulos/estoque.js';
+        import { SaidaItens } from './modulos/saidaItens.js';
+        import { LojaIntegradaApp } from './modulos/lojaIntegrada.js';
+
+        // Início do padrão Revealing Module para a aplicação principal
+        const App = (function () {
+            // --- VARIÁVEIS DE ESTADO PRIVADAS ---
+            const API_BASE_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
+            let _allProducts = [];
+            let _allOrdersTerceiros = [];
+            let _allOrdersFabrica = [];
+            let _allSaidasGarantia = [];
+            let _allSaidasFabrica = [];
+            let _allNFeData = [];
+            let _allLojaIntegradaOrders = [];
+            let _selectedSaidaItems = new Set();
+            let _selectedStockItems = new Set();
+            let _socket; // NOVO: Variável para o Socket.io
+
+            /**
+             * Inicializa a conexão WebSocket com o backend para atualizações em tempo real.
+             */
+            function _initWebSocket() {
+                // Usa a URL base do Cloud Run a partir de uma das URLs de API
+                const socketUrl = "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
+                
+                console.log(`[WebSocket] Tentando conectar em: ${socketUrl}`);
+                
+                try {
+                    _socket = io(socketUrl);
+
+                    _socket.on('connect', () => {
+                        console.log('[WebSocket] Conectado ao servidor com sucesso! ID:', _socket.id);
+                    });
+
+                    _socket.on('disconnect', () => {
+                        console.log('[WebSocket] Desconectado do servidor.');
+                    });
+
+                    _socket.on('connect_error', (error) => {
+                        console.error('[WebSocket] Erro na conexão:', error);
+                    });
+
+                    // Ouvindo o evento de atualização de estoque
+                    _socket.on('stockUpdated', (data) => {
+                        console.log('[WebSocket] Atualização de estoque recebida:', data);
+                        
+                        // 1. Atualiza na lista global de produtos
+                        const product = _allProducts.find(p => p.codigo === data.codigo);
+                        if (product) {
+                            const antigoEstoque = product.estoque;
+                            product.estoque = data.novoEstoque;
+                            console.log(`[WebSocket] Produto ${product.codigo} atualizado: ${antigoEstoque} -> ${product.estoque}`);
+                            
+                            // 2. Se o produto alterado estiver sendo exibido no módulo de pesquisa, atualiza os detalhes
+                            if (typeof PesquisarProduto !== 'undefined' && PesquisarProduto.getSelectedProductCodigo() === data.codigo) {
+                                console.log('[WebSocket] Atualizando detalhes do produto na tela de pesquisa.');
+                                PesquisarProduto.updateStockDisplay(data.novoEstoque);
+                            }
+                            
+                            // 3. Se estiver na página de estoque, atualiza a linha na tabela se estiver visível
+                            if (typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.updateProductStockInTable === 'function') {
+                                console.log('[WebSocket] Atualizando linha na tabela de estoque.');
+                                EstoqueApp.updateProductStockInTable(data.codigo, data.novoEstoque);
+                            }
+                            
+                            // 4. Se estiver na página de saída, atualiza a linha na tabela se estiver visível
+                            if (typeof SaidaItens !== 'undefined' && typeof SaidaItens.updateProductStockInTable === 'function') {
+                                console.log('[WebSocket] Atualizando linha na tabela de saída.');
+                                SaidaItens.updateProductStockInTable(data.codigo, data.novoEstoque);
+                            }
+                            
+                            // 5. Se o dashboard estiver ativo, atualiza os dados de estoque dele
+                            if (typeof DashboardApp !== 'undefined' && typeof DashboardApp.updateStockRealTime === 'function') {
+                                console.log('[WebSocket] Atualizando estoque no Dashboard.');
+                                DashboardApp.updateStockRealTime(data.codigo, data.novoEstoque);
+                            }
+                            
+                            // 6. Mostrar um pequeno alerta (toast) ou log
+                            console.log(`Estoque de "${product.descricao}" atualizado para ${data.novoEstoque} por outro usuário.`);
+                        }
+                    });
+
+                    // Ouvindo atualização de pedidos da Loja Integrada
+                    _socket.on('orderUpdated', (data) => {
+                        console.log('[WebSocket] Atualização de pedido Loja Integrada recebida:', data);
+                        
+                        // Atualiza na lista local
+                        const orderIndex = _allLojaIntegradaOrders.findIndex(o => String(o.numeropedido) === String(data.numeroPedido));
+                        if (orderIndex !== -1) {
+                            _allLojaIntegradaOrders[orderIndex].situao = data.novaSituacao;
+                            console.log(`[WebSocket] Pedido ${data.numeroPedido} atualizado na lista local.`);
+                        } else {
+                            // Adiciona novo pedido no topo
+                            _allLojaIntegradaOrders.unshift({
+                                numeropedido: data.numeroPedido,
+                                situao: data.novaSituacao,
+                                cliente: data.cliente,
+                                valortotal: data.valorTotal,
+                                datacriao: data.timestamp
+                            });
+                            console.log(`[WebSocket] Novo pedido ${data.numeroPedido} adicionado à lista local.`);
+                        }
+
+                        // Se o dashboard estiver visível, atualiza
+                        if (!_pageDashboards.classList.contains('hidden') && typeof DashboardApp !== 'undefined') {
+                            console.log('[WebSocket] Atualizando Dashboard...');
+                            DashboardApp.start(null, _allLojaIntegradaOrders);
+                        }
+                    });
+
+                    // Ouvindo atualização de status de requisição
+                    _socket.on('requisitionStatusUpdated', (data) => {
+                        console.log('[WebSocket] Status de requisição atualizado:', data);
+                        // Aqui poderíamos atualizar a linha da tabela de requisições se estivesse visível
+                        // Por enquanto, apenas logamos para garantir que o evento chegou.
+                    });
+
+                    // Ouvindo atualização de dados de produto (ex: nome/descrição)
+                    _socket.on('productUpdated', (data) => {
+                        console.log('[WebSocket] Dados de produto atualizados recebidos:', data);
+                        
+                        // 1. Atualiza na lista global de produtos
+                        const product = _allProducts.find(p => p.codigo === data.codigo || String(p.id) === String(data.id));
+                        if (product) {
+                            const antigoNome = product.descricao;
+                            product.descricao = data.novoNome;
+                            console.log(`[WebSocket] Produto ${product.codigo} renomeado: "${antigoNome}" -> "${product.descricao}"`);
+                            
+                            // 2. Se o produto alterado estiver sendo exibido no módulo de pesquisa, atualiza o nome na tela
+                            if (typeof PesquisarProduto !== 'undefined' && typeof PesquisarProduto.updateProductNameDisplay === 'function') {
+                                console.log('[WebSocket] Atualizando nome do produto na tela de pesquisa.');
+                                PesquisarProduto.updateProductNameDisplay(data.id, data.novoNome);
+                            }
+                            
+                            // 3. Se o modal de ajuste de estoque estiver aberto para este produto, atualiza o título
+                            if (_stockAdjustmentModal && !_stockAdjustmentModal.classList.contains('hidden') && String(_stockAdjustmentModal.dataset.productId) === String(data.id)) {
+                                _stockAdjustmentProductInfo.innerHTML = `<strong>Produto:</strong> ${data.novoNome} (Cód: ${data.codigo || 'N/A'})`;
+                            }
+
+                            // 4. Atualiza na tabela de estoque se estiver visível
+                            if (typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.updateProductNameInTable === 'function') {
+                                EstoqueApp.updateProductNameInTable(data.codigo, data.novoNome);
+                            }
+
+                            // 5. Atualiza na tabela de saída se estiver visível
+                            if (typeof SaidaItens !== 'undefined' && typeof SaidaItens.updateProductNameInTable === 'function') {
+                                SaidaItens.updateProductNameInTable(data.codigo, data.novoNome);
+                            }
+                        }
+                    });
+
+                } catch (error) {
+                    console.error('[WebSocket] Erro ao inicializar Socket.io:', error);
+                }
+            }
+            let _reportState = {
+                sortColumn: 'descricao',
+                sortDirection: 'asc',
+                isIntelligentMode: false
+            };
+
+
+
+
+            let _reportQuantities = new Map();
+            let _currentModalFabricaOrdersForPrint = [];
+
+            let _saidaReportQuantities = new Map();
+
+            // Estado da tabela de pedidos
+            let _ordersTableState = {
+                searchTerm: '',
+                sortColumn: 'descricao',
+                sortDirection: 'asc',
+                selectedType: 'terceiros',
+                statusFilters: new Set()
+            };
+
+            // ATUALIZADO: Estado da tabela de NFe com novos filtros
+            let _nfeTableState = {
+                sortColumn: 'data_de_emissao',
+                sortDirection: 'desc',
+                currentStoreFilter: 'todos', // 'todos', 'bling', 'mercado_livre', etc.
+                conferenceStatusFilter: 'todos', // 'todos', 'conferidas', 'nao_conferidas'
+                isInitialView: true,
+                filters: {
+                    startDate: null,
+                    endDate: null
+                },
+                currentDateFilterValue: 'all'
+            };
+
+
+
+            let _itemsToPrint = [];
+            let _currentPrintModalType = '';
+
+            // --- REFERÊNCIAS PRIVADAS A ELEMENTOS DO DOM ---
+            let _navPesquisar, _navEstoque, _navGerenciarSaida, _navDashboards, _navAtendimento;
+            let _refreshButton, _loadingOverlay;
+            let _globalFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer;
+            let _product_list_container, _product_details_container, _details_placeholder, _product_details, _requisitionOverviewCardsContainer, _saidaOverviewCards, _ordersTableTitle, _ordersTableContent, _noOrdersMessage, _noOrdersMessageModal, _ordersSearchInput;
+            let _saidaActionsContainer, _selectedSaidaItemsCount, _clearSaidaSelectionBtn, _viewSaidasBtn, _createSaidaBtn;
+            let _ordersTableActionsMenuContainer, _ordersTableActionsButton, _ordersTableActionsDropdown, _ordersTableActionPrintGeneric, _ordersTableActionPrintList, _ordersTableActionPrintSolicitation, _ordersTableActionExcel;
+            let _ordersFilterMenuContainer, _ordersFilterButton, _ordersFilterButtonLabel, _ordersFilterDropdown, _ordersStatusCheckboxesContainer;
+            let _clearGlobalSearchBtn, _clearOrdersSearchBtn; // NOVO: Botões para limpar busca
+            let _nfeOverviewCardsContainer, _noNFeMessageOverview, _nfeFilterBar, _nfeStartDateInput, _nfeEndDateInput, _nfeClearFiltersBtn, _nfeDashboardGrid, _nfeDiagnosticTableContainer;
+            let _orderDetailsModal, _closeModalBtn, _modalOrderTitle, _modalOrderContent;
+            let _messageModal, _messageModalTitle, _messageModalContent, _messageModalOkBtn, _closeMessageModalBtn;
+            let _reportActionBar, _reportLaunchTerceirosBtn, _reportLaunchFabricaBtn, _reportBackBtn, _pageReportContent, _reportActionsMenuContainer, _reportActionsButton, _reportActionsDropdown, _reportActionPrintList, _reportActionPrintReq, _reportActionExcel;
+            let _printTableModal, _printModalTitle, _printModalContent, _cancelPrintBtn, _confirmPrintBtn;
+            let _confirmationModal, _confirmationModalTitle, _confirmationModalContent, _confirmYesBtn, _confirmNoBtn, _printArea;
+            let _terceirosRequisitionModal, _closeTerceirosReqModalBtn, _terceirosReqModalMessage, _terceirosRequisitionCodeInput, _confirmTerceirosReqBtn, _cancelTerceirosReqBtn; // NOVO
+            let _terceirosOrdersModal, _closeTerceirosOrdersModalBtn;
+            let _nfeDetailsModal, _closeNFeModalBtn, _nfeModalTitle, _printNFeModalTableBtn, _nfeModalSearchInput, _nfeModalTableContent, _noNFeMessageModal;
+            let _browserPrintFabricaModal, _browserPrintFabricaContent, _closeBrowserPrintFabricaModalBtn;
+            let _customProductTooltip;
+            let _viewRequisitionsBtn;
+            let _requisitionActionBar, _requisitionBackBtn, _saidaActionBar, _saidaBackBtn, _saidaReportActionBar, _saidaReportBackBtn, _launchSaidaGarantiaBtn, _launchSaidaFabricaBtn, _pageSaidaReportContent;
+            let _currentFilteredOrderItems = []; // NOVO: Armazena os itens filtrados e ordenados da tabela de pedidos
+            let _clearSelectionBtn;
+            let _nfeObservationModal, _nfeObservationModalInfo, _nfeObservationHistory, _nfeObservationTextarea, _saveNfeObservationBtn, _cancelNfeObservationBtn, _nfeObservationCharCount; // Modal de Observação NFe
+            let _requisitionObservationModal, _requisitionObservationModalInfo, _requisitionObservationHistory, _requisitionObservationTextarea, _saveRequisitionObservationBtn, _cancelRequisitionObservationBtn, _requisitionObservationCharCount; // Modal de Observação Requisição
+            let _stockAdjustmentModal, _closeStockAdjustmentModalBtn, _stockAdjustmentProductInfo, _stockAdjustmentCurrentStock, _stockAdjustmentNewQuantity, _stockAdjustmentReason, _confirmStockAdjustmentBtn, _cancelStockAdjustmentBtn; // NOVO: Modal de Ajuste de Estoque
+            let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageSaidaReport, _pageReport, _pageGerenciarSaida, _pageDashboards, _pageAtendimento;
+            let _productReportModal, _openProductReportModalBtn, _closeProductReportModalBtn, _cancelProductReportBtn, _generateProductReportBtn;
+            let _productNameEditModal, _closeProductNameEditModalBtn, _productNameEditInfo, _productNameEditInput, _productNameEditLoading, _productNameEditSuccess, _cancelProductNameEditBtn, _confirmProductNameEditBtn;
+            let _productLocationEditModal, _closeProductLocationEditModalBtn, _productLocationEditInfo, _productLocationEditInput, _productLocationEditLoading, _productLocationEditSuccess, _cancelProductLocationEditBtn, _confirmProductLocationEditBtn;
+            let _productCodeEditModal, _closeProductCodeEditModalBtn, _productCodeEditInfo, _productCodeEditInput, _productCodeEditLoading, _productCodeEditSuccess, _cancelProductCodeEditBtn, _confirmProductCodeEditBtn;
+
+            // --- FUNÇÕES DE UTILIDADE PRIVADAS ---
+/**
+* NOVO: Função genérica para exportar dados para um arquivo CSV.
+ * @param {string} filename - O nome do arquivo a ser baixado (ex: "relatorio.csv").
+ * @param {string[]} headers - Um array com os nomes das colunas.
+ * @param {Array<string[]>} data - Um array de arrays, onde cada array interno representa uma linha.
+ */
+ function _exportToCsv(filename, headers, data) {
+    // Monta o conteúdo do CSV, começando pelos cabeçalhos
+    let csvContent = headers.join(";") + "\r\n";
+
+    // Adiciona cada linha de dados
+    data.forEach(rowArray => {
+        // Função para escapar campos que contêm aspas ou ponto e vírgula
+        const escapeCSV = (field) => {
+            if (field === null || field === undefined) return '""';
+            let str = String(field);
+            // Se o campo contém aspas, ponto-e-vírgula ou quebra de linha, envolve com aspas duplas
+            if (str.search(/("|;|\\n)/g) >= 0) {
+                str = `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        };
+        let row = rowArray.map(escapeCSV).join(";");
+        csvContent += row + "\r\n";
+    });
+
+    // Cria um Blob com o conteúdo CSV (com BOM para garantir a codificação UTF-8 correta no Excel)
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+
+    if (link.download !== undefined) { // Checa se o navegador suporta o atributo download
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+/**
+ * NOVO: Coleta as configurações do modal, filtra os dados e gera o relatório CSV de produtos.
+ */
+ function _generateProductReport() {
+    // 1. Coletar filtros de tipo de item (códigos que iniciam com 4, 5, 6, 7)
+    const selectedTypes = Array.from(document.querySelectorAll('.product-report-type-filter:checked'))
+                               .map(cb => cb.value);
+
+    if (selectedTypes.length === 0) {
+        _showMessageModal("Seleção Necessária", "Por favor, selecione pelo menos um tipo de item para gerar o relatório.");
+        return;
+    }
+
+    // 2. Coletar colunas selecionadas
+    const selectedColumns = Array.from(document.querySelectorAll('.product-report-column-select:checked'))
+                                 .map(cb => ({
+                                     key: cb.value,
+                                     label: cb.parentElement.querySelector('span').textContent
+                                 }));
+    
+    if (selectedColumns.length === 0) {
+        _showMessageModal("Seleção Necessária", "Por favor, selecione pelo menos uma coluna para incluir no relatório.");
+        return;
+    }
+
+    // 3. Filtrar os produtos com base nos tipos selecionados
+    const filteredProducts = _allProducts.filter(product => {
+        if (!product.codigo) return false;
+        // Verifica se o código do produto começa com algum dos tipos selecionados
+        return selectedTypes.some(type => product.codigo.startsWith(type));
+    });
+
+    if (filteredProducts.length === 0) {
+        _showMessageModal("Nenhum Resultado", "Nenhum produto encontrado com os tipos selecionados.");
+        return;
+    }
+    console.log("--- DADOS PARA O RELATÓRIO (DEPURAÇÃO) ---");
+    console.log(`Total de produtos filtrados: ${filteredProducts.length}`);
+    console.log("Amostra de alguns produtos filtrados (verifique as colunas 'estoque' e 'vendas_mes_atual'):");
+    // Usamos console.table para uma visualização clara
+    console.table(filteredProducts.slice(0, 10).map(p => ({
+        codigo: p.codigo,
+        descricao: p.descricao,
+        estoque: p.estoque,
+        vendas_mes_atual: p.vendas_mes_atual
+    })));
+    console.log("-------------------------------------------");
+  
+  // 4. Preparar os dados para o CSV
+const headers = selectedColumns.map(col => col.label);
+const data = filteredProducts.map(product => {
+    return selectedColumns.map(col => {
+        const key = col.key;
+        // CORREÇÃO: Trata 'null' e 'undefined' como um campo vazio, em vez de 0.
+        // Isso evita que estoque de serviços apareça como '0'.
+        const value = product[key];
+        return (value === null || value === undefined) ? '' : value;
+    });
+});
+
+
+    // 5. Chamar a função de exportação
+    _exportToCsv("relatorio_de_produtos.csv", headers, data);
+
+    // 6. Fechar o modal e dar feedback
+    if (_productReportModal) _productReportModal.classList.add('hidden');
+    _showMessageModal("Sucesso", "O relatório foi gerado e o download deve começar em breve.");
+}
+
+            /**
+             * NOVO: Cria uma pílula de status visual para a tabela de pedidos.
+             * @param {string} type - O tipo de status ('ok', 'pending', 'overdue').
+             * @param {string} text - O texto a ser exibido na pílula.
+             * @returns {string} O HTML da pílula.
+             */
+            function _createOrderStatusPill(type, text) {
+                const styles = {
+                    ok: 'bg-green-100 text-green-800',
+                    pending: 'bg-yellow-100 text-yellow-800',
+                    overdue: 'bg-red-100 text-red-800',
+                    indefinido: 'bg-gray-100 text-gray-800'
+                };
+                const pillClass = styles[type] || styles['indefinido'];
+                return `<span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${pillClass}">${text}</span>`;
+            }
+
+            /**
+             * Converte uma string de data no formato dd/mm/yyyy para um objeto Date.
+             * @param {string} dateString A data no formato "dd/mm/yyyy".
+             * @returns {Date|null} O objeto Date ou null se o formato for inválido.
+             */
+            function _parsePtBrDate(dateString) {
+                if (!dateString || typeof dateString !== 'string') return null;
+
+                // Primeiro, tenta analisar o formato dd/mm/yyyy (ou dd/mm/yy)
+                if (dateString.includes('/')) {
+                    const parts = dateString.split('/');
+                    if (parts.length === 3) {
+                        const day = parseInt(parts[0], 10);
+                        const month = parseInt(parts[1], 10) - 1; // Mês é base 0 em JS
+                        const year = parseInt(parts[2], 10);
+                        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                            const fullYear = year < 100 ? 2000 + year : year;
+                            const date = new Date(fullYear, month, day);
+                            if (!isNaN(date.getTime())) return date;
+                        }
+                    }
+                }
+
+                // Se não for o formato acima, tenta analisar diretamente (lida com ISO 8601)
+                const date = new Date(dateString);
+                return !isNaN(date.getTime()) ? date : null;
+            }
+
+            /**
+             * Normaliza uma string, removendo acentos e convertendo para minúsculas.
+             * @param {string} str A string a ser normalizada.
+             * @returns {string} A string normalizada.
+             */
+            function _normalizeString(str) {
+                if (!str) return '';
+                return str
+                    .toString()
+                    .normalize('NFD') // Separa acentos dos caracteres base
+                    .replace(/[\u0300-\u036f]/g, '') // Remove os acentos
+                    .toLowerCase(); // Converte para minúsculas
+            }
+
+            function _showMessageModal(title, message) {
+                _messageModalTitle.textContent = title;
+                _messageModalContent.innerHTML = message;
+                _messageModal.classList.remove('hidden');
+            }
+
+            function _showConfirmationModal(title, message) {
+                return new Promise((resolve) => {
+                    if (_confirmationModalTitle) _confirmationModalTitle.textContent = title;
+                    if (_confirmationModalContent) _confirmationModalContent.innerHTML = message;
+                    if (_confirmationModal) _confirmationModal.classList.remove('hidden');
+
+                    const onConfirm = () => {
+                        if (_confirmYesBtn) _confirmYesBtn.removeEventListener('click', onConfirm);
+                        if (_confirmNoBtn) _confirmNoBtn.removeEventListener('click', onCancel);
+                        if (_confirmationModal) _confirmationModal.classList.add('hidden');
+                        resolve(true);
+                    };
+
+                    const onCancel = () => {
+                        if (_confirmYesBtn) _confirmYesBtn.removeEventListener('click', onConfirm);
+                        if (_confirmNoBtn) _confirmNoBtn.removeEventListener('click', onCancel);
+                        if (_confirmationModal) _confirmationModal.classList.add('hidden');
+                        resolve(false);
+                    };
+
+                    if (_confirmYesBtn) _confirmYesBtn.addEventListener('click', onConfirm, { once: true });
+                    if (_confirmNoBtn) _confirmNoBtn.addEventListener('click', onCancel, { once: true });
+                });
+            }
+
+            /**
+             * Mostra um tooltip com a imagem e/ou descrição completa do produto.
+             * @param {MouseEvent} event - O evento do mouse (mouseover).
+             */
+            function _showProductTooltip(event) {
+                const targetElement = event.target;
+                let imageUrl = '';
+                let fullDescription = '';
+
+                // Determina a origem do hover e obtém os dados
+                if (targetElement.classList.contains('product-list-item-img')) {
+                    imageUrl = targetElement.dataset.imageUrl;
+                } else if (targetElement.closest('.product-description-cell')) {
+                    const cell = targetElement.closest('.product-description-cell');
+                    imageUrl = cell.dataset.imageUrl;
+                    fullDescription = cell.dataset.fullDescription;
+                } else {
+                    return; // Não é um alvo de hover que nos interessa
+                }
+
+                const hasImage = imageUrl && !imageUrl.includes('placehold.co');
+                const hasDescription = fullDescription && fullDescription !== 'N/A';
+
+                if (!hasImage && !hasDescription) return;
+
+                if (_customProductTooltip) {
+                    let tooltipContent = '<div class="flex flex-col items-center p-2 bg-white rounded-lg shadow-xl border border-gray-200 max-w-sm">';
+                    if (hasDescription) {
+                        // Movido para cima: A descrição agora aparece primeiro, com uma margem inferior.
+                        tooltipContent += `<p class="text-sm font-semibold text-gray-800 text-center break-words mb-2">${fullDescription}</p>`;
+                    }
+                    if (hasImage) {
+                        // A imagem agora aparece abaixo da descrição.
+                        tooltipContent += `<img src="${imageUrl}" alt="Pré-visualização" class="max-w-xs max-h-xs rounded-md">`;
+                    }
+                    tooltipContent += '</div>';
+
+                    _customProductTooltip.innerHTML = tooltipContent;
+                    positionTooltip(event, _customProductTooltip); // Use the imported positionTooltip utility
+                }
+            }
+
+
+            /**
+             * Esconde o tooltip do produto.
+             */
+            function _hideProductTooltip() {
+                if (_customProductTooltip) {
+                    _customProductTooltip.style.opacity = '0';
+                    // Usa um timeout para permitir que a transição de fade-out termine antes de esconder o elemento
+                    setTimeout(() => {
+                        if (_customProductTooltip.style.opacity === '0') {
+                            _customProductTooltip.classList.add('hidden');
+                            _customProductTooltip.innerHTML = ''; // Limpa o conteúdo
+                        }
+                    }, 200);
+                }
+            }
+
+            /**
+             * NOVO: Mostra um tooltip com os itens de uma Nota Fiscal.
+             * @param {MouseEvent} event - O evento do mouse (mouseover).
+             */
+            function _showNfeItemsTooltip(event) {
+                const targetElement = event.target.closest('.nfe-items-tooltip-trigger');
+                if (!targetElement || !_customProductTooltip) return;
+
+                const itemsString = targetElement.dataset.itens;
+                if (!itemsString || itemsString === "undefined") return;
+
+                try {
+                    const items = itemsString
+                        .replace(/[()]/g, '') // Remove parênteses
+                        .split(';') // Divide em itens: "codigo, qtd, valor"
+                        .filter(s => s.trim() !== '')
+                        .map(itemStr => {
+                            const parts = itemStr.split(',');
+                            const codigo = parts[0]?.trim();
+                            // Busca a descrição do produto na lista global
+                            const product = _allProducts.find(p => p.codigo === codigo);
+                            return {
+                                codigo: codigo,
+                                descricao: product ? product.descricao : 'Produto não encontrado',
+                                quantidade: parseFloat(parts[1]?.trim() || 0),
+                                valor: parseFloat(parts[2]?.trim() || 0)
+                            };
+                        });
+
+                    if (items.length === 0) return;
+
+                    const valorFrete = parseFloat(targetElement.dataset.frete || 0);
+                    const valorTotalItens = items.reduce((sum, item) => sum + (item.valor * item.quantidade), 0);
+                    const valorTotalNota = valorTotalItens + valorFrete;
+
+                    let tooltipContent = `<div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 max-w-md"><h4 class="font-bold text-center text-sm mb-2 pb-1 border-b">Itens da Nota Fiscal</h4><ul class="space-y-1 text-xs">`;
+                    items.forEach(item => {
+                        tooltipContent += `<li class="flex justify-between items-center"><span class="text-gray-700">${item.quantidade}x ${item.descricao} (${item.codigo})</span><span class="font-semibold text-gray-800 ml-4">${item.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></li>`;
+                    });
+                    tooltipContent += `</ul>`;
+
+                    // NOVO: Adiciona o rodapé com os totais
+                    tooltipContent += `
+                    <div class="mt-2 pt-2 border-t border-gray-200 text-xs space-y-1">
+                        <div class="flex justify-between"><span class="text-gray-600">Subtotal Itens:</span><span class="font-medium text-gray-800">${valorTotalItens.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-600">Frete:</span><span class="font-medium text-gray-800">${valorFrete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                        <div class="flex justify-between"><span class="font-bold text-gray-900">Total da Nota:</span><span class="font-bold text-gray-900">${valorTotalNota.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                    </div>
+                `;
+
+                    tooltipContent += `</div>`;
+                    _customProductTooltip.innerHTML = tooltipContent;
+                    positionTooltip(event, _customProductTooltip);
+                } catch (e) {
+                    console.error("Erro ao processar itens da NFe para tooltip:", e);
+                    _hideProductTooltip();
+                }
+            }
+
+
+
+            /**
+             * Mostra um tooltip com a observação da NFe, posicionado acima do cursor.
+             * @param {MouseEvent} event - O evento do mouse (mouseover).
+             */
+            function _showObservationTooltip(event) {
+                // CORREÇÃO: O alvo agora é o ícone de exclamação, não o botão antigo.
+                const targetElement = event.target.closest('.nfe-observation-status-icon');
+                if (!targetElement || !_customProductTooltip) return;
+
+                let observationText = "Nenhuma Observação";
+                try {
+                    const observationData = JSON.parse(targetElement.dataset.observation || '[]');
+                    if (Array.isArray(observationData) && observationData.length > 0) {
+                        // Mostra a observação mais recente no tooltip
+                        observationText = observationData[observationData.length - 1];
+                    }
+                } catch (e) { /* Ignora erros de parse, mantém o padrão */ }
+
+                // Define o conteúdo do tooltip com o estilo do tooltip de produto
+                _customProductTooltip.innerHTML = `<div class="p-2 bg-white rounded-lg shadow-xl border border-gray-400 max-w-sm"><p class="text-sm font-semibold text-gray-800 text-center break-words">${observationText}</p></div>`;
+
+                // Torna o tooltip visível, mas fora da tela, para medir suas dimensões
+                _customProductTooltip.style.visibility = 'hidden';
+                _customProductTooltip.classList.remove('hidden');
+
+                const tooltipHeight = _customProductTooltip.offsetHeight;
+                const tooltipWidth = _customProductTooltip.offsetWidth;
+
+                // Calcula a posição para ficar acima e centralizado no cursor
+                let top = event.pageY - tooltipHeight - 15; // 15px de espaço acima do cursor
+                let left = event.pageX - (tooltipWidth / 2);
+
+                // Ajusta a posição para não sair da tela
+                if (top < window.scrollY) top = event.pageY + 25; // Se for sair pelo topo, mostra abaixo
+                if (left < window.scrollX) left = window.scrollX + 5;
+                if (left + tooltipWidth > window.innerWidth + window.scrollX) left = window.innerWidth + window.scrollX - tooltipWidth - 5;
+
+                _customProductTooltip.style.top = `${top}px`;
+                _customProductTooltip.style.left = `${left}px`;
+
+                _customProductTooltip.style.visibility = 'visible';
+                _customProductTooltip.style.opacity = '1';
+            }
+
+
+
+            /**
+     * ATUALIZADO: Encontra um item de requisição específico em uma lista de pedidos específica.
+     * @param {string} orderCode - O código da requisição.
+     * @param {string} codigoService - O código do produto (service).
+     * @param {string} requisitionType - O tipo da lista onde procurar ('terceiros', 'fabrica', 'saidas-garantia', etc.).
+     * @returns {object|null} O objeto do item ou null se não for encontrado.
+     */
+            function _findRequisitionItem(orderCode, codigoService, requisitionType) {
+                let orderList;
+                // 1. Seleciona a lista correta com base no tipo para otimizar a busca.
+                switch (requisitionType) {
+                    case 'terceiros': orderList = _allOrdersTerceiros; break;
+                    case 'fabrica': orderList = _allOrdersFabrica; break;
+                    case 'saidas-fabrica': orderList = _allSaidasFabrica; break;
+                    case 'saidas-garantia': orderList = _allSaidasGarantia; break;
+                    default:
+                        // Como fallback, se o tipo for desconhecido, busca em todas.
+                        console.warn(`Tipo de requisição desconhecido: "${requisitionType}". Buscando em todas as listas.`);
+                        orderList = [..._allOrdersTerceiros, ..._allOrdersFabrica, ..._allSaidasFabrica, ..._allSaidasGarantia];
+                        break;
+                }
+
+                const trimmedOrderCode = String(orderCode || '').trim();
+                const trimmedCodigoService = String(codigoService || '').trim();
+
+                // 2. Encontra o pedido (a requisição) dentro da lista específica.
+                const order = orderList.find(o => String(o.orderCode || '').trim() === trimmedOrderCode);
+                if (!order) return null; // Se não encontrar a requisição, retorna nulo.
+
+                // 3. Encontra o item dentro dos 'rawItems' daquela requisição.
+                return order.rawItems.find(i => String(i.codigoService || '').trim() === trimmedCodigoService);
+            }
+
+
+            // INÍCIO DO BLOCO PARA ADICIONAR
+            function _renderObservationChat(observations) {
+                if (!_nfeObservationHistory) return;
+                if (!observations || !Array.isArray(observations) || observations.length === 0) {
+                    _nfeObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
+                    return;
+                }
+                const chatHtml = observations.map(obsString => {
+                    const parts = obsString.split(' - ');
+                    const timestamp = parts.length > 1 ? parts[0] : '';
+                    const message = parts.length > 1 ? parts.slice(1).join(' - ') : obsString;
+                    return `
+        <div class="p-3 rounded-lg bg-blue-100 text-gray-800 max-w-md self-start">
+            <p class="text-sm whitespace-pre-wrap">${message}</p>
+            <div class="flex items-center justify-end mt-1">
+                <span class="text-xs text-gray-500 mr-1">${timestamp}</span>
+                <span title="Salvo"><svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></span>
+            </div>
+        </div>`;
+                }).join('');
+                _nfeObservationHistory.innerHTML = chatHtml;
+                _nfeObservationHistory.scrollTop = _nfeObservationHistory.scrollHeight;
+            }
+
+            function _updateObservationCharCount() {
+                if (!_nfeObservationTextarea || !_nfeObservationCharCount) return;
+                const currentLength = _nfeObservationTextarea.value.length;
+                const maxLength = _nfeObservationTextarea.maxLength;
+                _nfeObservationCharCount.textContent = currentLength;
+                const counterContainer = _nfeObservationCharCount.parentElement;
+                if (currentLength >= maxLength) {
+                    counterContainer.classList.add('text-red-600', 'font-bold');
+                } else {
+                    counterContainer.classList.remove('text-red-600', 'font-bold');
+                }
+            }
+
+            function _openNfeObservationModal(nfeId) {
+                const nfe = _allNFeData.find(n => String(n.id_nota) === String(nfeId));
+                if (!nfe) {
+                    _showMessageModal("Erro", "Nota Fiscal não encontrada.");
+                    return;
+                }
+                if (_nfeObservationModal) {
+                    _nfeObservationModal.dataset.nfeId = nfeId;
+                    _nfeObservationModalInfo.innerHTML = `Editando observação para a NFe Nº: <a href="${nfe.link_danfe || '#'}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-bold">${nfe.numero_da_nota || 'N/A'}</a>`;
+                    _renderObservationChat(nfe.observacao);
+                    _nfeObservationTextarea.value = '';
+                    _updateObservationCharCount();
+                    _nfeObservationModal.classList.remove('hidden');
+                    _nfeObservationTextarea.focus();
+                }
+            }
+
+            async function _saveNfeObservation() {
+                const nfeId = _nfeObservationModal.dataset.nfeId;
+                const newObservation = _nfeObservationTextarea.value;
+                if (!nfeId || !newObservation.trim()) return;
+
+                const nfeToUpdate = _allNFeData.find(nfe => String(nfe.id_nota) === String(nfeId));
+                if (!nfeToUpdate) {
+                    _showMessageModal("Erro", "Nota Fiscal não encontrada para salvar a observação.");
+                    return;
+                }
+
+                _saveNfeObservationBtn.disabled = true;
+                _nfeObservationTextarea.value = '';
+                _updateObservationCharCount();
+
+                try {
+                    const payload = { id_nota: nfeId, observacao: newObservation };
+                    const response = await fetch(API_URLS.NFE_OBSERVATION, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
+
+                    const result = await response.json();
+                    if (!result.data || !result.data.newObservation) { throw new Error("A resposta da API não retornou a nova observação formatada."); }
+
+                    const newHistoryAsString = result.data.newObservation;
+                    nfeToUpdate.observacao = newHistoryAsString.split('\\n').filter(line => line.trim() !== '');
+                    _renderObservationChat(nfeToUpdate.observacao);
+
+                    if (typeof DashboardApp !== 'undefined') {
+                        DashboardApp.updateNfeObservationStatus(nfeId, nfeToUpdate.observacao);
+                    }
+
+                } catch (error) {
+                    _showMessageModal("Erro ao Salvar", `Não foi possível salvar a observação: ${error.message}`);
+                    _nfeObservationTextarea.value = newObservation;
+                    _updateObservationCharCount();
+                } finally {
+                    _saveNfeObservationBtn.disabled = false;
+                }
+            }
+
+
+            // NOVO: Adicionando de volta a lógica de observação de NFe
+            function _renderObservationChat(observations) {
+                if (!_nfeObservationHistory) return;
+                if (!observations || !Array.isArray(observations) || observations.length === 0) {
+                    _nfeObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
+                    return;
+                }
+                const chatHtml = observations.map(obsString => {
+                    const parts = obsString.split(' - ');
+                    const timestamp = parts.length > 1 ? parts[0] : '';
+                    const message = parts.length > 1 ? parts.slice(1).join(' - ') : obsString;
+                    return `
+                    <div class="p-3 rounded-lg bg-blue-100 text-gray-800 max-w-md self-start">
+                        <p class="text-sm whitespace-pre-wrap">${message}</p>
+                        <div class="flex items-center justify-end mt-1">
+                            <span class="text-xs text-gray-500 mr-1">${timestamp}</span>
+                            <span title="Salvo"><svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></span>
+                        </div>
+                    </div>`;
+                }).join('');
+                _nfeObservationHistory.innerHTML = chatHtml;
+                _nfeObservationHistory.scrollTop = _nfeObservationHistory.scrollHeight;
+            }
+
+            function _updateObservationCharCount() {
+                if (!_nfeObservationTextarea || !_nfeObservationCharCount) return;
+                const currentLength = _nfeObservationTextarea.value.length;
+                const maxLength = _nfeObservationTextarea.maxLength;
+                _nfeObservationCharCount.textContent = currentLength;
+                const counterContainer = _nfeObservationCharCount.parentElement;
+                if (currentLength >= maxLength) {
+                    counterContainer.classList.add('text-red-600', 'font-bold');
+                } else {
+                    counterContainer.classList.remove('text-red-600', 'font-bold');
+                }
+            }
+
+            function _openNfeObservationModal(nfeId) {
+                const nfe = _allNFeData.find(n => String(n.id_nota) === String(nfeId));
+                if (!nfe) {
+                    _showMessageModal("Erro", "Nota Fiscal não encontrada.");
+                    return;
+                }
+                if (_nfeObservationModal) {
+                    _nfeObservationModal.dataset.nfeId = nfeId;
+                    _nfeObservationModalInfo.innerHTML = `Editando observação para a NFe Nº: <a href="${nfe.link_danfe || '#'}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-bold">${nfe.numero_da_nota || 'N/A'}</a>`;
+                    _renderObservationChat(nfe.observacao);
+                    _nfeObservationTextarea.value = '';
+                    _updateObservationCharCount();
+                    _nfeObservationModal.classList.remove('hidden');
+                    _nfeObservationTextarea.focus();
+                }
+            }
+
+            async function _saveNfeObservation() {
+                const nfeId = _nfeObservationModal.dataset.nfeId;
+                const newObservation = _nfeObservationTextarea.value;
+                if (!nfeId || !newObservation.trim()) return;
+
+                const nfeToUpdate = _allNFeData.find(nfe => String(nfe.id_nota) === String(nfeId));
+                if (!nfeToUpdate) {
+                    _showMessageModal("Erro", "Nota Fiscal não encontrada para salvar a observação.");
+                    return;
+                }
+
+                _saveNfeObservationBtn.disabled = true;
+                _nfeObservationTextarea.value = '';
+                _updateObservationCharCount();
+
+                try {
+                    const payload = { id_nota: nfeId, observacao: newObservation };
+                    const response = await fetch(API_URLS.NFE_OBSERVATION, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
+
+                    const result = await response.json();
+                    if (!result.data || !result.data.newObservation) { throw new Error("A resposta da API não retornou a nova observação formatada."); }
+
+                    const newHistoryAsString = result.data.newObservation;
+                    nfeToUpdate.observacao = newHistoryAsString.split('\\n').filter(line => line.trim() !== '');
+                    _renderObservationChat(nfeToUpdate.observacao);
+
+                    // AVISO: A atualização do ícone na tabela agora precisa ser feita pelo módulo do Dashboard
+                    // Vamos passar a responsabilidade para ele no próximo passo.
+                    if (typeof DashboardApp !== 'undefined') {
+                        DashboardApp.updateNfeObservationStatus(nfeId, nfeToUpdate.observacao);
+                    }
+
+                } catch (error) {
+                    _showMessageModal("Erro ao Salvar", `Não foi possível salvar a observação: ${error.message}`);
+                    _nfeObservationTextarea.value = newObservation;
+                    _updateObservationCharCount();
+                } finally {
+                    _saveNfeObservationBtn.disabled = false;
+                }
+            }
+
+            // --- Fim das funções de observação ---
+
+
+            /**
+             * Renderiza o histórico de observações de um item de requisição.
+             * @param {string[]} observations - Array de strings de observação.
+             */
+            function _renderRequisitionObservationChat(observations) {
+                if (!_requisitionObservationHistory) return;
+
+                if (!observations || !Array.isArray(observations) || observations.length === 0) {
+                    _requisitionObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
+                    return;
+                }
+
+                const chatHtml = observations.map(obsString => {
+                    const parts = obsString.split(' - ');
+                    const timestamp = parts.length > 1 ? parts[0] : '';
+                    const message = parts.length > 1 ? parts.slice(1).join(' - ') : obsString;
+
+                    return `
+                    <div class="p-3 rounded-lg bg-purple-100 text-gray-800 max-w-md self-start">
+                        <p class="text-sm whitespace-pre-wrap">${message}</p>
+                        <div class="flex items-center justify-end mt-1">
+                            <span class="text-xs text-gray-500 mr-1">${timestamp}</span>
+                            <span title="Salvo">
+                                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            </span>
+                        </div>
+                    </div>
+                `;
+                }).join('');
+
+                _requisitionObservationHistory.innerHTML = chatHtml;
+                _requisitionObservationHistory.scrollTop = _requisitionObservationHistory.scrollHeight;
+            }
+
+            /**
+             * Abre o modal para visualizar/editar a observação de um item de requisição.
+             * @param {string} orderCode - O código da requisição.
+             * @param {string} codigoService - O código do produto.
+             */
+            function _openRequisitionObservationModal(orderCode, codigoService) {
+                const item = _findRequisitionItem(orderCode, codigoService);
+                if (!item) {
+                    _showMessageModal("Erro", "Item de requisição não encontrado.");
+                    return;
+                }
+
+                if (_requisitionObservationModal) {
+                    _requisitionObservationModal.dataset.orderCode = orderCode;
+                    _requisitionObservationModal.dataset.codigoService = codigoService;
+                    _requisitionObservationModalInfo.innerHTML = `Observações para o item <b>${item.descricao}</b> (${item.codigoService}) na Requisição <b>${orderCode}</b>`;
+                    _renderRequisitionObservationChat(item.observacao);
+                    _requisitionObservationTextarea.value = '';
+                    _updateRequisitionObservationCharCount();
+                    _requisitionObservationModal.classList.remove('hidden');
+                    _requisitionObservationTextarea.focus();
+                }
+            }
+
+            /**
+             * Salva a observação de um item de requisição.
+             */
+            async function _saveRequisitionObservation() {
+                const orderCode = _requisitionObservationModal.dataset.orderCode;
+                const codigoService = _requisitionObservationModal.dataset.codigoService;
+                const newObservation = _requisitionObservationTextarea.value;
+
+                if (!orderCode || !codigoService || !newObservation.trim()) return;
+
+                const itemToUpdate = _findRequisitionItem(orderCode, codigoService);
+                if (!itemToUpdate) {
+                    _showMessageModal("Erro", "Item de requisição não encontrado para salvar.");
+                    return;
+                }
+
+                _saveRequisitionObservationBtn.disabled = true;
+                _requisitionObservationTextarea.value = '';
+                _updateRequisitionObservationCharCount();
+
+                try {
+                    const payload = {
+                        id_requisicao: orderCode,
+                        codigo_service: codigoService,
+                        observacao: newObservation
+                    };
+
+                    // ATUALIZADO: Determina a URL correta da API com base no tipo de requisição/saída.
+                    const apiUrl = {
+                        'terceiros': API_URLS.TERCEIROS_OBSERVATION,
+                        'fabrica': API_URLS.FABRICA_OBSERVATION,
+                        'saidas-fabrica': API_URLS.SAIDA_FABRICA_OBSERVATION,
+                        'saidas-garantia': API_URLS.SAIDA_GARANTIA_OBSERVATION
+                    }[itemToUpdate.requisitionType];
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`);
+                    }
+
+                    const result = await response.json();
+                    if (!result.data || !result.data.newObservation) {
+                        throw new Error("A resposta da API de requisição não retornou a observação formatada.");
+                    }
+
+                    const newHistoryAsString = result.data.newObservation;
+                    itemToUpdate.observacao = newHistoryAsString.split('\n').filter(line => line.trim() !== '');
+
+                    _renderRequisitionObservationChat(itemToUpdate.observacao);
+
+                    // ATUALIZADO: Atualização direcionada do ícone na tabela, em vez de re-renderizar tudo.
+                    const tableRow = document.querySelector(`.order-item-checkbox[data-order-code="${orderCode}"][data-codigo-service="${codigoService}"]`)?.closest('tr');
+                    if (tableRow) {
+                        const viewBtn = tableRow.querySelector('.view-requisition-observation-btn');
+                        const statusIcon = tableRow.querySelector('.requisition-observation-status-icon');
+                        const newObservationJson = JSON.stringify(itemToUpdate.observacao);
+
+                        if (viewBtn) viewBtn.dataset.observation = newObservationJson;
+
+                        if (statusIcon) {
+                            statusIcon.dataset.observation = newObservationJson;
+                            const svgIcon = statusIcon.querySelector('svg');
+                            if (svgIcon) {
+                                svgIcon.classList.remove('text-gray-400');
+                                svgIcon.classList.add('text-red-500');
+                                statusIcon.title = 'Este item possui observações';
+                            }
+                        }
+                    }
+                } catch (error) {
+                    _showMessageModal("Erro ao Salvar", `Não foi possível salvar a observação: ${error.message}`);
+                    _requisitionObservationTextarea.value = newObservation;
+                    _updateRequisitionObservationCharCount();
+                } finally {
+                    _saveRequisitionObservationBtn.disabled = false;
+                }
+            }
+
+            /**
+             * Atualiza o contador de caracteres para a nova observação da requisição.
+             */
+            function _updateRequisitionObservationCharCount() {
+                if (!_requisitionObservationTextarea || !_requisitionObservationCharCount) return;
+                const currentLength = _requisitionObservationTextarea.value.length;
+                const maxLength = _requisitionObservationTextarea.maxLength;
+                _requisitionObservationCharCount.textContent = currentLength;
+                const counterContainer = _requisitionObservationCharCount.parentElement;
+                if (currentLength >= maxLength) {
+                    counterContainer.classList.add('text-red-600', 'font-bold');
+                } else {
+                    counterContainer.classList.remove('text-red-600', 'font-bold');
+                }
+            }
+
+
+
+            // NOVO: Abre o modal de ajuste de estoque
+            function _openStockAdjustmentModal(productId) {
+                const product = _allProducts.find(p => String(p.id) === String(productId));
+                if (!product) {
+                    _showMessageModal("Erro", "Produto não encontrado para realizar o ajuste.");
+                    return;
+                }
+
+                if (_stockAdjustmentModal) {
+                    _stockAdjustmentModal.dataset.productId = product.id;
+                    _stockAdjustmentProductInfo.innerHTML = `<strong>Produto:</strong> ${product.descricao} (Cód: ${product.codigo})`;
+                    _stockAdjustmentCurrentStock.innerHTML = `<strong>Estoque Atual:</strong> ${product.estoque || 0}`;
+                    _stockAdjustmentNewQuantity.value = '';
+                    _stockAdjustmentModal.classList.remove('hidden');
+                    _stockAdjustmentNewQuantity.focus();
+                }
+            }
+
+            // NOVO: Salva o ajuste de estoque
+            async function _saveStockAdjustment() {
+                const productId = _stockAdjustmentModal.dataset.productId;
+                const newQuantityStr = _stockAdjustmentNewQuantity.value;
+
+                const newQuantity = parseFloat(String(newQuantityStr || '0').replace(',', '.'));
+
+                if (isNaN(newQuantity) || newQuantity < 0) {
+                    _showMessageModal("Valor Inválido", "Por favor, insira uma nova quantidade de estoque válida (número maior ou igual a zero).");
+                    return;
+                }
+
+                const product = _allProducts.find(p => String(p.id) === String(productId));
+                if (!product) {
+                    _showMessageModal("Erro", "Produto não encontrado para salvar o ajuste.");
+                    return;
+                }
+
+                // Pega o nome do usuário do localStorage para adicionar na observação.
+                let userName = 'Usuário Desconhecido';
+                try {
+                    const userInfoString = localStorage.getItem('userInfo');
+                    if (userInfoString) {
+                        const userInfo = JSON.parse(userInfoString);
+                        userName = userInfo.nome || userName;
+                    }
+                } catch (e) { console.error("Erro ao ler nome do usuário para observação:", e); }
+
+                const payload = {
+                    produto: { id: product.id, codigo: product.codigo },
+                    operacaoBling: "B", // "B" para Balanço
+                    quantidadeMovimento: 0, // Não aplicável para balanço
+                    quantidadeFinal: newQuantity,
+                    tipoEntrada: "Balanço", // Tipo para identificar a operação
+                    observacoes: `Ajuste de balanço via sistema por "${userName}"`,
+                    // Dados para a Planilha (não aplicável para balanço, mas mantemos a estrutura)
+                    orderCode: 'BALANCO',
+                    codigoService: product.codigo,
+                    newStatus: 'N/A',
+                    requisitionType: 'balanco',
+                    dataEntrega: new Date().toLocaleDateString('pt-BR'),
+                    diasCorridos: '0'
+                };
+
+                // ATENDENDO AO PEDIDO: Imprime o JSON que será enviado para o backend.
+                console.log('--- JSON do ajuste de estoque enviado para o backend ---');
+                console.log(JSON.stringify(payload, null, 2));
+                console.log('----------------------------------------------------');
+
+                _loadingOverlay.classList.remove('hidden');
+                try {
+                    const response = await fetch(API_URLS.ORDERS_UPDATE, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
+
+                    product.estoque = newQuantity;
+                    _stockAdjustmentModal.classList.add('hidden');
+                    _showMessageModal("Sucesso!", `Estoque do produto <strong>${product.descricao}</strong> ajustado para <strong>${newQuantity}</strong>.`);
+
+                    // ATUALIZADO: Re-renderiza a lista e os detalhes do produto
+                    if (typeof PesquisarProduto !== 'undefined' && PesquisarProduto.renderDetails) {
+                        PesquisarProduto.renderDetails(product);
+                    }
+                } catch (error) {
+                    _showMessageModal("Erro no Ajuste", `Falha ao ajustar o estoque: ${error.message}`);
+                } finally {
+                    _loadingOverlay.classList.add('hidden');
+                }
+            }
+
+            // --- FUNÇÕES DE LÓGICA PRINCIPAL PRIVADAS ---
+            function _showPage(pageId) {
+                _pagePesquisar.classList.add('hidden');
+                _pageEstoque.classList.add('hidden');
+                _pageOverviewSaidas.classList.add('hidden');
+                _pageOverviewRequisitions.classList.add('hidden');
+                _pageSaidaReport.classList.add('hidden');
+                _pageReport.classList.add('hidden');
+                _pageGerenciarSaida.classList.add('hidden');
+                _pageDashboards.classList.add('hidden');
+                _pageAtendimento.classList.add('hidden');
+
+                _navPesquisar.classList.remove('active');
+                _navEstoque.classList.remove('active');
+                _navGerenciarSaida.classList.remove('active');
+                _navDashboards.classList.remove('active');
+                _navAtendimento.classList.remove('active');
+
+
+
+                // Esconde todas as barras de filtro por padrão
+                if (_globalFilterBar) _globalFilterBar.classList.add('hidden');
+
+                if (_nfeFilterBar) _nfeFilterBar.classList.add('hidden'); // Esconde a nova barra
+                if (_reportActionBar) _reportActionBar.classList.add('hidden');
+                if (_requisitionActionBar) _requisitionActionBar.classList.add('hidden'); // Add this line to hide by default
+                if (_saidaReportActionBar) _saidaReportActionBar.classList.add('hidden');
+                if (_saidaActionBar) _saidaActionBar.classList.add('hidden');
+
+                if (pageId === 'pesquisar') {
+                    _pagePesquisar.classList.remove('hidden');
+                    _navPesquisar.classList.add('active');
+                    if (_globalFilterBar) {
+                        _globalFilterBar.classList.remove('hidden');
+                        _globalSearchInput.classList.remove('hidden');
+                        _globalFilterButton.classList.remove('hidden');
+                        _stockActionsContainer.classList.add('hidden'); // Explicitly hide stock actions
+                        _saidaActionsContainer.classList.add('hidden');
+                    }
+                    if (typeof PesquisarProduto !== 'undefined') {
+                        PesquisarProduto.render(_allProducts);
+                    }
+                } else if (pageId === 'estoque') {
+                    _pageEstoque.classList.remove('hidden');
+                    _navEstoque.classList.add('active');
+                    if (_globalFilterBar) {
+                        _globalFilterBar.classList.remove('hidden');
+                        _globalSearchInput.classList.remove('hidden');
+                        _globalFilterButton.classList.remove('hidden');
+                        _stockActionsContainer.classList.remove('hidden'); // Explicitly show stock actions
+                        _saidaActionsContainer.classList.add('hidden');
+                    }
+                    if (typeof EstoqueApp !== 'undefined') {
+                        EstoqueApp.updateSelectedCountDisplay();
+                    }
+                } else if (pageId === 'overview-requisitions') {
+                    _pageOverviewRequisitions.classList.remove('hidden');
+                    if (_requisitionActionBar) _requisitionActionBar.classList.remove('hidden'); // Add this to show the bar
+                    _renderRequisitionOverviewPage();
+                } else if (pageId === 'report') {
+                    _pageReport.classList.remove('hidden');
+                    if (_reportActionBar) _reportActionBar.classList.remove('hidden');
+                } else if (pageId === 'saida-report') {
+                    _pageSaidaReport.classList.remove('hidden');
+                    if (_saidaReportActionBar) _saidaReportActionBar.classList.remove('hidden');
+                } else if (pageId === 'gerenciar-saida') {
+                    // Quando o usuário clica na navegação, ele vê a lista de produtos para selecionar.
+                    // A tela de diagnóstico é uma sub-página.
+                    _pageGerenciarSaida.classList.remove('hidden');
+                    _pageOverviewSaidas.classList.add('hidden');
+                    _pageGerenciarSaida.classList.remove('hidden');
+                    _navGerenciarSaida.classList.add('active');
+                    if (_globalFilterBar) {
+                        _globalFilterBar.classList.remove('hidden');
+                        _globalSearchInput.classList.remove('hidden');
+                        _globalFilterButton.classList.remove('hidden');
+                        _stockActionsContainer.classList.add('hidden');
+                        _saidaActionsContainer.classList.remove('hidden');
+                    }
+                } else if (pageId === 'overview-saidas') {
+                    // Esta é a página de diagnóstico, acessada pelo botão "Ver Saídas".
+                    _pageOverviewSaidas.classList.remove('hidden');
+                    if (_saidaActionBar) _saidaActionBar.classList.remove('hidden');
+                    _renderSaidaOverviewPage();
+                    // SUBSTITUA PELO NOVO BLOCO
+                } else if (pageId === 'dashboards') {
+                    _pageDashboards.classList.remove('hidden');
+                    _navDashboards.classList.add('active');
+                    if (typeof DashboardApp !== 'undefined') {
+                        // Primeiro, garantimos que a configuração foi passada
+                        DashboardApp.init({
+                            allNFeData: _allNFeData,
+                            allLojaIntegradaOrders: _allLojaIntegradaOrders, // DADOS NOVOS
+                            allProducts: _allProducts,
+                            parsePtBrDate: _parsePtBrDate,
+                            showMessageModal: _showMessageModal,
+                            positionTooltip: positionTooltip,
+                            openNfeObservationModal: _openNfeObservationModal,
+                            formatCnpjCpf: formatCnpjCpf
+                        });
+                        // SÓ ENTÃO, mandamos ele começar
+                        DashboardApp.start(_allNFeData, _allLojaIntegradaOrders);
+                    }
+
+                } else if (pageId === 'atendimento') {
+                    _pageAtendimento.classList.remove('hidden');
+                    _navAtendimento.classList.add('active');
+                    if (typeof Atendimento !== 'undefined') {
+                        Atendimento.start(); // Agora sim, chamamos o start AQUI.
+                    }
+                }
+
+                // Se a nova página não for 'atendimento', para o timer do módulo de atendimento
+                if (pageId !== 'atendimento' && typeof Atendimento !== 'undefined') {
+                    Atendimento.stop();
+                }
+                // Se a nova página não for 'dashboards', para o módulo de dashboard
+                if (pageId !== 'dashboards' && typeof DashboardApp !== 'undefined') {
+                    DashboardApp.stop();
+                }
+
+                _applyGlobalFilters();
+            }
+
+            function _processRawOrdersData(rawData, type) {
+                // ATUALIZADO: Validação para o novo formato (array de objetos)
+                if (!Array.isArray(rawData) || (rawData.length > 0 && typeof rawData[0] !== 'object')) {
+                    console.warn(`Estrutura de dados de pedidos inválida (${type}). Esperado um array de objetos. Recebido:`, rawData);
+                    return [];
+                }
+                if (rawData.length === 0) {
+                    return [];
+                }
+
+                // O rawData já é um array de objetos, não precisa mais de mapeamento de cabeçalho.
+                const itemRows = rawData;
+
+                const ordersMap = new Map();
+                itemRows.forEach(row => {
+                    // Acessa as propriedades diretamente do objeto 'row'
+                    const orderCode = row.requisicao;
+                    if (!orderCode) return;
+
+                    if (!ordersMap.has(orderCode)) {
+                        ordersMap.set(orderCode, {
+                            orderCode: orderCode,
+                            dataPedido: row.data_pedido,
+                            totalItems: 0,
+                            totalAtendido: 0,
+                            totalPendente: 0,
+                            rawItems: [],
+                            // itemHeaders não é mais necessário
+                        });
+                    }
+                    const order = ordersMap.get(orderCode);
+                    const itemStatus = (String(row.situacao) || '').toUpperCase().trim();
+
+                    // Adiciona o item ao array de itens brutos do pedido
+                    order.rawItems.push({
+                        orderCode: orderCode,
+                        codigoService: row.codigo_service || '',
+                        codigoMksEquipamentos: row.codigo_mks_equipamentos || '',
+                        descricao: row.descricao || '',
+                        localizacao: row.localizacao || 0,
+                        quantidadePedido: row.quantidade_pedido || 0,
+                        situacao: itemStatus,
+                        dataPedido: row.data_pedido,
+                        dataConclusao: row.data_entrega || null, // ATUALIZADO: Captura a data de entrega
+                        diasCorridosRaw: row.dias_corridos || 0,
+                        observacao: row.observacao || [], // Já vem como array
+                        prazoEntregaRaw: row.prazo_entrega || '',
+                        requisitionType: type
+                    });
+
+                    // Atualiza os contadores do pedido
+                    order.totalItems++;
+                    if (itemStatus === 'OK') {
+
+
+                        order.totalAtendido++;
+                    } else {
+                        order.totalPendente++;
+                    }
+                });
+
+                // Define o status geral de cada pedido
+                return Array.from(ordersMap.values()).map(order => {
+                    if (order.totalItems === 0) order.situacao = 'Sem Itens';
+                    else if (order.totalPendente === 0) order.situacao = 'Atendido';
+                    else if (order.totalAtendido > 0) order.situacao = 'Parcialmente Atendido';
+                    else order.situacao = 'Pendente';
+                    return order;
+                });
+            }
+
+            // NOVO: Processa os dados brutos de SAÍDAS da fábrica
+            function _processRawSaidasData(rawData, type) {
+                if (!Array.isArray(rawData) || (rawData.length > 0 && typeof rawData[0] !== 'object')) {
+                    console.warn(`Estrutura de dados de saídas inválida (${type}). Esperado um array de objetos. Recebido:`, rawData);
+                    return [];
+                }
+                if (rawData.length === 0) return [];
+
+                const saidasMap = new Map();
+                rawData.forEach(row => {
+                    const saidaCode = row.requisicao;
+                    if (!saidaCode) return;
+
+                    if (!saidasMap.has(saidaCode)) {
+                        saidasMap.set(saidaCode, {
+                            orderCode: saidaCode,
+                            dataPedido: row.data_pedido,
+                            totalItems: 0,
+                            totalAtendido: 0,
+                            totalPendente: 0,
+                            rawItems: [],
+                        });
+                    }
+                    const saida = saidasMap.get(saidaCode);
+                    const itemStatus = (String(row.situacao) || '').toUpperCase().trim();
+
+                    saida.rawItems.push({
+                        orderCode: saidaCode,
+                        codigoService: row.codigo_service || '', // CORRIGIDO: Garante que o campo correto seja mapeado.
+                        descricao: row.descricao || '',
+                        localizacao: row.localizacao || 0,
+                        quantidadePedido: row.quantidade || 0, // Mapeia 'quantidade' para 'quantidadePedido'
+                        situacao: itemStatus,
+                        dataPedido: row.data_pedido,
+                        dataConclusao: row.data_envio || null, // Mapeia 'data_envio' para 'dataConclusao'
+                        observacao: row.observacao || [],
+                        responsavel: row.responsavel || '',
+                        requisitionType: type // 'saidas-fabrica'
+                    });
+
+                    saida.totalItems++;
+                    if (itemStatus === 'OK') saida.totalAtendido++; else saida.totalPendente++;
+                });
+                return Array.from(saidasMap.values());
+            }
+
+            async function _fetchData() {
+                console.log('[App] _fetchData: Iniciando busca de dados...');
+                _loadingOverlay.classList.remove('hidden');
+                try {
+                    const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasFabricaRes, saidasGarantiaRes, lojaIntegradaData] = await Promise.all([
+                        fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`, { mode: 'cors' }),
+                        fetch(`${API_URLS.ORDERS_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }),
+                        fetch(`${API_URLS.ORDERS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
+                        fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' }),
+                        fetch(`${API_URLS.SAIDAS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
+                        fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }),
+                        LojaIntegradaApp.fetchOrders() // NOVO: Busca os pedidos da Loja Integrada
+                    ]);
+
+
+                    console.log('[DEBUG] Respostas das APIs recebidas.');
+
+                    if (!productsRes.ok) throw new Error(`Erro na API de Produtos: ${productsRes.statusText}`);
+                    const productsData = await productsRes.json();
+                    console.log('[DEBUG] Dados de Produtos (bruto):', productsData);
+
+
+                    if (productsData.error || !productsData.data) throw new Error(`Erro nos dados de Produtos: ${productsData.message || 'Formato inválido'}`);
+                    _allProducts.length = 0;
+                    Array.prototype.push.apply(_allProducts, productsData.data);
+                    console.log('[DEBUG] _allProducts processado:', _allProducts);
+
+                    if (!ordersTerceirosRes.ok) throw new Error(`Erro na API de Pedidos Terceiros: ${ordersTerceirosRes.statusText}`);
+                    const ordersTerceirosData = await ordersTerceirosRes.json();
+                    console.log('[DEBUG] Dados de Pedidos Terceiros (bruto):', ordersTerceirosData);
+
+                    // --- INÍCIO DO CÓDIGO DE DEPURAÇÃO (CORRIGIDO) ---
+                    try {
+                        if (ordersTerceirosData && ordersTerceirosData.data && Array.isArray(ordersTerceirosData.data)) {
+                            const pendingItems = ordersTerceirosData.data.filter(item => {
+                                return String(item.situacao || '').toLowerCase() === 'pendente';
+                            });
+
+                            console.log("--- [ANÁLISE] Itens 'Pendente' de TERCEIROS (bruto) ---");
+                            if (pendingItems.length > 0) {
+                                console.table(pendingItems);
+                            } else {
+                                console.log("Nenhum item com status 'Pendente' foi encontrado nos dados brutos de Terceiros.");
+                            }
+                        }
+                    } catch (e) {
+                        console.error("[ANÁLISE] Erro ao depurar itens pendentes:", e);
+                    }
+                    // --- FIM DO CÓDIGO DE DEPURAÇÃO (CORRIGIDO) ---
+
+
+
+                    if (ordersTerceirosData.error || !ordersTerceirosData.data) throw new Error(`Erro nos dados de Pedidos Terceiros: ${ordersTerceirosData.message || 'Formato inválido'}`);
+                    const freshTerceirosOrders = _processRawOrdersData(ordersTerceirosData.data, 'terceiros');
+                    _allOrdersTerceiros.length = 0; // Limpa a lista existente
+                    Array.prototype.push.apply(_allOrdersTerceiros, freshTerceirosOrders); // Adiciona os novos itens
+                    console.log('[DEBUG] _allOrdersTerceiros processado:', _allOrdersTerceiros);
+
+                    if (!ordersFabricaRes.ok) throw new Error(`Erro na API de Pedidos Fábrica: ${ordersFabricaRes.statusText}`);
+                    const ordersFabricaData = await ordersFabricaRes.json();
+                    console.log('[DEBUG] Dados de Pedidos Fábrica (bruto):', ordersFabricaData);
+                    if (ordersFabricaData.error || !ordersFabricaData.data) throw new Error(`Erro nos dados de Pedidos Fábrica: ${ordersFabricaData.message || 'Formato inválido'}`);
+                    const freshFabricaOrders = _processRawOrdersData(ordersFabricaData.data, 'fabrica');
+                    _allOrdersFabrica.length = 0; // Limpa a lista existente
+                    Array.prototype.push.apply(_allOrdersFabrica, freshFabricaOrders); // Adiciona os novos itens
+                    console.log('[DEBUG] _allOrdersFabrica processado:', _allOrdersFabrica);
+
+                    if (!nfeRes.ok) throw new Error(`Erro na API de NFe: ${nfeRes.statusText}`);
+                    const nfeData = await nfeRes.json();
+                    console.log('[DEBUG] Dados de NFe (bruto):', nfeData);
+                    if (nfeData.error || !nfeData.data) throw new Error(`Erro nos dados de NFe: ${nfeData.message || 'Formato inválido'}`);
+                    _allNFeData.length = 0;
+                    if (nfeData.data) Array.prototype.push.apply(_allNFeData, nfeData.data);
+
+                    console.log('[DEBUG] _allNFeData processado:', _allNFeData);
+
+                    if (!saidasFabricaRes.ok) throw new Error(`Erro na API de Saídas Fábrica: ${saidasFabricaRes.statusText}`);
+                    const saidasFabricaData = await saidasFabricaRes.json();
+                    console.log('[DEBUG] Dados de Saídas Fábrica (bruto):', saidasFabricaData);
+                    if (saidasFabricaData.error || !saidasFabricaData.data) throw new Error(`Erro nos dados de Saídas Fábrica: ${saidasFabricaData.message || 'Formato inválido'}`);
+                    const freshSaidasFabrica = _processRawSaidasData(saidasFabricaData.data, 'saidas-fabrica');
+                    _allSaidasFabrica.length = 0;
+                    Array.prototype.push.apply(_allSaidasFabrica, freshSaidasFabrica);
+                    console.log('[DEBUG] _allSaidasFabrica processado:', _allSaidasFabrica);
+
+                    if (!saidasGarantiaRes.ok) throw new Error(`Erro na API de Saídas Garantia: ${saidasGarantiaRes.statusText}`);
+                    const saidasGarantiaData = await saidasGarantiaRes.json();
+                    console.log('[DEBUG] Dados de Saídas Garantia (bruto):', saidasGarantiaData);
+                    if (saidasGarantiaData.error || !saidasGarantiaData.data) throw new Error(`Erro nos dados de Saídas Garantia: ${saidasGarantiaData.message || 'Formato inválido'}`);
+                    const freshSaidasGarantia = _processRawSaidasData(saidasGarantiaData.data, 'saidas-garantia');
+                    _allSaidasGarantia.length = 0;
+                    Array.prototype.push.apply(_allSaidasGarantia, freshSaidasGarantia);
+                    console.log('[DEBUG] _allSaidasGarantia processado:', _allSaidasGarantia);
+
+
+                    // NOVO: Atribui os dados da Loja Integrada
+                    _allLojaIntegradaOrders.length = 0;
+                    Array.prototype.push.apply(_allLojaIntegradaOrders, lojaIntegradaData);
+                    console.log('[DEBUG] _allLojaIntegradaOrders processado:', _allLojaIntegradaOrders);
+
+
+                    console.log('[DEBUG] Todos os dados foram buscados e processados. Renderizando a UI...');
+                    _renderCategoryFilters();
+                    _applyGlobalFilters();
+                    if (typeof EstoqueApp !== 'undefined') { EstoqueApp.updateSelectedCountDisplay(); }
+                    if (!_pageOverviewRequisitions.classList.contains('hidden')) _renderRequisitionOverviewPage();
+                    if (!_pageGerenciarSaida.classList.contains('hidden')) _renderNFeOverviewPage();
+                    if (!_pageDashboards.classList.contains('hidden')) _renderDashboardsPage(); // Adicione outras renderizações de página aqui se necessário
+
+                } catch (error) {
+                    let userFacingErrorMessage = `Falha ao carregar dados: ${error.message}.`;
+                    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                        userFacingErrorMessage = `Falha ao conectar com o servidor. Verifique as URLs das APIs, problemas de rede ou CORS.`;
+                    }
+                    const errorHtml = `<div class="text-red-500 p-4"><b>${userFacingErrorMessage}</b></div>`;
+                    _product_list_container.innerHTML = errorHtml;
+                    _pageEstoque.innerHTML = errorHtml;
+                    _pageReport.innerHTML = errorHtml;
+                    _pageOverviewRequisitions.innerHTML = errorHtml;
+                    if (_noNFeMessageOverview) _noNFeMessageOverview.classList.remove('hidden');
+                } finally {
+                    if (_loadingOverlay) _loadingOverlay.classList.add('hidden');
+                }
+            }
+
+
+
+
+            function _applyGlobalFilters() {
+                if (!_globalSearchInput || !_globalCategoryCheckboxesContainer) return; // Guard clause
+                const searchTerm = _normalizeString(_globalSearchInput.value);
+                const selectedCategories = [..._globalCategoryCheckboxesContainer.querySelectorAll('.category-checkbox:checked')].map(cb => cb.value);
+
+                if (_globalFilterButtonLabel) _globalFilterButtonLabel.textContent = `Filtro (${selectedCategories.length})`;
+
+                let filteredProducts = _allProducts.filter(product => {
+                    const normalizedCodigo = _normalizeString(product.codigo);
+                    const normalizedDescricao = _normalizeString(product.descricao);
+                    const searchMatch = (normalizedCodigo.includes(searchTerm) || normalizedDescricao.includes(searchTerm));
+
+                    let categoryMatch = selectedCategories.length === 0 ? true : selectedCategories.some(categoryKey => {
+                        switch (categoryKey) {
+                            case 'consumo': return product.grupo_de_tags_tags?.includes('Estoque - Consumo');
+                            case 'fabrica': return product.grupo_de_tags_tags?.includes('Estoque - Fábrica');
+                            case 'terceiros': return product.grupo_de_tags_tags?.includes('Estoque - Terceiros');
+                            case 'demanda': return product.grupo_de_tags_tags?.includes('Sob Demanda - Fábrica');
+                            case 'servicos': return product.codigo?.startsWith('7');
+                            case 'em_branco': return !product.grupo_de_tags_tags || product.grupo_de_tags_tags.length === 0 || (product.grupo_de_tags_tags.length === 1 && product.grupo_de_tags_tags[0] === '');
+                            default: return false;
+                        }
+                    });
+                    return searchMatch && categoryMatch;
+                });
+
+                // ATUALIZADO: Adiciona a ordenação alfabética
+                filteredProducts.sort((a, b) => {
+                    const descA = a.descricao || '';
+                    const descB = b.descricao || '';
+                    return descA.localeCompare(descB, 'pt-BR');
+                });
+
+
+                if (!_pagePesquisar.classList.contains('hidden')) {
+                    if (typeof PesquisarProduto !== 'undefined') {
+                        PesquisarProduto.render(filteredProducts);
+                    }
+                }
+                if (!_pageEstoque.classList.contains('hidden')) {
+                    const stockPageProducts = filteredProducts.filter(p => !p.codigo?.startsWith('7'));
+                    if (typeof EstoqueApp !== 'undefined') {
+                        EstoqueApp.render(stockPageProducts);
+                    }
+
+                }
+                // Bloco para ADICIONAR
+                if (!_pageGerenciarSaida.classList.contains('hidden')) {
+                    const saidaPageProducts = filteredProducts.filter(p => !p.codigo?.startsWith('7'));
+                    if (typeof SaidaItens !== 'undefined') {
+                        SaidaItens.render(saidaPageProducts);
+                    }
+                }
+
+            }
+
+            function _renderCategoryFilters() {
+                const container = _globalCategoryCheckboxesContainer;
+                if (!container) return;
+                const categories = {
+                    consumo: { label: 'Estoque - Consumo', check: p => p.grupo_de_tags_tags?.includes('Estoque - Consumo') },
+                    fabrica: { label: 'Estoque - Fábrica', check: p => p.grupo_de_tags_tags?.includes('Estoque - Fábrica') },
+                    terceiros: { label: 'Estoque - Terceiros', check: p => p.grupo_de_tags_tags?.includes('Estoque - Terceiros') },
+                    demanda: { label: 'Sob Demanda - Fábrica', check: p => p.grupo_de_tags_tags?.includes('Sob Demanda - Fábrica') },
+                    servicos: { label: 'Serviços', check: p => p.codigo?.startsWith('7') },
+                    em_branco: { label: 'Grupo de Tags em Branco', check: p => !p.grupo_de_tags_tags || p.grupo_de_tags_tags.length === 0 || (p.grupo_de_tags_tags.length === 1 && p.grupo_de_tags_tags[0] === '') }
+                };
+                const counts = Object.keys(categories).reduce((acc, key) => { acc[key] = _allProducts.filter(categories[key].check).length; return acc; }, {});
+                container.innerHTML = Object.keys(categories).map(key => {
+                    if (counts[key] === 0) return '';
+                    return `<label class="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-100 cursor-pointer"><input type="checkbox" class="category-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="${key}"><span class="flex-grow text-gray-700">${categories[key].label}</span><span class="text-gray-500 text-xs font-mono">(${counts[key]})</span></label>`;
+                }).join('');
+            }
+
+
+            function _renderReportSortIcon(column) {
+                if (_reportState.sortColumn !== column) return '';
+                return _reportState.sortDirection === 'asc' ? '▲' : '▼';
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+            function _createRequisitionCard(id, title, count, color) {
+                const isActive = id === _ordersTableState.selectedType ? 'active' : '';
+                return `<div data-id="${id}" class="status-card ${color} text-white p-3 rounded-lg shadow-lg cursor-pointer transform transition-transform duration-300 hover:scale-105 ${isActive}">
+                        <h3 class="text-sm font-semibold">${title}</h3>
+                        <p class="text-2xl font-bold mt-2">${count}</p>
+                    </div>`;
+            }
+
+            // ATUALIZADO: Função para renderizar a página de Diagnóstico de Requisição
+            // ATUALIZADO: Função para renderizar a página de Diagnóstico de Requisição
+            function _renderRequisitionOverviewPage() {
+                _ordersTableState.statusFilters.clear();
+                if (_ordersFilterButtonLabel) _ordersFilterButtonLabel.textContent = `Filtro (0)`;
+                if (_ordersStatusCheckboxesContainer) _ordersStatusCheckboxesContainer.querySelectorAll('.order-status-checkbox').forEach(cb => cb.checked = false);
+
+                // ATUALIZADO: Calcula a contagem de ITENS PENDENTES, ignorando os já entregues.
+                const terceirosItemsCount = _allOrdersTerceiros.reduce((acc, order) => acc + order.totalPendente, 0);
+                const fabricaItemsCount = _allOrdersFabrica.reduce((acc, order) => acc + order.totalPendente, 0);
+
+                let cardsHtml = `
+                ${_createRequisitionCard('terceiros', 'Itens Pendentes (Terceiros)', terceirosItemsCount, 'bg-purple-500')}
+                ${_createRequisitionCard('fabrica', 'Itens Pendentes (Fábrica)', fabricaItemsCount, 'bg-indigo-500')}
+            `;
+
+                if (_requisitionOverviewCardsContainer) _requisitionOverviewCardsContainer.innerHTML = cardsHtml;
+
+                if (_requisitionOverviewCardsContainer) {
+                    _requisitionOverviewCardsContainer.querySelectorAll('.status-card').forEach(card => {
+                        card.addEventListener('click', () => {
+                            _ordersTableState.selectedType = card.dataset.id;
+                            _ordersTableState.searchTerm = '';
+
+                            if (_terceirosOrdersModal) _terceirosOrdersModal.classList.remove('hidden');
+                            _renderConsolidatedOrdersTable();
+                        });
+                    });
+                }
+            }
+
+            // NOVO: Renderiza a página de diagnóstico de saídas
+            function _renderSaidaOverviewPage() {
+                // ATUALIZADO: Usa os dados reais para a contagem
+                const fabricaItemsCount = _allSaidasFabrica.reduce((acc, saida) => acc + (saida.totalPendente || 0), 0);
+                const garantiaItemsCount = _allSaidasGarantia.reduce((acc, saida) => acc + (saida.totalPendente || 0), 0);
+
+                // Reutiliza a função de criar card para manter o estilo
+                let cardsHtml = `
+                ${_createRequisitionCard('saidas-fabrica', 'Itens para Fábrica', fabricaItemsCount, 'bg-green-500')}
+                ${_createRequisitionCard('saidas-garantia', 'Itens para Garantia', garantiaItemsCount, 'bg-blue-500')}
+            `;
+                if (_saidaOverviewCards) _saidaOverviewCards.innerHTML = cardsHtml;
+
+                if (_saidaOverviewCards) {
+                    _saidaOverviewCards.querySelectorAll('.status-card').forEach(card => {
+                        card.addEventListener('click', () => {
+                            _ordersTableState.selectedType = card.dataset.id;
+                            _ordersTableState.searchTerm = '';
+                            if (_terceirosOrdersModal) _terceirosOrdersModal.classList.remove('hidden');
+                            _renderConsolidatedOrdersTable();
+                        });
+                    });
+                }
+            }
+
+            function _renderOrderSortIcon(column) {
+                if (_ordersTableState.sortColumn !== column) return '';
+                return _ordersTableState.sortDirection === 'asc' ? '▲' : '▼';
+            }
+
+            function _renderConsolidatedOrdersTable() {
+                let ordersToProcess = [];
+                let tableTitleSuffix = '';
+
+                // ATUALIZADO: Unifica as opções de impressão para Fábrica e Terceiros
+                if (_ordersTableActionPrintGeneric) _ordersTableActionPrintGeneric.classList.add('hidden');
+                if (_ordersTableActionPrintList) _ordersTableActionPrintList.classList.remove('hidden');
+                if (_ordersTableActionPrintSolicitation) _ordersTableActionPrintSolicitation.classList.remove('hidden');
+
+                if (_ordersTableState.selectedType === 'terceiros') {
+                    ordersToProcess = _allOrdersTerceiros;
+                    tableTitleSuffix = ' - Terceiros';
+                } else if (_ordersTableState.selectedType === 'fabrica') {
+                    ordersToProcess = _allOrdersFabrica;
+                    tableTitleSuffix = ' - Fábrica';
+                } else if (_ordersTableState.selectedType === 'saidas-fabrica') {
+                    ordersToProcess = _allSaidasFabrica;
+                    tableTitleSuffix = ' - Saídas Fábrica';
+                } else if (_ordersTableState.selectedType === 'saidas-garantia') {
+                    ordersToProcess = _allSaidasGarantia;
+                    tableTitleSuffix = ' - Saídas Garantia';
+                } else {
+                    ordersToProcess = [..._allOrdersTerceiros, ..._allOrdersFabrica];
+                    tableTitleSuffix = ' - Todos';
+                }
+
+                if (_ordersTableTitle) _ordersTableTitle.textContent = `Lista de Pedidos${tableTitleSuffix}`;
+                // _currentFilteredOrderItems will be populated by _renderOrdersByItemView
+                _renderOrdersByItemView(ordersToProcess);
+            }
+
+            function _renderOrdersByItemView(orders) {
+                let allIndividualItems = orders.flatMap(order => order.rawItems);
+
+                if (allIndividualItems.length === 0) {
+                    if (_noOrdersMessageModal) _noOrdersMessageModal.classList.remove('hidden');
+                    if (_ordersTableContent) _ordersTableContent.innerHTML = '';
+                    return;
+                }
+
+                const searchTerm = _normalizeString(_ordersTableState.searchTerm);
+                let filteredItems = allIndividualItems.filter(item => {
+                    return _normalizeString(item.codigoService).includes(searchTerm) ||
+                        _normalizeString(item.descricao).includes(searchTerm) ||
+                        _normalizeString(item.orderCode).includes(searchTerm);
+                });
+
+                const selectedStatusFilters = [..._ordersTableState.statusFilters];
+                // ATUALIZADO: Lógica de filtro de status
+                if (selectedStatusFilters.length > 0) {
+                    // Se houver filtros de status ativos, aplica-os
+                    filteredItems = filteredItems.filter(item => {
+                        const itemStatus = (item.situacao || '').toLowerCase();
+                        const isOk = itemStatus === 'ok';
+
+                        let daysOverdue = 0;
+                        if (!isOk && item.dataPedido) {
+                            const orderDate = _parsePtBrDate(item.dataPedido);
+                            if (orderDate) {
+                                orderDate.setHours(0, 0, 0, 0);
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const prazoEntregaDias = parseInt(item.prazoEntregaRaw) || 15;
+                                const deliveryDueDate = addBusinessDays(orderDate, prazoEntregaDias);
+                                if (today > deliveryDueDate) {
+                                    daysOverdue = getBusinessDaysDifference(deliveryDueDate, today);
+                                }
+                            }
+                        }
+
+                        return selectedStatusFilters.some(filter => {
+                            switch (filter) {
+                                case 'entregues': return isOk;
+                                case 'dentro_prazo': return !isOk && daysOverdue === 0;
+                                case 'fora_prazo': return !isOk && daysOverdue > 0;
+                                default: return false;
+                            }
+                        });
+                    });
+                } else {
+                    // Por padrão, se nenhum filtro estiver selecionado, esconde os itens já entregues ('ok')
+                    filteredItems = filteredItems.filter(item => (item.situacao || '').toLowerCase() !== 'ok');
+                }
+
+                if (_ordersFilterButtonLabel) _ordersFilterButtonLabel.textContent = `Filtro (${selectedStatusFilters.length})`;
+
+                filteredItems.sort((a, b) => {
+                    const sortKey = _ordersTableState.sortColumn;
+                    let valA, valB;
+
+                    if (sortKey === 'dataPedido') {
+                        const parseDate = (dateString) => {
+                            if (!dateString || dateString === 'N/A') return new Date(0);
+                            const [day, month, year] = dateString.split('/');
+                            return new Date(year, month - 1, day);
+                        };
+                        valA = parseDate(a.dataPedido);
+                        valB = parseDate(b.dataPedido);
+                        return _ordersTableState.sortDirection === 'asc' ? (valA.getTime() - valB.getTime()) : (valB.getTime() - valA.getTime());
+                    } else if (['quantidadePedido'].includes(sortKey)) {
+                        valA = parseInt(a[sortKey]) || 0;
+                        valB = parseInt(b[sortKey]) || 0;
+                        return _ordersTableState.sortDirection === 'asc' ? (valA - valB) : (valB - valA);
+                    } else {
+                        valA = a[sortKey] || '';
+                        valB = b[sortKey] || '';
+                    }
+
+                    const comparison = String(valA).localeCompare(String(valB), 'pt-BR', { numeric: true });
+                    return _ordersTableState.sortDirection === 'asc' ? comparison : -comparison;
+                });
+
+                if (_ordersTableState.selectedType === 'fabrica') {
+                    _currentModalFabricaOrdersForPrint = filteredItems;
+                } else {
+                    _currentModalFabricaOrdersForPrint = [];
+                }
+
+                if (filteredItems.length === 0) {
+                    _currentFilteredOrderItems = []; // Limpa a lista de impressão se não houver itens
+                    if (_noOrdersMessageModal) _noOrdersMessageModal.classList.remove('hidden');
+                    if (_ordersTableContent) _ordersTableContent.innerHTML = '';
+                } else {
+                    if (_noOrdersMessageModal) _noOrdersMessageModal.classList.add('hidden');
+                    _currentFilteredOrderItems = filteredItems; // Popula a variável global com os itens filtrados e ordenados
+
+                    const showResponsavelColumn = _ordersTableState.selectedType === 'saidas-fabrica' || _ordersTableState.selectedType === 'saidas-garantia';
+
+                    const itemDisplayHeaders = [
+                        { label: '', sortable: false, key: 'checkbox' },
+                        { label: 'REQ.', sortable: true, key: 'orderCode' },
+                        { label: 'DESCRIÇÃO / CÓDIGO SERVICE', sortable: true, key: 'descricao' },
+                        { label: 'LOCALIZAÇÃO', sortable: false, key: 'localizacao' },
+                        { label: 'QTD. PEDIDO', sortable: true, key: 'quantidadePedido' },
+                        { label: 'DATA PEDIDO', sortable: true, key: 'dataPedido' }, // Mantido
+                        { label: 'PREVISÃO', sortable: false, key: 'dataPrevista' }, // Coluna separada
+                        { label: 'RECEBIMENTO', sortable: true, key: 'dataConclusao' }, // Coluna separada
+                        { label: 'DIAS ATRASADOS', sortable: false, key: 'diasAtrasados' }, // NOVO
+                        { label: 'STATUS', sortable: false, key: 'status' } // RE-ADICIONADO
+                    ];
+
+                    if (showResponsavelColumn) {
+                        itemDisplayHeaders.splice(3, 0, { label: 'RESPONSÁVEL', sortable: true, key: 'responsavel' });
+                    }
+
+                    let itemsHtml = `
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50 read-only-disable">
+                            <tr>
+                                ${itemDisplayHeaders.map(header => `
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${header.sortable ? 'sortable-header' : ''}" data-sort="${header.key}">
+                                        <div class="flex items-center">${header.label} ${header.sortable ? _renderOrderSortIcon(header.key) : ''}</div>
+                                    </th>
+                                `).join('')}
+                            </tr>
+                        </thead>
+                        <tbody id="orders-table-body-items" class="bg-white divide-y divide-gray-200">`;
+
+                    filteredItems.forEach(item => {
+                        const itemStatus = (item.situacao || '').toLowerCase();
+                        const isOk = itemStatus === 'ok';
+                        const orderDate = _parsePtBrDate(item.dataPedido);
+                        const prazoEntregaDias = parseInt(item.prazoEntregaRaw) || 15; // Prazo padrão de 15 dias
+
+                        let deliveryDueDate = null;
+                        let formattedDueDate = 'N/A';
+                        let diasAtrasadosUteis = 0;
+                        let diasAtrasadosDisplay = '';
+                        let statusHtml = '';
+                        let rowClass = 'row-pending';
+
+                        // ATUALIZADO: Lógica condicional para datas
+                        if (item.requisitionType === 'saidas-fabrica' || item.requisitionType === 'saidas-garantia') {
+                            formattedDueDate = 'N/A';
+                            diasAtrasadosDisplay = '-';
+                        } else {
+                            if (orderDate) {
+                                deliveryDueDate = addBusinessDays(orderDate, prazoEntregaDias);
+                                formattedDueDate = deliveryDueDate.toLocaleDateString('pt-BR');
+                                if (!isOk) {
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    if (today > deliveryDueDate) {
+                                        diasAtrasadosUteis = getBusinessDaysDifference(deliveryDueDate, today);
+                                    }
+                                }
+                            }
+                            diasAtrasadosDisplay = diasAtrasadosUteis > 0 ? diasAtrasadosUteis : (isOk ? '-' : '0');
+                            if (!orderDate) diasAtrasadosDisplay = '-';
+                        }
+
+                        // --- Lógica de Status e Cor da Linha ---
+                        const statusText = (item.situacao && item.situacao.trim() !== '')
+                            ? item.situacao.charAt(0).toUpperCase() + item.situacao.slice(1).toLowerCase()
+                            : 'Pendente';
+
+                        if (itemStatus === 'ok') {
+                            statusHtml = _createOrderStatusPill('ok', 'OK');
+                            rowClass = 'row-ok';
+                        } else { // Para 'PENDENTE' ou qualquer outro status não-OK
+                            if (diasAtrasadosUteis > 0) {
+                                statusHtml = _createOrderStatusPill('overdue', statusText);
+                                rowClass = 'row-overdue';
+                            } else {
+                                statusHtml = _createOrderStatusPill('pending', statusText);
+                                rowClass = 'row-pending';
+                            }
+                        }
+
+
+                        const correspondingProduct = _allProducts.find(p => p.codigo === item.codigoService);
+                        const imageUrl = correspondingProduct?.url_imagens_externas?.[0] || '';
+                        const hasObservation = Array.isArray(item.observacao) && item.observacao.length > 0;
+                        const truncatedDescription = item.descricao && item.descricao.length > 50 ? item.descricao.substring(0, 47) + '...' : item.descricao || 'N/A';
+
+                        itemsHtml += `
+                        <tr class="${rowClass}">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center space-x-2">
+                                    <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 order-item-checkbox" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-requisition-type="${item.requisitionType}" ${isOk ? 'checked disabled' : ''}>
+                                    <button class="view-requisition-observation-btn text-gray-500 hover:text-blue-600 p-1 rounded-full" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" title="Visualizar Observações">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                    </button>
+                                    <span class="requisition-observation-status-icon cursor-pointer" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-observation='${JSON.stringify(item.observacao || [])}' title="${hasObservation ? 'Este item possui observações' : 'Nenhuma observação'}">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ${hasObservation ? 'text-red-500' : 'text-gray-400'}" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                        </svg>
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.orderCode}</td>
+                            <td class="px-6 py-4 text-sm text-gray-900 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap product-description-cell" data-full-description="${item.descricao || 'N/A'}" data-image-url="${imageUrl}">
+                                <strong>${truncatedDescription}</strong><br><span class="text-xs text-gray-500">${item.codigoService || 'N/A'}</span>
+                            </td>
+                            ${showResponsavelColumn ? `<td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.responsavel || ''}</td>` : ''}
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.localizacao}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.quantidadePedido}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.dataPedido || 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium text-gray-900">${formattedDueDate}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium ${isOk ? 'text-green-700 font-bold' : 'text-gray-500'}">${isOk ? (item.dataConclusao || 'Recebido') : 'Pendente'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-bold ${diasAtrasadosUteis > 0 ? 'text-red-600' : 'text-gray-900'}">${diasAtrasadosDisplay}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-center">${statusHtml}</td>
+                        </tr>
+                    `;
+                    });
+                    itemsHtml += `</tbody></table>`;
+                    if (_ordersTableContent) _ordersTableContent.innerHTML = itemsHtml;
+
+                    _ordersTableContent.querySelectorAll('.sortable-header').forEach(header => {
+                        header.addEventListener('click', () => {
+                            _ordersTableState.sortColumn = header.dataset.sort;
+                            _ordersTableState.sortDirection = _ordersTableState.sortDirection === 'asc' ? 'desc' : 'asc';
+                            _renderConsolidatedOrdersTable();
+                        });
+                    });
+
+                    _ordersTableContent.querySelectorAll('.order-item-checkbox').forEach(checkbox => {
+                        checkbox.addEventListener('change', (event) => {
+                            const { orderCode, codigoService, requisitionType } = event.target.dataset;
+                            _handleItemStatusChange(orderCode, codigoService, requisitionType, event.target);
+                        });
+                    });
+
+                    // Adiciona listeners para o tooltip de produto na tabela de pedidos
+                    const tableBody = _ordersTableContent.querySelector('#orders-table-body-items');
+                    if (tableBody) {
+                        tableBody.addEventListener('mouseover', (event) => {
+                            if (event.target.closest('.product-description-cell')) {
+                                _showProductTooltip(event);
+                            }
+                        });
+                        tableBody.addEventListener('mouseout', (event) => {
+                            if (event.target.closest('.product-description-cell')) {
+                                _hideProductTooltip();
+                            }
+                        });
+
+                        // NOVO: Listeners para observações de requisição
+                        tableBody.addEventListener('click', (event) => {
+                            const viewBtn = event.target.closest('.view-requisition-observation-btn');
+                            if (viewBtn) {
+                                const { orderCode, codigoService } = viewBtn.dataset;
+                                _openRequisitionObservationModal(orderCode, codigoService);
+                            }
+                        });
+
+                        tableBody.addEventListener('mouseover', (event) => {
+                            const statusIcon = event.target.closest('.requisition-observation-status-icon');
+                            if (statusIcon) _showObservationTooltip(event);
+                        });
+
+                        tableBody.addEventListener('mouseout', (event) => {
+                            const statusIcon = event.target.closest('.requisition-observation-status-icon');
+                            if (statusIcon) _hideProductTooltip();
+                        });
+                    }
+                }
+            }
+
+            function _printOrdersTableDirectly() {
+                if (_currentFilteredOrderItems.length === 0) {
+                    _showMessageModal("Nenhum Item", "Não há itens na tabela para imprimir.");
+                    return;
+                }
+
+                // Reutiliza a mesma área de impressão e CSS do relatório
+                const itemsToPrint = _currentFilteredOrderItems;
+                const tableTitle = _ordersTableTitle ? _ordersTableTitle.textContent : 'Lista de Pedidos';
+                let printHtml = `
+                <h1 style="font-size: 16pt; font-weight: bold; text-align: center; margin-bottom: 20px;">${tableTitle}</h1>
+                <table class="orders-print-table">
+                    <thead>
+                        <tr>
+                            <th>REQ.</th>
+                            <th>PRODUTO</th>
+                            <th>LOCAL</th>
+                            <th class="text-center-print">QTD</th>
+                            <th>SITUAÇÃO</th>
+                            <th>DATA</th>
+                            <th class="text-center-print">DIAS COR.</th>
+                            <th class="text-center-print">PRAZO</th>
+                            <th class="text-center-print">ATRASO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+                itemsToPrint.forEach(item => {
+                    const isOk = (item.situacao || '').toLowerCase() === 'ok';
+                    let daysOverdue = '0';
+                    if (!isOk && item.dataPedido) {
+                        const orderDate = _parsePtBrDate(item.dataPedido);
+                        if (orderDate) {
+                            const today = new Date();
+                            const prazoEntregaDias = parseInt(item.prazoEntregaRaw) || 15;
+                            const deliveryDueDate = addBusinessDays(orderDate, prazoEntregaDias);
+                            if (today > deliveryDueDate) {
+                                daysOverdue = getBusinessDaysDifference(deliveryDueDate, today);
+                            }
+                        }
+                    }
+                    const correspondingProduct = _allProducts.find(p => p.codigo === item.codigoService);
+                    const imageUrl = correspondingProduct?.url_imagens_externas?.[0] || 'https://placehold.co/50x50/e2e8f0/64748b?text=?';
+
+                    const orderDateObj = _parsePtBrDate(item.dataPedido);
+                    const formattedDate = orderDateObj
+                        ? `${String(orderDateObj.getDate()).padStart(2, '0')}/${String(orderDateObj.getMonth() + 1).padStart(2, '0')}/${String(orderDateObj.getFullYear()).slice(-2)}`
+                        : 'N/A';
+
+                    printHtml += `
+                    <tr>
+                        <td>${item.orderCode}</td>
+                        <td>
+                            <div style="display: flex; align-items: center;">
+                                <img src="${imageUrl}" alt="" class="product-list-item-img" onerror="this.style.display='none'">
+                                <div style="margin-left: 8px;">
+                                    <div style="font-weight: 500;">${item.descricao || 'N/A'}</div>
+                                    <div style="font-size: 0.8em; color: #6b7280;">${item.codigoService || 'N/A'}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>${item.localizacao}</td>
+                        <td class="text-center-print">${item.quantidadePedido}</td>
+                        <td>${item.situacao}</td>
+                        <td>${formattedDate}</td>
+                        <td class="text-center-print">${item.diasCorridosRaw || '0'}</td>
+                        <td class="text-center-print">${item.prazoEntregaRaw || '15'}</td>
+                        <td class="text-center-print">${daysOverdue}</td>
+                    </tr>
+                `;
+                });
+                printHtml += `</tbody></table>`;
+
+                if (_printArea) {
+                    _printArea.innerHTML = printHtml;
+                    window.print();
+                    _printArea.innerHTML = ''; // Clear the area after printing
+                }
+            }
+
+            function _exportOrdersTableToCSV() {
+                if (_currentFilteredOrderItems.length === 0) {
+                    _showMessageModal("Nenhum Item", "Não há itens na tabela para exportar.");
+                    return;
+                }
+
+                const headers = [
+                    "REQUISIÇÃO", "DESCRIÇÃO", "CÓDIGO SERVICE", "LOCALIZAÇÃO", "QTD. PEDIDO",
+                    "SITUAÇÃO", "DATA PEDIDO", "DIAS CORRIDOS", "PRAZO ENTREGA", "DIAS ATRASADOS",
+                    "TIPO REQUISIÇÃO" // Add requisition type for context
+                ];
+                let csvContent = headers.join(";") + "\n";
+
+                _currentFilteredOrderItems.forEach(item => {
+                    const isOk = (item.situacao || '').toLowerCase() === 'ok';
+                    let daysOverdue = '0';
+                    if (!isOk && item.dataPedido) {
+                        const orderDate = _parsePtBrDate(item.dataPedido);
+                        if (orderDate) {
+                            const today = new Date();
+                            const prazoEntregaDias = parseInt(item.prazoEntregaRaw) || 15;
+                            const deliveryDueDate = addBusinessDays(orderDate, prazoEntregaDias);
+                            if (today > deliveryDueDate) {
+                                daysOverdue = getBusinessDaysDifference(deliveryDueDate, today);
+                            }
+                        }
+                    }
+
+                    const escapeCSV = (field) => `"${String(field || '').replace(/"/g, '""')}"`;
+
+                    const row = [
+                        escapeCSV(item.orderCode),
+                        escapeCSV(item.descricao),
+                        escapeCSV(item.codigoService),
+                        escapeCSV(item.localizacao),
+                        item.quantidadePedido,
+                        escapeCSV(item.situacao),
+                        escapeCSV(item.dataPedido),
+                        item.diasCorridosRaw || '0',
+                        item.prazoEntregaRaw || '15',
+                        daysOverdue,
+                        escapeCSV(item.requisitionType)
+                    ].join(";");
+                    csvContent += row + "\n";
+                });
+
+                const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "lista_pedidos.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            async function _handleItemStatusChange(orderCode, codigoService, requisitionType, checkboxElement) {
+                if (!checkboxElement.checked) {
+                    if (checkboxElement.disabled) {
+                        checkboxElement.checked = true;
+                        _showMessageModal("Item Já Entregue", "Este item já foi marcado como 'Entregue' e não pode ser desmarcado.");
+                    }
+                    return;
+                }
+
+                // ATUALIZADO: Mensagem de confirmação dinâmica com campo de quantidade para devoluções
+                const isSaida = requisitionType.startsWith('saida');
+                const item = _findRequisitionItem(orderCode, codigoService, requisitionType);
+
+                if (!item) {
+                    _showMessageModal("Erro", "Item não encontrado para processar a operação.");
+                    checkboxElement.checked = false;
+                    return;
+                }
+
+                const originalQuantity = item.quantidadePedido || 1;
+                let confirmationTitle = isSaida ? "Confirmar Devolução / Consumo" : "Confirmar Entrega";
+                let confirmationMessage = isSaida
+                    ? `
+                    <p>Confirme a quantidade que <strong>retornou</strong> ao estoque. Se o item foi totalmente consumido, digite <strong>0</strong>.</p>
+                    <div class="mt-4 text-left">
+                        <label for="devolucao-quantity-input" class="block text-sm font-bold text-gray-700">Quantidade Devolvida:</label>
+                        <input type="number" id="devolucao-quantity-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" value="${originalQuantity}" min="0">
+                    </div>
+                `
+                    : "Deseja marcar o item como 'Entregue' (OK)?";
+
+
+                const confirmed = await _showConfirmationModal(confirmationTitle, confirmationMessage);
+                if (!confirmed) {
+                    checkboxElement.checked = false;
+                    return;
+                }
+
+                const parentDiv = checkboxElement.parentElement;
+                const spinner = document.createElement('div');
+                spinner.className = 'w-4 h-4 border-2 border-gray-400 border-t-blue-500 rounded-full spinning';
+
+                checkboxElement.style.display = 'none';
+                if (parentDiv) parentDiv.insertBefore(spinner, checkboxElement);
+
+                try {
+                    const product = _allProducts.find(p => p.codigo === codigoService);
+                    if (!product) throw new Error("Produto correspondente não encontrado localmente.");
+
+                    // DEBUG: Imprime os valores brutos para análise, conforme solicitado.
+                    console.log('--- DEBUG: Valores para cálculo de estoque ---');
+                    console.log(`Estoque Atual (product.estoque): '${product.estoque}' (tipo: ${typeof product.estoque})`);
+                    console.log(`Qtd. Requisição (item.quantidadePedido): '${item.quantidadePedido}' (tipo: ${typeof item.quantidadePedido})`);
+                    console.log('-------------------------------------------');
+
+                    // 2. Preparar o payload combinado para a Cloud Function
+                    // CORREÇÃO DEFINITIVA: Lógica de parse robusta para tratar números formatados como texto (ex: "1.234,56" ou "2,00").
+                    // 1. Converte para string.
+                    // 2. Remove pontos de milhar.
+                    // 3. Troca a vírgula decimal por ponto.
+                    // 4. Converte para número.
+                    // ETAPA 1: Determinar a quantidade do movimento
+                    // CORREÇÃO DEFINITIVA: Lógica unificada para criar sempre o payload completo.
+                    let quantidadeMovimento;
+                    if (isSaida) {
+                        const inputQtyElem = document.getElementById('devolucao-quantity-input');
+                        const inputQty = inputQtyElem ? inputQtyElem.value : '0';
+                        // Garante que a quantidade seja um número, tratando vírgula decimal
+                        quantidadeMovimento = parseFloat(String(inputQty || '0').replace(',', '.')) || 0;
+                    } else {
+                        // Para recebimento de compra, a quantidade é sempre a do pedido
+                        quantidadeMovimento = parseFloat(String(item.quantidadePedido || '0').replace(',', '.')) || 0;
+                    }
+
+                    // Calcula o estoque final. Se quantidadeMovimento for 0, o estoque final será igual ao atual.
+                    const estoqueAtual = parseFloat(String(product.estoque || '0').replace(',', '.')) || 0;
+                    const quantidadeFinal = estoqueAtual + quantidadeMovimento;
+
+                    // Define o tipo de entrada e observações com base na operação
+                    let tipoEntrada = '';
+                    let observacoes = '';
+
+                    if (isSaida) { // Lógica para Devolução / Consumo
+                        if (quantidadeMovimento > 0) {
+                            observacoes = `Devolução ao estoque (${quantidadeMovimento} un.) - Resp: ${item.responsavel || 'N/A'}`;
+                            tipoEntrada = requisitionType === 'saidas-garantia' ? 'Devolução - Garantia' : 'Devolução - Fábrica';
+                        } else {
+                            // Se a quantidade for 0, é um consumo.
+                            observacoes = `Item consumido em campo - Resp: ${item.responsavel || 'N/A'}`;
+                            tipoEntrada = 'Consumo em Campo';
+                        }
+                    } else { // Lógica para Recebimento de Compra
+                        tipoEntrada = requisitionType === 'fabrica' ? 'Recebimento da Fábrica' : 'Recebimento de Terceiros';
+                        observacoes = `Recebimento referente à requisição ${orderCode}`;
+                    }
+
+                    const today = new Date();
+                    const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+
+                    // Cria o payload COMPLETO em todos os casos, como no arquivo de backup.
+                    const payload = {
+                        produto: {
+                            id: product.id,
+                            codigo: product.codigo
+                        },
+                        operacaoBling: "E", // Sempre "E", o backend deve ignorar se a quantidade for 0
+                        quantidadeMovimento: quantidadeMovimento,
+                        quantidadeFinal: quantidadeFinal,
+                        tipoEntrada: tipoEntrada,
+                        observacoes: observacoes,
+                        orderCode: orderCode,
+                        codigoService: codigoService,
+                        newStatus: 'OK',
+                        requisitionType: requisitionType,
+                        dataEntrega: formattedDate,
+                        diasCorridos: item?.diasCorridosRaw || '0'
+                    };
+
+
+
+                    // ETAPA 3: Log e envio (esta parte permanece igual)
+                    console.log('--- JSON a ser enviado para o backend ---');
+                    console.log(JSON.stringify(payload, null, 2));
+                    console.log('---------------------------------------');
+
+                    // 3. Enviar a requisição para a API
+                    const response = await fetch(API_URLS.ORDERS_UPDATE, {
+                        method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`);
+                    }
+
+                    // 4. Atualizar os dados locais e a interface
+                    if (item) {
+                        item.situacao = 'ok';
+                        item.dataConclusao = formattedDate;
+
+                        // ATUALIZAÇÃO: Encontra o pedido pai e ajusta os contadores de itens pendentes/atendidos.
+                        let ordersArray;
+                        if (requisitionType === 'terceiros') ordersArray = _allOrdersTerceiros;
+                        else if (requisitionType === 'fabrica') ordersArray = _allOrdersFabrica;
+                        else if (requisitionType === 'saidas-fabrica') ordersArray = _allSaidasFabrica;
+                        else if (requisitionType === 'saidas-garantia') ordersArray = _allSaidasGarantia;
+                        else ordersArray = [];
+
+                        const order = ordersArray.find(o => o.orderCode === orderCode);
+                        if (order) {
+                            order.totalPendente = Math.max(0, order.totalPendente - 1);
+                            order.totalAtendido++;
+                        }
+                    }
+                    if (product) { product.estoque = quantidadeFinal; }
+
+                    // Re-renderiza a tabela do modal para refletir a mudança do item
+                    _renderConsolidatedOrdersTable();
+                    // ATUALIZAÇÃO: Re-renderiza os cards da página de diagnóstico para atualizar a contagem
+                    if (isSaida) _renderSaidaOverviewPage(); else _renderRequisitionOverviewPage();
+
+                    _showMessageModal("Sucesso!", isSaida ? "Item devolvido ao estoque com sucesso." : "Item marcado como 'Entregue' e estoque atualizado.");
+                } catch (error) {
+                    _showMessageModal("Erro na Atualização", `Falha ao processar a operação: ${error.message}.`);
+                    checkboxElement.checked = false;
+                } finally {
+                    // A re-renderização da tabela já cuida de remover o spinner, mas garantimos aqui por segurança.
+                    if (spinner && spinner.parentElement) spinner.remove();
+                    if (checkboxElement) checkboxElement.style.display = 'block';
+                }
+            }
+
+            function _handleIntelligentToggleChange(event) {
+                _reportState.isIntelligentMode = event.target.checked;
+
+                // Otimização: Em vez de redesenhar a tabela inteira, apenas recalcula e atualiza os valores dos inputs.
+                // Isso evita o "piscar" das imagens.
+                const aguardandoMap = _calculateAguardandoChegarMap();
+
+                document.querySelectorAll('.report-quantity-input').forEach(input => {
+                    const productId = input.dataset.productId;
+                    const p = _allProducts.find(prod => String(prod.id) === String(productId));
+                    if (!p) return;
+
+                    let newQty = 0;
+                    if (_reportState.isIntelligentMode) {
+                        // --- CÁLCULO INTELIGENTE ---
+                        const estoqueMin = p.estoque_minimo || 0;
+                        const vendas90d = p.vendas_ultimos_90_dias || 0;
+                        const estoqueEfetivo = (p.estoque || 0) + (aguardandoMap.get(p.codigo) || 0);
+                        const avgDailySales = vendas90d / 90;
+                        const daysRemaining = Math.max(0, Math.ceil((new Date(new Date().getFullYear(), 11, 31) - new Date()) / (1000 * 3600 * 24)));
+                        const targetStock = (avgDailySales * daysRemaining) + estoqueMin;
+                        newQty = Math.round(Math.max(0, targetStock - estoqueEfetivo));
+                    } else {
+                        // --- CÁLCULO PADRÃO ---
+                        const estoqueMin = p.estoque_minimo || 0;
+                        const vendas90d = p.vendas_ultimos_90_dias || 0;
+                        const estoqueEfetivo = (p.estoque || 0) + (aguardandoMap.get(p.codigo) || 0);
+                        const avgMonthlySales = vendas90d / 3;
+                        const targetStock = estoqueMin + avgMonthlySales;
+                        newQty = Math.round(Math.max(0, targetStock - estoqueEfetivo));
+                    }
+                    _reportQuantities.set(productId, newQty);
+                    input.value = newQty;
+                });
+
+                _updateReportActionButtonsState(); // Atualiza o estado dos botões de lançamento
+
+            }
+
+
+
+
+
+            // CORREÇÃO: Mover a definição da função para fora do escopo anônimo
+            // para que ela possa ser exposta corretamente.
+            function _updateReportQuantity(productId, newQuantity) {
+                const parsedQuantity = parseInt(newQuantity, 10);
+                if (!isNaN(parsedQuantity) && parsedQuantity >= 0) {
+                    _reportQuantities.set(productId, parsedQuantity);
+                } else {
+                    _reportQuantities.set(productId, 0);
+                }
+                _updateReportActionButtonsState();
+            }
+
+            // NOVO: Gera o relatório para a tela de "Criar Saída"
+
+            // NOVO: Função para atualizar o estado dos botões de ação do relatório
+            function _updateReportActionButtonsState() {
+                const hasFabricaItems = Array.from(_reportQuantities.entries()).some(([productId, qty]) => {
+                    if (qty <= 0) return false;
+                    const product = _allProducts.find(p => p.id === productId);
+                    return product?.codigo?.startsWith('6');
+                });
+
+                const hasTerceirosItems = Array.from(_reportQuantities.entries()).some(([productId, qty]) => {
+                    if (qty <= 0) return false;
+                    const product = _allProducts.find(p => p.id === productId);
+                    return !product?.codigo?.startsWith('6');
+                });
+
+                if (_reportLaunchTerceirosBtn) _reportLaunchTerceirosBtn.disabled = !hasTerceirosItems;
+                if (_reportLaunchFabricaBtn) _reportLaunchFabricaBtn.disabled = !hasFabricaItems;
+            }
+            function _calculateAguardandoChegarMap() {
+                const aguardandoMap = new Map();
+                const allOrderItems = [
+                    ..._allOrdersTerceiros.flatMap(o => o.rawItems),
+                    ..._allOrdersFabrica.flatMap(o => o.rawItems)
+                ];
+
+                for (const item of allOrderItems) {
+                    // A 'situacao' virá padronizada como 'OK' ou 'PENDENTE' do indexold.html
+                    if (item.situacao !== 'OK' && item.codigoService) {
+                        const currentQty = aguardandoMap.get(item.codigoService) || 0;
+                        // Garante que a quantidade seja um número antes de somar
+                        const itemQty = parseFloat(String(item.quantidadePedido || '0').replace(',', '.')) || 0;
+                        aguardandoMap.set(item.codigoService, currentQty + itemQty);
+                    }
+                }
+                return aguardandoMap;
+            }
+
+
+            function _prepareRequisition() {
+                if (_selectedStockItems.size === 0) {
+                    // NOVO: Mostra uma mensagem com link para voltar à seleção de estoque.
+                    if (_pageReportContent) {
+                        _pageReportContent.innerHTML = `
+                        <div class="text-center py-20">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
+                            <h2 class="mt-2 text-xl font-medium text-gray-700">Nenhum Item na Requisição</h2>
+                            <p class="mt-2 text-gray-500">
+                                Para adicionar itens, <a href="#" id="redirect-to-stock-page" class="text-blue-600 hover:underline font-semibold">Clique Aqui</a>.
+                            </p>
+                        </div>
+                    `;
+                        const redirectLink = document.getElementById('redirect-to-stock-page');
+                        if (redirectLink) {
+                            redirectLink.addEventListener('click', (e) => { e.preventDefault(); _showPage('estoque'); });
+                        }
+                    }
+                    return; // Encerra a função aqui.
+                }
+                const selectedProducts = _allProducts.filter(p => _selectedStockItems.has(p.id));
+                const aguardandoMap = _calculateAguardandoChegarMap();
+
+                // Lógica de ordenação
+                selectedProducts.sort((a, b) => {
+                    const sortKey = _reportState.sortColumn;
+                    let valA, valB;
+
+                    if (sortKey === 'aguardandoChegar') {
+                        valA = aguardandoMap.get(a.codigo) || 0;
+                        valB = aguardandoMap.get(b.codigo) || 0;
+                    } else if (['estoque', 'estoque_minimo', 'estoque_maximo', 'vendas_ultimos_90_dias'].includes(sortKey)) {
+                        valA = a[sortKey] || 0;
+                        valB = b[sortKey] || 0;
+                    } else if (sortKey === 'quantidadeRequisitar') {
+                        valA = _reportQuantities.get(a.id) || 0;
+                        valB = _reportQuantities.get(b.id) || 0;
+                    } else { // Default para comparação de string (ex: 'descricao')
+                        valA = a[sortKey] || '';
+                        valB = b[sortKey] || '';
+                    }
+
+                    let comparison = 0;
+                    if (typeof valA === 'number' && typeof valB === 'number') {
+                        comparison = valA - valB;
+                    } else {
+                        comparison = String(valA).localeCompare(String(valB), 'pt-BR', { numeric: true });
+                    }
+
+                    return _reportState.sortDirection === 'asc' ? comparison : -comparison;
+                });
+
+                selectedProducts.forEach(p => {
+                    if (!_reportQuantities.has(p.id)) {
+                        let initialQty = 0;
+                        if (_reportState.isIntelligentMode) {
+                            // --- CÁLCULO INTELIGENTE (ATÉ FIM DO ANO + ESTOQUE MÍNIMO) ---
+                            const estoqueMin = p.estoque_minimo || 0; // Adicionado: estoque mínimo
+                            const vendas90d = p.vendas_ultimos_90_dias || 0;
+                            const estoqueAtual = p.estoque || 0;
+                            const aguardandoChegar = aguardandoMap.get(p.codigo) || 0;
+                            const estoqueEfetivo = estoqueAtual + aguardandoChegar;
+
+                            const avgDailySales = vendas90d / 90;
+
+                            const today = new Date();
+                            const endOfYear = new Date(today.getFullYear(), 11, 31); // 31 de Dezembro
+                            const timeDiff = endOfYear.getTime() - today.getTime();
+                            const daysRemaining = Math.max(0, Math.ceil(timeDiff / (1000 * 3600 * 24)));
+
+                            const demandUntilYearEnd = avgDailySales * daysRemaining;
+                            const targetStock = demandUntilYearEnd + estoqueMin; // O alvo é a demanda + o estoque de segurança
+                            const calculatedQty = targetStock - estoqueEfetivo;
+                            initialQty = Math.round(Math.max(0, calculatedQty));
+
+                        } else {
+                            // --- CÁLCULO PADRÃO (REQUISIÇÃO MENSAL BASEADA EM VENDAS) ---
+                            const estoqueMin = p.estoque_minimo || 0; // Adicionado: estoque mínimo
+                            const vendas90d = p.vendas_ultimos_90_dias || 0;
+                            const estoqueAtual = p.estoque || 0;
+                            const aguardandoChegar = aguardandoMap.get(p.codigo) || 0;
+                            const estoqueEfetivo = estoqueAtual + aguardandoChegar;
+
+                            // Calcula a média de vendas mensais (90 dias = 3 meses)
+                            const avgMonthlySales = vendas90d / 3;
+
+                            // A quantidade a requisitar é o que falta para atingir o estoque mínimo
+                            // MAIS a demanda mensal, considerando o estoque efetivo.
+                            const targetStock = estoqueMin + avgMonthlySales;
+                            let calculatedQty = targetStock - estoqueEfetivo;
+
+                            // Garante que a quantidade não seja negativa
+                            initialQty = Math.round(Math.max(0, calculatedQty));
+                        }
+                        _reportQuantities.set(p.id, initialQty);
+                    }
+                });
+
+                _reportQuantities.forEach((value, key) => {
+                    if (!_selectedStockItems.has(key)) _reportQuantities.delete(key);
+                });
+
+                _updateReportActionButtonsState();
+
+                let reportContentHtml = `
+                <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Preparar Requisição para Lançamento</h1>
+                <!-- NOVO: Alternador de cálculo de requisição -->
+                <div class="flex items-center justify-end mb-4">
+                    <label for="intelligent-requisition-toggle" class="flex items-center cursor-pointer">
+                        <span class="mr-3 text-sm font-medium text-gray-700">Requisição Padrão</span>
+                        <div class="relative">
+                            <input type="checkbox" id="intelligent-requisition-toggle" class="sr-only peer" ${_reportState.isIntelligentMode ? 'checked' : ''}>
+                            <div class="w-14 h-8 bg-gray-300 rounded-full peer peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                        </div>
+                        <span class="ml-3 text-sm font-medium text-gray-700">Requisição Inteligente (Até Fim do Ano)</span>
+                    </label>
+                </div>
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50 read-only-disable">
+                            <tr>
+                                <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-full sortable-header" data-sort="descricao">Produto ${_renderReportSortIcon('descricao')}</th>
+                                <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sortable-header" data-sort="estoque">Estoque ${_renderReportSortIcon('estoque')}</th>
+                                <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sortable-header" data-sort="aguardandoChegar">Aguardando Chegar ${_renderReportSortIcon('aguardandoChegar')}</th>
+                                <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sortable-header" data-sort="estoque_minimo">Mín/Máx ${_renderReportSortIcon('estoque_minimo')}</th>
+                                <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sortable-header" data-sort="vendas_ultimos_90_dias">Vendas 90d ${_renderReportSortIcon('vendas_ultimos_90_dias')}</th>
+                                <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sortable-header" data-sort="quantidadeRequisitar">Qtd. a Requisitar ${_renderReportSortIcon('quantidadeRequisitar')}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+            `;
+                selectedProducts.forEach(p => {
+                    const currentQuantity = _reportQuantities.get(p.id) || 0;
+                    const aguardandoChegar = aguardandoMap.get(p.codigo) || 0;
+                    const imageUrl = p.url_imagens_externas && p.url_imagens_externas[0]
+                        ? p.url_imagens_externas[0]
+                        : 'https://placehold.co/50x50/e2e8f0/64748b?text=?';
+                    reportContentHtml += `
+                    <tr data-product-id="${p.id}">
+                        <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-medium">
+                            <button class="remove-item-btn text-red-600 hover:text-red-800 p-1 rounded-full" title="Remover item" data-product-id="${p.id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                            </button>
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <img src="${imageUrl}"
+                                     alt="${p.descricao || 'Imagem do produto'}"
+                                     class="product-list-item-img"
+                                     data-image-url="${imageUrl}"
+                                     onerror="this.onerror=null;this.src='https://placehold.co/50x50/e2e8f0/64748b?text=?';">
+                                <div class="ml-4">
+                                    <div class="text-xs font-medium text-gray-900">${p.descricao}</div>
+                                    <div class="text-xs text-gray-500">${p.codigo}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-bold text-gray-800">${p.estoque ?? 0}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-bold text-blue-600">${aguardandoChegar}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-center text-xs text-gray-500">${p.estoque_minimo ?? 0} / ${p.estoque_maximo ?? 0}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-bold text-gray-600">${p.vendas_ultimos_90_dias ?? 0}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-center text-xs font-medium">
+                            <input type="number" value="${currentQuantity}" data-product-id="${p.id}" class="report-quantity-input w-20 px-2 py-1 border border-gray-300 rounded-md text-center text-xs" min="0">
+                        </td>
+                    </tr>
+                `;
+                });
+                reportContentHtml += `</tbody></table></div>`;
+
+                if (_pageReportContent) _pageReportContent.innerHTML = reportContentHtml;
+                _showPage('report');
+
+                _pageReportContent.querySelectorAll('.remove-item-btn').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        const productIdToRemove = event.currentTarget.dataset.productId;
+                        _selectedStockItems.delete(productIdToRemove);
+                        _reportQuantities.delete(productIdToRemove);
+                        _prepareRequisition(); // CORREÇÃO
+                        _updateSelectedCountDisplay();
+                    });
+                });
+
+                // Adiciona listeners para os cabeçalhos ordenáveis do relatório
+                _pageReportContent.querySelectorAll('.sortable-header').forEach(header => {
+                    header.addEventListener('click', () => {
+                        const sortKey = header.dataset.sort;
+                        if (_reportState.sortColumn === sortKey) {
+                            _reportState.sortDirection = _reportState.sortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            _reportState.sortColumn = sortKey;
+                            _reportState.sortDirection = 'asc';
+                        }
+                        _prepareRequisition(); // CORREÇÃO
+                    });
+                });
+
+                // NOVO: Adiciona listeners para os inputs de quantidade
+                _pageReportContent.querySelectorAll('.report-quantity-input').forEach(input => {
+                    input.addEventListener('input', (event) => {
+                        // CORREÇÃO: Chama a função interna diretamente, pois 'App' ainda não está definido neste escopo.
+                        // A função _updateReportQuantity já está acessível aqui.
+                        _updateReportQuantity(event.target.dataset.productId, event.target.value);
+                    });
+                });
+
+                // Adiciona listener para o novo alternador
+                const toggle = _pageReportContent.querySelector('#intelligent-requisition-toggle');
+                if (toggle) toggle.addEventListener('change', _handleIntelligentToggleChange);
+
+                if (_pageReportContent) {
+                    _pageReportContent.addEventListener('mouseover', (event) => {
+                        if (event.target.classList.contains('product-list-item-img')) {
+                            _showProductTooltip(event);
+                        }
+                    });
+                    _pageReportContent.addEventListener('mouseout', (event) => {
+                        if (event.target.classList.contains('product-list-item-img')) {
+                            _hideProductTooltip();
+                        }
+                    });
+                }
+            }
+
+
+            /**
+             * ATUALIZADO: Lida com o lançamento da requisição para Fábrica ou Terceiros.
+             */
+            async function _handleLaunchRequisition(type) {
+                // 1. Verifica se há itens da fábrica em uma requisição de terceiros e pede confirmação.
+                if (type === 'terceiros') {
+                    const anyFabricaItemSelected = Array.from(_reportQuantities.keys()).some(productId => {
+                        const product = _allProducts.find(p => p.id === productId);
+                        return (_reportQuantities.get(productId) || 0) > 0 && product?.codigo?.startsWith('6');
+                    });
+                    if (anyFabricaItemSelected) {
+                        const confirmed = await _showConfirmationModal("Atenção", "Sua seleção contém itens da Fábrica (código iniciado com '6'). Eles não serão incluídos nesta requisição de Terceiros. Deseja continuar?");
+                        if (!confirmed) return;
+                    }
+                }
+
+                // 2. Filtra os itens a serem lançados com base no tipo (fábrica/terceiros).
+                const itemsToLaunch = Array.from(_reportQuantities.entries())
+                    .filter(([productId, qty]) => {
+                        if (qty <= 0) return false;
+                        const product = _allProducts.find(p => p.id === productId);
+                        if (!product) return false;
+                        const isFabricaItem = product.codigo?.startsWith('6');
+                        return (type === 'fabrica' && isFabricaItem) || (type === 'terceiros' && !isFabricaItem);
+                    })
+                    .map(([productId, qty]) => {
+                        const product = _allProducts.find(p => p.id === productId);
+                        return {
+                            id: product.id, codigo: product.codigo, descricao: product.descricao, quantidade: qty,
+                            unidade: product.unidade || 'UN', preco: product.preco || 0,
+                            situacao: 'PENDENTE' // Adiciona o status padrão ao criar o item
+                        };
+                    });
+
+                // 3. Verifica se há itens para lançar.
+                if (itemsToLaunch.length === 0) {
+                    _showMessageModal("Nenhum Item", `Não há itens do tipo '${type}' para lançar.`);
+                    return;
+                }
+
+                // 4. Lógica de lançamento específica por tipo
+                if (type === 'fabrica') {
+                    // Gera o código da requisição para fábrica
+                    const today = new Date();
+                    const ddmmaa = `${String(today.getDate()).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getFullYear()).slice(-2)}`;
+                    const todayStr = today.toLocaleDateString('pt-BR');
+                    const requisitionsToday = new Set(
+                        _allOrdersFabrica
+                            .filter(order => {
+                                const orderDate = _parsePtBrDate(order.dataPedido);
+                                return orderDate && orderDate.toLocaleDateString('pt-BR') === todayStr;
+                            })
+                            .map(order => order.orderCode)
+                    );
+                    const nextSequence = requisitionsToday.size + 1;
+                    const requisitionCode = `${ddmmaa}-${nextSequence}`;
+
+                    // Mostra o modal de confirmação final.
+                    const confirmationMessage = `Confirmar lançamento de <b>${itemsToLaunch.length}</b> itens?<br><br>Requisição <b>${type.toUpperCase()}</b> com o código <b>${requisitionCode}</b>.`;
+                    const confirmed = await _showConfirmationModal("Confirmar Lançamento", confirmationMessage);
+                    if (!confirmed) return;
+
+                    // Se confirmado, executa o lançamento.
+                    _executeLaunch(type, requisitionCode, itemsToLaunch);
+
+                } else {
+                    // Abre o modal para inserir o código
+                    if (_terceirosReqModalMessage) _terceirosReqModalMessage.textContent = `Você está lançando uma requisição para ${itemsToLaunch.length} itens de Terceiros.`;
+                    if (_terceirosRequisitionCodeInput) _terceirosRequisitionCodeInput.value = '';
+                    if (_terceirosRequisitionModal) {
+                        _terceirosRequisitionModal.classList.remove('hidden');
+                        _terceirosRequisitionCodeInput.focus();
+                    }
+                }
+            }
+
+            // NOVO: Função para confirmar e prosseguir com a requisição de terceiros
+            async function _confirmTerceirosRequisition() {
+                const requisitionCode = _terceirosRequisitionCodeInput.value.trim();
+                if (!requisitionCode) {
+                    _showMessageModal("Código Necessário", "Por favor, insira o código da requisição do Phoenix.");
+                    return;
+                }
+
+                // Esconde o primeiro modal
+                if (_terceirosRequisitionModal) _terceirosRequisitionModal.classList.add('hidden');
+
+                // Filtra os itens novamente (para garantir)
+                const itemsToLaunch = Array.from(_reportQuantities.entries())
+                    .filter(([productId, qty]) => {
+                        if (qty <= 0) return false;
+                        const product = _allProducts.find(p => p.id === productId);
+                        if (!product) return false;
+                        const isFabricaItem = product.codigo?.startsWith('6');
+                        return !isFabricaItem; // Apenas itens de terceiros
+                    })
+                    .map(([productId, qty]) => {
+                        const product = _allProducts.find(p => p.id === productId);
+                        return {
+                            id: product.id, codigo: product.codigo, descricao: product.descricao, quantidade: qty,
+                            unidade: product.unidade || 'UN', preco: product.preco || 0,
+                            situacao: 'PENDENTE' // Adiciona o status padrão ao criar o item
+                        };
+                    });
+
+                if (itemsToLaunch.length === 0) {
+                    _showMessageModal("Nenhum Item", `Não há itens do tipo 'terceiros' para lançar.`);
+                    return;
+                }
+
+                // Mostra o modal de confirmação final.
+                const confirmationMessage = `Confirmar lançamento de <b>${itemsToLaunch.length}</b> itens?<br><br>Requisição <b>TERCEIROS</b> com o código <b>${requisitionCode}</b>.`;
+                const confirmed = await _showConfirmationModal("Confirmar Lançamento", confirmationMessage);
+                if (!confirmed) return;
+
+                // Se confirmado, executa o lançamento.
+                _executeLaunch('terceiros', requisitionCode, itemsToLaunch);
+            }
+
+            /**
+             * NOVO: Função centralizada que envia a requisição para a API de lançamento.
+             */
+            async function _executeLaunch(type, requisitionCode, itemsToLaunch) {
+                _loadingOverlay.classList.remove('hidden');
+                const targetLaunchUrl = type === 'fabrica' ? `${API_URLS.WEBHOOK_LAUNCH}/launch-fabrica` : API_URLS.WEBHOOK_LAUNCH;
+
+                try {
+                    const response = await fetch(targetLaunchUrl, {
+                        method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phoenixCode: requisitionCode, items: itemsToLaunch })
+                    });
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Erro na rede (Status: ${response.status}): ${errorText}`);
+                    }
+                    const resultJson = await response.json();
+                    if (resultJson.requisitionData) {
+                        if (type === 'terceiros') _allOrdersTerceiros.push(resultJson.requisitionData);
+                        else if (type === 'fabrica') _allOrdersFabrica.push(resultJson.requisitionData);
+                    }
+                    _showMessageModal("Sucesso!", `Requisição lançada!`);
+
+                    itemsToLaunch.forEach(launchedItem => {
+                        _selectedStockItems.delete(launchedItem.id);
+                        _reportQuantities.delete(launchedItem.id);
+                    });
+                    _updateSelectedCountDisplay();
+                    _showPage('estoque');
+                    _renderRequisitionOverviewPage();
+                    if (!_terceirosOrdersModal.classList.contains('hidden')) _renderConsolidatedOrdersTable();
+                } catch (error) {
+                    _showMessageModal("Erro no Lançamento", `Falha: ${error.message}.`);
+                } finally {
+                    _loadingOverlay.classList.add('hidden');
+                }
+            }
+
+            function _removeItemFromPrintPreview(index) {
+                _itemsToPrint.splice(index, 1);
+                _renderPrintPreviewTable();
+            }
+
+            function _openPrintPreviewModal(items, type) {
+                _itemsToPrint = JSON.parse(JSON.stringify(items));
+                _currentPrintModalType = type;
+                const titles = {
+                    orders: 'Pré-visualização para Impressão de Pedidos',
+                    nfe: 'Pré-visualização para Impressão de Notas Fiscais',
+                    fabrica_solicitacao: 'Pré-visualização para Impressão de Solicitação Fábrica'
+                };
+                if (_printModalTitle) _printModalTitle.textContent = titles[type] || 'Pré-visualização';
+                _renderPrintPreviewTable();
+                if (_printTableModal) _printTableModal.classList.remove('hidden');
+            }
+
+            function _renderPrintPreviewTable() {
+                if (_itemsToPrint.length === 0) {
+                    if (_printModalContent) _printModalContent.innerHTML = '<p class="text-center text-gray-500 py-8">Nenhum item para imprimir.</p>';
+                    return;
+                }
+
+                let tableHtml = '';
+                if (_currentPrintModalType === 'nfe') {
+                    const headers = [
+                        { label: 'AÇÕES', key: 'actions' }, { label: 'Nº DA NOTA', key: 'numero_da_nota' },
+                        { label: 'DATA DE EMISSÃO', key: 'data_de_emissao' }, { label: 'SITUAÇÃO', key: 'situacao' },
+                        { label: 'VALOR DA NOTA', key: 'valor_da_nota' }, { label: 'VALOR DO FRETE', key: 'valor_do_frete' },
+                        { label: 'NOME DO CLIENTE', key: 'nome_do_cliente' }, { label: 'CNPJ/CPF CLIENTE', key: 'cnpjcpf_cliente' },
+                        { label: 'NOME DO VENDEDOR', key: 'nome_do_vendedor' }, { label: 'Nº PEDIDO LOJA', key: 'numero_pedido_loja' },
+                        { label: 'TRANSPORTADORA', key: 'transportadora' }, { label: 'FRETE POR CONTA', key: 'frete_por_conta' },
+                        { label: 'ORIGEM LOJA', key: 'origem_loja' }, { label: 'OBSERVÇÃO', key: 'observacao' }
+                    ];
+                    tableHtml = `<table class="print-preview-table"><thead><tr>${headers.map(h => `<th>${h.label}</th>`).join('')}</tr></thead><tbody>`;
+                    _itemsToPrint.forEach((nfe, index) => {
+                        const nfeDate = _parsePtBrDate(nfe.data_de_emissao);
+                        const dataEmissao = nfeDate ? nfeDate.toLocaleDateString('pt-BR') : 'N/A';
+                        const rowClass = nfe.conferido === 'Sim' ? 'row-conferido' : 'row-nao-conferido';
+                        tableHtml += `<tr class="${rowClass}">
+                        <td><button class="remove-print-item-btn text-red-600" data-index="${index}">Remover</button></td>
+                        <td>${nfe.numero_da_nota || 'N/A'}</td>
+                        <td>${dataEmissao}</td>
+                        <td>${nfe.situacao || 'N/A'}</td>
+                        <td>${(nfe.valor_da_nota || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td>${(nfe.valor_do_frete || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td>${nfe.nome_do_cliente || 'N/A'}</td>
+                        <td>${formatCnpjCpf(nfe.cnpjcpf_cliente)}</td>
+                        <td>${nfe.nome_do_vendedor || 'N/A'}</td>
+                        <td>${nfe.numero_pedido_loja || 'N/A'}</td>
+                        <td>${nfe.transportadora || 'N/A'}</td>
+                        <td>${nfe.frete_por_conta || 'N/A'}</td>
+                        <td>${nfe.origem_loja || 'N/A'}</td>
+                        <td>${nfe.observacao || ''}</td>
+                    </tr>`;
+                    });
+                    tableHtml += '</tbody></table>';
+                }
+                // Add other _currentPrintModalType conditions if necessary...
+
+                if (_printModalContent) _printModalContent.innerHTML = tableHtml;
+                _printModalContent.querySelectorAll('.remove-print-item-btn').forEach(button => {
+                    button.addEventListener('click', (event) => _removeItemFromPrintPreview(parseInt(event.target.dataset.index, 10)));
+                });
+            }
+
+            async function _confirmPrintPreview() {
+                // A lógica de gerar PDF com html2pdf foi removida.
+                // Agora, simplesmente acionamos a caixa de diálogo de impressão do navegador.
+                // As regras de CSS @media print cuidarão de formatar o conteúdo corretamente.
+                window.print();
+            }
+
+            function _printReportDirectly() {
+                // Pega apenas os produtos que estão no relatório e têm quantidade > 0
+                const productsToPrint = _allProducts
+                    .filter(p => _selectedStockItems.has(p.id) && (_reportQuantities.get(p.id) || 0) > 0);
+
+                if (productsToPrint.length === 0) {
+                    _showMessageModal("Nenhum Item", "Não há itens com quantidade a requisitar maior que zero para imprimir.");
+                    return;
+                }
+
+                const aguardandoMap = _calculateAguardandoChegarMap();
+
+                // Re-usa a lógica de ordenação do relatório
+                productsToPrint.sort((a, b) => {
+                    const sortKey = _reportState.sortColumn;
+                    let valA, valB;
+                    if (sortKey === 'aguardandoChegar') { valA = aguardandoMap.get(a.codigo) || 0; valB = aguardandoMap.get(b.codigo) || 0; }
+                    else if (['estoque', 'estoque_minimo', 'estoque_maximo', 'vendas_ultimos_90_dias'].includes(sortKey)) { valA = a[sortKey] || 0; valB = b[sortKey] || 0; }
+                    else if (sortKey === 'quantidadeRequisitar') { valA = _reportQuantities.get(a.id) || 0; valB = _reportQuantities.get(b.id) || 0; }
+                    else { valA = a[sortKey] || ''; valB = b[sortKey] || ''; }
+                    let comparison = 0;
+                    if (typeof valA === 'number' && typeof valB === 'number') { comparison = valA - valB; }
+                    else { comparison = String(valA).localeCompare(String(valB), 'pt-BR', { numeric: true }); }
+                    return _reportState.sortDirection === 'asc' ? comparison : -comparison;
+                });
+
+                // --- Coleta de informações adicionais para o cabeçalho ---
+                const requisitionModeText = _reportState.isIntelligentMode ? 'Requisição Inteligente (Até Fim do Ano)' : 'Requisição Padrão';
+                const currentDateText = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+                const hasFabricaItems = productsToPrint.some(p => p.codigo?.startsWith('6'));
+                const hasTerceirosItems = productsToPrint.some(p => !p.codigo?.startsWith('6'));
+
+                let modelTypeText = '';
+                if (hasFabricaItems && hasTerceirosItems) {
+                    modelTypeText = 'Modelo: Terceiros e Fábrica';
+                } else if (hasFabricaItems) {
+                    modelTypeText = 'Modelo: Fábrica';
+                } else if (hasTerceirosItems) {
+                    modelTypeText = 'Modelo: Terceiros';
+                }
+
+                // Constrói o HTML para impressão do relatório
+                let printHtml = `
+                <h1 style="font-size: 16pt; font-weight: bold; text-align: center; margin-bottom: 5px;">Relatório de Requisição</h1>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9pt; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+                    <span style="font-weight: bold;">${requisitionModeText}</span>
+                    <span style="font-weight: bold;">${modelTypeText}</span>
+                    <span>Data: ${currentDateText}</span>
+                </div>
+                <table class="report-print-table">
+                    <thead>
+                        <tr>
+                            <th>Produto</th> <!-- Coluna 1 -->
+                            <th class="text-center-print">Est.</th> <!-- Coluna 2 -->
+                            <th class="text-center-print">Aguardando</th> <!-- Coluna 3 -->
+                            <th class="text-center-print">Mín/Máx</th> <!-- Coluna 4 -->
+                            <th class="text-center-print">Vendas 90d</th> <!-- Coluna 5 -->
+                            <th class="text-center-print">Qtd. Req.</th> <!-- Coluna 6 -->
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+                productsToPrint.forEach(p => {
+                    const currentQuantity = _reportQuantities.get(p.id) || 0;
+                    const aguardandoChegar = aguardandoMap.get(p.codigo) || 0;
+                    const imageUrl = p.url_imagens_externas?.[0] || 'https://placehold.co/50x50/e2e8f0/64748b?text=?';
+                    printHtml += `
+                    <tr>
+                        <td><div style="display: flex; align-items: center;"><img src="${imageUrl}" alt="" class="product-list-item-img" onerror="this.style.display='none'"><div style="margin-left: 8px;"><div style="font-weight: 500;">${p.descricao || ''}</div><div style="font-size: 0.875rem; color: #6b7280;">${p.codigo || ''}</div></div></div></td> <!-- Coluna 1 -->
+                        <td class="text-center-print">${p.estoque ?? 0}</td> <!-- Coluna 2 -->
+                        <td class="text-center-print">${aguardandoChegar}</td> <!-- Coluna 3 -->
+                        <td class="text-center-print">${p.estoque_minimo ?? 0} / ${p.estoque_maximo ?? 0}</td> <!-- Coluna 4 -->
+                        <td class="text-center-print">${p.vendas_ultimos_90_dias ?? 0}</td> <!-- Coluna 5 -->
+                        <td class="text-center-print" style="font-weight: bold;">${currentQuantity}</td> <!-- Coluna 6 -->
+                    </tr>
+                `;
+                });
+                printHtml += `</tbody></table>`;
+
+                if (_printArea) {
+                    _printArea.innerHTML = printHtml;
+                    window.print();
+                    _printArea.innerHTML = ''; // Limpa a área após a impressão
+                }
+            }
+
+            /**
+             * ATUALIZADO: Imprime a "Solicitação" a partir da Lista de Pedidos em uma única folha.
+             */
+            function _printRequisitionSolicitation() {
+                if (_currentFilteredOrderItems.length === 0) {
+                    _showMessageModal("Nenhum Item", "Não há itens na tabela para imprimir a solicitação.");
+                    return;
+                }
+
+                const itemsToPrint = _currentFilteredOrderItems;
+                const currentDate = new Date().toLocaleDateString('pt-br');
+
+                // NOVO: Define o título dinamicamente com base no tipo de lista
+                let reportTitle = 'Itens de Reposição'; // Título padrão para requisições de compra
+                if (_ordersTableState.selectedType === 'saidas-fabrica') {
+                    reportTitle = 'Saída para Fábrica';
+                } else if (_ordersTableState.selectedType === 'saidas-garantia') {
+                    reportTitle = 'Itens de Garantia';
+                }
+
+                let printHtml = '';
+
+                printHtml += `
+                <div class="solicitation-page">
+                    <div class="solicitation-header">
+                        <div class="company-name">MKS Service</div>
+                        <div class="report-title">${reportTitle}</div>
+                        <div class="solicitation-info">
+                            <div><strong>Data da Impressão:</strong> ${currentDate}</div>
+                        </div>
+                    </div>
+                    <table class="solicitation-print-table">
+                        <thead>
+                            <tr>
+                                <th>Requisição / Foto</th>
+                                <th>Produto / Código</th>
+                                <th>Localização</th>
+                                <th>Qtd. Solicitada</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+                itemsToPrint.forEach(item => {
+                    const product = _allProducts.find(p => p.codigo === item.codigoService);
+                    const imageUrl = product?.url_imagens_externas?.[0];
+                    const imageHtml = imageUrl
+                        ? `<img src="${imageUrl}" class="solicitation-product-image" onerror="this.style.display='none'">`
+                        : `<span style="font-size: 9pt; color: #6b7280;">Sem Imagem</span>`;
+
+                    printHtml += `
+                    <tr>
+                        <td class="photo-cell">
+                            <strong style="display: block; margin-bottom: 5px;">${item.orderCode}</strong>
+                            ${imageHtml}
+                        </td>
+                        <td class="product-cell">
+                            <strong>${item.descricao}</strong><br>
+                            <small>Código: ${item.codigoService}</small>
+                        </td>
+                        <td class="location-cell">${item.localizacao || 'N/A'}</td>
+                        <td class="quantity-cell">${item.quantidadePedido}</td>
+                    </tr>
+                `;
+                });
+
+                printHtml += `</tbody></table></div>`;
+
+                if (_printArea) {
+                    _printArea.innerHTML = printHtml;
+                    window.print();
+                    _printArea.innerHTML = '';
+                }
+            }
+
+            /**
+             * NOVO: Imprime a "Solicitação" a partir da tela de Relatório/Preparação.
+             */
+            function _printReportSolicitation() {
+                // CORREÇÃO: Usa os produtos já filtrados na tela do relatório, em vez de buscar na lista completa.
+                // A chave do mapa de quantidades é o 'id' do produto.
+                const productsToPrint = Array.from(_reportQuantities.keys())
+                    .filter(productId => (_reportQuantities.get(productId) || 0) > 0)
+                    .map(productId => _allProducts.find(p => String(p.id) === String(productId)));
+
+                if (productsToPrint.length === 0) {
+                    _showMessageModal("Nenhum Item", "Não há itens com quantidade a requisitar maior que zero para imprimir.");
+                    return;
+                }
+
+                const requisitionModeText = _reportState.isIntelligentMode ? 'Requisição Inteligente' : 'Requisição Padrão';
+                const currentDateText = new Date().toLocaleDateString('pt-BR');
+
+                let printHtml = `
+                <div class="solicitation-page">
+                    <div class="solicitation-header">
+                        <div class="company-name">MKS Service</div>
+                        <div class="report-title">Itens de Reposição</div>
+                        <div class="solicitation-info">
+                            <div><strong>Modo:</strong> ${requisitionModeText}</div>
+                            <div><strong>Data da Solicitação:</strong> ${currentDateText}</div>
+                        </div>
+                    </div>
+                    <table class="solicitation-print-table">
+                        <thead><tr><th>Foto</th><th>Produto / Código</th><th>Localização</th><th>Qtd. Solicitada</th></tr></thead>
+                        <tbody>`;
+
+                productsToPrint.forEach(p => {
+                    const requestedQty = _reportQuantities.get(p.id) || 0;
+                    const imageUrl = p.url_imagens_externas?.[0];
+                    const imageHtml = imageUrl
+                        ? `<img src="${imageUrl}" class="solicitation-product-image" onerror="this.style.display='none'">`
+                        : `<span style="font-size: 9pt; color: #6b7280;">Sem Imagem</span>`;
+                    printHtml += `<tr>
+                    <td class="photo-cell">${imageHtml}</td>
+                    <td class="product-cell"><strong>${p.descricao}</strong><br><small>Código: ${p.codigo}</small></td>
+                    <td class="location-cell">${p.localizacao || 'N/A'}</td>
+                    <td class="quantity-cell">${requestedQty}</td>
+                </tr>`;
+                });
+                printHtml += `</tbody></table></div>`;
+
+                if (_printArea) {
+                    _printArea.innerHTML = printHtml;
+                    window.print();
+                    _printArea.innerHTML = '';
+                }
+            }
+
+            function _exportReportToCSV() {
+                if (_selectedStockItems.size === 0) {
+                    _showMessageModal("Nenhum Item", "Não há itens no relatório para exportar.");
+                    return;
+                }
+
+                const selectedProducts = _allProducts.filter(p => _selectedStockItems.has(p.id));
+                const aguardandoMap = _calculateAguardandoChegarMap();
+
+                const headers = ["Código", "Descrição", "Estoque", "Aguardando Chegar", "Estoque Mínimo", "Estoque Máximo", "Vendas 90d", "Qtd. a Requisitar"];
+                let csvContent = headers.join(";") + "\n";
+
+                selectedProducts.forEach(p => {
+                    const aguardandoChegar = aguardandoMap.get(p.codigo) || 0;
+                    const quantidadeRequisitar = _reportQuantities.get(p.id) || 0;
+                    const escapeCSV = (field) => `"${String(field || '').replace(/"/g, '""')}"`;
+
+                    const row = [
+                        escapeCSV(p.codigo), escapeCSV(p.descricao), p.estoque ?? 0, aguardandoChegar,
+                        p.estoque_minimo ?? 0, p.estoque_maximo ?? 0, p.vendas_ultimos_90_dias ?? 0, quantidadeRequisitar
+                    ].join(";");
+                    csvContent += row + "\n";
+                });
+
+                const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "relatorio_requisicao.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+
+
+
+            function _createNFeDashboardCard(storeName, color) {
+                return `<div data-store="${storeName}" class="nfe-diagnostic-card bg-white p-4 rounded-lg shadow-md cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex items-center justify-center">
+                        <h3 class="text-lg font-semibold text-gray-700 text-center">Analisar ${storeName}</h3>
+                    </div>`;
+            }
+
+            // ATUALIZADO: Função para renderizar a página de Conferência NFe com os novos cards
+            function _renderNFeOverviewPage() {
+                let filteredNFeByDate = _allNFeData;
+                const { startDate, endDate } = _nfeTableState.filters;
+
+                if (startDate || endDate) {
+                    filteredNFeByDate = _allNFeData.filter(nfe => {
+                        const nfeDate = _parsePtBrDate(nfe.data_de_emissao);
+                        if (!nfeDate) return false;
+                        const startMatch = startDate ? nfeDate >= startDate : true;
+                        const endMatch = endDate ? nfeDate <= endDate : true;
+                        return startMatch && endMatch;
+                    });
+                }
+
+                if (!filteredNFeByDate || filteredNFeByDate.length === 0) {
+                    if (_noNFeMessageOverview) _noNFeMessageOverview.classList.remove('hidden');
+                    return;
+                }
+
+                if (_noNFeMessageOverview) _noNFeMessageOverview.classList.add('hidden');
+
+                // ATUALIZADO: Renderiza a tabela se não for a visualização inicial
+                if (!_nfeTableState.isInitialView) {
+                    _renderNFeDiagnosticTable(_nfeTableState.currentStoreFilter);
+                } else {
+                    if (_nfeDiagnosticTableContainer) _nfeDiagnosticTableContainer.innerHTML = '';
+                }
+            }
+
+            async function _handleNFeConferenciaChange(event) {
+                const selectElement = event.target;
+                const nfeId = selectElement.dataset.nfeId;
+                const newStatus = selectElement.value;
+                const oldStatus = selectElement.dataset.currentStatus;
+
+                if (newStatus === oldStatus) return; const confirmed = await _showConfirmationModal(
+                    "Confirmar Alteração",
+                    `Deseja alterar o status da Nota Fiscal ID <b>${nfeId}</b> para '<b>${newStatus}</b>'?`
+                );
+
+                if (confirmed) {
+                    _loadingOverlay.classList.remove('hidden');
+                    try {
+                        const payload = {
+                            id_nota: nfeId,
+                            conferido: newStatus
+                        };
+
+                        const response = await fetch(API_URLS.NFE_CONFERENCIA, {
+                            method: 'POST',
+                            mode: 'cors',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`Erro na rede (Status: ${response.status}): ${errorText}`);
+                        }
+
+                        // Update local data
+                        const nfeToUpdate = _allNFeData.find(nfe => String(nfe.id_nota) === String(nfeId));
+                        if (nfeToUpdate) {
+                            nfeToUpdate.conferido = newStatus;
+                            selectElement.dataset.currentStatus = newStatus; // Update the current status
+                        }
+
+                        _renderNFeOverviewPage();
+
+                    } catch (error) {
+                        _showMessageModal("Erro na Alteração", `Falha ao alterar status: ${error.message}.`);
+                        selectElement.value = oldStatus; // Revert on failure
+                    } finally {
+                        _loadingOverlay.classList.add('hidden');
+                    }
+                } else {
+                    selectElement.value = oldStatus; // Revert if user cancels
+                }
+            }
+
+
+            function _renderNFeDiagnosticTable(storeFilter) {
+                let filteredNFe = _allNFeData;
+                const { startDate, endDate } = _nfeTableState.filters;
+
+                if (startDate || endDate) {
+                    filteredNFe = filteredNFe.filter(nfe => {
+                        const nfeDate = _parsePtBrDate(nfe.data_de_emissao);
+                        if (!nfeDate) return false;
+                        const startMatch = startDate ? nfeDate >= startDate : true;
+                        const endMatch = endDate ? nfeDate <= endDate : true;
+                        return startMatch && endMatch;
+                    });
+                }
+
+                const storeMap = { 'bling': 'Bling', 'mercado_livre': 'Mercado Livre', 'loja_integrada': 'Loja Integrada' };
+                const storeName = storeMap[storeFilter] || 'Todos os Canais';
+
+                if (storeFilter !== 'todos') {
+                    filteredNFe = filteredNFe.filter(nfe => nfe.origem_loja === storeName);
+                }
+
+                // Filtro de status de conferência
+                if (_nfeTableState.conferenceStatusFilter === 'conferidas') {
+                    filteredNFe = filteredNFe.filter(nfe => nfe.conferido === 'Sim');
+                } else if (_nfeTableState.conferenceStatusFilter === 'nao_conferidas') {
+                    filteredNFe = filteredNFe.filter(nfe => nfe.conferido !== 'Sim');
+                }
+
+
+                filteredNFe.sort((a, b) => {
+                    const sortKey = _nfeTableState.sortColumn;
+                    let valA = a[sortKey];
+                    let valB = b[sortKey];
+                    if (sortKey === 'data_de_emissao') {
+                        valA = _parsePtBrDate(valA) || new Date(0);
+                        valB = _parsePtBrDate(valB) || new Date(0);
+                    } else if (['valor_da_nota', 'valor_do_frete'].includes(sortKey)) {
+                        valA = parseFloat(valA) || 0;
+                        valB = parseFloat(valB) || 0;
+                    }
+                    const comparison = valA > valB ? 1 : (valA < valB ? -1 : 0);
+                    return _nfeTableState.sortDirection === 'asc' ? comparison : -comparison;
+                });
+
+                const headers = [
+                    { label: 'Nº DA NOTA', key: 'numero_da_nota' },
+                    { label: 'DATA DE EMISSÃO', key: 'data_de_emissao' },
+                    { label: 'CLIENTE', key: 'nome_do_cliente' },
+                    { label: 'VENDEDOR', key: 'nome_do_vendedor' },
+                    { label: 'VALOR', key: 'valor_da_nota' },
+                    { label: 'SITUAÇÃO', key: 'situacao' }
+                ];
+
+                let tableHtml = `
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
+                        <h3 class="text-xl font-bold text-gray-800">Diagnóstico de Vendas: ${storeName}</h3>
+                        <button id="close-diagnostic-table-btn" class="text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
+                    </div>
+                    <div id="nfe-diagnostic-table-content" class="overflow-auto max-h-[60vh]">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    ${headers.map(h => `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable-header" data-sort="${h.key}">${h.label} ${_renderNFeSortIcon(h.key)}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                ${filteredNFe.map(nfe => {
+                    const nfeDate = _parsePtBrDate(nfe.data_de_emissao);
+                    const isConferido = nfe.conferido === 'Sim';
+                    return `
+                                    <tr class="${isConferido ? 'row-conferido' : 'row-nao-conferido'}">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600"><a href="${nfe.link_danfe || '#'}" target="_blank" rel="noopener noreferrer">${nfe.numero_da_nota || 'N/A'}</a></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${nfeDate ? nfeDate.toLocaleDateString('pt-BR') : 'N/A'}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${nfe.nome_do_cliente || 'N/A'}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${nfe.nome_do_vendedor || 'N/A'}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${(parseFloat(nfe.valor_da_nota) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${nfe.situacao || 'N/A'}</td>
+                                    </tr>
+                                `}).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+                if (_nfeDiagnosticTableContainer) {
+                    _nfeDiagnosticTableContainer.innerHTML = tableHtml;
+                    _nfeDiagnosticTableContainer.querySelector('#close-diagnostic-table-btn').addEventListener('click', () => {
+                        _nfeDiagnosticTableContainer.innerHTML = '';
+                        _nfeTableState.isInitialView = true; // Reseta para o estado inicial ao fechar
+                        _nfeTableState.currentStoreFilter = 'todos';
+                        _nfeTableState.conferenceStatusFilter = 'todos';
+                        _renderNFeOverviewPage(); // Re-renderiza os cards para remover o estado 'active'
+                    });
+                    _nfeDiagnosticTableContainer.querySelectorAll('.sortable-header').forEach(header => {
+                        header.addEventListener('click', () => {
+                            const sortKey = header.dataset.sort;
+                            if (_nfeTableState.sortColumn === sortKey) {
+                                _nfeTableState.sortDirection = _nfeTableState.sortDirection === 'asc' ? 'desc' : 'asc';
+                            } else {
+                                _nfeTableState.sortColumn = sortKey;
+                                _nfeTableState.sortDirection = 'asc';
+                            }
+                            _renderNFeDiagnosticTable(storeFilter);
+                        });
+                    });
+                }
+            }
+
+
+
+
+            /**
+             * NOVO: Vincula os eventos dos botões do modal de ajuste de estoque.
+             */
+            function _bindStockAdjustmentModalEvents() {
+                if (_closeStockAdjustmentModalBtn) {
+                    _closeStockAdjustmentModalBtn.addEventListener('click', () => _stockAdjustmentModal.classList.add('hidden'));
+                }
+                if (_cancelStockAdjustmentBtn) {
+                    _cancelStockAdjustmentBtn.addEventListener('click', () => _stockAdjustmentModal.classList.add('hidden'));
+                }
+                if (_confirmStockAdjustmentBtn) {
+                    _confirmStockAdjustmentBtn.addEventListener('click', _saveStockAdjustment);
+                }
+            }
+
+            /**
+             * NOVO: Vincula os eventos dos botões do modal de edição de nome do produto.
+             */
+            function _bindProductNameEditModalEvents() {
+                if (_closeProductNameEditModalBtn) {
+                    _closeProductNameEditModalBtn.addEventListener('click', () => _productNameEditModal.classList.add('hidden'));
+                }
+                if (_cancelProductNameEditBtn) {
+                    _cancelProductNameEditBtn.addEventListener('click', () => _productNameEditModal.classList.add('hidden'));
+                }
+                if (_confirmProductNameEditBtn) {
+                    _confirmProductNameEditBtn.addEventListener('click', _saveProductNameEdit);
+                }
+            }
+
+            /**
+             * NOVO: Abre o modal para editar o nome (descrição) do produto.
+             */
+            function _openProductNameEditModal(productId) {
+                const product = _allProducts.find(p => String(p.id) === String(productId));
+                if (!product) {
+                    _showMessageModal("Erro", "Produto não encontrado para editar o nome.");
+                    return;
+                }
+
+                if (_productNameEditModal) {
+                    _productNameEditModal.dataset.productId = product.id;
+                    _productNameEditModal.dataset.codigo = product.codigo;
+                    if (_productNameEditInfo) _productNameEditInfo.innerHTML = `Editando descrição do produto código: <b>${product.codigo}</b>`;
+                    if (_productNameEditInput) _productNameEditInput.value = product.descricao;
+                    
+                    // Reseta estados de feedback
+                    if (_productNameEditLoading) _productNameEditLoading.classList.add('hidden');
+                    if (_productNameEditSuccess) _productNameEditSuccess.classList.add('hidden');
+                    if (_confirmProductNameEditBtn) _confirmProductNameEditBtn.disabled = false;
+                    
+                    _productNameEditModal.classList.remove('hidden');
+                    if (_productNameEditInput) _productNameEditInput.focus();
+                }
+            }
+
+            /**
+             * NOVO: Salva a alteração do nome do produto no backend.
+             */
+            async function _saveProductNameEdit() {
+                const productId = _productNameEditModal.dataset.productId;
+                const codigo = _productNameEditModal.dataset.codigo;
+                const novoNome = _productNameEditInput.value.trim();
+
+                if (!novoNome) {
+                    _showMessageModal("Campo Vazio", "Por favor, digite um nome para o produto.");
+                    return;
+                }
+
+                const product = _allProducts.find(p => String(p.id) === String(productId));
+                if (novoNome === product.descricao) {
+                    _productNameEditModal.classList.add('hidden');
+                    return;
+                }
+
+                // UI Feedback
+                _confirmProductNameEditBtn.disabled = true;
+                _productNameEditLoading.classList.remove('hidden');
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/produtos/${productId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nome: novoNome, codigo: codigo })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || "Erro ao atualizar nome do produto.");
+                    }
+
+                    // Feedback de Sucesso
+                    _productNameEditLoading.classList.add('hidden');
+                    _productNameEditSuccess.classList.remove('hidden');
+
+                    // Fecha o modal após um pequeno delay para o usuário ver o sucesso
+                    setTimeout(() => {
+                        _productNameEditModal.classList.add('hidden');
+                        // O WebSocket atualizará a lista global e a UI automaticamente.
+                    }, 1500);
+
+                } catch (error) {
+                    console.error("[App] Erro ao editar nome:", error);
+                    _productNameEditLoading.classList.add('hidden');
+                    _confirmProductNameEditBtn.disabled = false;
+                    _showMessageModal("Erro na Atualização", `Falha ao atualizar nome: ${error.message}`);
+                }
+            }
+
+
+            /**
+             * NOVO: Configura os campos de busca para terem um botão de limpar ("X").
+             */
+            function _setupClearableInputs() {
+                const inputsToSetup = [
+                    { input: _globalSearchInput, clearBtn: _clearGlobalSearchBtn },
+                    { input: _ordersSearchInput, clearBtn: _clearOrdersSearchBtn }
+                ];
+
+                inputsToSetup.forEach(({ input, clearBtn }) => {
+                    if (!input || !clearBtn) return;
+
+                    input.addEventListener('input', () => {
+                        clearBtn.classList.toggle('hidden', input.value === '');
+                    });
+
+                    clearBtn.addEventListener('click', () => {
+                        input.value = '';
+                        clearBtn.classList.add('hidden');
+                        // Dispara o evento 'input' para que a lógica de filtro/busca seja acionada
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.focus();
+                    });
+
+                    // Garante que o botão esteja no estado correto ao carregar a página
+                    clearBtn.classList.toggle('hidden', input.value === '');
+                });
+            }
+
+
+            function _bindEvents() {
+                const debouncedApplyGlobalFilters = debounce(_applyGlobalFilters, 300);
+                const debouncedRenderConsolidatedOrdersTable = debounce(_renderConsolidatedOrdersTable, 300);
+
+                if (_navPesquisar) _navPesquisar.addEventListener('click', (e) => { e.preventDefault(); _showPage('pesquisar'); });
+                if (_navEstoque) _navEstoque.addEventListener('click', (e) => { e.preventDefault(); _showPage('estoque'); });
+                if (_navGerenciarSaida) _navGerenciarSaida.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-saida'); });
+                if (_navDashboards) _navDashboards.addEventListener('click', (e) => { e.preventDefault(); _showPage('dashboards'); });
+                if (_viewRequisitionsBtn) _viewRequisitionsBtn.addEventListener('click', (e) => { e.preventDefault(); _showPage('overview-requisitions'); });
+                if (_requisitionBackBtn) _requisitionBackBtn.addEventListener('click', () => _showPage('estoque'));
+
+                if (_refreshButton) _refreshButton.addEventListener('click', _fetchData);
+                if (_globalSearchInput) _globalSearchInput.addEventListener('input', debouncedApplyGlobalFilters);
+                if (_globalCategoryCheckboxesContainer) _globalCategoryCheckboxesContainer.addEventListener('change', _applyGlobalFilters);
+                if (_globalFilterButton) _globalFilterButton.addEventListener('click', (e) => { e.stopPropagation(); _globalFilterDropdown.classList.toggle('hidden'); });
+                if (_navAtendimento) {
+                    _navAtendimento.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        _showPage('atendimento'); // <--- Apenas mostre a "página"
+                    });
+                }
+                if (_cancelNfeObservationBtn) {
+                    _cancelNfeObservationBtn.addEventListener('click', () => {
+                        if (_nfeObservationModal) _nfeObservationModal.classList.add('hidden');
+                    });
+                }
+                if (_nfeObservationTextarea) {
+                    _nfeObservationTextarea.addEventListener('input', _updateObservationCharCount);
+                }
+                if (_saveNfeObservationBtn) {
+                    _saveNfeObservationBtn.addEventListener('click', _saveNfeObservation);
+                }
+                
+// NOVO: Listeners para o modal de relatório de produtos
+if (_openProductReportModalBtn) {
+    _openProductReportModalBtn.addEventListener('click', () => {
+        if (_productReportModal) _productReportModal.classList.remove('hidden');
+    });
+}
+if (_closeProductReportModalBtn) {
+    _closeProductReportModalBtn.addEventListener('click', () => {
+        if (_productReportModal) _productReportModal.classList.add('hidden');
+    });
+}
+if (_cancelProductReportBtn) {
+    _cancelProductReportBtn.addEventListener('click', () => {
+        if (_productReportModal) _productReportModal.classList.add('hidden');
+    });
+}
+if (_generateProductReportBtn) {
+    _generateProductReportBtn.addEventListener('click', _generateProductReport);
+}
+
+
+
+
+
+
+                window.addEventListener('click', (e) => {
+                    if (_globalFilterMenuContainer && !_globalFilterMenuContainer.contains(e.target)) _globalFilterDropdown.classList.add('hidden');
+                    if (_ordersFilterMenuContainer && !_ordersFilterMenuContainer.contains(e.target)) _ordersFilterDropdown.classList.add('hidden');
+                    if (_reportActionsMenuContainer && !_reportActionsMenuContainer.contains(e.target)) _reportActionsDropdown.classList.add('hidden');
+                    // CORREÇÃO: Adiciona a lógica para fechar o dropdown de ações da tabela de pedidos ao clicar fora.
+                    if (_ordersTableActionsMenuContainer && !_ordersTableActionsMenuContainer.contains(e.target)) _ordersTableActionsDropdown.classList.add('hidden');
+                });
+
+                if (_generateReportButton) _generateReportButton.addEventListener('click', _prepareRequisition);
+                if (_clearSelectionBtn) _clearSelectionBtn.addEventListener('click', EstoqueApp.clearSelection);
+                if (_closeModalBtn) _closeModalBtn.addEventListener('click', () => _orderDetailsModal.classList.add('hidden'));
+                if (_viewSaidasBtn) _viewSaidasBtn.addEventListener('click', () => _showPage('overview-saidas'));
+                if (_createSaidaBtn) _createSaidaBtn.addEventListener('click', () => SaidaItens.generateReport());
+                if (_clearSaidaSelectionBtn) _clearSaidaSelectionBtn.addEventListener('click', () => SaidaItens.clearSelection());
+                if (_ordersSearchInput) _ordersSearchInput.addEventListener('input', (e) => {
+                    _ordersTableState.searchTerm = e.target.value;
+                    debouncedRenderConsolidatedOrdersTable();
+                });
+                if (_ordersFilterButton) _ordersFilterButton.addEventListener('click', (e) => { e.stopPropagation(); _ordersFilterDropdown.classList.toggle('hidden'); });
+                if (_ordersStatusCheckboxesContainer) _ordersStatusCheckboxesContainer.addEventListener('change', (event) => {
+                    if (event.target.classList.contains('order-status-checkbox')) {
+                        if (event.target.checked) _ordersTableState.statusFilters.add(event.target.value);
+                        else _ordersTableState.statusFilters.delete(event.target.value);
+                        debouncedRenderConsolidatedOrdersTable();
+                    }
+                });
+
+                if (_saidaBackBtn) _saidaBackBtn.addEventListener('click', () => _showPage('gerenciar-saida'));
+                if (_saidaReportBackBtn) _saidaReportBackBtn.addEventListener('click', () => _showPage('gerenciar-saida'));
+                if (_launchSaidaGarantiaBtn) _launchSaidaGarantiaBtn.addEventListener('click', () => SaidaItens.handleLaunchSaida('garantia'));
+                if (_launchSaidaFabricaBtn) _launchSaidaFabricaBtn.addEventListener('click', () => SaidaItens.handleLaunchSaida('fabrica'));
+                if (_ordersTableActionsButton) {
+                    _ordersTableActionsButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        _ordersTableActionsDropdown.classList.toggle('hidden');
+                    });
+                }
+                if (_ordersTableActionPrintGeneric) {
+                    _ordersTableActionPrintGeneric.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        _printOrdersTableDirectly();
+                        if (_ordersTableActionsDropdown) _ordersTableActionsDropdown.classList.add('hidden');
+                    });
+                }
+                if (_ordersTableActionPrintList) {
+                    _ordersTableActionPrintList.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        _printOrdersTableDirectly();
+                        if (_ordersTableActionsDropdown) _ordersTableActionsDropdown.classList.add('hidden');
+                    });
+                }
+                if (_ordersTableActionPrintSolicitation) {
+                    _ordersTableActionPrintSolicitation.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        _printRequisitionSolicitation();
+                        if (_ordersTableActionsDropdown) _ordersTableActionsDropdown.classList.add('hidden');
+                    });
+                }
+                if (_ordersTableActionExcel) {
+                    _ordersTableActionExcel.addEventListener('click', (e) => { e.preventDefault(); _exportOrdersTableToCSV(); if (_ordersTableActionsDropdown) _ordersTableActionsDropdown.classList.add('hidden'); });
+                }
+
+                if (_reportLaunchTerceirosBtn) _reportLaunchTerceirosBtn.addEventListener('click', () => _handleLaunchRequisition('terceiros'));
+                if (_reportLaunchFabricaBtn) _reportLaunchFabricaBtn.addEventListener('click', () => _handleLaunchRequisition('fabrica'));
+                if (_reportActionsButton) {
+                    _reportActionsButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        _reportActionsDropdown.classList.toggle('hidden');
+                    });
+                }
+                if (_reportActionPrintList) {
+                    _reportActionPrintList.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        _printReportDirectly();
+                        if (_reportActionsDropdown) _reportActionsDropdown.classList.add('hidden');
+                    });
+                }
+                if (_reportActionPrintReq) {
+                    _reportActionPrintReq.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        _printReportSolicitation();
+                        if (_reportActionsDropdown) _reportActionsDropdown.classList.add('hidden');
+                    });
+                }
+                if (_reportActionExcel) {
+                    _reportActionExcel.addEventListener('click', (e) => { e.preventDefault(); _exportReportToCSV(); if (_reportActionsDropdown) _reportActionsDropdown.classList.add('hidden'); });
+                }
+                if (_reportBackBtn) _reportBackBtn.addEventListener('click', () => _showPage('estoque'));
+
+                if (_messageModalOkBtn) _messageModalOkBtn.addEventListener('click', () => _messageModal.classList.add('hidden'));
+                if (_closeMessageModalBtn) _closeMessageModalBtn.addEventListener('click', () => _messageModal.classList.add('hidden'));
+                // NOVO: Eventos para o modal de requisição de terceiros
+                if (_closeTerceirosReqModalBtn) _closeTerceirosReqModalBtn.addEventListener('click', () => _terceirosRequisitionModal.classList.add('hidden'));
+                if (_cancelTerceirosReqBtn) _cancelTerceirosReqBtn.addEventListener('click', () => _terceirosRequisitionModal.classList.add('hidden'));
+                if (_confirmTerceirosReqBtn) _confirmTerceirosReqBtn.addEventListener('click', _confirmTerceirosRequisition);
+                if (_confirmPrintBtn) _confirmPrintBtn.addEventListener('click', _confirmPrintPreview);
+                if (_closeTerceirosOrdersModalBtn) _closeTerceirosOrdersModalBtn.addEventListener('click', () => _terceirosOrdersModal.classList.add('hidden'));
+                if (_closeNFeModalBtn) _closeNFeModalBtn.addEventListener('click', () => _nfeDetailsModal.classList.add('hidden'));
+                if (_closeBrowserPrintFabricaModalBtn) _closeBrowserPrintFabricaModalBtn.addEventListener('click', () => _browserPrintFabricaModal.classList.add('hidden'));
+
+
+
+
+                // NOVO: Event listeners para o modal de observação
+                if (_cancelNfeObservationBtn) {
+                    _cancelNfeObservationBtn.addEventListener('click', () => {
+                        if (_nfeObservationModal) _nfeObservationModal.classList.add('hidden');
+                    });
+                }
+                if (_nfeObservationTextarea) {
+                    _nfeObservationTextarea.addEventListener('input', _updateObservationCharCount);
+                }
+                if (_saveNfeObservationBtn) {
+                    _saveNfeObservationBtn.addEventListener('click', _saveNfeObservation);
+                }
+
+                // NOVO: Event listeners para o modal de observação de requisição
+                if (_cancelRequisitionObservationBtn) {
+                    _cancelRequisitionObservationBtn.addEventListener('click', () => {
+                        if (_requisitionObservationModal) _requisitionObservationModal.classList.add('hidden');
+                    });
+                }
+                if (_requisitionObservationTextarea) {
+                    _requisitionObservationTextarea.addEventListener('input', _updateRequisitionObservationCharCount);
+                }
+                if (_saveRequisitionObservationBtn) {
+                    _saveRequisitionObservationBtn.addEventListener('click', _saveRequisitionObservation);
+                }
+
+
+
+            }
+
+
+            function _cacheDomElements() {
+                 _pageAtendimento = document.getElementById('page-atendimento');
+                _navAtendimento = document.getElementById('nav-atendimento');
+                _pagePesquisar = document.getElementById('page-pesquisar-produto');
+                _pageEstoque = document.getElementById('page-gerenciar-estoque');
+                _pageOverviewSaidas = document.getElementById('page-overview-saidas');
+                _pageOverviewRequisitions = document.getElementById('page-overview-requisitions');
+                _pageSaidaReport = document.getElementById('page-saida-report');
+                _pageReport = document.getElementById('page-report');
+                _pageGerenciarSaida = document.getElementById('page-gerenciar-saida');
+                _pageDashboards = document.getElementById('page-dashboards');
+                _navPesquisar = document.getElementById('nav-pesquisar');
+                _navEstoque = document.getElementById('nav-estoque');
+                _navGerenciarSaida = document.getElementById('nav-gerenciar-saida');
+                _navDashboards = document.getElementById('nav-dashboards');
+                _navAtendimento = document.getElementById('nav-atendimento');
+                _refreshButton = document.getElementById('refresh-button');
+                _loadingOverlay = document.getElementById('loading-overlay');
+                _globalFilterBar = document.getElementById('global-filter-bar');
+                _globalSearchInput = document.getElementById('global-search-input');
+                _globalFilterButton = document.getElementById('global-filter-button');
+                _globalFilterDropdown = document.getElementById('global-filter-dropdown');
+                _globalCategoryCheckboxesContainer = document.getElementById('global-category-checkboxes');
+                _selectedItemsCountDisplay = document.getElementById('selected-items-count');
+                _clearSelectionBtn = document.getElementById('clear-selection-btn');
+                _generateReportButton = document.getElementById('generate-report-button');
+                _saidaActionsContainer = document.getElementById('saida-actions');
+                _selectedSaidaItemsCount = document.getElementById('selected-saida-items-count');
+                _createSaidaBtn = document.getElementById('create-saida-btn');
+                _viewSaidasBtn = document.getElementById('view-saidas-btn');
+                _clearSaidaSelectionBtn = document.getElementById('clear-saida-selection-btn');
+                _stockActionsContainer = document.getElementById('stock-actions');
+                _globalFilterButtonLabel = document.getElementById('global-filter-button-label');
+                _globalFilterMenuContainer = document.getElementById('global-filter-menu-container');
+                _product_list_container = document.getElementById('product-list-container');
+                _product_details_container = document.getElementById('product-details-container');
+                _details_placeholder = document.getElementById('details-placeholder');
+                _product_details = document.getElementById('product-details');
+                _saidaOverviewCards = document.getElementById('saida-overview-cards');
+                _requisitionOverviewCardsContainer = document.getElementById('requisition-overview-cards');
+                _ordersTableTitle = document.getElementById('orders-table-title');
+                _ordersTableContent = document.getElementById('orders-table-content');
+                _noOrdersMessage = document.getElementById('no-orders-message');
+                _noOrdersMessageModal = document.getElementById('no-orders-message-modal');
+                _ordersSearchInput = document.getElementById('orders-search-input');
+                // NOVO: Cache dos elementos do menu de ações da tabela de pedidos
+                _ordersTableActionsMenuContainer = document.getElementById('orders-table-actions-menu-container');
+                _ordersTableActionsButton = document.getElementById('orders-table-actions-button');
+                _ordersTableActionsDropdown = document.getElementById('orders-table-actions-dropdown');
+                _ordersTableActionPrintGeneric = document.getElementById('orders-table-action-print-generic');
+                _ordersTableActionPrintList = document.getElementById('orders-table-action-print-list');
+                _ordersTableActionPrintSolicitation = document.getElementById('orders-table-action-print-solicitation');
+                _ordersTableActionExcel = document.getElementById('orders-table-action-excel');
+                _ordersFilterMenuContainer = document.getElementById('orders-filter-menu-container');
+                _ordersFilterButton = document.getElementById('orders-filter-button');
+                _ordersFilterButtonLabel = document.getElementById('orders-filter-button-label');
+                _ordersFilterDropdown = document.getElementById('orders-filter-dropdown');
+                _ordersStatusCheckboxesContainer = document.getElementById('orders-status-checkboxes');
+                _clearGlobalSearchBtn = document.getElementById('clear-global-search-btn'); // NOVO
+                _clearOrdersSearchBtn = document.getElementById('clear-orders-search-btn'); // NOVO
+                _noNFeMessageOverview = document.getElementById('no-nfe-message-overview'); // Mantido para a mensagem
+                _orderDetailsModal = document.getElementById('order-details-modal');
+                _closeModalBtn = document.getElementById('close-order-modal-btn');
+                _modalOrderTitle = document.getElementById('modal-order-title');
+                _modalOrderContent = document.getElementById('modal-order-content');
+                _messageModal = document.getElementById('message-modal');
+                _messageModalTitle = document.getElementById('message-modal-title');
+                _messageModalContent = document.getElementById('message-modal-content');
+                _messageModalOkBtn = document.getElementById('message-modal-ok-btn');
+                _closeMessageModalBtn = document.getElementById('close-message-modal-btn');
+                _reportActionBar = document.getElementById('report-action-bar');
+                _reportLaunchTerceirosBtn = document.getElementById('report-launch-terceiros-btn');
+                _reportLaunchFabricaBtn = document.getElementById('report-launch-fabrica-btn');
+                _reportBackBtn = document.getElementById('report-back-btn');
+                _pageReportContent = document.getElementById('page-report-content');
+                _reportActionsMenuContainer = document.getElementById('report-actions-menu-container');
+                _reportActionsButton = document.getElementById('report-actions-button');
+                _reportActionsDropdown = document.getElementById('report-actions-dropdown');
+                _reportActionPrintList = document.getElementById('report-action-print-list');
+                _reportActionPrintReq = document.getElementById('report-action-print-req');
+                _reportActionExcel = document.getElementById('report-action-excel');
+                _printTableModal = document.getElementById('print-table-modal');
+                _printModalTitle = document.getElementById('print-modal-title');
+                _printModalContent = document.getElementById('print-modal-content');
+                _cancelPrintBtn = document.getElementById('cancel-print-btn');
+                _printArea = document.getElementById('print-area');
+                _confirmPrintBtn = document.getElementById('confirm-print-btn');
+                _confirmationModal = document.getElementById('confirmation-modal');
+                _confirmationModalTitle = document.getElementById('confirmation-modal-title');
+                _confirmationModalContent = document.getElementById('confirmation-modal-content');
+                _confirmYesBtn = document.getElementById('confirm-yes-btn');
+                _confirmNoBtn = document.getElementById('confirm-no-btn');
+                // NOVO: Cache dos elementos do modal de requisição de terceiros
+                _terceirosRequisitionModal = document.getElementById('terceiros-requisition-modal');
+                _closeTerceirosReqModalBtn = document.getElementById('close-terceiros-req-modal-btn');
+                _terceirosReqModalMessage = document.getElementById('terceiros-req-modal-message');
+                _terceirosRequisitionCodeInput = document.getElementById('terceiros-requisition-code-input');
+                _confirmTerceirosReqBtn = document.getElementById('confirm-terceiros-req-btn');
+                _cancelTerceirosReqBtn = document.getElementById('cancel-terceiros-req-btn');
+                _terceirosOrdersModal = document.getElementById('terceiros-orders-modal');
+                _closeTerceirosOrdersModalBtn = document.getElementById('close-terceiros-orders-modal-btn');
+                _nfeDetailsModal = document.getElementById('nfe-details-modal');
+                _closeNFeModalBtn = document.getElementById('close-nfe-modal-btn');
+                _nfeModalTitle = document.getElementById('nfe-modal-title');
+                _printNFeModalTableBtn = document.getElementById('print-nfe-modal-table-btn');
+                _nfeModalSearchInput = document.getElementById('nfe-modal-search-input');
+                _nfeModalTableContent = document.getElementById('nfe-modal-table-content');
+                _noNFeMessageModal = document.getElementById('no-nfe-message-modal');
+                _browserPrintFabricaModal = document.getElementById('browser-print-fabrica-modal');
+                _browserPrintFabricaContent = document.getElementById('browser-print-fabrica-content');
+                _closeBrowserPrintFabricaModalBtn = document.getElementById('close-browser-print-fabrica-modal-btn');
+                _customProductTooltip = document.createElement('div');
+                // NOVO: Cache dos elementos do modal de observação
+                _nfeObservationModal = document.getElementById('nfe-observation-modal');
+                _nfeObservationModalInfo = document.getElementById('nfe-observation-modal-info');
+                _nfeObservationHistory = document.getElementById('nfe-observation-history');
+                _nfeObservationTextarea = document.getElementById('nfe-observation-textarea');
+                _saveNfeObservationBtn = document.getElementById('save-nfe-observation-btn');
+                _cancelNfeObservationBtn = document.getElementById('cancel-nfe-observation-btn');
+                _nfeObservationCharCount = document.getElementById('nfe-observation-char-count');
+                // NOVO: Cache dos elementos do modal de observação de requisição
+                _requisitionObservationModal = document.getElementById('requisition-observation-modal');
+                _requisitionObservationModalInfo = document.getElementById('requisition-observation-modal-info');
+                _requisitionObservationHistory = document.getElementById('requisition-observation-history');
+                _requisitionObservationTextarea = document.getElementById('requisition-observation-textarea');
+                _saveRequisitionObservationBtn = document.getElementById('save-requisition-observation-btn');
+                _cancelRequisitionObservationBtn = document.getElementById('cancel-requisition-observation-btn');
+                _requisitionObservationCharCount = document.getElementById('requisition-observation-char-count');
+                _customProductTooltip.id = 'custom-product-tooltip';
+                _customProductTooltip.className = 'fixed hidden bg-white p-1 rounded-lg shadow-2xl border border-gray-200 z-[100]';
+                _customProductTooltip.style.pointerEvents = 'none'; // Importante para não interferir com outros eventos
+                _customProductTooltip.style.transition = 'opacity 0.2s ease-in-out';
+                _customProductTooltip.style.opacity = '0';
+                _customProductTooltip.style.width = 'max-content'; // Garante que o tooltip se ajuste ao conteúdo
+                document.body.appendChild(_customProductTooltip);
+                _viewRequisitionsBtn = document.getElementById('view-requisitions-btn');
+                _requisitionActionBar = document.getElementById('requisition-action-bar');
+                _saidaActionBar = document.getElementById('saida-action-bar');
+                _saidaBackBtn = document.getElementById('saida-back-btn');
+                _pageSaidaReportContent = document.getElementById('page-saida-report-content');
+                _saidaReportActionBar = document.getElementById('saida-report-action-bar');
+                _saidaReportBackBtn = document.getElementById('saida-report-back-btn');
+                _launchSaidaGarantiaBtn = document.getElementById('launch-saida-garantia-btn');
+                _launchSaidaFabricaBtn = document.getElementById('launch-saida-fabrica-btn');
+                _requisitionBackBtn = document.getElementById('requisition-back-btn');
+                // NOVO: Cache dos elementos do modal de ajuste de estoque
+                _stockAdjustmentModal = document.getElementById('stock-adjustment-modal');
+                _closeStockAdjustmentModalBtn = document.getElementById('close-stock-adjustment-modal-btn');
+                _stockAdjustmentProductInfo = document.getElementById('stock-adjustment-product-info');
+                _stockAdjustmentCurrentStock = document.getElementById('stock-adjustment-current-stock');
+                _stockAdjustmentNewQuantity = document.getElementById('stock-adjustment-new-quantity');
+                _confirmStockAdjustmentBtn = document.getElementById('confirm-stock-adjustment-btn');
+                _cancelStockAdjustmentBtn = document.getElementById('cancel-stock-adjustment-btn');
+           // NOVO: Cache dos elementos do modal de relatório de produtos
+_openProductReportModalBtn = document.getElementById('open-product-report-modal-btn');
+_productReportModal = document.getElementById('product-report-modal');
+_closeProductReportModalBtn = document.getElementById('close-product-report-modal-btn');
+_cancelProductReportBtn = document.getElementById('cancel-product-report-btn');
+_generateProductReportBtn = document.getElementById('generate-product-report-btn');
+
+// NOVO: Cache dos elementos do modal de edição de nome do produto
+_productNameEditModal = document.getElementById('product-name-edit-modal');
+_closeProductNameEditModalBtn = document.getElementById('close-product-name-edit-modal-btn');
+_productNameEditInfo = document.getElementById('product-name-edit-info');
+_productNameEditInput = document.getElementById('product-name-edit-input');
+_productNameEditLoading = document.getElementById('product-name-edit-loading');
+_productNameEditSuccess = document.getElementById('product-name-edit-success');
+_cancelProductNameEditBtn = document.getElementById('cancel-product-name-edit-btn');
+_confirmProductNameEditBtn = document.getElementById('confirm-product-name-edit-btn');
+
+// NOVO: Cache dos elementos do modal de edição de localização
+_productLocationEditModal = document.getElementById('product-location-edit-modal');
+_closeProductLocationEditModalBtn = document.getElementById('close-product-location-edit-modal-btn');
+_productLocationEditInfo = document.getElementById('product-location-edit-info');
+_productLocationEditInput = document.getElementById('product-location-edit-input');
+_productLocationEditLoading = document.getElementById('product-location-edit-loading');
+_productLocationEditSuccess = document.getElementById('product-location-edit-success');
+_cancelProductLocationEditBtn = document.getElementById('cancel-product-location-edit-btn');
+_confirmProductLocationEditBtn = document.getElementById('confirm-product-location-edit-btn');
+
+// NOVO: Cache dos elementos do modal de edição de código do produto
+_productCodeEditModal = document.getElementById('product-code-edit-modal');
+_closeProductCodeEditModalBtn = document.getElementById('close-product-code-edit-modal-btn');
+_productCodeEditInfo = document.getElementById('product-code-edit-info');
+_productCodeEditInput = document.getElementById('product-code-edit-input');
+_productCodeEditLoading = document.getElementById('product-code-edit-loading');
+_productCodeEditSuccess = document.getElementById('product-code-edit-success');
+_cancelProductCodeEditBtn = document.getElementById('cancel-product-code-edit-btn');
+_confirmProductCodeEditBtn = document.getElementById('confirm-product-code-edit-btn');
+}
+
+/**
+* NOVO: Vincula os eventos dos botões do modal de edição de código do produto.
+*/
+function _bindProductCodeEditModalEvents() {
+    if (_closeProductCodeEditModalBtn) {
+        _closeProductCodeEditModalBtn.addEventListener('click', () => _productCodeEditModal.classList.add('hidden'));
+    }
+    if (_cancelProductCodeEditBtn) {
+        _cancelProductCodeEditBtn.addEventListener('click', () => _productCodeEditModal.classList.add('hidden'));
+    }
+    if (_confirmProductCodeEditBtn) {
+        _confirmProductCodeEditBtn.addEventListener('click', _saveProductCodeEdit);
+    }
+}
+
+/**
+* NOVO: Abre o modal para editar o código (SKU) do produto.
+*/
+function _openProductCodeEditModal(productId) {
+    const product = _allProducts.find(p => String(p.id) === String(productId));
+    if (!product) {
+        _showMessageModal("Erro", "Produto não encontrado para editar o código.");
+        return;
+    }
+
+    if (_productCodeEditModal) {
+        _productCodeEditModal.dataset.productId = product.id;
+        if (_productCodeEditInfo) _productCodeEditInfo.innerHTML = `Editando código do produto: <b>${product.descricao}</b>`;
+        if (_productCodeEditInput) _productCodeEditInput.value = product.codigo || "";
+
+        // Reseta estados de feedback
+        if (_productCodeEditLoading) _productCodeEditLoading.classList.add('hidden');
+        if (_productCodeEditSuccess) _productCodeEditSuccess.classList.add('hidden');
+        if (_confirmProductCodeEditBtn) _confirmProductCodeEditBtn.disabled = false;
+
+        _productCodeEditModal.classList.remove('hidden');
+        if (_productCodeEditInput) _productCodeEditInput.focus();
+    }
+}
+
+/**
+* NOVO: Salva a alteração do código do produto no backend.
+*/
+async function _saveProductCodeEdit() {
+    const productId = _productCodeEditModal.dataset.productId;
+    const novoCodigo = _productCodeEditInput.value.trim();
+
+    if (!novoCodigo) {
+        _showMessageModal("Campo Vazio", "Por favor, digite um código para o produto.");
+        return;
+    }
+
+    const product = _allProducts.find(p => String(p.id) === String(productId));
+    if (novoCodigo === (product.codigo || "")) {
+        _productCodeEditModal.classList.add('hidden');
+        return;
+    }
+
+    // UI Feedback
+    _confirmProductCodeEditBtn.disabled = true;
+    _productCodeEditLoading.classList.remove('hidden');
+
+    try {
+        const payload = {
+            codigo: novoCodigo
+        };
+
+        const response = await fetch(`${API_BASE_URL}/produtos/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Erro ao atualizar código do produto.");
+        }
+
+        // Atualiza localmente o objeto _allProducts
+        if (product) product.codigo = novoCodigo;
+
+        // Atualiza a interface se o módulo PesquisarProduto estiver ativo
+        if (typeof PesquisarProduto !== 'undefined') {
+            PesquisarProduto.updateProductCodeDisplay(productId, novoCodigo);
+        }
+
+        // Feedback de Sucesso
+        _productCodeEditLoading.classList.add('hidden');
+        _productCodeEditSuccess.classList.remove('hidden');
+
+        // Fecha o modal após um pequeno delay
+        setTimeout(() => {
+            _productCodeEditModal.classList.add('hidden');
+        }, 1500);
+
+    } catch (error) {
+        console.error("[App] Erro ao editar código:", error);
+        _productCodeEditLoading.classList.add('hidden');
+        _confirmProductCodeEditBtn.disabled = false;
+        _showMessageModal("Erro na Atualização", `Falha ao atualizar código: ${error.message}`);
+    }
+}
+
+/**
+* NOVO: Vincula os eventos dos botões do modal de edição de localização do produto.
+*/
+function _bindProductLocationEditModalEvents() {
+if (_closeProductLocationEditModalBtn) {
+    _closeProductLocationEditModalBtn.addEventListener('click', () => _productLocationEditModal.classList.add('hidden'));
+}
+if (_cancelProductLocationEditBtn) {
+    _cancelProductLocationEditBtn.addEventListener('click', () => _productLocationEditModal.classList.add('hidden'));
+}
+if (_confirmProductLocationEditBtn) {
+    _confirmProductLocationEditBtn.addEventListener('click', _saveProductLocationEdit);
+}
+}
+
+/**
+* NOVO: Abre o modal para editar a localização do produto.
+*/
+function _openProductLocationEditModal(productId) {
+const product = _allProducts.find(p => String(p.id) === String(productId));
+if (!product) {
+    _showMessageModal("Erro", "Produto não encontrado para editar a localização.");
+    return;
+}
+
+if (_productLocationEditModal) {
+    _productLocationEditModal.dataset.productId = product.id;
+    _productLocationEditModal.dataset.codigo = product.codigo;
+    if (_productLocationEditInfo) _productLocationEditInfo.innerHTML = `Editando localização do produto código: <b>${product.codigo}</b>`;
+    if (_productLocationEditInput) _productLocationEditInput.value = product.localizacao || "";
+
+    // Reseta estados de feedback
+    if (_productLocationEditLoading) _productLocationEditLoading.classList.add('hidden');
+    if (_productLocationEditSuccess) _productLocationEditSuccess.classList.add('hidden');
+    if (_confirmProductLocationEditBtn) _confirmProductLocationEditBtn.disabled = false;
+
+    _productLocationEditModal.classList.remove('hidden');
+    if (_productLocationEditInput) _productLocationEditInput.focus();
+}
+}
+
+/**
+* NOVO: Salva a alteração da localização do produto no backend.
+*/
+async function _saveProductLocationEdit() {
+const productId = _productLocationEditModal.dataset.productId;
+const codigo = _productLocationEditModal.dataset.codigo;
+const novaLocalizacao = _productLocationEditInput.value.trim();
+
+const product = _allProducts.find(p => String(p.id) === String(productId));
+if (novaLocalizacao === (product.localizacao || "")) {
+    _productLocationEditModal.classList.add('hidden');
+    return;
+}
+
+// UI Feedback
+_confirmProductLocationEditBtn.disabled = true;
+_productLocationEditLoading.classList.remove('hidden');
+
+try {
+    // Prepara o payload para atualizar a localização no Bling
+    // A API do Bling espera a localização dentro do objeto 'estoque'
+    const payload = {
+        localizacao: novaLocalizacao,
+        codigo: codigo
+    };
+
+    const response = await fetch(`${API_BASE_URL}/produtos/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro ao atualizar localização do produto.");
+    }
+
+    // Atualiza localmente o objeto _allProducts
+    if (product) product.localizacao = novaLocalizacao;
+
+    // Atualiza a interface se o módulo PesquisarProduto estiver ativo
+    if (typeof PesquisarProduto !== 'undefined') {
+        PesquisarProduto.updateProductLocationDisplay(productId, novaLocalizacao);
+    }
+
+    // Feedback de Sucesso
+    _productLocationEditLoading.classList.add('hidden');
+    _productLocationEditSuccess.classList.remove('hidden');
+
+    // Fecha o modal após um pequeno delay
+    setTimeout(() => {
+        _productLocationEditModal.classList.add('hidden');
+        // O WebSocket ou a atualização global cuidará do resto
+    }, 1500);
+
+} catch (error) {
+    console.error("[App] Erro ao editar localização:", error);
+    _productLocationEditLoading.classList.add('hidden');
+    _confirmProductLocationEditBtn.disabled = false;
+    _showMessageModal("Erro na Atualização", `Falha ao atualizar localização: ${error.message}`);
+}
+}
+
+
+
+            return {
+                /**
+                 * Inicializa a aplicação.
+                 */
+                init: function () {
+                    console.log('[App] init: Aplicação inicializando...');
+                    _initWebSocket(); // NOVO: Inicia a conexão WebSocket
+                    _cacheDomElements();
+                    _bindEvents();
+                    // NOVO: Inicializa o módulo de Atendimento com as configurações necessárias
+                    if (typeof Atendimento !== 'undefined') {
+                        Atendimento.init({
+                            apiUrls: API_URLS,
+                            showMessageModal: _showMessageModal
+                        });
+                    }
+
+                    // NOVO: Inicializa o módulo de Dashboard
+
+
+                    // NOVO: Inicializa o módulo da Loja Integrada
+                    if (typeof LojaIntegradaApp !== 'undefined') {
+                        LojaIntegradaApp.init({ apiUrls: API_URLS });
+                    }
+
+
+                    _bindStockAdjustmentModalEvents(); // NOVO
+                    _bindProductNameEditModalEvents(); // NOVO
+                    _bindProductLocationEditModalEvents(); // NOVO
+                    _bindProductCodeEditModalEvents(); // NOVO
+                    if (typeof SaidaItens !== 'undefined') {
+                        SaidaItens.init({
+                            allProducts: _allProducts,
+                            allSaidasGarantia: _allSaidasGarantia,
+                            allSaidasFabrica: _allSaidasFabrica,
+                            selectedSaidaItems: _selectedSaidaItems,
+                            saidaReportQuantities: _saidaReportQuantities,
+                            apiUrls: API_URLS,
+                            dom: {
+                                pageGerenciarSaida: _pageGerenciarSaida,
+                                pageSaidaReport: _pageSaidaReportContent,
+                                selectedSaidaItemsCount: _selectedSaidaItemsCount,
+                                createSaidaBtn: _createSaidaBtn,
+                                clearSaidaSelectionBtn: _clearSaidaSelectionBtn,
+                                launchSaidaGarantiaBtn: _launchSaidaGarantiaBtn,
+                                launchSaidaFabricaBtn: _launchSaidaFabricaBtn,
+                            },
+                            utils: {
+                                applyGlobalFilters: _applyGlobalFilters,
+                                showProductTooltip: _showProductTooltip,
+                                hideProductTooltip: _hideProductTooltip,
+                                showMessageModal: _showMessageModal,
+                                showConfirmationModal: _showConfirmationModal,
+                                showPage: _showPage,
+                                parsePtBrDate: _parsePtBrDate,
+                                toggleLoading: (isLoading) => {
+                                    _loadingOverlay.classList.toggle('hidden', !isLoading);
+                                }
+                            }
+                        });
+                    }
+
+
+                    if (typeof EstoqueApp !== 'undefined') {
+                        EstoqueApp.init({
+                            allProducts: _allProducts,
+                            allOrdersTerceiros: _allOrdersTerceiros,
+                            allOrdersFabrica: _allOrdersFabrica,
+                            selectedStockItems: _selectedStockItems, // Importante: compartilhe o Set de itens selecionados
+                            dom: {
+                                pageEstoque: _pageEstoque,
+                                selectedItemsCountDisplay: _selectedItemsCountDisplay,
+                                generateReportButton: _generateReportButton,
+                                clearSelectionBtn: _clearSelectionBtn
+                            },
+                            utils: {
+                                showProductTooltip: _showProductTooltip,
+                                hideProductTooltip: _hideProductTooltip,
+                                applyGlobalFilters: _applyGlobalFilters
+                            }
+                        });
+                    }
+
+
+                    const API_BASE_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
+                    if (typeof PesquisarProduto !== 'undefined') {
+                        PesquisarProduto.init({
+                            API_BASE_URL: API_BASE_URL,
+                            domElements: {
+                                product_list_container: _product_list_container,
+                                product_details_container: _product_details_container,
+                                details_placeholder: _details_placeholder,
+                                product_details: _product_details,
+                            },
+                            utilities: {
+                                createDetailItem,
+                                showProductTooltip: _showProductTooltip,
+                                hideProductTooltip: _hideProductTooltip
+                            },
+                            openStockAdjustmentModal: _openStockAdjustmentModal,
+                            openProductNameEditModal: _openProductNameEditModal,
+                            openProductLocationEditModal: _openProductLocationEditModal,
+                            openProductCodeEditModal: _openProductCodeEditModal
+                        });
+                    }
+                    else {
+                        console.error("Erro: Módulo PesquisarProduto não foi carregado corretamente.");
+                        _showMessageModal("Erro de Carregamento", "Não foi possível carregar o módulo de pesquisa de produtos.");
+                    }
+                    _showPage('pesquisar');
+                    _fetchData();
+                }
+            };
+        })();
+
+        // CORREÇÃO: Expõe a função de inicialização diretamente no escopo global
+        // para que o auth.js possa encontrá-la assim que o script for parseado.
+        window.startApp = App.init; 
