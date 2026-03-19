@@ -143,6 +143,12 @@
                         }
                         break;
 
+                    case 'nfeReceived':
+                        console.log(`[Firestore Sync] Nova NF-e ${data.numero} recebida do cliente ${data.cliente}.`);
+                        // Recarrega todos os dados para atualizar a tabela de NF-e e Dashboard
+                        _fetchData();
+                        break;
+
                     default:
                         console.log(`[Firestore Sync] Tipo de atualização não mapeado: ${type}`);
                 }
@@ -1304,6 +1310,13 @@ const data = filteredProducts.map(product => {
 
             async function _fetchData() {
                 console.log('[App] _fetchData: Iniciando busca de dados...');
+                
+                // Melhoria Visual: Adiciona animação de giro ao botão e o desabilita
+                if (_refreshButton) {
+                    _refreshButton.disabled = true;
+                    _refreshButton.classList.add('animate-spin', 'opacity-50');
+                }
+                
                 _loadingOverlay.classList.remove('hidden');
                 try {
                     const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasFabricaRes, saidasGarantiaRes, lojaIntegradaData] = await Promise.all([
@@ -1423,6 +1436,11 @@ const data = filteredProducts.map(product => {
                     _pageOverviewRequisitions.innerHTML = errorHtml;
                     if (_noNFeMessageOverview) _noNFeMessageOverview.classList.remove('hidden');
                 } finally {
+                    // Restaura o botão de atualizar
+                    if (_refreshButton) {
+                        _refreshButton.disabled = false;
+                        _refreshButton.classList.remove('animate-spin', 'opacity-50');
+                    }
                     if (_loadingOverlay) _loadingOverlay.classList.add('hidden');
                 }
             }

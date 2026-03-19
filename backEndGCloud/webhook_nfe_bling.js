@@ -196,6 +196,17 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
                 await formatarLinhaPadrao(sheets, SPREADSHEET_ID_NFE, sheetId, newRow);
             }
 
+            // 5. Notificar via Firestore Sync (Tempo Real)
+            if (req.notifySync) {
+                const numeroNf = n ? n.numero : (data ? data.numero : 'N/A');
+                console.log(`[Firestore Sync] Notificando nova NF-e recebida: ${numeroNf}`);
+                req.notifySync('nfeReceived', {
+                    numero: numeroNf,
+                    cliente: n ? n.contato?.nome : 'N/A',
+                    valor: n ? n.valorNota : 0
+                });
+            }
+
             res.status(200).send({ status: 'success' });
         } catch (error) {
             next(error);
