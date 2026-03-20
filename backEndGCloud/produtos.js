@@ -201,14 +201,14 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
      */
     router.put('/:id', async (req, res, next) => {
         const idProduto = req.params.id;
-        const { nome, localizacao, codigo } = req.body;
+        const { nome, localizacao, codigo, preco_de_custo } = req.body;
 
         console.log(`--- ATUALIZANDO PRODUTO: ID ${idProduto} ---`);
         if (nome) console.log(` > Novo Nome: ${nome}`);
         if (localizacao !== undefined) console.log(` > Nova Localização: ${localizacao}`);
 
-        if (!nome && localizacao === undefined && !codigo) {
-            return res.status(400).json({ error: "Nome, localização ou código do produto deve ser informado." });
+        if (!nome && localizacao === undefined && !codigo && preco_de_custo === undefined) {
+            return res.status(400).json({ error: "Nome, localização, código ou preço de custo do produto deve ser informado." });
         }
 
         try {
@@ -240,7 +240,8 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             const blingPayload = {
                 ...productData,
                 nome: nome || currentProduct.nome,
-                codigo: codigo || currentProduct.codigo
+                codigo: codigo || currentProduct.codigo,
+                precoCusto: preco_de_custo !== undefined ? parseFloat(preco_de_custo) : currentProduct.precoCusto
             };
 
             // Se localizacao foi informada, ela deve ir dentro de 'estoque'
@@ -268,7 +269,8 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             const idColIndex = normalizedHeaders.indexOf('id');
             const descricaoColIndex = normalizedHeaders.indexOf('descricao');
             const localizacaoColIndex = normalizedHeaders.indexOf('localizacao');
-            const codigoColIndex = normalizedHeaders.indexOf('codigo'); // NOVO: Mapeia a coluna de código
+            const codigoColIndex = normalizedHeaders.indexOf('codigo');
+            const precoCustoColIndex = normalizedHeaders.indexOf('preco_de_custo'); // NOVO: Mapeia a coluna de código
 
             if (idColIndex === -1) {
                 throw new Error("Coluna 'ID' não encontrada na planilha.");
@@ -314,6 +316,16 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                         spreadsheetId, range: updateCodeRange, valueInputOption: 'RAW', resource: { values: [[codigo]] }
                     });
                 }
+
+                // NOVO: Atualiza Preço de Custo se houver
+                if (preco_de_custo !== undefined && precoCustoColIndex !== -1) {
+                    const updatePriceRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + precoCustoColIndex)}${rowIndex}`;
+                    console.log(`[Sheets] Atualizando preço de custo na linha ${rowIndex}`);
+                    // Formata como número para que a planilha possa aplicar formatação de moeda
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId, range: updatePriceRange, valueInputOption: 'USER_ENTERED', resource: { values: [[preco_de_custo]] }
+                    });
+                }
             } else {
                 console.warn(`[Sheets] Produto ID ${idProduto} não encontrado na planilha para atualização.`);
             }
@@ -325,7 +337,8 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                     id: idProduto,
                     codigo: codigo || currentProduct.codigo,
                     novoNome: nome || currentProduct.nome,
-                    novaLocalizacao: localizacao !== undefined ? localizacao : currentProduct.estoque?.localizacao
+                    novaLocalizacao: localizacao !== undefined ? localizacao : currentProduct.estoque?.localizacao,
+                    novoPrecoCusto: preco_de_custo !== undefined ? preco_de_custo : currentProduct.precoCusto
                 });
             }
 

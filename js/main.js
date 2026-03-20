@@ -109,12 +109,14 @@
                             if (data.novoNome) pIdx.descricao = data.novoNome;
                             if (data.novaLocalizacao !== undefined) pIdx.localizacao = data.novaLocalizacao;
                             if (data.codigo) pIdx.codigo = data.codigo;
+                            if (data.novoPrecoCusto !== undefined) pIdx.preco_de_custo = data.novoPrecoCusto;
 
                             // Atualiza exibições
                             if (typeof PesquisarProduto !== 'undefined') {
                                 if (data.novoNome) PesquisarProduto.updateProductNameDisplay(data.id, data.novoNome);
                                 if (data.novaLocalizacao !== undefined) PesquisarProduto.updateProductLocationDisplay(data.id, data.novaLocalizacao);
                                 if (data.codigo) PesquisarProduto.updateProductCodeDisplay(data.id, data.codigo);
+                                if (data.novoPrecoCusto !== undefined) PesquisarProduto.updateProductCostPriceDisplay(data.id, data.novoPrecoCusto);
                             }
                             
                             if (data.novoNome) {
@@ -479,6 +481,7 @@
             let _productNameEditModal, _closeProductNameEditModalBtn, _productNameEditInfo, _productNameEditInput, _productNameEditLoading, _productNameEditSuccess, _cancelProductNameEditBtn, _confirmProductNameEditBtn;
             let _productLocationEditModal, _closeProductLocationEditModalBtn, _productLocationEditInfo, _productLocationEditInput, _productLocationEditLoading, _productLocationEditSuccess, _cancelProductLocationEditBtn, _confirmProductLocationEditBtn;
             let _productCodeEditModal, _closeProductCodeEditModalBtn, _productCodeEditInfo, _productCodeEditInput, _productCodeEditLoading, _productCodeEditSuccess, _cancelProductCodeEditBtn, _confirmProductCodeEditBtn;
+            let _productCostPriceEditModal, _closeProductCostPriceEditModalBtn, _productCostPriceEditInfo, _productCostPriceEditInput, _productCostPriceEditLoading, _productCostPriceEditSuccess, _cancelProductCostPriceEditBtn, _confirmProductCostPriceEditBtn;
 
             // --- FUNÇÕES DE UTILIDADE PRIVADAS ---
 /**
@@ -3994,6 +3997,16 @@ _productCodeEditLoading = document.getElementById('product-code-edit-loading');
 _productCodeEditSuccess = document.getElementById('product-code-edit-success');
 _cancelProductCodeEditBtn = document.getElementById('cancel-product-code-edit-btn');
 _confirmProductCodeEditBtn = document.getElementById('confirm-product-code-edit-btn');
+
+// NOVO: Cache dos elementos do modal de edição de preço de custo
+_productCostPriceEditModal = document.getElementById('product-cost-price-edit-modal');
+_closeProductCostPriceEditModalBtn = document.getElementById('close-product-cost-price-edit-modal-btn');
+_productCostPriceEditInfo = document.getElementById('product-cost-price-edit-info');
+_productCostPriceEditInput = document.getElementById('product-cost-price-edit-input');
+_productCostPriceEditLoading = document.getElementById('product-cost-price-edit-loading');
+_productCostPriceEditSuccess = document.getElementById('product-cost-price-edit-success');
+_cancelProductCostPriceEditBtn = document.getElementById('cancel-product-cost-price-edit-btn');
+_confirmProductCostPriceEditBtn = document.getElementById('confirm-product-cost-price-edit-btn');
 }
 
 /**
@@ -4115,6 +4128,21 @@ if (_confirmProductLocationEditBtn) {
 }
 
 /**
+* NOVO: Vincula os eventos dos botões do modal de edição de preço de custo do produto.
+*/
+function _bindProductCostPriceEditModalEvents() {
+if (_closeProductCostPriceEditModalBtn) {
+    _closeProductCostPriceEditModalBtn.addEventListener('click', () => _productCostPriceEditModal.classList.add('hidden'));
+}
+if (_cancelProductCostPriceEditBtn) {
+    _cancelProductCostPriceEditBtn.addEventListener('click', () => _productCostPriceEditModal.classList.add('hidden'));
+}
+if (_confirmProductCostPriceEditBtn) {
+    _confirmProductCostPriceEditBtn.addEventListener('click', _saveProductCostPriceEdit);
+}
+}
+
+/**
 * NOVO: Abre o modal para editar a localização do produto.
 */
 function _openProductLocationEditModal(productId) {
@@ -4203,6 +4231,95 @@ try {
 }
 }
 
+/**
+* NOVO: Abre o modal para editar o preço de custo do produto.
+*/
+function _openProductCostPriceEditModal(productId) {
+const product = _allProducts.find(p => String(p.id) === String(productId));
+if (!product) {
+    _showMessageModal("Erro", "Produto não encontrado para editar o preço de custo.");
+    return;
+}
+
+if (_productCostPriceEditModal) {
+    _productCostPriceEditModal.dataset.productId = product.id;
+    if (_productCostPriceEditInfo) _productCostPriceEditInfo.innerHTML = `Editando preço de custo do produto: <b>${product.descricao}</b>`;
+    if (_productCostPriceEditInput) _productCostPriceEditInput.value = product.preco_de_custo || 0;
+
+    // Reseta estados de feedback
+    if (_productCostPriceEditLoading) _productCostPriceEditLoading.classList.add('hidden');
+    if (_productCostPriceEditSuccess) _productCostPriceEditSuccess.classList.add('hidden');
+    if (_confirmProductCostPriceEditBtn) _confirmProductCostPriceEditBtn.disabled = false;
+
+    _productCostPriceEditModal.classList.remove('hidden');
+    if (_productCostPriceEditInput) _productCostPriceEditInput.focus();
+}
+}
+
+/**
+* NOVO: Salva a alteração do preço de custo do produto no backend.
+*/
+async function _saveProductCostPriceEdit() {
+const productId = _productCostPriceEditModal.dataset.productId;
+const novoPreco = parseFloat(_productCostPriceEditInput.value);
+
+if (isNaN(novoPreco)) {
+    _showMessageModal("Valor Inválido", "Por favor, digite um valor numérico válido para o preço de custo.");
+    return;
+}
+
+const product = _allProducts.find(p => String(p.id) === String(productId));
+if (novoPreco === (product.preco_de_custo || 0)) {
+    _productCostPriceEditModal.classList.add('hidden');
+    return;
+}
+
+// UI Feedback
+_confirmProductCostPriceEditBtn.disabled = true;
+_productCostPriceEditLoading.classList.remove('hidden');
+
+try {
+    const payload = {
+        preco_de_custo: novoPreco,
+        codigo: product.codigo // Mantém o código atual para satisfazer a validação do backend antigo
+    };
+
+    const response = await fetch(`${API_BASE_URL}/produtos/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro ao atualizar preço de custo do produto.");
+    }
+
+    // Atualiza localmente o objeto _allProducts
+    if (product) product.preco_de_custo = novoPreco;
+
+    // Atualiza a interface se o módulo PesquisarProduto estiver ativo
+    if (typeof PesquisarProduto !== 'undefined') {
+        PesquisarProduto.updateProductCostPriceDisplay(productId, novoPreco);
+    }
+
+    // Feedback de Sucesso
+    _productCostPriceEditLoading.classList.add('hidden');
+    _productCostPriceEditSuccess.classList.remove('hidden');
+
+    // Fecha o modal após um pequeno delay
+    setTimeout(() => {
+        _productCostPriceEditModal.classList.add('hidden');
+    }, 1500);
+
+} catch (error) {
+    console.error("[App] Erro ao editar preço de custo:", error);
+    _productCostPriceEditLoading.classList.add('hidden');
+    _confirmProductCostPriceEditBtn.disabled = false;
+    _showMessageModal("Erro na Atualização", `Falha ao atualizar preço de custo: ${error.message}`);
+}
+}
+
 
 
             return {
@@ -4236,6 +4353,7 @@ try {
                     _bindProductNameEditModalEvents(); // NOVO
                     _bindProductLocationEditModalEvents(); // NOVO
                     _bindProductCodeEditModalEvents(); // NOVO
+                    _bindProductCostPriceEditModalEvents(); // NOVO
                     if (typeof SaidaItens !== 'undefined') {
                         SaidaItens.init({
                             allProducts: _allProducts,
@@ -4308,7 +4426,8 @@ try {
                             openStockAdjustmentModal: _openStockAdjustmentModal,
                             openProductNameEditModal: _openProductNameEditModal,
                             openProductLocationEditModal: _openProductLocationEditModal,
-                            openProductCodeEditModal: _openProductCodeEditModal
+                            openProductCodeEditModal: _openProductCodeEditModal,
+                            openProductCostPriceEditModal: _openProductCostPriceEditModal
                         });
                     }
                     else {

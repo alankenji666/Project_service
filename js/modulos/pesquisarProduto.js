@@ -31,7 +31,15 @@ export const PesquisarProduto = (function() {
                 ${_utils.createDetailItem('Preço', (product.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))}
                 
                 <!-- CORREÇÃO FINAL COM O NOME CORRETO DO CAMPO -->
-                ${_utils.createDetailItem('Preço de Custo', (product.preco_de_custo || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))}
+                <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Preço de Custo</p>
+                        <p class="text-lg text-gray-800 font-bold product-detail-cost-price">${(product.preco_de_custo || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                    <button class="read-only-disable edit-product-cost-price-btn p-2 rounded-full hover:bg-gray-200 text-blue-600" data-product-id="${product.id}" title="Editar Preço de Custo">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
+                    </button>
+                </div>
                 
                 ${_utils.createDetailItem('Unidade', product.unidade || 'N/A')}
                 <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
@@ -310,6 +318,11 @@ export const PesquisarProduto = (function() {
                 if (editCodeBtn) {
                     _handleEditCode(editCodeBtn.dataset.productId);
                 }
+
+                const editCostPriceBtn = event.target.closest('.edit-product-cost-price-btn');
+                if (editCostPriceBtn && typeof config.openProductCostPriceEditModal === 'function') {
+                    config.openProductCostPriceEditModal(editCostPriceBtn.dataset.productId);
+                }
             });
         }
     }
@@ -342,6 +355,23 @@ export const PesquisarProduto = (function() {
         }
     }
 
+    /**
+     * Atualiza o preço de custo do produto na tela de detalhes sem re-renderizar tudo.
+     * @param {string|number} productId 
+     * @param {number} novoPreco 
+     */
+    function updateProductCostPriceDisplay(productId, novoPreco) {
+        if (String(_activeProductId) === String(productId) && _dom.product_details) {
+            const priceElement = _dom.product_details.querySelector('.product-detail-cost-price');
+            if (priceElement) {
+                const formattedPrice = novoPreco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                priceElement.textContent = formattedPrice;
+                priceElement.classList.add('text-green-600', 'scale-110', 'transition-all', 'duration-300');
+                setTimeout(() => priceElement.classList.remove('text-green-600', 'scale-110'), 2000);
+            }
+        }
+    }
+
     // Expõe as funções públicas
     return {
         init,
@@ -352,6 +382,7 @@ export const PesquisarProduto = (function() {
         updateStockDisplay,
         updateProductNameDisplay,
         updateProductLocationDisplay,
-        updateProductCodeDisplay
+        updateProductCodeDisplay,
+        updateProductCostPriceDisplay
     };
 })();
