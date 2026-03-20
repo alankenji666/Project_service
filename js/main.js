@@ -231,8 +231,10 @@
                 const cliente = data.cliente || 'Cliente não informado';
                 let linkDanfe = data['Link DANFE'] || data.link_danfe || data.linkDanfe || data.link || '#';
 
-                // Busca o link silenciosamente se o webhook não o tiver enviado
-                if (linkDanfe === '#' && numeroNota !== 'Desconhecido') {
+                let notificationTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                // Busca o link e data silenciosamente se o webhook não o tiver enviado
+                if ((linkDanfe === '#' || !data.data_de_emissao) && numeroNota !== 'Desconhecido') {
                     try {
                         const nfeRes = await fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' });
                         if (nfeRes.ok) {
@@ -248,11 +250,24 @@
                                 
                                 if (foundNfe) {
                                     linkDanfe = foundNfe['Link DANFE'] || foundNfe.link_danfe || foundNfe.linkDanfe || foundNfe.link || '#';
+                                    
+                                    // NOVO: Usa a hora da emissão da nota se disponível
+                                    const rawDate = foundNfe.data_de_emissao || foundNfe.data_emissao;
+                                    if (rawDate) {
+                                        const dateObj = new Date(rawDate);
+                                        if (!isNaN(dateObj.getTime())) {
+                                            notificationTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                                        } else if (typeof rawDate === 'string' && rawDate.includes(':')) {
+                                            // Fallback para strings que já tenham hora mas não sejam ISO perfeitas
+                                            const match = rawDate.match(/(\d{2}:\d{2})/);
+                                            if (match) notificationTime = match[1];
+                                        }
+                                    }
                                 }
                             }
                         }
                     } catch (e) {
-                        console.warn('[Firestore Sync] Erro ao buscar link da Danfe em background:', e);
+                        console.warn('[Firestore Sync] Erro ao buscar dados da NFe em background:', e);
                     }
                 }
 
@@ -267,7 +282,7 @@
                     list.innerHTML = '';
                 }
                 
-                const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const time = notificationTime;
                 
                 const itemHtml = `
                     <li class="relative px-4 py-3 border-b border-gray-50 hover:bg-blue-50 transition-colors cursor-pointer select-none" data-numero="${numeroNota}">
