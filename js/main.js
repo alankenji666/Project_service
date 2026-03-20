@@ -145,14 +145,251 @@
 
                     case 'nfeReceived':
                         console.log(`[Firestore Sync] Nova NF-e ${data.numero} recebida do cliente ${data.cliente}.`);
-                        // Recarrega todos os dados para atualizar a tabela de NF-e e Dashboard
-                        _fetchData();
+                        // ATUALIZADO: Em vez de recarregar todos os dados de forma intrusiva, apenas mostra uma notificação.
+                        _showNewNFeNotification(data);
                         break;
 
                     default:
                         console.log(`[Firestore Sync] Tipo de atualização não mapeado: ${type}`);
                 }
             }
+
+            // --- NOVO: LÓGICA DE NOTIFICAÇÕES ---
+            let _notificationCount = 0;
+            
+            function _initNotifications() {
+                const btn = document.getElementById('notification-button');
+                const dropdown = document.getElementById('notification-dropdown');
+                const clearBtn = document.getElementById('clear-notifications-btn');
+                
+                if (btn && dropdown) {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        dropdown.classList.toggle('hidden');
+                        
+                        // Oculta outros menus, se necessário (ex: settings)
+                        const settingsDropdown = document.getElementById('settings-dropdown');
+                        if (settingsDropdown && !settingsDropdown.classList.contains('hidden')) {
+                            settingsDropdown.classList.add('hidden');
+                        }
+                    });
+                    
+                    document.addEventListener('click', (e) => {
+                        if (!btn.contains(e.target) && !dropdown.contains(e.target)) {
+                            dropdown.classList.add('hidden');
+                        }
+                    });
+                }
+                
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        
+                        // Grava os números das NFes atuais no localStorage para não voltarem no refresh
+                        const list = document.getElementById('notification-list');
+                        if (list) {
+                            const items = list.querySelectorAll('li[data-numero]');
+                            if (items.length > 0) {
+                                const dismissed = JSON.parse(localStorage.getItem('dismissed_nfes') || '[]');
+                                items.forEach(li => {
+                                    const num = li.getAttribute('data-numero');
+                                    if (num && !dismissed.includes(num)) dismissed.push(num);
+                                });
+                                // Keep only the last 50 to avoid bloat
+                                if (dismissed.length > 50) dismissed.splice(0, dismissed.length - 50);
+                                localStorage.setItem('dismissed_nfes', JSON.stringify(dismissed));
+                            }
+                            
+                            list.innerHTML = '<li class="px-4 py-3 text-sm text-gray-500 text-center">Nenhuma notificação nova.</li>';
+                        }
+                        
+                        _notificationCount = 0;
+                        _updateNotificationBadge();
+                    });
+                }
+            }
+
+            function _updateNotificationBadge() {
+                const badge = document.getElementById('notification-badge');
+                if (badge) {
+                    if (_notificationCount > 0) {
+                        badge.textContent = _notificationCount > 99 ? '99+' : _notificationCount;
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+            }
+
+            async function _showNewNFeNotification(data) {
+                const numeroNota = data.numero || data.numero_da_nota || 'Desconhecido';
+                
+                // Evita mostrar notificações que o usuário já descartou e o Firebase releu no refresh
+                const dismissed = JSON.parse(localStorage.getItem('dismissed_nfes') || '[]');
+                if (dismissed.includes(String(numeroNota))) return;
+                
+                const cliente = data.cliente || 'Cliente não informado';
+                let linkDanfe = data['Link DANFE'] || data.link_danfe || data.linkDanfe || data.link || '#';
+
+                // Busca o link silenciosamente se o webhook não o tiver enviado
+                if (linkDanfe === '#' && numeroNota !== 'Desconhecido') {
+                    try {
+                        const nfeRes = await fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' });
+                        if (nfeRes.ok) {
+                            const nfeJson = await nfeRes.json();
+                            if (nfeJson.data && Array.isArray(nfeJson.data)) {
+                                _allNFeData = nfeJson.data; // Atualiza a memória p/ tabelas futuras
+                                // Extrai apenas números para comparação, já que o webhook pode mandar "000114" e a API "114"
+                                const cleanNumWebhook = Number(String(numeroNota).replace(/\D/g, ''));
+                                const foundNfe = _allNFeData.find(n => {
+                                    const cleanNumAPI = Number(String(n.numero_da_nota || n.numero).replace(/\D/g, ''));
+                                    return cleanNumAPI === cleanNumWebhook;
+                                });
+                                
+                                if (foundNfe) {
+                                    linkDanfe = foundNfe['Link DANFE'] || foundNfe.link_danfe || foundNfe.linkDanfe || foundNfe.link || '#';
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[Firestore Sync] Erro ao buscar link da Danfe em background:', e);
+                    }
+                }
+
+                _notificationCount++;
+                _updateNotificationBadge();
+                
+                const list = document.getElementById('notification-list');
+                if (!list) return; // Segurança
+                
+                // Se for a primeira notificação, limpa o texto "Nenhuma notificação"
+                if (list.querySelector('li.text-center')) {
+                    list.innerHTML = '';
+                }
+                
+                const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                
+                const itemHtml = `
+                    <li class="relative px-4 py-3 border-b border-gray-50 hover:bg-blue-50 transition-colors cursor-pointer select-none" data-numero="${numeroNota}">
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="font-bold text-sm text-gray-800">Nova NF-e</span>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-500">${time}</span>
+                                <button class="delete-notification-btn text-gray-400 hover:text-red-500 focus:outline-none" title="Remover">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-600 mb-1">Chegou a NFe Nº: <span class="font-semibold text-blue-600">${numeroNota}</span></p>
+                        <p class="text-[10px] text-gray-400 truncate mt-1">${cliente}</p>
+                    </li>
+                `;
+                
+                list.insertAdjacentHTML('afterbegin', itemHtml);
+                const newItem = list.firstElementChild;
+                
+                // Botão de deletar
+                const deleteBtn = newItem.querySelector('.delete-notification-btn');
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        newItem.remove();
+                        if (_notificationCount > 0) _notificationCount--;
+                        _updateNotificationBadge();
+                        
+                        // Grava no localStorage para não voltar no refresh
+                        const dismissedList = JSON.parse(localStorage.getItem('dismissed_nfes') || '[]');
+                        if (!dismissedList.includes(String(numeroNota))) {
+                            dismissedList.push(String(numeroNota));
+                            if (dismissedList.length > 50) dismissedList.shift();
+                            localStorage.setItem('dismissed_nfes', JSON.stringify(dismissedList));
+                        }
+                        
+                        if (list.children.length === 0) {
+                            list.innerHTML = '<li class="px-4 py-3 text-sm text-gray-500 text-center">Nenhuma notificação nova.</li>';
+                        }
+                    });
+                }
+                
+                // Clique na notificação abre o link e fecha o menu
+                newItem.addEventListener('click', (e) => {
+                   if (e.target.closest('.delete-notification-btn')) return; // ignora se clicou no X
+                   
+                   if (linkDanfe && linkDanfe !== '#') {
+                       window.open(linkDanfe, '_blank');
+                   } else {
+                       _showToastNotification('Link da Danfe indisponível! Nem o webhook nem a API retornaram o link.', 'error');
+                   }
+                   document.getElementById('notification-dropdown').classList.add('hidden');
+                });
+                
+                // Exibir um Toast estilizado na tela para chamar a atenção temporariamente
+                if (linkDanfe && linkDanfe !== '#') {
+                    _showToastNotification(`Chegou uma nova Nota Fiscal no sistema!<br>NFe N°: <b>${numeroNota}</b>`, 'info', linkDanfe);
+                } else {
+                    _showToastNotification(`Chegou uma nova NFe N°: <b>${numeroNota}</b><br><span class="text-xs text-red-500">Sem link disponível</span>`, 'error');
+                }
+            }
+
+            function _showToastNotification(message, type = 'info', link = '#') {
+                let toastContainer = document.getElementById('toast-container');
+                if (!toastContainer) {
+                    toastContainer = document.createElement('div');
+                    toastContainer.id = 'toast-container';
+                    // ADICIONADO LARGURA FIXA PARA NÃO FICAR ESPREMIDO (w-80 sm:w-96)
+                    toastContainer.className = 'fixed bottom-4 right-4 z-[100] flex flex-col gap-2 w-80 sm:w-96';
+                    document.body.appendChild(toastContainer);
+                }
+                
+                const toast = document.createElement('div');
+                toast.className = 'transform transition-all duration-300 translate-y-full opacity-0 max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden flex' + (link !== '#' ? ' cursor-pointer hover:bg-gray-50' : '');
+                
+                if (link !== '#') {
+                    toast.onclick = (e) => {
+                        if (!e.target.closest('button')) window.open(link, '_blank');
+                    };
+                }
+                
+                const iconColor = type === 'info' ? 'text-blue-500' : (type === 'error' ? 'text-red-500' : 'text-green-500');
+                const iconSvg = `<svg class="h-6 w-6 ${iconColor}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>`;
+                
+                toast.innerHTML = `
+                    <div class="p-4 w-full">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0">${iconSvg}</div>
+                            <div class="ml-3 w-0 flex-1 pt-0.5">
+                                <p class="text-sm font-medium text-gray-900">Notificação</p>
+                                <p class="mt-1 text-sm text-gray-500">${message}</p>
+                            </div>
+                            <div class="ml-4 flex-shrink-0 flex">
+                                <button type="button" class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" onclick="this.closest('.pointer-events-auto').remove()">
+                                    <span class="sr-only">Fechar</span>
+                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                toastContainer.appendChild(toast);
+                
+                // Animate in
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-full', 'opacity-0');
+                    toast.classList.add('translate-y-0', 'opacity-100');
+                }, 10);
+                
+                // Auto dismiss
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-0', 'opacity-100');
+                    toast.classList.add('translate-y-full', 'opacity-0');
+                    setTimeout(() => {
+                        if (toastContainer.contains(toast)) toast.remove();
+                    }, 300);
+                }, 5000);
+            }
+            // --- FIM DA LÓGICA DE NOTIFICAÇÕES ---
+
             let _reportState = {
                 sortColumn: 'descricao',
                 sortDirection: 'asc',
@@ -3960,6 +4197,7 @@ try {
                 init: function () {
                     console.log('[App] init: Aplicação inicializando...');
                     _initFirestoreSync(); // NOVO: Inicia a sincronização via Firestore Sync
+                    _initNotifications(); // NOVO: Inicializa sino de notificações
                     _cacheDomElements();
                     _bindEvents();
                     // NOVO: Inicializa o módulo de Atendimento com as configurações necessárias

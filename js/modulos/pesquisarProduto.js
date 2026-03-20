@@ -66,7 +66,7 @@ export const PesquisarProduto = (function() {
                     ${(product.url_imagens_externas && product.url_imagens_externas.length > 0) ? 
                         product.url_imagens_externas.map(url => `
                             <a href="${url}" target="_blank" rel="noopener noreferrer">
-                                <img src="${url}" alt="Imagem do produto" class="w-full h-32 object-cover rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300" 
+                                <img src="${url}" alt="Imagem do produto" class="w-full h-48 object-contain bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 p-2" 
                                      onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
                             </a>
                         `).join('') :

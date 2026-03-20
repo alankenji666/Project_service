@@ -282,15 +282,42 @@ export const DashboardApp = (function() {
                     datasets: [{
                         data: data.categories.map(c => c.total),
                         backgroundColor: data.categories.map(c => c.color),
-                        borderWidth: 0,
-                        hoverOffset: 15
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 10
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '65%',
+                    layout: {
+                        padding: 30
+                    },
+                    cutout: '60%',
                     plugins: { 
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 4,
+                            formatter: (value, ctx) => {
+                                if (!value || value === 0) return '';
+                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                const perc = (value / total) * 100;
+                                if (perc < 3) return '';
+                                return [
+                                    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value),
+                                    '(' + perc.toFixed(1) + '%)'
+                                ];
+                            },
+                            textAlign: 'center',
+                            color: '#374151',
+                            font: { weight: 'bold', size: 11 },
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            borderRadius: 4,
+                            padding: 4,
+                            borderColor: '#e5e7eb',
+                            borderWidth: 1
+                        },
                         legend: { 
                             position: 'right',
                             labels: { boxWidth: 12, padding: 20, font: { size: 12, weight: 'bold' } }
