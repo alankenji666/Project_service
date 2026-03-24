@@ -938,19 +938,49 @@ export const DashboardApp = (function() {
     function _exportToCSV(type) {
         if (!_currentSalesDetails.length) return;
         
+        const formatBRL = (val) => {
+            return new Intl.NumberFormat('pt-BR', { 
+                style: 'currency', 
+                currency: 'BRL' 
+            }).format(val || 0);
+        };
+
         let headers, rows;
         if (type === 'notes') {
             headers = ["Nº Nota", "Data", "Cliente", "Vendedor", "Valor", "Situação", "Origem"];
             rows = _currentSalesDetails.map(n => [
-                n.numero_da_nota, n.data_de_emissao, n.nome_do_cliente, n.nome_do_vendedor, 
-                String(n.valor_da_nota).replace('.',','), n.situacao, n.origem_loja
+                n.numero_da_nota, 
+                _formatDate(n.data_de_emissao), 
+                n.nome_do_cliente, 
+                n.nome_do_vendedor, 
+                formatBRL(n.valor_da_nota), 
+                n.situacao, 
+                n.origem_loja
             ]);
         } else {
-            headers = ["Nº Nota", "Data", "Cliente", "Código Item", "Quantidade", "Valor Unit"];
+            headers = ["Nº Nota", "Data", "Cliente", "Código Item", "Quantidade", "Valor Unitario (Venda)", "Valor Unitario (Custo)", "Total (Venda)", "Total (Custo)"];
             rows = [];
             _currentSalesDetails.forEach(n => {
                 _parseNfeItemsString(n.itens).forEach(i => {
-                    rows.push([n.numero_da_nota, n.data_de_emissao, n.nome_do_cliente, i.codigo, i.quantidade, String(i.valor).replace('.',',')]);
+                    const product = _allProducts.find(p => String(p.codigo) === String(i.codigo));
+                    const custoUnitario = product ? (parseFloat(product.preco_de_custo) || 0) : 0;
+                    const vendaUnitario = parseFloat(i.valor) || 0;
+                    const quantidade = parseFloat(i.quantidade) || 0;
+
+                    const totalVenda = quantidade * vendaUnitario;
+                    const totalCusto = quantidade * custoUnitario;
+
+                    rows.push([
+                        n.numero_da_nota, 
+                        _formatDate(n.data_de_emissao), 
+                        n.nome_do_cliente, 
+                        i.codigo, 
+                        quantidade, 
+                        formatBRL(vendaUnitario),
+                        formatBRL(custoUnitario),
+                        formatBRL(totalVenda),
+                        formatBRL(totalCusto)
+                    ]);
                 });
             });
         }
