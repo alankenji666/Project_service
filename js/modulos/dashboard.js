@@ -73,6 +73,41 @@ export const DashboardApp = (function() {
     }
 
     /**
+     * Formata uma data para o padrão brasileiro (DD/MM/AAAA HH:mm).
+     * Trata strings ISO e formatos já existentes.
+     * @param {string} dateStr - A string de data a ser formatada.
+     * @returns {string} A data formatada.
+     */
+    function _formatDate(dateStr) {
+        if (!dateStr) return 'N/A';
+        
+        // Se já estiver no formato brasileiro DD/MM/AAAA, retorna como está
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+            return dateStr;
+        }
+
+        try {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr;
+
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            
+            // Verifica se a string original contém T (ISO) ou : (hora) para incluir o horário
+            if (dateStr.includes('T') || dateStr.includes(':')) {
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                return `${day}/${month}/${year} ${hours}:${minutes}`;
+            }
+            
+            return `${day}/${month}/${year}`;
+        } catch (e) {
+            return dateStr;
+        }
+    }
+
+    /**
      * Processa a string de itens da NFe.
      * @param {string} itemsString - A string no formato "(codigo, qtd, valor);(codigo, qtd, valor)".
      * @returns {Array} Um array de objetos, cada um com {codigo, quantidade, valor}.
@@ -820,7 +855,7 @@ export const DashboardApp = (function() {
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600"><a href="${nfe.link_danfe || '#'}" target="_blank">${nfe.numero_da_nota}</a></td>
                     <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" data-itens="${nfe.itens}" data-frete="${nfe.valor_do_frete}" data-desconto="${nfe.valor_do_desconto || 0}" data-valor-total="${nfe.valor_da_nota || 0}">
                         <div class="text-sm font-medium text-gray-900">${nfe.nome_do_cliente}</div>
-                        <div class="text-xs text-gray-500">${nfe.data_de_emissao}</div>
+                        <div class="text-xs text-gray-500">${_formatDate(nfe.data_de_emissao)}</div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                         <span class="seller-tooltip-trigger cursor-pointer underline decoration-dotted" data-seller-name="${nfe.nome_do_vendedor || ''}">${nfe.nome_do_vendedor || 'N/A'}</span>

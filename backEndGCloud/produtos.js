@@ -1,5 +1,9 @@
 const express = require('express');
 
+// Utilitário para delay (Rate Limit Bling: 3 req/s)
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+
 /**
  * Cria um roteador para buscar e processar os dados dos produtos.
  * @param {Function} getSheetsClient - Função para obter o cliente autenticado do Google Sheets.
@@ -231,6 +235,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             if (!currentProduct) {
                 throw new Error("Produto não encontrado no Bling para atualização.");
             }
+            console.log(`[Bling] Dados atuais do produto:`, JSON.stringify(currentProduct, null, 2));
 
             // 3. Montar o Payload de atualização clonando o produto atual e alterando apenas o necessário
             // Removemos campos que não devem ser enviados no corpo de um PUT (como IDs internos e timestamps)
@@ -243,6 +248,46 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 codigo: codigo || currentProduct.codigo,
                 precoCusto: preco_de_custo !== undefined ? parseFloat(preco_de_custo) : currentProduct.precoCusto
             };
+
+            // NOVO: Passo 3.1 - Obter o vínculo do fornecedor
+            // Em Bling V3, o fornecedor principal costuma vir no campo singular 'fornecedor'
+            let fornecedorVinculo = null;
+            if (currentProduct.fornecedor && currentProduct.fornecedor.id) {
+                fornecedorVinculo = currentProduct.fornecedor;
+                console.log(`[Bling] Vínculo de fornecedor detectado no produto: ID ${fornecedorVinculo.id}`);
+            }
+
+            // NOVO: Passo 3.2 - Atualizar o preço no fornecedor via rota específica
+            // PUT /produtos/fornecedores/{idProdutoFornecedor}
+            if (preco_de_custo !== undefined && fornecedorVinculo) {
+                try {
+                    // Rate Limit: Espera um pouco antes de chamar a próxima API do Bling
+                    await sleep(500);
+                    
+                    const supplierUrl = `${blingBaseUrl}/produtos/fornecedores/${fornecedorVinculo.id}`;
+                    console.log(`[Bling] Atualizando preço no fornecedor (ID Vínculo: ${fornecedorVinculo.id}) via ${supplierUrl}...`);
+                    
+                    // O Bling V3 exige IDs de produto e contato para validar a edição do item do fornecedor
+                    const supplierPayload = {
+                        id: fornecedorVinculo.id,
+                        precoCusto: parseFloat(preco_de_custo),
+                        produto: { id: parseInt(idProduto) },
+                        fornecedor: { id: fornecedorVinculo.contato?.id || 0 }
+                    };
+                    
+                    console.log(`[Bling] Payload do fornecedor:`, JSON.stringify(supplierPayload, null, 2));
+                    
+                    await axios.put(supplierUrl, supplierPayload, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    console.log(`[Bling] Sucesso na atualização do fornecedor vínculo ${fornecedorVinculo.id}`);
+                } catch (err) {
+                    console.error(`[Bling] Erro ao atualizar fornecedor vínculo:`, err.response?.data || err.message);
+                }
+            }
+
+            // Rate Limit: Espera meio segundo antes da atualização principal do produto
+            await sleep(500);
 
             // Se localizacao foi informada, ela deve ir dentro de 'estoque'
             if (localizacao !== undefined) {
