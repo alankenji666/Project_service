@@ -145,18 +145,19 @@ const COLUMNS_NFE = {
 
 // --- CONSTANTES DE MAPEAMENTO DE COLUNAS PARA 'PedidosBling' ---
 const COLUMNS_PEDIDOS_BLING = {
-    ID: 0,
-    NUMERO: 1,
-    NUMERO_LOJA: 2,
-    DATA: 3,
-    TOTAL: 4,
-    SITUACAO_VALOR: 5,
-    SITUACAO_ID: 6,
-    CONTATO_ID: 7,
-    VENDEDOR_ID: 8,
-    LOJA_ID: 9,
-    EVENTO: 10,
-    DATA_EVENTO: 11
+    CONFERIDO: 0,
+    ID: 1,
+    NUMERO: 2,
+    NUMERO_LOJA: 3,
+    DATA: 4,
+    DATA_SAIDA: 5,
+    SITUACAO: 6,
+    CONTATO_NOME: 7,
+    TOTAL_PRODUTOS: 8,
+    TOTAL_PEDIDO: 9,
+    VENDEDOR: 10,
+    LOJA: 11,
+    OBSERVACAO: 12
 };
 
 // Rota para Lançamento de Requisição - TERCEIROS
