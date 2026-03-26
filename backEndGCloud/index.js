@@ -79,6 +79,7 @@ const SHEET_NAME_WHATSAPP_HISTORICO = 'whatsapp - historico'; // NOVO
 const SHEET_NAME_PRODUTOS_ESTOQUE = 'Produtos Estoque';
 const SHEET_NAME_VENDAS_LOJA_INTEGRADA = 'VendasLojaIntegrada'; // <-- ADICIONE ESTA LINHA
 const SHEET_NAME_LOJA_INTEGRADA_CONFIG = 'configuracaoLojaIntegrada'; // <-- ADICIONE ESTA LINHA
+const SHEET_NAME_PEDIDOS_BLING = 'PedidosBling'; // NOVO
 
 
 // URLs
@@ -140,6 +141,22 @@ const COLUMNS_NFE = {
     ORIGEM_LOJA: 15,
     LINK_DANFE: 16,
     OBSERVACAO: 17
+};
+
+// --- CONSTANTES DE MAPEAMENTO DE COLUNAS PARA 'PedidosBling' ---
+const COLUMNS_PEDIDOS_BLING = {
+    ID: 0,
+    NUMERO: 1,
+    NUMERO_LOJA: 2,
+    DATA: 3,
+    TOTAL: 4,
+    SITUACAO_VALOR: 5,
+    SITUACAO_ID: 6,
+    CONTATO_ID: 7,
+    VENDEDOR_ID: 8,
+    LOJA_ID: 9,
+    EVENTO: 10,
+    DATA_EVENTO: 11
 };
 
 // Rota para Lançamento de Requisição - TERCEIROS
@@ -850,6 +867,18 @@ const lojaIntegradaRouter = createLojaIntegradaRouter(
     notifySync // Injetando Firestore Sync
 );
 app.use('/loja-integrada', lojaIntegradaRouter);
+
+// Roteador do webhook de Pedidos do Bling (NOVO)
+const createBlingPedidosWebhookRouter = require('./webhook_pedidos_bling');
+const blingPedidosWebhookRouter = createBlingPedidosWebhookRouter(
+    getInitializedSheetsClient,
+    SPREADSHEET_ID_NFE,
+    SHEET_NAME_PEDIDOS_BLING,
+    BLING_API_BASE_URL,
+    COLUMNS_PEDIDOS_BLING,
+    APPS_SCRIPT_TOKEN_URL
+);
+app.use('/bling/pedidos', blingPedidosWebhookRouter);
 
 
 // --- EXPORTAÇÃO DA APLICAÇÃO EXPRESS ---
