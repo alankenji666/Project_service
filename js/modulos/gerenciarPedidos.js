@@ -495,6 +495,7 @@ export const GerenciarPedidosApp = (function () {
             }
             fetchPedidos(); 
         },
+        fetchPedidos: fetchPedidos,
         getAllPedidos: () => _allPedidos
     };
 })();
