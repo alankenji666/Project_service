@@ -881,6 +881,15 @@ const blingPedidosWebhookRouter = createBlingPedidosWebhookRouter(
 );
 app.use('/bling/pedidos', blingPedidosWebhookRouter);
 
+// Roteador de Pedidos para o Frontend
+const createPedidosRouter = require('./pedidos.js');
+const pedidosRouter = createPedidosRouter(
+    getInitializedSheetsClient,
+    SPREADSHEET_ID_NFE,
+    SHEET_NAME_PEDIDOS_BLING
+);
+app.use('/pedidos', pedidosRouter);
+
 
 // --- EXPORTAÇÃO DA APLICAÇÃO EXPRESS ---
 // Middleware de Erro Global - Captura todos os erros lançados nas rotas

@@ -72,6 +72,9 @@
                     <button type="button" id="nav-gerenciar-saida"
                         class="nav-link px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-100 transition-colors">Gerenciar
                         Saída</button>
+                    <button type="button" id="nav-gerenciar-pedidos"
+                        class="nav-link px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-100 transition-colors">Gerenciar
+                        Pedidos</button>
                     <button type="button" id="nav-dashboards"
                         class="nav-link px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-100 transition-colors">Dashboards</button>
                 </nav>
@@ -280,6 +283,52 @@
         </div>
     </div>
 
+    <!-- BARRA DE FILTRO DE PEDIDOS (Global) -->
+    <div id="pedidos-filter-bar" class="bg-gray-50 p-4 border-b border-gray-200 shadow-sm z-20 hidden">
+        <div class="container mx-auto flex flex-wrap items-center justify-center gap-x-6 gap-y-4">
+            <div>
+                <label for="pedidos-year-filter" class="block text-sm font-medium text-gray-700">Ano:</label>
+                <select id="pedidos-year-filter" class="mt-1 block w-24 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    <option value="all">Tudo</option>
+                </select>
+            </div>
+            <div>
+                <label for="pedidos-start-date" class="block text-sm font-medium text-gray-700">Data Início:</label>
+                <input type="date" id="pedidos-start-date" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+            <div>
+                <label for="pedidos-end-date" class="block text-sm font-medium text-gray-700">Data Fim:</label>
+                <input type="date" id="pedidos-end-date" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+            <div>
+                <label for="pedidos-status-select" class="block text-sm font-medium text-gray-700">Situação:</label>
+                <select id="pedidos-status-select" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    <option value="all" selected>Todas</option>
+                    <option value="atendido">Atendido / Entregue</option>
+                    <option value="pendente">Pendente / Em Andamento</option>
+                    <option value="preparando">Preparando / Impresso</option>
+                    <option value="cancelado">Cancelado</option>
+                </select>
+            </div>
+            <div class="flex flex-col gap-2 text-sm self-end">
+                <div class="flex items-center justify-start gap-x-4">
+                    <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="pedidos-date-range" value="current_month" class="pedidos-date-radio"> Mês Atual</label>
+                    <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="pedidos-date-range" value="last_month" class="pedidos-date-radio"> Último Mês</label>
+                    <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="pedidos-date-range" value="last_3_months" class="pedidos-date-radio"> Últimos 3 Meses</label>
+                    <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="pedidos-date-range" value="last_6_months" class="pedidos-date-radio"> Últimos 6 Meses</label>
+                </div>
+                <div class="flex items-center justify-start gap-x-4">
+                    <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="pedidos-date-range" value="30" class="pedidos-date-radio"> 30 dias</label>
+                    <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="pedidos-date-range" value="60" class="pedidos-date-radio"> 60 dias</label>
+                    <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="pedidos-date-range" value="90" class="pedidos-date-radio"> 90 dias</label>
+                    <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="pedidos-date-range" value="all" class="pedidos-date-radio" checked> Tudo</label>
+                </div>
+            </div>
+            <button id="pedidos-clear-filters-btn" class="self-end px-4 py-2 bg-gray-600 text-white rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+                Limpar
+            </button>
+        </div>
+    </div>
 
     <!-- BARRA DE AÇÕES DO RELATÓRIO -->
     <div id="report-action-bar" class="report-action-bar-style hidden">
@@ -443,6 +492,73 @@
         <!-- PÁGINA: GERENCIAR SAÍDA -->
         <main id="page-gerenciar-saida" class="hidden p-8 h-full overflow-y-auto">
             <!-- Conteúdo será renderizado pelo JavaScript -->
+        </main>
+
+        <!-- NOVA PÁGINA: GERENCIAR PEDIDOS -->
+        <main id="page-gerenciar-pedidos" class="hidden p-4 sm:p-8 h-full overflow-y-auto bg-gray-50 flex flex-col">
+            <div class="max-w-7xl mx-auto w-full">
+                <!-- Cabeçalho -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                        </svg>
+                        Gerenciar Pedidos (Bling)
+                    </h2>
+                </div>
+                
+                <!-- Card Consolidado: Busca, Paginação e Tabela -->
+                <div class="bg-white shadow-sm rounded-xl border border-gray-100 overflow-hidden mt-2">
+                    
+                    <!-- Barra de pesquisa -->
+                    <div class="p-4 border-b border-gray-100 bg-white">
+                        <div class="relative w-full">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <input type="text" id="pedidos-search-input" class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Buscar por cliente, número...">
+                        </div>
+                    </div>
+
+                    <!-- Container de Paginação (Topo) -->
+                    <div id="pedidos-pagination-top-container" class="px-4 py-2 border-b border-gray-100 bg-gray-50 border-t-0"></div>
+                    
+                    <!-- Tabela de Pedidos -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200" id="pedidos-table">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" data-pedidos-sort="numero" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Número</th>
+                                    <th scope="col" data-pedidos-sort="data" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Data</th>
+                                    <th scope="col" data-pedidos-sort="cliente" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Cliente</th>
+                                    <th scope="col" data-pedidos-sort="vendedor" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Vendedor</th>
+                                    <th scope="col" data-pedidos-sort="situacao" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Situação</th>
+                                    <th scope="col" data-pedidos-sort="total" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-right cursor-pointer hover:bg-gray-100">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pedidos-table-content" class="bg-white divide-y divide-gray-200">
+                                <!-- Preenchido pelo JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Estado Vazio / Carregando -->
+                    <div id="pedidos-loading" class="hidden p-12 text-center text-gray-500 flex flex-col items-center">
+                        <svg class="animate-spin h-8 w-8 mx-auto text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <p>Carregando pedidos...</p>
+                    </div>
+                    <div id="no-pedidos-message" class="hidden p-12 text-center text-gray-500 flex flex-col items-center">
+                        <svg class="h-12 w-12 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+                        <p class="text-lg font-medium text-gray-900 mb-1">Nenhum pedido encontrado</p>
+                        <p class="text-sm text-gray-500">Tente ajustar seus filtros ou recarregar a página.</p>
+                    </div>
+
+                    <!-- Container de Paginação (Fim) -->
+                    <div id="pedidos-pagination-container" class="px-4 py-2 border-t border-gray-100 bg-gray-50"></div>
+                </div>
+            </div>
         </main>
 
         <!-- NOVA PÁGINA: DASHBOARDS -->

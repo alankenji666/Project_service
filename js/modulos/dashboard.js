@@ -583,7 +583,7 @@ export const DashboardApp = (function() {
                 return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
             });
         }
-        
+
         const stores = ['Bling', 'Mercado Livre', 'Loja Integrada'];
         const storeData = stores.map(store => {
             const notes = filteredNFe.filter(nfe => nfe.origem_loja === store);
@@ -1114,7 +1114,14 @@ export const DashboardApp = (function() {
         init: function(config) {
             _allNFeData = config.allNFeData || [];
             _allProducts = config.allProducts || [];
+            _allLojaIntegradaOrders = config.allLojaIntegradaOrders || [];
             _utils = config;
+            
+            if (!_state.isInitialized) {
+                _cacheDom();
+                _bindEvents();
+                _state.isInitialized = true;
+            }
         },
 
         start: function(nfeData, liOrders) {

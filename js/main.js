@@ -11,6 +11,7 @@
         import { EstoqueApp } from './modulos/estoque.js';
         import { SaidaItens } from './modulos/saidaItens.js';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js';
 
         // Início do padrão Revealing Module para a aplicação principal
         const App = (function () {
@@ -142,6 +143,13 @@
                         console.log(`[Firestore Sync] Pedido ${data.numeroPedido} atualizado.`);
                         if (typeof LojaIntegradaApp !== 'undefined') {
                             LojaIntegradaApp.fetchOrders();
+                        }
+                        break;
+
+                    case 'pedidoBlingReceived':
+                        console.log(`[Firestore Sync] Novo pedido Bling recebido ou atualizado: ${data.numero}.`);
+                        if (typeof GerenciarPedidosApp !== 'undefined') {
+                            GerenciarPedidosApp.init(); // Refresh data
                         }
                         break;
 
@@ -450,9 +458,9 @@
             let _currentPrintModalType = '';
 
             // --- REFERÊNCIAS PRIVADAS A ELEMENTOS DO DOM ---
-            let _navPesquisar, _navEstoque, _navGerenciarSaida, _navDashboards, _navAtendimento;
+            let _navPesquisar, _navEstoque, _navGerenciarSaida, _navGerenciarPedidos, _navDashboards, _navAtendimento;
             let _refreshButton, _loadingOverlay;
-            let _globalFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer;
+            let _globalFilterBar, _pedidosFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer;
             let _product_list_container, _product_details_container, _details_placeholder, _product_details, _requisitionOverviewCardsContainer, _saidaOverviewCards, _ordersTableTitle, _ordersTableContent, _noOrdersMessage, _noOrdersMessageModal, _ordersSearchInput;
             let _saidaActionsContainer, _selectedSaidaItemsCount, _clearSaidaSelectionBtn, _viewSaidasBtn, _createSaidaBtn;
             let _ordersTableActionsMenuContainer, _ordersTableActionsButton, _ordersTableActionsDropdown, _ordersTableActionPrintGeneric, _ordersTableActionPrintList, _ordersTableActionPrintSolicitation, _ordersTableActionExcel;
@@ -476,7 +484,7 @@
             let _nfeObservationModal, _nfeObservationModalInfo, _nfeObservationHistory, _nfeObservationTextarea, _saveNfeObservationBtn, _cancelNfeObservationBtn, _nfeObservationCharCount; // Modal de Observação NFe
             let _requisitionObservationModal, _requisitionObservationModalInfo, _requisitionObservationHistory, _requisitionObservationTextarea, _saveRequisitionObservationBtn, _cancelRequisitionObservationBtn, _requisitionObservationCharCount; // Modal de Observação Requisição
             let _stockAdjustmentModal, _closeStockAdjustmentModalBtn, _stockAdjustmentProductInfo, _stockAdjustmentCurrentStock, _stockAdjustmentNewQuantity, _stockAdjustmentReason, _confirmStockAdjustmentBtn, _cancelStockAdjustmentBtn; // NOVO: Modal de Ajuste de Estoque
-            let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageSaidaReport, _pageReport, _pageGerenciarSaida, _pageDashboards, _pageAtendimento;
+            let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageSaidaReport, _pageReport, _pageGerenciarSaida, _pageGerenciarPedidos, _pageDashboards, _pageAtendimento;
             let _productReportModal, _openProductReportModalBtn, _closeProductReportModalBtn, _cancelProductReportBtn, _generateProductReportBtn;
             let _productNameEditModal, _closeProductNameEditModalBtn, _productNameEditInfo, _productNameEditInput, _productNameEditLoading, _productNameEditSuccess, _cancelProductNameEditBtn, _confirmProductNameEditBtn;
             let _productLocationEditModal, _closeProductLocationEditModalBtn, _productLocationEditInfo, _productLocationEditInput, _productLocationEditLoading, _productLocationEditSuccess, _cancelProductLocationEditBtn, _confirmProductLocationEditBtn;
@@ -1331,12 +1339,14 @@ const data = filteredProducts.map(product => {
                 _pageSaidaReport.classList.add('hidden');
                 _pageReport.classList.add('hidden');
                 _pageGerenciarSaida.classList.add('hidden');
+                _pageGerenciarPedidos.classList.add('hidden');
                 _pageDashboards.classList.add('hidden');
                 _pageAtendimento.classList.add('hidden');
 
                 _navPesquisar.classList.remove('active');
                 _navEstoque.classList.remove('active');
                 _navGerenciarSaida.classList.remove('active');
+                _navGerenciarPedidos.classList.remove('active');
                 _navDashboards.classList.remove('active');
                 _navAtendimento.classList.remove('active');
 
@@ -1344,7 +1354,7 @@ const data = filteredProducts.map(product => {
 
                 // Esconde todas as barras de filtro por padrão
                 if (_globalFilterBar) _globalFilterBar.classList.add('hidden');
-
+                if (_pedidosFilterBar) _pedidosFilterBar.classList.add('hidden');
                 if (_nfeFilterBar) _nfeFilterBar.classList.add('hidden'); // Esconde a nova barra
                 if (_reportActionBar) _reportActionBar.classList.add('hidden');
                 if (_requisitionActionBar) _requisitionActionBar.classList.add('hidden'); // Add this line to hide by default
@@ -1400,6 +1410,13 @@ const data = filteredProducts.map(product => {
                         _globalFilterButton.classList.remove('hidden');
                         _stockActionsContainer.classList.add('hidden');
                         _saidaActionsContainer.classList.remove('hidden');
+                    }
+                } else if (pageId === 'gerenciar-pedidos') {
+                    _pageGerenciarPedidos.classList.remove('hidden');
+                    if (_pedidosFilterBar) _pedidosFilterBar.classList.remove('hidden');
+                    _navGerenciarPedidos.classList.add('active');
+                    if (typeof GerenciarPedidosApp !== 'undefined') {
+                        GerenciarPedidosApp.init();
                     }
                 } else if (pageId === 'overview-saidas') {
                     // Esta é a página de diagnóstico, acessada pelo botão "Ver Saídas".
@@ -3623,6 +3640,7 @@ const data = filteredProducts.map(product => {
                 if (_navPesquisar) _navPesquisar.addEventListener('click', (e) => { e.preventDefault(); _showPage('pesquisar'); });
                 if (_navEstoque) _navEstoque.addEventListener('click', (e) => { e.preventDefault(); _showPage('estoque'); });
                 if (_navGerenciarSaida) _navGerenciarSaida.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-saida'); });
+                if (_navGerenciarPedidos) _navGerenciarPedidos.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-pedidos'); });
                 if (_navDashboards) _navDashboards.addEventListener('click', (e) => { e.preventDefault(); _showPage('dashboards'); });
                 if (_viewRequisitionsBtn) _viewRequisitionsBtn.addEventListener('click', (e) => { e.preventDefault(); _showPage('overview-requisitions'); });
                 if (_requisitionBackBtn) _requisitionBackBtn.addEventListener('click', () => _showPage('estoque'));
@@ -3818,15 +3836,18 @@ if (_generateProductReportBtn) {
                 _pageSaidaReport = document.getElementById('page-saida-report');
                 _pageReport = document.getElementById('page-report');
                 _pageGerenciarSaida = document.getElementById('page-gerenciar-saida');
+                _pageGerenciarPedidos = document.getElementById('page-gerenciar-pedidos');
                 _pageDashboards = document.getElementById('page-dashboards');
                 _navPesquisar = document.getElementById('nav-pesquisar');
                 _navEstoque = document.getElementById('nav-estoque');
                 _navGerenciarSaida = document.getElementById('nav-gerenciar-saida');
+                _navGerenciarPedidos = document.getElementById('nav-gerenciar-pedidos');
                 _navDashboards = document.getElementById('nav-dashboards');
                 _navAtendimento = document.getElementById('nav-atendimento');
                 _refreshButton = document.getElementById('refresh-button');
                 _loadingOverlay = document.getElementById('loading-overlay');
                 _globalFilterBar = document.getElementById('global-filter-bar');
+                _pedidosFilterBar = document.getElementById('pedidos-filter-bar');
                 _globalSearchInput = document.getElementById('global-search-input');
                 _globalFilterButton = document.getElementById('global-filter-button');
                 _globalFilterDropdown = document.getElementById('global-filter-dropdown');
