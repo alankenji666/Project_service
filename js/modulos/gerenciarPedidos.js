@@ -19,14 +19,14 @@ export const GerenciarPedidosApp = (function () {
     function _getVendedorName(vendedor) {
         if (!vendedor) return '-';
         const v = String(vendedor).trim();
-        if (v === '15596443455') return 'Reginaldo';
-        if (v === '15596443462') return 'Julio';
-        if (v === '15596442848') return 'Rodrigo';
+        if (v === '15596443455') return 'Reginaldo Araujo de Souza';
+        if (v === '15596443462') return 'Julio Martins dos Santos';
+        if (v === '15596442848') return 'Rodrigo Carbone';
         if (v.includes('ID:')) {
             const id = v.replace('ID:', '').trim();
-            if (id === '15596443455') return 'Reginaldo';
-            if (id === '15596443462') return 'Julio';
-            if (id === '15596442848') return 'Rodrigo';
+            if (id === '15596443455') return 'Reginaldo Araujo de Souza';
+            if (id === '15596443462') return 'Julio Martins dos Santos';
+            if (id === '15596442848') return 'Rodrigo Carbone';
         }
         return vendedor;
     }
