@@ -26,6 +26,8 @@
             let _allLojaIntegradaOrders = [];
             let _selectedSaidaItems = new Set();
             let _selectedStockItems = new Set();
+            let _isInitialized = false;
+            let _activePageId = null;
             
             // Variáveis do Firebase
             let _db;
@@ -167,7 +169,9 @@
             // --- NOVO: LÓGICA DE NOTIFICAÇÕES ---
             let _notificationCount = 0;
             
+            let _notificationsInitialized = false;
             function _initNotifications() {
+                if (_notificationsInitialized) return;
                 const btn = document.getElementById('notification-button');
                 const dropdown = document.getElementById('notification-dropdown');
                 const clearBtn = document.getElementById('clear-notifications-btn');
@@ -189,6 +193,7 @@
                             dropdown.classList.add('hidden');
                         }
                     });
+                    _notificationsInitialized = true;
                 }
                 
                 if (clearBtn) {
@@ -1332,6 +1337,9 @@ const data = filteredProducts.map(product => {
 
             // --- FUNÇÕES DE LÓGICA PRINCIPAL PRIVADAS ---
             function _showPage(pageId) {
+                if (_activePageId === pageId) return; // Otimização: Não faz nada se já estiver na página
+                _activePageId = pageId;
+
                 _pagePesquisar.classList.add('hidden');
                 _pageEstoque.classList.add('hidden');
                 _pageOverviewSaidas.classList.add('hidden');
@@ -1431,11 +1439,11 @@ const data = filteredProducts.map(product => {
                         // Pegamos os pedidos que já foram carregados pelo GerenciarPedidosApp
                         const allPedidosBling = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
 
-                        // Primeiro, garantimos que a configuração foi passada
+                        // Só inicializa se necessário
                         DashboardApp.init({
                             allNFeData: _allNFeData,
                             allLojaIntegradaOrders: _allLojaIntegradaOrders,
-                            allPedidosBling: allPedidosBling, // NOVA FONTE
+                            allPedidosBling: allPedidosBling, 
                             allProducts: _allProducts,
                             parsePtBrDate: _parsePtBrDate,
                             showMessageModal: _showMessageModal,
@@ -1443,8 +1451,8 @@ const data = filteredProducts.map(product => {
                             openNfeObservationModal: _openNfeObservationModal,
                             formatCnpjCpf: formatCnpjCpf
                         });
-                        // SÓ ENTÃO, mandamos ele começar
-                        DashboardApp.start(_allNFeData, _allLojaIntegradaOrders, allPedidosBling);
+                        
+                        DashboardApp.start(); // Agora o start não precisa receber os dados de novo se já foram passados no init
                     }
 
                 } else if (pageId === 'atendimento') {
@@ -4353,11 +4361,16 @@ try {
                  * Inicializa a aplicação.
                  */
                 init: function () {
+                    if (_isInitialized) {
+                        console.log('[App] init: Aplicação já inicializada. Ignorando.');
+                        return;
+                    }
                     console.log('[App] init: Aplicação inicializando...');
                     _initFirestoreSync(); // NOVO: Inicia a sincronização via Firestore Sync
                     _initNotifications(); // NOVO: Inicializa sino de notificações
                     _cacheDomElements();
                     _bindEvents();
+                    _isInitialized = true;
                     // NOVO: Inicializa o módulo de Atendimento com as configurações necessárias
                     if (typeof Atendimento !== 'undefined') {
                         Atendimento.init({

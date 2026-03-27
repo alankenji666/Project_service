@@ -479,7 +479,10 @@ export const DashboardApp = (function() {
     function _populateYearFilter() {
         if (!_dom.yearFilter) return;
 
-        const allData = [..._allNFeData, ..._allLojaIntegradaOrders];
+        // Se já temos anos populados, não precisa refazer a cada troca de menu
+        if (_dom.yearFilter.options.length > 1) return;
+
+        const allData = [..._allNFeData, ..._allLojaIntegradaOrders, ..._allPedidosBling];
         const years = new Set();
 
         allData.forEach(item => {
@@ -1222,11 +1225,16 @@ export const DashboardApp = (function() {
             if (liOrders) _allLojaIntegradaOrders = liOrders;
             if (pedidosBling) _allPedidosBling = pedidosBling;
 
-            _populateYearFilter();
+            // Só popula os anos se o seletor estiver vazio
+            if (_dom.yearFilter && _dom.yearFilter.options.length <= 1) {
+                _populateYearFilter();
+            }
             
-            // Sempre mostra o seletor ao iniciar (ou clicar no menu novamente)
-            _showSelector();
-            _state.isStarted = true;
+            // Só mostra o seletor se não estivermos já em uma view de vendas/estoque
+            if (!_state.isStarted) {
+                _showSelector();
+                _state.isStarted = true;
+            }
         },
 
         stop: function() {
