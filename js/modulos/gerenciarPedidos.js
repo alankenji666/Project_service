@@ -372,7 +372,8 @@ export const GerenciarPedidosApp = (function () {
                 const cliente = p.contato_nome || p['contato nome'] || p.cliente || '-';
                 const vendedor = _getVendedorName(p.vendedor);
                 const situacao = p.situação || p.situacao || p.situao || '-';
-                const total = p.total_pedido || p['total pedido'] || p.valortotal || p.total || '0.00';
+                const totalVal = parseFloat(p.total_pedido || p['total pedido'] || p.valortotal || p.total || 0);
+                const totalFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVal);
                 
                 const dataStr = p.data || p.data_criacao || '';
                 const pDate = _parseDate(dataStr);
@@ -398,7 +399,7 @@ export const GerenciarPedidosApp = (function () {
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${situacao}</span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-right">R$ ${total}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-right">${totalFormatted}</td>
                     </tr>
                 `;
             }).join('');
