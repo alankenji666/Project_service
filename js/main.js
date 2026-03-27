@@ -1595,14 +1595,15 @@ const data = filteredProducts.map(product => {
                 
                 _loadingOverlay.classList.remove('hidden');
                 try {
-                    const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasFabricaRes, saidasGarantiaRes, lojaIntegradaData] = await Promise.all([
+                    const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasFabricaRes, saidasGarantiaRes, lojaIntegradaData, pedidosBlingData] = await Promise.all([
                         fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         fetch(`${API_URLS.ORDERS_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         fetch(`${API_URLS.ORDERS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         fetch(`${API_URLS.SAIDAS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }),
-                        LojaIntegradaApp.fetchOrders() // NOVO: Busca os pedidos da Loja Integrada
+                        LojaIntegradaApp.fetchOrders(), // NOVO: Busca os pedidos da Loja Integrada
+                        (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.fetchPedidos() : Promise.resolve()
                     ]);
 
 
