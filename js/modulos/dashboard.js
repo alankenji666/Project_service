@@ -34,7 +34,13 @@ export const DashboardApp = (function() {
         estoqueTopLimit: 'all', // Limite de itens no Top Itens (all, 10, 20, 30)
         estoqueCurrentPage: 1, // Página atual da tabela de estoque
         estoquePageSize: 30, // Itens por página
-        charts: {} // Armazena instâncias de outros gráficos (ex: estoque)
+        charts: {}, // Armazena instâncias de outros gráficos (ex: estoque)
+        salesFilters: {
+            pedido: '',
+            cliente: '',
+            vendedor: '',
+            valor: ''
+        }
     };
 
     let _dom = {}; // Cache for DOM elements
@@ -871,103 +877,177 @@ export const DashboardApp = (function() {
         
         const total = _currentSalesDetails.reduce((sum, p) => sum + (parseFloat(p.total_pedido || p['total pedido'] || 0) || 0), 0);
         _dom.salesDetailsModalTitle.textContent = `Vendas Detalhadas (${channel}) ${titleDate} - Total: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
-    
+        
+        // Reseta filtros ao abrir um novo modal de período/canal
+        _state.salesFilters = { pedido: '', cliente: '', vendedor: '', valor: '' };
+
         if (_currentSalesDetails.length === 0) {
             _dom.salesDetailsModalContent.innerHTML = '';
             _dom.noSalesDetailsMessage.classList.remove('hidden');
         } else {
             _dom.noSalesDetailsMessage.classList.add('hidden');
-            let html = `
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pedido / Nota</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente / Data</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendedor</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">`;
-    
-            _currentSalesDetails.forEach(p => {
-                // Tenta encontrar a NFe correspondente na base _allNFeData pelo ID da Nota Fiscal
-                // IMPORTANTE: Convertemos ambos para string e limpamos espaços para garantir o acerto
-                const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
-                const nfeId = String(rawNfeId).split('.')[0].trim(); // Remove .0 se vier como float do Excel/Sheet
-                const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
-
-                const numeroDisplay = nfe ? nfe.numero_da_nota : (p.numero || p.número || 'S/N');
-                const linkDanfe = nfe ? nfe.link_danfe : '#';
-                const hasNfe = !!nfe;
-                
-                // Vendedor: Mapeia ID para nome completo se possível
-                let vendedorRaw = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
-                // Se o vendedor for um ID ou alias, traduzimos
-                let vendedor = vendedorRaw;
-                for (const [id, name] of Object.entries(_vendedorMap)) {
-                    if (vendedorRaw.includes(id)) {
-                        vendedor = name;
-                        break;
-                    }
-                }
-                
-                // Itens para o tooltip: Prefere os itens da NFe se existir, senão usa os do pedido
-                const itensRaw = nfe ? nfe.itens : (p.itens || '');
-                const valorTotal = parseFloat(p.total_pedido || p['total pedido'] || 0);
-
-                html += `
-                <tr id="sales-detail-row-${p.id || p.id_pedido}">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div class="flex flex-col">
-                            <span class="text-gray-400 text-[10px]">Ped: ${p.numero || p.número || '-'}</span>
-                            ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline">Nota ${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" 
-                        data-itens="${itensRaw}" 
-                        data-frete="${nfe ? (parseFloat(nfe.valor_do_frete) || 0) : 0}" 
-                        data-valor-total="${valorTotal}">
-                        <div class="text-sm font-medium text-gray-900 truncate max-w-[200px]" title="${p.contato_nome || p['contato nome'] || '-'}">${p.contato_nome || p['contato nome'] || '-'}</div>
-                        <div class="text-xs text-gray-500">${_formatDate(p.data)}</div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        ${vendedor}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">${valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
-                        <div class="flex items-center justify-center space-x-2">
-                            ${hasNfe ? `
-                            <button class="view-nfe-observation-btn text-gray-400 hover:text-blue-600" data-nfe-id="${nfe.id_nota}" title="Ver Detalhes NFe">
-                               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                            </button>` : ''}
-                            
-                            <span class="nfe-observation-status-icon cursor-pointer" 
-                                data-nfe-id="${nfe ? nfe.id_nota : (p.id || p.id_pedido)}" 
-                                data-observation='${(() => {
-                                    // Se tem NFe, tenta as observações da NFe
-                                    if (nfe && Array.isArray(nfe.observacao) && nfe.observacao.length > 0) {
-                                        return JSON.stringify(nfe.observacao);
-                                    }
-                                    // Senão, pega a observação do pedido
-                                    const obsPedido = p.observacao || p.observação || "";
-                                    if (obsPedido && obsPedido.trim()) {
-                                        return JSON.stringify([{ autor: 'Pedido', obs: obsPedido.trim() }]);
-                                    }
-                                    return JSON.stringify([]);
-                                })()}'>
-                               <svg class="h-5 w-5 ${(nfe && nfe.observacao && nfe.observacao.length > 0) || (p.observacao || p.observação) ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
-                                   <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
-                               </svg>
-                            </span>
-                        </div>
-                    </td>
-                </tr>`;
-            });
-            html += `</tbody></table>`;
-            _dom.salesDetailsModalContent.innerHTML = html;
+            _renderSalesDetailsTable();
         }
         _dom.salesDetailsModal.classList.remove('hidden');
+    }
+
+    /**
+     * Renderiza a estrutura da tabela de detalhes de vendas com os campos de filtro.
+     */
+    function _renderSalesDetailsTable() {
+        const html = `
+            <table class="min-w-full divide-y divide-gray-200" id="sales-details-table">
+                <thead class="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Pedido / Nota
+                            <input type="text" data-filter="pedido" value="${_state.salesFilters.pedido}" placeholder="Filtrar..." class="sales-col-filter mt-1 block w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500">
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Cliente / Data
+                            <input type="text" data-filter="cliente" value="${_state.salesFilters.cliente}" placeholder="Filtrar..." class="sales-col-filter mt-1 block w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500">
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Vendedor
+                            <input type="text" data-filter="vendedor" value="${_state.salesFilters.vendedor}" placeholder="Filtrar..." class="sales-col-filter mt-1 block w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500">
+                        </th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Valor
+                            <input type="text" data-filter="valor" value="${_state.salesFilters.valor}" placeholder="Ex: >100" class="sales-col-filter mt-1 block w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right">
+                        </th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="sales-details-tbody">
+                    <!-- Conteúdo renderizado dinamicamente -->
+                </tbody>
+            </table>
+        `;
+        _dom.salesDetailsModalContent.innerHTML = html;
+        _applySalesFilters();
+    }
+
+    /**
+     * Aplica os filtros atuais à lista de detalhes de vendas e renderiza o corpo da tabela.
+     */
+    function _applySalesFilters() {
+        const filters = _state.salesFilters;
+        const filteredData = _currentSalesDetails.filter(p => {
+            // Encontra NFe para buscar dados extras se necessário
+            const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
+            const nfeId = String(rawNfeId).split('.')[0].trim();
+            const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+
+            // Filtro Pedido/Nota
+            const pedidoStr = String(p.numero || p.número || "").toLowerCase();
+            const notaStr = nfe ? String(nfe.numero_da_nota || "").toLowerCase() : "";
+            if (filters.pedido && !pedidoStr.includes(filters.pedido.toLowerCase()) && !notaStr.includes(filters.pedido.toLowerCase())) return false;
+
+            // Filtro Cliente
+            const clienteStr = String(p.contato_nome || p['contato nome'] || "").toLowerCase();
+            if (filters.cliente && !clienteStr.includes(filters.cliente.toLowerCase())) return false;
+
+            // Filtro Vendedor
+            let vendedorRaw = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
+            let vendedorLabel = vendedorRaw;
+            for (const [id, name] of Object.entries(_vendedorMap)) {
+                if (vendedorRaw.includes(id)) { vendedorLabel = name; break; }
+            }
+            if (filters.vendedor && !vendedorLabel.toLowerCase().includes(filters.vendedor.toLowerCase())) return false;
+
+            // Filtro Valor (suporta > e < opcionalmente)
+            const valorTotal = parseFloat(p.total_pedido || p['total pedido'] || 0);
+            if (filters.valor) {
+                const fVal = filters.valor.trim();
+                if (fVal.startsWith('>')) {
+                    if (valorTotal <= parseFloat(fVal.substring(1)) || isNaN(parseFloat(fVal.substring(1)))) return false;
+                } else if (fVal.startsWith('<')) {
+                    if (valorTotal >= parseFloat(fVal.substring(1)) || isNaN(parseFloat(fVal.substring(1)))) return false;
+                } else {
+                    if (!valorTotal.toString().includes(fVal)) return false;
+                }
+            }
+
+            return true;
+        });
+
+        _renderSalesTableBody(filteredData);
+    }
+
+    /**
+     * Renderiza o corpo da tabela de detalhes de vendas.
+     */
+    function _renderSalesTableBody(data) {
+        const tbody = document.getElementById('sales-details-tbody');
+        if (!tbody) return;
+
+        if (data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-10 text-center text-gray-500 italic text-sm">Nenhum resultado para estes filtros.</td></tr>`;
+            return;
+        }
+
+        let html = '';
+        data.forEach(p => {
+            const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
+            const nfeId = String(rawNfeId).split('.')[0].trim();
+            const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+            
+            const numeroDisplay = nfe ? nfe.numero_da_nota : (p.numero || p.número || 'S/N');
+            const linkDanfe = nfe ? nfe.link_danfe : '#';
+            const hasNfe = !!nfe;
+            
+            let vendedorRaw = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
+            let vendedor = vendedorRaw;
+            for (const [id, name] of Object.entries(_vendedorMap)) {
+                if (vendedorRaw.includes(id)) { vendedor = name; break; }
+            }
+            
+            const itensRaw = nfe ? nfe.itens : (p.itens || '');
+            const valorTotal = parseFloat(p.total_pedido || p['total pedido'] || 0);
+
+            html += `
+            <tr id="sales-detail-row-${p.id || p.id_pedido}" class="hover:bg-gray-50 transition-colors">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div class="flex flex-col">
+                        <span class="text-gray-400 text-[10px]">Ped: ${p.numero || p.número || '-'}</span>
+                        ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline">Nota ${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" 
+                    data-itens="${itensRaw}" 
+                    data-frete="${nfe ? (parseFloat(nfe.valor_do_frete) || 0) : 0}" 
+                    data-valor-total="${valorTotal}">
+                    <div class="text-sm font-medium text-gray-900 truncate max-w-[200px]" title="${p.contato_nome || p['contato nome'] || '-'}">${p.contato_nome || p['contato nome'] || '-'}</div>
+                    <div class="text-xs text-gray-500">${_formatDate(p.data)}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    ${vendedor}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">${valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
+                    <div class="flex items-center justify-center space-x-3">
+                        ${hasNfe ? `
+                        <button class="view-nfe-observation-btn text-gray-400 hover:text-blue-600 transition-colors" data-nfe-id="${nfe.id_nota}" title="Ver Detalhes NFe">
+                           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        </button>` : ''}
+                        
+                        <span class="edit-sales-observation-btn cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors" 
+                            data-target-id="${nfe ? nfe.id_nota : (p.id || p.id_pedido)}" 
+                            data-observation='${(() => {
+                                if (nfe && Array.isArray(nfe.observacao) && nfe.observacao.length > 0) return JSON.stringify(nfe.observacao);
+                                const obsPedido = p.observacao || p.observação || "";
+                                if (obsPedido && obsPedido.trim()) return JSON.stringify([{ autor: 'Pedido', obs: obsPedido.trim() }]);
+                                return JSON.stringify([]);
+                            })()}'
+                            title="Adicionar/Ver Observação">
+                           <svg class="h-5 w-5 ${(nfe && nfe.observacao && nfe.observacao.length > 0) || (p.observacao || p.observação) ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
+                               <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
+                           </svg>
+                        </span>
+                    </div>
+                </td>
+            </tr>`;
+        });
     }
 
     function _showNfeItemsTooltip(event) {
@@ -1181,8 +1261,23 @@ export const DashboardApp = (function() {
             if (e.target.closest('#sales-details-export-button')) { e.stopPropagation(); _dom.exportDropdown.classList.toggle('hidden'); }
             if (e.target.closest('#export-sales-details-notes-csv-btn')) { e.preventDefault(); _exportToCSV('notes'); _dom.exportDropdown.classList.add('hidden'); }
             if (e.target.closest('#export-sales-details-items-csv-btn')) { e.preventDefault(); _exportToCSV('items'); _dom.exportDropdown.classList.add('hidden'); }
+            
             const viewBtn = e.target.closest('.view-nfe-observation-btn');
             if (viewBtn && _utils.openNfeObservationModal) _utils.openNfeObservationModal(viewBtn.dataset.nfeId);
+
+            const editObsBtn = e.target.closest('.edit-sales-observation-btn');
+            if (editObsBtn && _utils.openNfeObservationModal) {
+                _utils.openNfeObservationModal(editObsBtn.dataset.targetId);
+            }
+        });
+
+        _dom.salesDetailsModalContent?.addEventListener('input', e => {
+            const filterInput = e.target.closest('.sales-col-filter');
+            if (filterInput) {
+                const key = filterInput.dataset.filter;
+                _state.salesFilters[key] = filterInput.value;
+                _applySalesFilters();
+            }
         });
 
         _dom.salesDetailsModalContent?.addEventListener('mouseover', e => {
