@@ -11,6 +11,11 @@ export const DashboardApp = (function() {
     let _allLojaIntegradaOrders = [];
     let _allPedidosBling = []; // Nova fonte primária
     let _currentSalesDetails = []; // Armazena os dados para o modal de detalhes
+    let _vendedorMap = {
+        '15596443455': 'Julio Martins dos Santos',
+        'Reginaldo': 'Reginaldo Araujo de Souza',
+        'Rodrigo': 'Rodrigo Carbone'
+    };
     let _salesChartInstance = null;
 
     let _state = {
@@ -885,15 +890,25 @@ export const DashboardApp = (function() {
     
             _currentSalesDetails.forEach(p => {
                 // Tenta encontrar a NFe correspondente na base _allNFeData pelo ID da Nota Fiscal
-                const nfeId = p.id_nota_fiscal || p['id nota fiscal'];
-                const nfe = nfeId ? _allNFeData.find(n => n.id_nota === String(nfeId)) : null;
+                // IMPORTANTE: Convertemos ambos para string e limpamos espaços para garantir o acerto
+                const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
+                const nfeId = String(rawNfeId).split('.')[0].trim(); // Remove .0 se vier como float do Excel/Sheet
+                const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
 
                 const numeroDisplay = nfe ? nfe.numero_da_nota : (p.numero || p.número || 'S/N');
                 const linkDanfe = nfe ? nfe.link_danfe : '#';
                 const hasNfe = !!nfe;
                 
-                // Vendedor: Prefere o nome completo se disponível
-                const vendedor = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
+                // Vendedor: Mapeia ID para nome completo se possível
+                let vendedorRaw = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
+                // Se o vendedor for um ID ou alias, traduzimos
+                let vendedor = vendedorRaw;
+                for (const [id, name] of Object.entries(_vendedorMap)) {
+                    if (vendedorRaw.includes(id)) {
+                        vendedor = name;
+                        break;
+                    }
+                }
                 
                 // Itens para o tooltip: Prefere os itens da NFe se existir, senão usa os do pedido
                 const itensRaw = nfe ? nfe.itens : (p.itens || '');
