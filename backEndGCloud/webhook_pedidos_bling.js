@@ -59,7 +59,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
             // 3. Ler dados atuais para verificar se o pedido já existe e preservar dados manuais (Colunas A e M)
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId: SPREADSHEET_ID,
-                range: `${SHEET_NAME}!A:M`
+                range: `${SHEET_NAME}!A:P`
             });
             const currentSheetData = response.data.values || [];
             const existingRows = currentSheetData.slice(1); // Ignora cabeçalho
@@ -77,7 +77,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                 }
             }
 
-            const rowValues = new Array(13).fill('');
+            const rowValues = new Array(16).fill('');
             
             if (action === 'deleted' || !p) {
                 rowValues[COLUMNS.CONFERIDO] = dadosManuais.conferido;
@@ -110,11 +110,20 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                 rowValues[COLUMNS.DATA_SAIDA] = p.dataSaida || "";
                 rowValues[COLUMNS.SITUACAO] = p.situacao ? traduzirSituacaoPedido(p.situacao.id) : "N/A";
                 rowValues[COLUMNS.CONTATO_NOME] = p.contato ? p.contato.nome : "N/A";
+                rowValues[COLUMNS.CPF_CNPJ] = p.contato ? (p.contato.numeroDocumento || "") : "";
                 rowValues[COLUMNS.TOTAL_PRODUTOS] = p.totalProdutos || 0;
                 rowValues[COLUMNS.TOTAL_PEDIDO] = p.total || 0;
                 rowValues[COLUMNS.VENDEDOR] = vendedorFinal;
                 rowValues[COLUMNS.LOJA] = origemLoja;
+                rowValues[COLUMNS.ID_NOTA] = p.notaFiscal ? (p.notaFiscal.id || "") : "";
                 rowValues[COLUMNS.OBSERVACAO] = dadosManuais.observacao;
+
+                // Formatar Itens como (codigo, quantidade, valor)
+                if (p.itens && Array.isArray(p.itens)) {
+                    rowValues[COLUMNS.ITENS] = p.itens.map(i => `(${i.codigo}, ${parseFloat(i.quantidade).toFixed(2)}, ${parseFloat(i.valor).toFixed(2)})`).join(' ');
+                } else {
+                    rowValues[COLUMNS.ITENS] = "";
+                }
             }
 
             if (rowIndexToUpdate !== -1) {

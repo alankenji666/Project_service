@@ -153,11 +153,14 @@ const COLUMNS_PEDIDOS_BLING = {
     DATA_SAIDA: 5,
     SITUACAO: 6,
     CONTATO_NOME: 7,
-    TOTAL_PRODUTOS: 8,
-    TOTAL_PEDIDO: 9,
-    VENDEDOR: 10,
-    LOJA: 11,
-    OBSERVACAO: 12
+    CPF_CNPJ: 8,
+    TOTAL_PRODUTOS: 9,
+    TOTAL_PEDIDO: 10,
+    VENDEDOR: 11,
+    LOJA: 12,
+    ID_NOTA: 13,
+    OBSERVACAO: 14,
+    ITENS: 15
 };
 
 // Rota para Lançamento de Requisição - TERCEIROS
