@@ -1379,9 +1379,6 @@ const data = filteredProducts.map(product => {
                         _stockActionsContainer.classList.add('hidden'); // Explicitly hide stock actions
                         _saidaActionsContainer.classList.add('hidden');
                     }
-                    if (typeof PesquisarProduto !== 'undefined') {
-                        PesquisarProduto.render(_allProducts);
-                    }
                 } else if (pageId === 'estoque') {
                     _pageEstoque.classList.remove('hidden');
                     _navEstoque.classList.add('active');
