@@ -9,6 +9,7 @@ export const DashboardApp = (function() {
     let _allNFeData = [];
     let _allProducts = [];
     let _allLojaIntegradaOrders = [];
+    let _allPedidosBling = []; // Nova fonte primária
     let _currentSalesDetails = []; // Armazena os dados para o modal de detalhes
     let _salesChartInstance = null;
 
@@ -562,66 +563,81 @@ export const DashboardApp = (function() {
     }
 
     function _renderSalesView() {
-        if (!_dom.salesChartCanvas || !_allNFeData) return;
+        if (!_dom.salesChartCanvas || !_allPedidosBling) return;
 
         if (_salesChartInstance) { _salesChartInstance.destroy(); _salesChartInstance = null; }
         _dom.salesTableContainer.innerHTML = '';
         
-        let filteredNFe;
+        let filteredPedidos;
         const selectedYear = parseInt(_state.selectedYearFilter, 10);
 
+        // Somente pedidos "Atendido" são considerados vendas concluídas para o dashboard
+        const pedidosBase = _allPedidosBling.filter(p => {
+            const sit = (p.situacao || p.situação || "").toLowerCase();
+            return sit === 'atendido' || sit === 'concluído' || sit === 'faturado';
+        });
+
         if (selectedYear && !isNaN(selectedYear)) {
-            filteredNFe = _allNFeData.filter(nfe => {
-                const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-                return nfeDate && nfeDate.getFullYear() === selectedYear;
+            filteredPedidos = pedidosBase.filter(p => {
+                const pDate = _utils.parsePtBrDate(p.data);
+                return pDate && pDate.getFullYear() === selectedYear;
             });
         } else {
             const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
             const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
-            filteredNFe = _allNFeData.filter(nfe => {
-                const nfeDate = _utils.parsePtBrDate(nfe.data_de_emissao);
-                return nfeDate && (!startDate || nfeDate >= startDate) && (!endDate || nfeDate <= endDate);
+            filteredPedidos = pedidosBase.filter(p => {
+                const pDate = _utils.parsePtBrDate(p.data);
+                return pDate && (!startDate || pDate >= startDate) && (!endDate || pDate <= endDate);
             });
         }
 
         const stores = ['Bling', 'Mercado Livre', 'Loja Integrada'];
         const storeData = stores.map(store => {
-            const notes = filteredNFe.filter(nfe => nfe.origem_loja === store);
-            const total = notes.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
-            return { name: `Vendas ${store}`, id: store.toLowerCase().replace(/ /g, '_'), count: notes.length, total: total };
+            const currentPedidos = filteredPedidos.filter(p => p.loja === store);
+            const total = currentPedidos.reduce((sum, p) => sum + (parseFloat(p.total_pedido || p['total pedido'] || 0) || 0), 0);
+            return { name: `Vendas ${store}`, id: store.toLowerCase().replace(/ /g, '_'), count: currentPedidos.length, total: total };
         });
 
         const grandTotalVendas = storeData.reduce((sum, store) => sum + store.total, 0);
         const grandTotalVendasCount = storeData.reduce((sum, store) => sum + store.count, 0);
         
         const colors = { 'bling': 'bg-green-500', 'mercado_livre': 'bg-yellow-500', 'loja_integrada': 'bg-blue-500' };
-        let cardsHtml = storeData.map(store => _createSummaryCard(store.id, store.name, "Notas", store.count, store.total, colors[store.id])).join('');
-        cardsHtml += _createSummaryCard('total', 'Total Vendas (NFe)', "Notas", grandTotalVendasCount, grandTotalVendas, 'bg-gray-700');
+        let cardsHtml = storeData.map(store => _createSummaryCard(store.id, store.name, "Pedidos", store.count, store.total, colors[store.id])).join('');
+        cardsHtml += _createSummaryCard('total', 'Total Vendas (Pedidos)', "Pedidos", grandTotalVendasCount, grandTotalVendas, 'bg-gray-700');
         
         if (_dom.summaryCards) _dom.summaryCards.innerHTML = cardsHtml;
 
         const aggregationLevel = ['current_month', 'last_month', '30'].includes(_state.currentDateFilterValue) ? 'day' : 'month';
         const salesByPeriod = {};
         
-        filteredNFe.forEach(nfe => {
-            const date = _utils.parsePtBrDate(nfe.data_de_emissao);
+        filteredPedidos.forEach(p => {
+            const date = _utils.parsePtBrDate(p.data);
             if (!date) return;
             const key = aggregationLevel === 'day' ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
-            const store = nfe.origem_loja;
-            let value;
+            const store = p.loja;
+            let value = parseFloat(p.total_pedido || p['total pedido'] || 0) || 0;
+            
+            // Se modo líquido ativado, tentamos subtrair o custo
             if (_state.chartDisplayMode === 'liquida') {
-                const items = _parseNfeItemsString(nfe.itens);
-                let totalCostOfGoods = 0;
-                items.forEach(item => {
-                    const product = _allProducts.find(p => p.codigo === item.codigo);
-                    const cost = product ? _parseCurrencyBRL(product.preco_de_custo) : 0;
-                    totalCostOfGoods += cost * item.quantidade;
-                });
-                const grossSale = parseFloat(nfe.valor_da_nota) || 0;
-                value = grossSale - totalCostOfGoods;
-            } else {
-                value = parseFloat(nfe.valor_da_nota) || 0;
+                // Tentamos extrair itens do pedido
+                const itemsStr = p.itens || '';
+                // O formato dos itens no backend novo é (cod, qty, price) (cod, qty, price) ...
+                const itemsMatch = itemsStr.match(/\(([^)]+)\)/g);
+                if (itemsMatch) {
+                    let totalCostOfGoods = 0;
+                    itemsMatch.forEach(m => {
+                        const parts = m.slice(1, -1).split(',');
+                        if (parts.length >= 2) {
+                            const cod = parts[0].trim();
+                            const qty = parseFloat(parts[1]) || 0;
+                            const product = _allProducts.find(prod => prod.codigo === cod);
+                            const cost = product ? _parseCurrencyBRL(product.preco_de_custo) : 0;
+                            totalCostOfGoods += cost * qty;
+                        }
+                    });
+                    value -= totalCostOfGoods;
+                }
             }
             if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += value;
         });
@@ -717,13 +733,30 @@ export const DashboardApp = (function() {
 
         if (_state.activeLiTab === 'vendas') {
             const salesByPeriod = {};
-            filteredNFe.forEach(nfe => {
-                const d = _utils.parsePtBrDate(nfe.data_de_emissao);
+            const liPedidos = _allPedidosBling.filter(p => {
+                const sit = (p.situacao || p.situação || "").toLowerCase();
+                const isAtendido = (sit === 'atendido' || sit === 'concluído' || sit === 'faturado');
+                const isLI = p.loja === 'Loja Integrada';
+                if (!isAtendido || !isLI) return false;
+
+                const d = _utils.parsePtBrDate(p.data);
+                if (!d) return false;
+                if (selectedYear && !isNaN(selectedYear) && d.getFullYear() !== selectedYear) return false;
+                if (!selectedYear) {
+                    const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+                    const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+                    if ((startDate && d < startDate) || (endDate && d > endDate)) return false;
+                }
+                return true;
+            });
+
+            liPedidos.forEach(p => {
+                const d = _utils.parsePtBrDate(p.data);
                 if (!d) return;
                 const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                 if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
-                const store = nfe.origem_loja;
-                if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += parseFloat(nfe.valor_da_nota) || 0;
+                const store = p.loja;
+                if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += parseFloat(p.total_pedido || p['total pedido'] || 0) || 0;
             });
             tabContentContainer.innerHTML = _getSalesTableHTML(Object.keys(salesByPeriod).sort(), salesByPeriod);
         } else {
@@ -745,7 +778,7 @@ export const DashboardApp = (function() {
         const formatCurrency = (v) => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         let totals = { Bling: 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
 
-        let html = `<div class="bg-white p-4 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Vendas Mensais Detalhadas</h3><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mês/Ano</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bling</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Mercado Livre</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Loja Integrada (NFe)</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Mês</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+        let html = `<div class="bg-white p-4 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Vendas Mensais Detalhadas</h3><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mês/Ano</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bling</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Mercado Livre</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Loja Integrada</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Mês</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
         
         sortedMonths.forEach(monthKey => {
             const data = salesData[monthKey] || { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
@@ -818,14 +851,17 @@ export const DashboardApp = (function() {
             titleDate = `de ${new Date(y, m - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}`;
         }
     
-        _currentSalesDetails = _allNFeData.filter(nfe => {
-            const d = _utils.parsePtBrDate(nfe.data_de_emissao);
+        _currentSalesDetails = _allPedidosBling.filter(p => {
+            const sit = (p.situacao || p.situação || "").toLowerCase();
+            if (!(sit === 'atendido' || sit === 'concluído' || sit === 'faturado')) return false;
+
+            const d = _utils.parsePtBrDate(p.data);
             if (!d) return false;
-            const channelMatch = (channel === 'Total' || channel === 'total') ? true : (nfe.origem_loja === channel);
+            const channelMatch = (channel === 'Total' || channel === 'total') ? true : (p.loja === channel);
             return channelMatch && (!start || d >= start) && (!end || d <= end);
         });
         
-        const total = _currentSalesDetails.reduce((sum, nfe) => sum + (parseFloat(nfe.valor_da_nota) || 0), 0);
+        const total = _currentSalesDetails.reduce((sum, p) => sum + (parseFloat(p.total_pedido || p['total pedido'] || 0) || 0), 0);
         _dom.salesDetailsModalTitle.textContent = `Vendas Detalhadas (${channel}) ${titleDate} - Total: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
     
         if (_currentSalesDetails.length === 0) {
@@ -837,40 +873,58 @@ export const DashboardApp = (function() {
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nº da Nota</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pedido / Nota</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente / Data</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendedor</th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Situação</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Itens</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">`;
     
-            _currentSalesDetails.forEach(nfe => {
-                const obs = JSON.stringify(nfe.observacao || []);
-                const hasObs = Array.isArray(nfe.observacao) && nfe.observacao.length > 0;
+            _currentSalesDetails.forEach(p => {
+                // Tenta encontrar a NFe correspondente na base _allNFeData pelo ID da Nota Fiscal
+                const nfeId = p.id_nota_fiscal || p['id nota fiscal'];
+                const nfe = nfeId ? _allNFeData.find(n => n.id_nota === String(nfeId)) : null;
+
+                const numeroDisplay = nfe ? nfe.numero_da_nota : (p.numero || p.número || 'S/N');
+                const linkDanfe = nfe ? nfe.link_danfe : '#';
+                const hasNfe = !!nfe;
+                
+                // Vendedor: Prefere o nome completo se disponível
+                const vendedor = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
+                
+                // Itens para o tooltip: Prefere os itens da NFe se existir, senão usa os do pedido
+                const itensRaw = nfe ? nfe.itens : (p.itens || '');
+                const valorTotal = parseFloat(p.total_pedido || p['total pedido'] || 0);
+
                 html += `
-                <tr id="sales-detail-row-${nfe.id_nota}">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600"><a href="${nfe.link_danfe || '#'}" target="_blank">${nfe.numero_da_nota}</a></td>
-                    <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" data-itens="${nfe.itens}" data-frete="${nfe.valor_do_frete}" data-desconto="${nfe.valor_do_desconto || 0}" data-valor-total="${nfe.valor_da_nota || 0}">
-                        <div class="text-sm font-medium text-gray-900">${nfe.nome_do_cliente}</div>
-                        <div class="text-xs text-gray-500">${_formatDate(nfe.data_de_emissao)}</div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                        <span class="seller-tooltip-trigger cursor-pointer underline decoration-dotted" data-seller-name="${nfe.nome_do_vendedor || ''}">${nfe.nome_do_vendedor || 'N/A'}</span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold">${(parseFloat(nfe.valor_da_nota) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">${nfe.situacao || 'N/A'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
-                        <div class="flex items-center justify-center space-x-2">
-                            <button class="view-nfe-observation-btn text-gray-400 hover:text-blue-600" data-nfe-id="${nfe.id_nota}" title="Obs.">
-                               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                            </button>
-                            <span class="nfe-observation-status-icon cursor-pointer" data-nfe-id="${nfe.id_nota}" data-observation='${obs}'>
-                               <svg class="h-5 w-5 ${hasObs ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor"><path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/></svg>
-                            </span>
+                <tr id="sales-detail-row-${p.id || p.id_pedido}">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex flex-col">
+                            <span class="text-gray-400 text-[10px]">Ped: ${p.numero || p.número || '-'}</span>
+                            ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline">Nota ${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
                         </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" 
+                        data-itens="${itensRaw}" 
+                        data-frete="${nfe ? nfe.valor_do_frete : 0}" 
+                        data-valor-total="${valorTotal}">
+                        <div class="text-sm font-medium text-gray-900 truncate max-w-[200px]" title="${p.contato_nome || p['contato nome'] || '-'}">${p.contato_nome || p['contato nome'] || '-'}</div>
+                        <div class="text-xs text-gray-500">${_formatDate(p.data)}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        ${vendedor}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">${valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${hasNfe ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                            ${p.situacao || p.situação || 'Atendido'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
+                        <svg class="w-5 h-5 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     </td>
                 </tr>`;
             });
@@ -1115,6 +1169,7 @@ export const DashboardApp = (function() {
             _allNFeData = config.allNFeData || [];
             _allProducts = config.allProducts || [];
             _allLojaIntegradaOrders = config.allLojaIntegradaOrders || [];
+            _allPedidosBling = config.allPedidosBling || [];
             _utils = config;
             
             if (!_state.isInitialized) {
@@ -1124,7 +1179,7 @@ export const DashboardApp = (function() {
             }
         },
 
-        start: function(nfeData, liOrders) {
+        start: function(nfeData, liOrders, pedidosBling) {
             if (!_state.isInitialized) {
                 _cacheDom();
                 _bindEvents();
@@ -1132,6 +1187,7 @@ export const DashboardApp = (function() {
             }
             if (nfeData) _allNFeData = nfeData;
             if (liOrders) _allLojaIntegradaOrders = liOrders;
+            if (pedidosBling) _allPedidosBling = pedidosBling;
 
             _populateYearFilter();
             

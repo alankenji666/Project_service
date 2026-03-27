@@ -1428,10 +1428,14 @@ const data = filteredProducts.map(product => {
                     _pageDashboards.classList.remove('hidden');
                     _navDashboards.classList.add('active');
                     if (typeof DashboardApp !== 'undefined') {
+                        // Pegamos os pedidos que já foram carregados pelo GerenciarPedidosApp
+                        const allPedidosBling = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
+
                         // Primeiro, garantimos que a configuração foi passada
                         DashboardApp.init({
                             allNFeData: _allNFeData,
-                            allLojaIntegradaOrders: _allLojaIntegradaOrders, // DADOS NOVOS
+                            allLojaIntegradaOrders: _allLojaIntegradaOrders,
+                            allPedidosBling: allPedidosBling, // NOVA FONTE
                             allProducts: _allProducts,
                             parsePtBrDate: _parsePtBrDate,
                             showMessageModal: _showMessageModal,
@@ -1440,7 +1444,7 @@ const data = filteredProducts.map(product => {
                             formatCnpjCpf: formatCnpjCpf
                         });
                         // SÓ ENTÃO, mandamos ele começar
-                        DashboardApp.start(_allNFeData, _allLojaIntegradaOrders);
+                        DashboardApp.start(_allNFeData, _allLojaIntegradaOrders, allPedidosBling);
                     }
 
                 } else if (pageId === 'atendimento') {
