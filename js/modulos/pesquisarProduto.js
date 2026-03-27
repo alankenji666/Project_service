@@ -6,6 +6,8 @@ export const PesquisarProduto = (function() {
     let _config = {}; // Adicionado: Armazena configurações como API_BASE_URL
     let _activeProductId = null;
     let _onProductSelectCallback = null;
+    let _currentPage = 1;
+    let _pageSize = 50;
 
     /**
      * Renderiza os detalhes de um produto específico no painel direito.
@@ -238,18 +240,53 @@ export const PesquisarProduto = (function() {
     // --- Funções Públicas ---
     
     /**
-     * Renderiza a lista de produtos no painel esquerdo.
+     * Gera o HTML dos controles de paginação.
      */
-    function render(products) {
+    function _renderPaginationControls(totalItems) {
+        const totalPages = Math.ceil(totalItems / _pageSize);
+        if (totalPages <= 1) return '';
+
+        return `
+            <div class="flex items-center justify-between p-2 bg-gray-50 border-y border-gray-200 sticky top-0 z-10">
+                <button class="prev-page-btn p-1 rounded hover:bg-gray-200 disabled:opacity-30" ${_currentPage === 1 ? 'disabled' : ''}>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <span class="text-xs font-medium text-gray-600">Pág ${_currentPage} de ${totalPages}</span>
+                <button class="next-page-btn p-1 rounded hover:bg-gray-200 disabled:opacity-30" ${_currentPage === totalPages ? 'disabled' : ''}>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+            </div>
+        `;
+    }
+
+    /**
+     * Renderiza a lista de produtos no painel esquerdo com paginação.
+     */
+    function render(products, resetPagination = false) {
+        if (resetPagination) _currentPage = 1;
         _allProducts = products; // Atualiza a lista interna de produtos
         if (!_dom.product_list_container) return;
+
         if (!products || products.length === 0) {
             _dom.product_list_container.innerHTML = `<div class="p-4 text-center text-gray-500">Nenhum produto encontrado.</div>`;
             _clearDetails();
             return;
         }
 
-        let listHtml = products.map(product => {
+        const totalItems = products.length;
+        const totalPages = Math.ceil(totalItems / _pageSize);
+        
+        // Garante que a página atual seja válida
+        if (_currentPage > totalPages) _currentPage = totalPages;
+        if (_currentPage < 1) _currentPage = 1;
+
+        const startIndex = (_currentPage - 1) * _pageSize;
+        const endIndex = startIndex + _pageSize;
+        const paginatedProducts = products.slice(startIndex, endIndex);
+
+        const paginationHtml = _renderPaginationControls(totalItems);
+
+        let listHtml = paginatedProducts.map(product => {
             const imageUrl = product.url_imagens_externas && product.url_imagens_externas[0] 
                 ? product.url_imagens_externas[0] 
                 : 'https://placehold.co/50x50/e2e8f0/64748b?text=?';
@@ -270,7 +307,18 @@ export const PesquisarProduto = (function() {
                 </div>
             `;
         }).join('');
-        _dom.product_list_container.innerHTML = listHtml;
+
+        // Monta o HTML final com paginação no topo e no rodapé (opcional se quiser no rodapé também)
+        const footerPaginationHtml = paginationHtml.replace('sticky top-0 z-10', 'mt-auto border-t');
+        _dom.product_list_container.innerHTML = `
+            <div class="flex flex-col h-full overflow-y-auto">
+                ${paginationHtml}
+                <div class="flex-grow overflow-y-auto w-full">
+                    ${listHtml}
+                </div>
+                ${footerPaginationHtml ? footerPaginationHtml : ''}
+            </div>
+        `;
     }
 
     /**
@@ -283,7 +331,26 @@ export const PesquisarProduto = (function() {
         _onProductSelectCallback = config.onProductSelect;
 
         if (_dom.product_list_container) {
-            _dom.product_list_container.addEventListener('click', _handleProductClick);
+            _dom.product_list_container.addEventListener('click', (event) => {
+                // Paginação: Prev
+                const prevBtn = event.target.closest('.prev-page-btn');
+                if (prevBtn && !prevBtn.disabled) {
+                    _currentPage--;
+                    render(_allProducts);
+                    _dom.product_list_container.scrollTop = 0;
+                    return;
+                }
+                // Paginação: Next
+                const nextBtn = event.target.closest('.next-page-btn');
+                if (nextBtn && !nextBtn.disabled) {
+                    _currentPage++;
+                    render(_allProducts);
+                    _dom.product_list_container.scrollTop = 0;
+                    return;
+                }
+
+                _handleProductClick(event);
+            });
             
             _dom.product_list_container.addEventListener('mouseover', (event) => {
                 if (event.target.classList.contains('product-list-item-img')) {

@@ -1766,7 +1766,7 @@ const data = filteredProducts.map(product => {
 
                 if (!_pagePesquisar.classList.contains('hidden')) {
                     if (typeof PesquisarProduto !== 'undefined') {
-                        PesquisarProduto.render(filteredProducts);
+                        PesquisarProduto.render(filteredProducts, true);
                     }
                 }
                 if (!_pageEstoque.classList.contains('hidden')) {
