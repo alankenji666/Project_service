@@ -12,9 +12,9 @@ export const DashboardApp = (function() {
     let _allPedidosBling = []; // Nova fonte primária
     let _currentSalesDetails = []; // Armazena os dados para o modal de detalhes
     let _vendedorMap = {
-        '15596443455': 'Julio Martins dos Santos',
-        'Reginaldo': 'Reginaldo Araujo de Souza',
-        'Rodrigo': 'Rodrigo Carbone'
+        '15596443462': 'Julio Martins dos Santos',
+        '15596443455': 'Reginaldo Araujo de Souza',
+        '15596442848': 'Rodrigo Carbone'
     };
     let _salesChartInstance = null;
 
