@@ -17,6 +17,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 return res.status(200).send({ status: 'success', data: [] });
             }
 
+            const headersRow = rows[0];
             const headersNorm = headersRow.map(h => 
                 h.toLowerCase().trim()
                  .normalize('NFD').replace(/[\u0300-\u036f]/g, "") // Remove acentos
