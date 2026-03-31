@@ -200,7 +200,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
             if (req.notifySync) {
                 const numeroNf = n ? n.numero : (data ? data.numero : 'N/A');
                 console.log(`[Firestore Sync] Notificando nova NF-e recebida: ${numeroNf}`);
-                req.notifySync('nfeReceived', {
+                await req.notifySync('nfeReceived', {
                     numero: numeroNf,
                     cliente: n ? n.contato?.nome : 'N/A',
                     valor: n ? n.valorNota : 0

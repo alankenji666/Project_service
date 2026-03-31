@@ -72,7 +72,7 @@ export const GerenciarPedidosApp = (function () {
                     const id = tr.querySelector('td')?.innerText;
                     if (id && id !== _lastHoveredRowId) {
                         _lastHoveredRowId = id;
-                        if (typeof Toastify !== 'undefined') {
+                        if (typeof Toastify !== 'undefined' && false) { // Desativei o toast que fica piscando
                             Toastify({
                                 text: "Em desenvolvimento",
                                 duration: 1500,
@@ -86,6 +86,12 @@ export const GerenciarPedidosApp = (function () {
             });
             _tableContent.addEventListener('mouseout', () => {
                 _lastHoveredRowId = null;
+            });
+            _tableContent.addEventListener('click', (e) => {
+                const obsBtn = e.target.closest('.edit-order-observation-btn');
+                if (obsBtn && _state.openOrderObservationModal) {
+                    _state.openOrderObservationModal(obsBtn.dataset.targetId);
+                }
             });
         }
     }
@@ -391,15 +397,24 @@ export const GerenciarPedidosApp = (function () {
                 else if (sitLower.includes('prepar') || sitLower.includes('impress') || sitLower.includes('verificad')) badgeClass = 'bg-blue-100 text-blue-800';
 
                 return `
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">${numero}</td>
+                    <tr id="pedido-row-${numero}" data-order-number="${numero}" class="hover:bg-gray-50 transition-colors">
+                        <td class="order-cell-numero px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">${numero}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${dateFormatted}</td>
                         <td class="px-6 py-4 text-sm text-gray-900 max-w-[250px] truncate" title="${cliente}">${cliente}</td>
                         <td class="px-6 py-4 text-sm text-gray-500">${vendedor}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="order-cell-status px-6 py-4 whitespace-nowrap">
                             <span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${situacao}</span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-right">${totalFormatted}</td>
+                        <td class="order-cell-total px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-right">${totalFormatted}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
+                            <span class="edit-order-observation-btn cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block" 
+                                data-target-id="${numero}" 
+                                title="Adicionar/Ver Observação">
+                               <svg class="h-5 w-5 ${(p.observacao || p.observação) ? 'text-red-500' : 'text-gray-300'} order-obs-icon-${numero}" viewBox="0 0 20 20" fill="currentColor">
+                                   <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
+                               </svg>
+                            </span>
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -487,7 +502,10 @@ export const GerenciarPedidosApp = (function () {
     }
 
     return {
-        init: function () {
+        init: function (config = {}) {
+            if (config.openOrderObservationModal) {
+                _state.openOrderObservationModal = config.openOrderObservationModal;
+            }
             if (!_isInitialized) {
                 _cacheDom();
                 _bindEvents();
@@ -496,6 +514,73 @@ export const GerenciarPedidosApp = (function () {
             fetchPedidos(); 
         },
         fetchPedidos: fetchPedidos,
-        getAllPedidos: () => _allPedidos
+        getAllPedidos: () => _allPedidos,
+        updateOrderSingleRow: function(data) {
+            if (!data || !data.numero) return;
+            const numero = String(data.numero);
+            
+            // 1. Update internal data
+            const index = _allPedidos.findIndex(p => String(p.numero) === numero || String(p.id) === numero);
+            if (index !== -1) {
+                // Update properties if provided in data
+                if (data.situacao) _allPedidos[index].situacao = data.situacao;
+                if (data.total) _allPedidos[index].total_pedido = data.total;
+                // Also update filtered copy if it exists there
+                const fIndex = _filteredPedidos.findIndex(p => String(p.numero) === numero || String(p.id) === numero);
+                if (fIndex !== -1) {
+                    if (data.situacao) _filteredPedidos[fIndex].situacao = data.situacao;
+                    if (data.total) _filteredPedidos[fIndex].total_pedido = data.total;
+                }
+            }
+
+            // 2. Update DOM row directly
+            const row = document.getElementById(`pedido-row-${numero}`);
+            if (row) {
+                console.log(`[GerenciarPedidos] Atualizando linha do pedido ${numero} via DOM.`);
+                
+                // Update Status
+                if (data.situacao) {
+                    const statusCell = row.querySelector('.order-cell-status');
+                    if (statusCell) {
+                        let badgeClass = 'bg-gray-100 text-gray-800';
+                        const sitLower = data.situacao.toLowerCase();
+                        if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badgeClass = 'bg-green-100 text-green-800';
+                        else if (sitLower.includes('cancel')) badgeClass = 'bg-red-100 text-red-800';
+                        else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento') || sitLower.includes('em andamento')) badgeClass = 'bg-yellow-100 text-yellow-800';
+                        else if (sitLower.includes('prepar') || sitLower.includes('impress') || sitLower.includes('verificad')) badgeClass = 'bg-blue-100 text-blue-800';
+                        
+                        statusCell.innerHTML = `<span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${data.situacao}</span>`;
+                    }
+                }
+
+                // Update Total
+                if (data.total !== undefined) {
+                    const totalCell = row.querySelector('.order-cell-total');
+                    if (totalCell) {
+                        const totalVal = parseFloat(data.total || 0);
+                        const totalFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVal);
+                        totalCell.innerText = totalFormatted;
+                    }
+                }
+
+                // Highlight Row
+                row.classList.add('row-update-flash');
+                setTimeout(() => row.classList.remove('row-update-flash'), 2000);
+            }
+        },
+        updateOrderObservationStatus: function(orderId, obsArray) {
+            const hasObs = Array.isArray(obsArray) && obsArray.length > 0;
+            // Update the data array
+            const target = _allPedidos.find(p => String(p.id) === String(orderId) || String(p.numero) === String(orderId) || String(p.numero_loja || p.numeroLoja) === String(orderId));
+            if (target) {
+                target.observacao = hasObs ? obsArray : '';
+                // Attempt to update the UI directly if visible
+                const iconSvg = _tableContent?.querySelector(`.order-obs-icon-${target.numero || target.número || target.id}`);
+                if (iconSvg) {
+                    iconSvg.classList.toggle('text-red-500', hasObs);
+                    iconSvg.classList.toggle('text-gray-300', !hasObs);
+                }
+            }
+        }
     };
 })();

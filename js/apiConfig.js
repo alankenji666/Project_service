@@ -29,6 +29,7 @@
           NFE_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/nfe/conferencia/observacao",
           SAIDA_FABRICA_LAUNCH: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saida-fabrica",
           SAIDA_GARANTIA_LAUNCH: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saida-garantia",
+          ORDER_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos/observacao",
       
           // APIs de Observações
           TERCEIROS_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/add-requisition-observation",

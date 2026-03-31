@@ -180,7 +180,7 @@ const createSaidaFabricaRouter = (
                         // --- NOTIFICAÇÃO FIRESTORE SYNC ---
                         if (notifySync) {
                             console.log(`[Firestore Sync] Notificando atualização de estoque (Saída Fábrica) para o código: ${codigoService}`);
-                            notifySync('stockUpdated', {
+                            await notifySync('stockUpdated', {
                                 codigo: codigoService,
                                 novoEstoque: estoqueFinal,
                                 origem: 'saida_fabrica'

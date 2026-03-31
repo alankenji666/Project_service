@@ -35,11 +35,9 @@ export const DashboardApp = (function() {
         estoqueCurrentPage: 1, // Página atual da tabela de estoque
         estoquePageSize: 30, // Itens por página
         charts: {}, // Armazena instâncias de outros gráficos (ex: estoque)
-        salesFilters: {
-            pedido: '',
-            cliente: '',
-            vendedor: '',
-            valor: ''
+        salesSort: {
+            key: 'data',
+            direction: 'desc'
         }
     };
 
@@ -878,8 +876,8 @@ export const DashboardApp = (function() {
         const total = _currentSalesDetails.reduce((sum, p) => sum + (parseFloat(p.total_pedido || p['total pedido'] || 0) || 0), 0);
         _dom.salesDetailsModalTitle.textContent = `Vendas Detalhadas (${channel}) ${titleDate} - Total: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
         
-        // Reseta filtros ao abrir um novo modal de período/canal
-        _state.salesFilters = { pedido: '', cliente: '', vendedor: '', valor: '' };
+        // Reseta ordenação ao abrir um novo modal de período/canal
+        _state.salesSort = { key: 'data', direction: 'desc' };
 
         if (_currentSalesDetails.length === 0) {
             _dom.salesDetailsModalContent.innerHTML = '';
@@ -892,28 +890,38 @@ export const DashboardApp = (function() {
     }
 
     /**
-     * Renderiza a estrutura da tabela de detalhes de vendas com os campos de filtro.
+     * Renderiza a estrutura da tabela de detalhes de vendas com cabeçalhos clicáveis para ordenação.
      */
     function _renderSalesDetailsTable() {
+        const sort = _state.salesSort;
+        const getIcon = (key) => {
+            if (sort.key !== key) return '<svg class="w-3 h-3 ml-1 opacity-20" fill="currentColor" viewBox="0 0 20 20"><path d="M5 10l5-5 5 5H5zM15 10l-5 5-5-5h10z"/></svg>';
+            return sort.direction === 'asc' 
+                ? '<svg class="w-3 h-3 ml-1 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M5 10l5-5 5 5H5z"/></svg>'
+                : '<svg class="w-3 h-3 ml-1 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M15 10l-5 5-5-5h10z"/></svg>';
+        };
+
         const html = `
             <table class="min-w-full divide-y divide-gray-200" id="sales-details-table">
                 <thead class="bg-gray-50 sticky top-0 z-10">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Pedido / Nota
-                            <input type="text" data-filter="pedido" value="${_state.salesFilters.pedido}" placeholder="Filtrar..." class="sales-col-filter mt-1 block w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="pedido">
+                            <div class="flex items-center">Pedido ${getIcon('pedido')}</div>
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Cliente / Data
-                            <input type="text" data-filter="cliente" value="${_state.salesFilters.cliente}" placeholder="Filtrar..." class="sales-col-filter mt-1 block w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="nota">
+                            <div class="flex items-center">Nota ${getIcon('nota')}</div>
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Vendedor
-                            <input type="text" data-filter="vendedor" value="${_state.salesFilters.vendedor}" placeholder="Filtrar..." class="sales-col-filter mt-1 block w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="cliente">
+                            <div class="flex items-center">Cliente ${getIcon('cliente')}</div>
                         </th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Valor
-                            <input type="text" data-filter="valor" value="${_state.salesFilters.valor}" placeholder="Ex: >100" class="sales-col-filter mt-1 block w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-right">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="data">
+                            <div class="flex items-center">Data ${getIcon('data')}</div>
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="vendedor">
+                            <div class="flex items-center">Vendedor ${getIcon('vendedor')}</div>
+                        </th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="valor">
+                            <div class="flex items-center justify-end">Valor ${getIcon('valor')}</div>
                         </th>
                         <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                     </tr>
@@ -924,54 +932,74 @@ export const DashboardApp = (function() {
             </table>
         `;
         _dom.salesDetailsModalContent.innerHTML = html;
-        _applySalesFilters();
+        _applySalesSort();
     }
 
     /**
-     * Aplica os filtros atuais à lista de detalhes de vendas e renderiza o corpo da tabela.
+     * Aplica a ordenação atual à lista de detalhes de vendas e renderiza o corpo da tabela.
      */
-    function _applySalesFilters() {
-        const filters = _state.salesFilters;
-        const filteredData = _currentSalesDetails.filter(p => {
-            // Encontra NFe para buscar dados extras se necessário
-            const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
-            const nfeId = String(rawNfeId).split('.')[0].trim();
-            const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+    function _applySalesSort() {
+        const sort = _state.salesSort;
+        const sortedData = [..._currentSalesDetails].sort((a, b) => {
+            let valA, valB;
+            
+            // Helper para obter dados da NFe se necessário
+            const getNfe = (p) => {
+                const rawId = p.id_nota_fiscal || p['id nota fiscal'] || "";
+                const id = String(rawId).split('.')[0].trim();
+                return id ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === id) : null;
+            };
 
-            // Filtro Pedido/Nota
-            const pedidoStr = String(p.numero || p.número || "").toLowerCase();
-            const notaStr = nfe ? String(nfe.numero_da_nota || "").toLowerCase() : "";
-            if (filters.pedido && !pedidoStr.includes(filters.pedido.toLowerCase()) && !notaStr.includes(filters.pedido.toLowerCase())) return false;
-
-            // Filtro Cliente
-            const clienteStr = String(p.contato_nome || p['contato nome'] || "").toLowerCase();
-            if (filters.cliente && !clienteStr.includes(filters.cliente.toLowerCase())) return false;
-
-            // Filtro Vendedor
-            let vendedorRaw = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
-            let vendedorLabel = vendedorRaw;
-            for (const [id, name] of Object.entries(_vendedorMap)) {
-                if (vendedorRaw.includes(id)) { vendedorLabel = name; break; }
+            switch (sort.key) {
+                case 'pedido':
+                    valA = parseInt(a.numero || a.número) || 0;
+                    valB = parseInt(b.numero || b.número) || 0;
+                    break;
+                case 'nota':
+                    const nfeA_nota = getNfe(a);
+                    const nfeB_nota = getNfe(b);
+                    valA = nfeA_nota ? (parseInt(nfeA_nota.numero_da_nota) || 0) : 0;
+                    valB = nfeB_nota ? (parseInt(nfeB_nota.numero_da_nota) || 0) : 0;
+                    break;
+                case 'cliente':
+                    valA = String(a.contato_nome || a['contato nome'] || "").toLowerCase();
+                    valB = String(b.contato_nome || b['contato nome'] || "").toLowerCase();
+                    break;
+                case 'vendedor':
+                    const getVendedor = (p) => {
+                        let raw = p.vendedor || (getNfe(p)?.nome_do_vendedor) || 'N/A';
+                        for (const [id, name] of Object.entries(_vendedorMap)) {
+                            if (raw.includes(id)) return name;
+                        }
+                        return raw;
+                    };
+                    valA = getVendedor(a).toLowerCase();
+                    valB = getVendedor(b).toLowerCase();
+                    break;
+                case 'valor':
+                    valA = parseFloat(a.total_pedido || a['total pedido'] || 0);
+                    valB = parseFloat(b.total_pedido || b['total pedido'] || 0);
+                    break;
+                case 'data':
+                default:
+                    valA = _utils.parsePtBrDate(a.data) || 0;
+                    valB = _utils.parsePtBrDate(b.data) || 0;
+                    break;
             }
-            if (filters.vendedor && !vendedorLabel.toLowerCase().includes(filters.vendedor.toLowerCase())) return false;
 
-            // Filtro Valor (suporta > e < opcionalmente)
-            const valorTotal = parseFloat(p.total_pedido || p['total pedido'] || 0);
-            if (filters.valor) {
-                const fVal = filters.valor.trim();
-                if (fVal.startsWith('>')) {
-                    if (valorTotal <= parseFloat(fVal.substring(1)) || isNaN(parseFloat(fVal.substring(1)))) return false;
-                } else if (fVal.startsWith('<')) {
-                    if (valorTotal >= parseFloat(fVal.substring(1)) || isNaN(parseFloat(fVal.substring(1)))) return false;
-                } else {
-                    if (!valorTotal.toString().includes(fVal)) return false;
-                }
+            if (valA < valB) return sort.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sort.direction === 'asc' ? 1 : -1;
+            
+            // Critério de desempate: sempre Data desc se não for a chave primária
+            if (sort.key !== 'data') {
+                const dateA = _utils.parsePtBrDate(a.data) || 0;
+                const dateB = _utils.parsePtBrDate(b.data) || 0;
+                return dateB - dateA;
             }
-
-            return true;
+            return 0;
         });
 
-        _renderSalesTableBody(filteredData);
+        _renderSalesTableBody(sortedData);
     }
 
     /**
@@ -982,7 +1010,7 @@ export const DashboardApp = (function() {
         if (!tbody) return;
 
         if (data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-10 text-center text-gray-500 italic text-sm">Nenhum resultado para estes filtros.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-10 text-center text-gray-500 italic text-sm">Nenhum resultado para estes filtros.</td></tr>`;
             return;
         }
 
@@ -992,7 +1020,7 @@ export const DashboardApp = (function() {
             const nfeId = String(rawNfeId).split('.')[0].trim();
             const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
             
-            const numeroDisplay = nfe ? nfe.numero_da_nota : (p.numero || p.número || 'S/N');
+            const numeroDisplay = nfe ? nfe.numero_da_nota : '-';
             const linkDanfe = nfe ? nfe.link_danfe : '#';
             const hasNfe = !!nfe;
             
@@ -1007,18 +1035,20 @@ export const DashboardApp = (function() {
 
             html += `
             <tr id="sales-detail-row-${p.id || p.id_pedido}" class="hover:bg-gray-50 transition-colors">
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div class="flex flex-col">
-                        <span class="text-gray-400 text-[10px]">Ped: ${p.numero || p.número || '-'}</span>
-                        ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline">Nota ${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
-                    </div>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-600">
+                    ${p.numero || p.número || '-'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline font-bold">${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" 
                     data-itens="${itensRaw}" 
                     data-frete="${nfe ? (parseFloat(nfe.valor_do_frete) || 0) : 0}" 
                     data-valor-total="${valorTotal}">
                     <div class="text-sm font-medium text-gray-900 truncate max-w-[200px]" title="${p.contato_nome || p['contato nome'] || '-'}">${p.contato_nome || p['contato nome'] || '-'}</div>
-                    <div class="text-xs text-gray-500">${_formatDate(p.data)}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                    ${_formatDate(p.data)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     ${vendedor}
@@ -1026,21 +1056,17 @@ export const DashboardApp = (function() {
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">${valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
                     <div class="flex items-center justify-center space-x-3">
-                        ${hasNfe ? `
-                        <button class="view-nfe-observation-btn text-gray-400 hover:text-blue-600 transition-colors" data-nfe-id="${nfe.id_nota}" title="Ver Detalhes NFe">
-                           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                        </button>` : ''}
+
                         
                         <span class="edit-sales-observation-btn cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors" 
-                            data-target-id="${nfe ? nfe.id_nota : (p.id || p.id_pedido)}" 
+                            data-target-id="${p.numero || p.número || p.id || p.id_pedido}" 
                             data-observation='${(() => {
-                                if (nfe && Array.isArray(nfe.observacao) && nfe.observacao.length > 0) return JSON.stringify(nfe.observacao);
                                 const obsPedido = p.observacao || p.observação || "";
                                 if (obsPedido && obsPedido.trim()) return JSON.stringify([{ autor: 'Pedido', obs: obsPedido.trim() }]);
                                 return JSON.stringify([]);
                             })()}'
                             title="Adicionar/Ver Observação">
-                           <svg class="h-5 w-5 ${(nfe && nfe.observacao && nfe.observacao.length > 0) || (p.observacao || p.observação) ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
+                           <svg class="h-5 w-5 ${(p.observacao || p.observação) ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
                                <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
                            </svg>
                         </span>
@@ -1048,7 +1074,9 @@ export const DashboardApp = (function() {
                 </td>
             </tr>`;
         });
+        tbody.innerHTML = html;
     }
+
 
     function _showNfeItemsTooltip(event) {
         const trigger = event.target.closest('.nfe-items-tooltip-trigger');
@@ -1261,22 +1289,21 @@ export const DashboardApp = (function() {
             if (e.target.closest('#sales-details-export-button')) { e.stopPropagation(); _dom.exportDropdown.classList.toggle('hidden'); }
             if (e.target.closest('#export-sales-details-notes-csv-btn')) { e.preventDefault(); _exportToCSV('notes'); _dom.exportDropdown.classList.add('hidden'); }
             if (e.target.closest('#export-sales-details-items-csv-btn')) { e.preventDefault(); _exportToCSV('items'); _dom.exportDropdown.classList.add('hidden'); }
-            
-            const viewBtn = e.target.closest('.view-nfe-observation-btn');
-            if (viewBtn && _utils.openNfeObservationModal) _utils.openNfeObservationModal(viewBtn.dataset.nfeId);
-
             const editObsBtn = e.target.closest('.edit-sales-observation-btn');
-            if (editObsBtn && _utils.openNfeObservationModal) {
-                _utils.openNfeObservationModal(editObsBtn.dataset.targetId);
+            if (editObsBtn && _utils.openOrderObservationModal) {
+                _utils.openOrderObservationModal(editObsBtn.dataset.targetId);
             }
         });
 
-        _dom.salesDetailsModalContent?.addEventListener('input', e => {
-            const filterInput = e.target.closest('.sales-col-filter');
-            if (filterInput) {
-                const key = filterInput.dataset.filter;
-                _state.salesFilters[key] = filterInput.value;
-                _applySalesFilters();
+        _dom.salesDetailsModalContent?.addEventListener('click', e => {
+            const header = e.target.closest('[data-sales-sort]');
+            if (header) {
+                const key = header.dataset.salesSort;
+                _state.salesSort = {
+                    key: key,
+                    direction: (_state.salesSort.key === key && _state.salesSort.direction === 'desc') ? 'asc' : 'desc'
+                };
+                _renderSalesDetailsTable();
             }
         });
 
@@ -1310,7 +1337,7 @@ export const DashboardApp = (function() {
             }
         },
 
-        start: function(nfeData, liOrders, pedidosBling) {
+        start: function(nfeData, liOrders, pedidosBling, products) {
             if (!_state.isInitialized) {
                 _cacheDom();
                 _bindEvents();
@@ -1319,14 +1346,22 @@ export const DashboardApp = (function() {
             if (nfeData) _allNFeData = nfeData;
             if (liOrders) _allLojaIntegradaOrders = liOrders;
             if (pedidosBling) _allPedidosBling = pedidosBling;
+            if (products) _allProducts = products;
 
             // Só popula os anos se o seletor estiver vazio
             if (_dom.yearFilter && _dom.yearFilter.options.length <= 1) {
                 _populateYearFilter();
             }
             
-            // Só mostra o seletor se não estivermos já em uma view de vendas/estoque
-            if (!_state.isStarted) {
+            // Se já estiver "started", precisamos re-renderizar a view atual para refletir novos dados
+            if (_state.isStarted) {
+                console.log('[Dashboard] Dados atualizados em tempo real. Re-renderizando view ativa.');
+                if (_dom.vendasContainer && !_dom.vendasContainer.classList.contains('hidden')) {
+                    _renderSalesView();
+                } else if (_dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
+                    _renderEstoqueDashboard();
+                }
+            } else {
                 _showSelector();
                 _state.isStarted = true;
             }
@@ -1342,10 +1377,10 @@ export const DashboardApp = (function() {
             _state.isStarted = false;
         },
 
-        updateNfeObservationStatus: function(id, obs) {
+        updateOrderObservationStatus: function(id, obs) {
             const row = document.getElementById(`sales-detail-row-${id}`);
             if (row) {
-                const icon = row.querySelector('.nfe-observation-status-icon');
+                const icon = row.querySelector('.edit-sales-observation-btn');
                 if (icon) {
                     icon.dataset.observation = JSON.stringify(obs || []);
                     const svg = icon.querySelector('svg');

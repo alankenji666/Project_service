@@ -328,7 +328,7 @@ const createEstoqueRouter = (
             // --- TAREFA 3: NOTIFICAR CLIENTES VIA FIRESTORE SYNC (TEMPO REAL) ---
             if (isStockUpdate && notifySync) {
                 console.log(`[Firestore Sync] Notificando atualização de estoque para o código: ${produto.codigo}`);
-                notifySync('stockUpdated', {
+                await notifySync('stockUpdated', {
                     codigo: produto.codigo,
                     id: produto.id,
                     novoEstoque: quantidadeFinal,

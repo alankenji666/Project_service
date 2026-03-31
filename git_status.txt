@@ -1,0 +1,14 @@
+ M backEndGCloud/estoque.js
+ M backEndGCloud/loja_integrada.js
+ M backEndGCloud/pedidos.js
+ M backEndGCloud/produtos.js
+ M backEndGCloud/saida_fabrica.js
+ M backEndGCloud/saida_garantia.js
+ M backEndGCloud/webhook_nfe_bling.js
+ M css/styles.css
+ M index.html
+ M js/apiConfig.js
+ M js/modulos/dashboard.js
+ M js/modulos/gerenciarPedidos.js
+?? backEndGCloud/recover_orders.js
+?? git_status.txt

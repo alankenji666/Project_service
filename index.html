@@ -536,6 +536,7 @@
                                     <th scope="col" data-pedidos-sort="vendedor" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Vendedor</th>
                                     <th scope="col" data-pedidos-sort="situacao" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Situação</th>
                                     <th scope="col" data-pedidos-sort="total" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-right cursor-pointer hover:bg-gray-100">Total</th>
+                                    <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="pedidos-table-content" class="bg-white divide-y divide-gray-200">
@@ -1022,31 +1023,31 @@
         </div>
     </div>
 
-    <!-- NOVO: Modal para editar observação da NFe -->
-    <div id="nfe-observation-modal"
+    <!-- NOVO: Modal para editar observação do Pedido -->
+    <div id="order-observation-modal"
         class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
         <div class="bg-white rounded-lg shadow-xl max-w-lg w-full flex flex-col max-h-[90vh]">
             <!-- Header -->
             <div class="p-4 border-b">
                 <h3 class="text-xl font-bold text-gray-800">Histórico de Observações</h3>
-                <p id="nfe-observation-modal-info" class="text-sm text-gray-600 mt-1"></p>
+                <p id="order-observation-modal-info" class="text-sm text-gray-600 mt-1"></p>
             </div>
             <!-- Chat History -->
-            <div id="nfe-observation-history" class="flex-grow p-4 space-y-4 overflow-y-auto bg-gray-50">
+            <div id="order-observation-history" class="flex-grow p-4 space-y-4 overflow-y-auto bg-gray-50">
                 <!-- Chat messages will be injected here by JS -->
             </div>
             <!-- Input Area -->
             <div class="p-4 border-t bg-white">
-                <textarea id="nfe-observation-textarea" maxlength="1000"
+                <textarea id="order-observation-textarea" maxlength="1000"
                     class="w-full h-20 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Adicionar nova observação..."></textarea>
                 <div class="text-right text-sm text-gray-500 mt-1 transition-colors">
-                    <span id="nfe-observation-char-count">0</span> / 1000
+                    <span id="order-observation-char-count">0</span> / 1000
                 </div>
                 <div class="flex justify-end space-x-4 mt-1">
-                    <button id="cancel-nfe-observation-btn"
+                    <button id="cancel-order-observation-btn"
                         class="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500">Fechar</button>
-                    <button id="save-nfe-observation-btn"
+                    <button id="save-order-observation-btn"
                         class="read-only-disable px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">Salvar</button>
                 </div>
             </div>

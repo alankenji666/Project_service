@@ -378,7 +378,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             // 5. Notificar via Firestore Sync
             if (notifySync) {
                 console.log(`[Firestore Sync] Notificando atualização de produto: ${codigo || idProduto}`);
-                notifySync('productUpdated', {
+                await notifySync('productUpdated', {
                     id: idProduto,
                     codigo: codigo || currentProduct.codigo,
                     novoNome: nome || currentProduct.nome,

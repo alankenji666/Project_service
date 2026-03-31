@@ -229,7 +229,7 @@ sheetNameConfig,
             // --- NOTIFICAÇÃO FIRESTORE SYNC ---
             if (notifySync) {
                 console.log(`[Firestore Sync] Notificando atualização de pedido ${pedidoNumeroStr}`);
-                notifySync('orderUpdated', {
+                await notifySync('orderUpdated', {
                     numeroPedido: pedidoNumeroStr,
                     novaSituacao: pedido.situacao ? (pedido.situacao.nome || pedido.situacao.codigo || 'N/A') : 'N/A',
                     cliente: pedidoObj.cliente,
