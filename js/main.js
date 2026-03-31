@@ -142,16 +142,55 @@
                         break;
 
                     case 'orderUpdated':
-                        console.log(`[Firestore Sync] Pedido ${data.numeroPedido} atualizado.`);
+                        console.log(`[Firestore Sync] Pedido Loja Integrada ${data.numeroPedido} atualizado.`);
+                        _showOrderUpdateNotification({ ...data, numero: data.numeroPedido }); // Reaproveita notificação
                         if (typeof LojaIntegradaApp !== 'undefined') {
-                            LojaIntegradaApp.fetchOrders();
+                            LojaIntegradaApp.fetchOrders().then(() => {
+                                // Se o dashboard estiver aberto, atualiza também
+                                if (typeof DashboardApp !== 'undefined' && !document.getElementById('page-dashboards').classList.contains('hidden')) {
+                                    _allLojaIntegradaOrders = LojaIntegradaApp.getOrders();
+                                    DashboardApp.init({
+                                        allNFeData: _allNFeData,
+                                        allLojaIntegradaOrders: _allLojaIntegradaOrders,
+                                        allPedidosBling: GerenciarPedidosApp.getAllPedidos(), 
+                                        allProducts: _allProducts,
+                                        parsePtBrDate: _parsePtBrDate,
+                                        showMessageModal: _showMessageModal,
+                                        positionTooltip: typeof positionTooltip !== 'undefined' ? positionTooltip : undefined,
+                                        openOrderObservationModal: _openOrderObservationModal,
+                                        formatCnpjCpf: typeof formatCnpjCpf !== 'undefined' ? formatCnpjCpf : undefined
+                                    });
+                                    DashboardApp.start(_allNFeData, _allLojaIntegradaOrders, GerenciarPedidosApp.getAllPedidos(), _allProducts);
+                                }
+                            });
                         }
                         break;
 
                     case 'pedidoBlingReceived':
-                        console.log(`[Firestore Sync] Novo pedido Bling recebido ou atualizado: ${data.numero}.`);
+                        console.log(`[Firestore Sync] Pedido Bling recebido ou atualizado: ${data.numero}.`);
+                        _showOrderUpdateNotification(data);
                         if (typeof GerenciarPedidosApp !== 'undefined') {
-                            GerenciarPedidosApp.init(); // Refresh data
+                            // Atualização Parcial Silenciosa (sem flicker)
+                            GerenciarPedidosApp.updateOrderSingleRow(data);
+                            
+                            // Opcional: Atualiza o Dashboard apenas se visível, de forma silenciosa
+                            if (typeof DashboardApp !== 'undefined') {
+                                DashboardApp.init({
+                                    allNFeData: _allNFeData,
+                                    allLojaIntegradaOrders: _allLojaIntegradaOrders,
+                                    allPedidosBling: GerenciarPedidosApp.getAllPedidos(), 
+                                    allProducts: _allProducts,
+                                    parsePtBrDate: _parsePtBrDate,
+                                    showMessageModal: _showMessageModal,
+                                    positionTooltip: typeof positionTooltip !== 'undefined' ? positionTooltip : undefined,
+                                    openOrderObservationModal: _openOrderObservationModal,
+                                    formatCnpjCpf: typeof formatCnpjCpf !== 'undefined' ? formatCnpjCpf : undefined
+                                });
+                                // Só re-inicia o dashboard se ele for a página visível
+                                if (!document.getElementById('page-dashboards').classList.contains('hidden')) {
+                                    DashboardApp.start(_allNFeData, _allLojaIntegradaOrders, GerenciarPedidosApp.getAllPedidos(), _allProducts);
+                                }
+                            }
                         }
                         break;
 
@@ -213,6 +252,17 @@
                                 // Keep only the last 50 to avoid bloat
                                 if (dismissed.length > 50) dismissed.splice(0, dismissed.length - 50);
                                 localStorage.setItem('dismissed_nfes', JSON.stringify(dismissed));
+                            }
+
+                            const orderItems = list.querySelectorAll('li[data-order-notif]');
+                            if (orderItems.length > 0) {
+                                const dismissedOrders = JSON.parse(localStorage.getItem('dismissed_orders') || '[]');
+                                orderItems.forEach(li => {
+                                    const key = li.getAttribute('data-order-notif');
+                                    if (key && !dismissedOrders.includes(key)) dismissedOrders.push(key);
+                                });
+                                if (dismissedOrders.length > 50) dismissedOrders.splice(0, dismissedOrders.length - 50);
+                                localStorage.setItem('dismissed_orders', JSON.stringify(dismissedOrders));
                             }
                             
                             list.innerHTML = '<li class="px-4 py-3 text-sm text-gray-500 text-center">Nenhuma notificação nova.</li>';
@@ -361,6 +411,71 @@
                 }
             }
 
+            async function _showOrderUpdateNotification(data) {
+                const numeroPedido = data.numero || 'Desconhecido';
+                const situacao = data.situacao || 'Status atualizado';
+                const notifKey = `${numeroPedido}_${situacao}`;
+                
+                const dismissed = JSON.parse(localStorage.getItem('dismissed_orders') || '[]');
+                if (dismissed.includes(notifKey)) return;
+                
+                const cliente = data.cliente || 'Cliente não informado';
+
+                let notificationTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                _notificationCount++;
+                _updateNotificationBadge();
+                
+                const list = document.getElementById('notification-list');
+                if (!list) return;
+                
+                if (list.querySelector('li.text-center')) {
+                    list.innerHTML = '';
+                }
+                
+                const itemHtml = `
+                    <li class="relative px-4 py-3 border-b border-gray-50 hover:bg-green-50 transition-colors cursor-pointer select-none" data-order-notif="${notifKey}">
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="font-bold text-sm text-gray-800">Pedido Atualizado</span>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-500">${notificationTime}</span>
+                                <button class="delete-notification-btn text-gray-400 hover:text-red-500 focus:outline-none" title="Remover">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-600 mb-1">O Pedido Nº: <span class="font-semibold text-green-600">${numeroPedido}</span> mudou para <b>${situacao}</b></p>
+                        <p class="text-[10px] text-gray-400 truncate mt-1">${cliente}</p>
+                    </li>
+                `;
+                
+                list.insertAdjacentHTML('afterbegin', itemHtml);
+                const newItem = list.firstElementChild;
+                
+                const deleteBtn = newItem.querySelector('.delete-notification-btn');
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        newItem.remove();
+                        if (_notificationCount > 0) _notificationCount--;
+                        _updateNotificationBadge();
+                        
+                        const dismissedList = JSON.parse(localStorage.getItem('dismissed_orders') || '[]');
+                        if (!dismissedList.includes(notifKey)) {
+                            dismissedList.push(notifKey);
+                            if (dismissedList.length > 50) dismissedList.shift();
+                            localStorage.setItem('dismissed_orders', JSON.stringify(dismissedList));
+                        }
+                        
+                        if (list.children.length === 0) {
+                            list.innerHTML = '<li class="px-4 py-3 text-sm text-gray-500 text-center">Nenhuma notificação nova.</li>';
+                        }
+                    });
+                }
+                
+                _showToastNotification(`O Pedido Nº: <b>${numeroPedido}</b> mudou para <b>${situacao}</b>!`, 'success');
+            }
+
             function _showToastNotification(message, type = 'info', link = '#') {
                 let toastContainer = document.getElementById('toast-container');
                 if (!toastContainer) {
@@ -486,7 +601,7 @@
             let _requisitionActionBar, _requisitionBackBtn, _saidaActionBar, _saidaBackBtn, _saidaReportActionBar, _saidaReportBackBtn, _launchSaidaGarantiaBtn, _launchSaidaFabricaBtn, _pageSaidaReportContent;
             let _currentFilteredOrderItems = []; // NOVO: Armazena os itens filtrados e ordenados da tabela de pedidos
             let _clearSelectionBtn;
-            let _nfeObservationModal, _nfeObservationModalInfo, _nfeObservationHistory, _nfeObservationTextarea, _saveNfeObservationBtn, _cancelNfeObservationBtn, _nfeObservationCharCount; // Modal de Observação NFe
+            let _orderObservationModal, _orderObservationModalInfo, _orderObservationHistory, _orderObservationTextarea, _saveOrderObservationBtn, _cancelOrderObservationBtn, _orderObservationCharCount; // Modal de Observação de Pedido
             let _requisitionObservationModal, _requisitionObservationModalInfo, _requisitionObservationHistory, _requisitionObservationTextarea, _saveRequisitionObservationBtn, _cancelRequisitionObservationBtn, _requisitionObservationCharCount; // Modal de Observação Requisição
             let _stockAdjustmentModal, _closeStockAdjustmentModalBtn, _stockAdjustmentProductInfo, _stockAdjustmentCurrentStock, _stockAdjustmentNewQuantity, _stockAdjustmentReason, _confirmStockAdjustmentBtn, _cancelStockAdjustmentBtn; // NOVO: Modal de Ajuste de Estoque
             let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageSaidaReport, _pageReport, _pageGerenciarSaida, _pageGerenciarPedidos, _pageDashboards, _pageAtendimento;
@@ -896,106 +1011,14 @@ const data = filteredProducts.map(product => {
             }
 
 
-            // INÍCIO DO BLOCO PARA ADICIONAR
+
+
+
+            // NOVO: Adicionando de volta a lógica de observação de Pedido
             function _renderObservationChat(observations) {
-                if (!_nfeObservationHistory) return;
+                if (!_orderObservationHistory) return;
                 if (!observations || !Array.isArray(observations) || observations.length === 0) {
-                    _nfeObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
-                    return;
-                }
-                const chatHtml = observations.map(obsString => {
-                    const parts = obsString.split(' - ');
-                    const timestamp = parts.length > 1 ? parts[0] : '';
-                    const message = parts.length > 1 ? parts.slice(1).join(' - ') : obsString;
-                    return `
-        <div class="p-3 rounded-lg bg-blue-100 text-gray-800 max-w-md self-start">
-            <p class="text-sm whitespace-pre-wrap">${message}</p>
-            <div class="flex items-center justify-end mt-1">
-                <span class="text-xs text-gray-500 mr-1">${timestamp}</span>
-                <span title="Salvo"><svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></span>
-            </div>
-        </div>`;
-                }).join('');
-                _nfeObservationHistory.innerHTML = chatHtml;
-                _nfeObservationHistory.scrollTop = _nfeObservationHistory.scrollHeight;
-            }
-
-            function _updateObservationCharCount() {
-                if (!_nfeObservationTextarea || !_nfeObservationCharCount) return;
-                const currentLength = _nfeObservationTextarea.value.length;
-                const maxLength = _nfeObservationTextarea.maxLength;
-                _nfeObservationCharCount.textContent = currentLength;
-                const counterContainer = _nfeObservationCharCount.parentElement;
-                if (currentLength >= maxLength) {
-                    counterContainer.classList.add('text-red-600', 'font-bold');
-                } else {
-                    counterContainer.classList.remove('text-red-600', 'font-bold');
-                }
-            }
-
-            function _openNfeObservationModal(nfeId) {
-                const nfe = _allNFeData.find(n => String(n.id_nota) === String(nfeId));
-                if (!nfe) {
-                    _showMessageModal("Erro", "Nota Fiscal não encontrada.");
-                    return;
-                }
-                if (_nfeObservationModal) {
-                    _nfeObservationModal.dataset.nfeId = nfeId;
-                    _nfeObservationModalInfo.innerHTML = `Editando observação para a NFe Nº: <a href="${nfe.link_danfe || '#'}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-bold">${nfe.numero_da_nota || 'N/A'}</a>`;
-                    _renderObservationChat(nfe.observacao);
-                    _nfeObservationTextarea.value = '';
-                    _updateObservationCharCount();
-                    _nfeObservationModal.classList.remove('hidden');
-                    _nfeObservationTextarea.focus();
-                }
-            }
-
-            async function _saveNfeObservation() {
-                const nfeId = _nfeObservationModal.dataset.nfeId;
-                const newObservation = _nfeObservationTextarea.value;
-                if (!nfeId || !newObservation.trim()) return;
-
-                const nfeToUpdate = _allNFeData.find(nfe => String(nfe.id_nota) === String(nfeId));
-                if (!nfeToUpdate) {
-                    _showMessageModal("Erro", "Nota Fiscal não encontrada para salvar a observação.");
-                    return;
-                }
-
-                _saveNfeObservationBtn.disabled = true;
-                _nfeObservationTextarea.value = '';
-                _updateObservationCharCount();
-
-                try {
-                    const payload = { id_nota: nfeId, observacao: newObservation };
-                    const response = await fetch(API_URLS.NFE_OBSERVATION, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
-
-                    const result = await response.json();
-                    if (!result.data || !result.data.newObservation) { throw new Error("A resposta da API não retornou a nova observação formatada."); }
-
-                    const newHistoryAsString = result.data.newObservation;
-                    nfeToUpdate.observacao = newHistoryAsString.split('\\n').filter(line => line.trim() !== '');
-                    _renderObservationChat(nfeToUpdate.observacao);
-
-                    if (typeof DashboardApp !== 'undefined') {
-                        DashboardApp.updateNfeObservationStatus(nfeId, nfeToUpdate.observacao);
-                    }
-
-                } catch (error) {
-                    _showMessageModal("Erro ao Salvar", `Não foi possível salvar a observação: ${error.message}`);
-                    _nfeObservationTextarea.value = newObservation;
-                    _updateObservationCharCount();
-                } finally {
-                    _saveNfeObservationBtn.disabled = false;
-                }
-            }
-
-
-            // NOVO: Adicionando de volta a lógica de observação de NFe
-            function _renderObservationChat(observations) {
-                if (!_nfeObservationHistory) return;
-                if (!observations || !Array.isArray(observations) || observations.length === 0) {
-                    _nfeObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
+                    _orderObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
                     return;
                 }
                 const chatHtml = observations.map(obsString => {
@@ -1011,16 +1034,16 @@ const data = filteredProducts.map(product => {
                         </div>
                     </div>`;
                 }).join('');
-                _nfeObservationHistory.innerHTML = chatHtml;
-                _nfeObservationHistory.scrollTop = _nfeObservationHistory.scrollHeight;
+                _orderObservationHistory.innerHTML = chatHtml;
+                _orderObservationHistory.scrollTop = _orderObservationHistory.scrollHeight;
             }
 
             function _updateObservationCharCount() {
-                if (!_nfeObservationTextarea || !_nfeObservationCharCount) return;
-                const currentLength = _nfeObservationTextarea.value.length;
-                const maxLength = _nfeObservationTextarea.maxLength;
-                _nfeObservationCharCount.textContent = currentLength;
-                const counterContainer = _nfeObservationCharCount.parentElement;
+                if (!_orderObservationTextarea || !_orderObservationCharCount) return;
+                const currentLength = _orderObservationTextarea.value.length;
+                const maxLength = _orderObservationTextarea.maxLength;
+                _orderObservationCharCount.textContent = currentLength;
+                const counterContainer = _orderObservationCharCount.parentElement;
                 if (currentLength >= maxLength) {
                     counterContainer.classList.add('text-red-600', 'font-bold');
                 } else {
@@ -1028,62 +1051,70 @@ const data = filteredProducts.map(product => {
                 }
             }
 
-            function _openNfeObservationModal(nfeId) {
-                const nfe = _allNFeData.find(n => String(n.id_nota) === String(nfeId));
-                if (!nfe) {
-                    _showMessageModal("Erro", "Nota Fiscal não encontrada.");
+            function _openOrderObservationModal(orderId) {
+                const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
+                const order = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+                if (!order) {
+                    _showMessageModal("Erro", "Pedido não encontrado.");
                     return;
                 }
-                if (_nfeObservationModal) {
-                    _nfeObservationModal.dataset.nfeId = nfeId;
-                    _nfeObservationModalInfo.innerHTML = `Editando observação para a NFe Nº: <a href="${nfe.link_danfe || '#'}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-bold">${nfe.numero_da_nota || 'N/A'}</a>`;
-                    _renderObservationChat(nfe.observacao);
-                    _nfeObservationTextarea.value = '';
+                if (_orderObservationModal) {
+                    _orderObservationModal.dataset.orderId = orderId;
+                    _orderObservationModalInfo.innerHTML = `Editando observação para o Pedido Nº: <b>${order.numero || order.numeroLoja || 'N/A'}</b>`;
+                    _renderObservationChat(order.observacao);
+                    _orderObservationTextarea.value = '';
                     _updateObservationCharCount();
-                    _nfeObservationModal.classList.remove('hidden');
-                    _nfeObservationTextarea.focus();
+                    _orderObservationModal.classList.remove('hidden');
+                    _orderObservationTextarea.focus();
                 }
             }
 
-            async function _saveNfeObservation() {
-                const nfeId = _nfeObservationModal.dataset.nfeId;
-                const newObservation = _nfeObservationTextarea.value;
-                if (!nfeId || !newObservation.trim()) return;
+            async function _saveOrderObservation() {
+                const orderId = _orderObservationModal.dataset.orderId;
+                const newObservation = _orderObservationTextarea.value;
+                if (!orderId || !newObservation.trim()) return;
 
-                const nfeToUpdate = _allNFeData.find(nfe => String(nfe.id_nota) === String(nfeId));
-                if (!nfeToUpdate) {
-                    _showMessageModal("Erro", "Nota Fiscal não encontrada para salvar a observação.");
+                const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
+                const orderToUpdate = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+                if (!orderToUpdate) {
+                    _showMessageModal("Erro", "Pedido não encontrado para salvar a observação.");
                     return;
                 }
 
-                _saveNfeObservationBtn.disabled = true;
-                _nfeObservationTextarea.value = '';
+                _saveOrderObservationBtn.disabled = true;
+                _orderObservationTextarea.value = '';
                 _updateObservationCharCount();
 
                 try {
-                    const payload = { id_nota: nfeId, observacao: newObservation };
-                    const response = await fetch(API_URLS.NFE_OBSERVATION, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const payload = { numero_do_pedido: orderId, observacao: newObservation };
+                    const response = await fetch(API_URLS.ORDER_OBSERVATION, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
 
                     const result = await response.json();
                     if (!result.data || !result.data.newObservation) { throw new Error("A resposta da API não retornou a nova observação formatada."); }
 
                     const newHistoryAsString = result.data.newObservation;
-                    nfeToUpdate.observacao = newHistoryAsString.split('\\n').filter(line => line.trim() !== '');
-                    _renderObservationChat(nfeToUpdate.observacao);
+                    orderToUpdate.observacao = newHistoryAsString.split('\\n').filter(line => line.trim() !== '');
+                    _renderObservationChat(orderToUpdate.observacao);
 
-                    // AVISO: A atualização do ícone na tabela agora precisa ser feita pelo módulo do Dashboard
-                    // Vamos passar a responsabilidade para ele no próximo passo.
-                    if (typeof DashboardApp !== 'undefined') {
-                        DashboardApp.updateNfeObservationStatus(nfeId, nfeToUpdate.observacao);
+                    // Atualiza as instâncias que controlam a UI com a nova observação
+                    if (typeof DashboardApp !== 'undefined' && typeof DashboardApp.updateOrderObservationStatus === 'function') {
+                        DashboardApp.updateOrderObservationStatus(orderId, orderToUpdate.observacao);
                     }
+
+                    if (typeof GerenciarPedidosApp !== 'undefined' && typeof GerenciarPedidosApp.updateOrderObservationStatus === 'function') {
+                        GerenciarPedidosApp.updateOrderObservationStatus(orderId, orderToUpdate.observacao);
+                    }
+
+                    _orderObservationModal.classList.add('hidden');
+                    _showMessageModal("Sucesso", "Observação salva com sucesso!");
 
                 } catch (error) {
                     _showMessageModal("Erro ao Salvar", `Não foi possível salvar a observação: ${error.message}`);
-                    _nfeObservationTextarea.value = newObservation;
+                    _orderObservationTextarea.value = newObservation;
                     _updateObservationCharCount();
                 } finally {
-                    _saveNfeObservationBtn.disabled = false;
+                    _saveOrderObservationBtn.disabled = false;
                 }
             }
 
@@ -1421,7 +1452,7 @@ const data = filteredProducts.map(product => {
                     if (_pedidosFilterBar) _pedidosFilterBar.classList.remove('hidden');
                     _navGerenciarPedidos.classList.add('active');
                     if (typeof GerenciarPedidosApp !== 'undefined') {
-                        GerenciarPedidosApp.init();
+                        GerenciarPedidosApp.init({ openOrderObservationModal: _openOrderObservationModal });
                     }
                 } else if (pageId === 'overview-saidas') {
                     // Esta é a página de diagnóstico, acessada pelo botão "Ver Saídas".
@@ -1445,7 +1476,7 @@ const data = filteredProducts.map(product => {
                             parsePtBrDate: _parsePtBrDate,
                             showMessageModal: _showMessageModal,
                             positionTooltip: positionTooltip,
-                            openNfeObservationModal: _openNfeObservationModal,
+                            openOrderObservationModal: _openOrderObservationModal,
                             formatCnpjCpf: formatCnpjCpf
                         });
                         
@@ -1608,7 +1639,7 @@ const data = filteredProducts.map(product => {
                         fetch(`${API_URLS.SAIDAS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         LojaIntegradaApp.fetchOrders(), // NOVO: Busca os pedidos da Loja Integrada
-                        (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.fetchPedidos() : Promise.resolve()
+                        (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.fetchPedidos(true) : Promise.resolve()
                     ]);
 
 
@@ -3594,6 +3625,14 @@ const data = filteredProducts.map(product => {
                         throw new Error(errorData.error || "Erro ao atualizar nome do produto.");
                     }
 
+                    // Atualiza localmente o objeto _allProducts imediatamente
+                    if (product) product.descricao = novoNome;
+
+                    // Atualiza a interface se o módulo PesquisarProduto estiver ativo
+                    if (typeof PesquisarProduto !== 'undefined') {
+                        PesquisarProduto.updateProductNameDisplay(productId, novoNome);
+                    }
+
                     // Feedback de Sucesso
                     _productNameEditLoading.classList.add('hidden');
                     _productNameEditSuccess.classList.remove('hidden');
@@ -3601,7 +3640,7 @@ const data = filteredProducts.map(product => {
                     // Fecha o modal após um pequeno delay para o usuário ver o sucesso
                     setTimeout(() => {
                         _productNameEditModal.classList.add('hidden');
-                        // O WebSocket atualizará a lista global e a UI automaticamente.
+                        // O Firestore Sync chegará em seguida, mas a UI já está atualizada.
                     }, 1500);
 
                 } catch (error) {
@@ -3665,16 +3704,16 @@ const data = filteredProducts.map(product => {
                         _showPage('atendimento'); // <--- Apenas mostre a "página"
                     });
                 }
-                if (_cancelNfeObservationBtn) {
-                    _cancelNfeObservationBtn.addEventListener('click', () => {
-                        if (_nfeObservationModal) _nfeObservationModal.classList.add('hidden');
+                if (_cancelOrderObservationBtn) {
+                    _cancelOrderObservationBtn.addEventListener('click', () => {
+                        if (_orderObservationModal) _orderObservationModal.classList.add('hidden');
                     });
                 }
-                if (_nfeObservationTextarea) {
-                    _nfeObservationTextarea.addEventListener('input', _updateObservationCharCount);
+                if (_orderObservationTextarea) {
+                    _orderObservationTextarea.addEventListener('input', _updateObservationCharCount);
                 }
-                if (_saveNfeObservationBtn) {
-                    _saveNfeObservationBtn.addEventListener('click', _saveNfeObservation);
+                if (_saveOrderObservationBtn) {
+                    _saveOrderObservationBtn.addEventListener('click', _saveOrderObservation);
                 }
                 
 // NOVO: Listeners para o modal de relatório de produtos
@@ -3806,16 +3845,16 @@ if (_generateProductReportBtn) {
 
 
                 // NOVO: Event listeners para o modal de observação
-                if (_cancelNfeObservationBtn) {
-                    _cancelNfeObservationBtn.addEventListener('click', () => {
-                        if (_nfeObservationModal) _nfeObservationModal.classList.add('hidden');
+                if (_cancelOrderObservationBtn) {
+                    _cancelOrderObservationBtn.addEventListener('click', () => {
+                        if (_orderObservationModal) _orderObservationModal.classList.add('hidden');
                     });
                 }
-                if (_nfeObservationTextarea) {
-                    _nfeObservationTextarea.addEventListener('input', _updateObservationCharCount);
+                if (_orderObservationTextarea) {
+                    _orderObservationTextarea.addEventListener('input', _updateObservationCharCount);
                 }
-                if (_saveNfeObservationBtn) {
-                    _saveNfeObservationBtn.addEventListener('click', _saveNfeObservation);
+                if (_saveOrderObservationBtn) {
+                    _saveOrderObservationBtn.addEventListener('click', _saveOrderObservation);
                 }
 
                 // NOVO: Event listeners para o modal de observação de requisição
@@ -3952,13 +3991,13 @@ if (_generateProductReportBtn) {
                 _closeBrowserPrintFabricaModalBtn = document.getElementById('close-browser-print-fabrica-modal-btn');
                 _customProductTooltip = document.createElement('div');
                 // NOVO: Cache dos elementos do modal de observação
-                _nfeObservationModal = document.getElementById('nfe-observation-modal');
-                _nfeObservationModalInfo = document.getElementById('nfe-observation-modal-info');
-                _nfeObservationHistory = document.getElementById('nfe-observation-history');
-                _nfeObservationTextarea = document.getElementById('nfe-observation-textarea');
-                _saveNfeObservationBtn = document.getElementById('save-nfe-observation-btn');
-                _cancelNfeObservationBtn = document.getElementById('cancel-nfe-observation-btn');
-                _nfeObservationCharCount = document.getElementById('nfe-observation-char-count');
+                _orderObservationModal = document.getElementById('order-observation-modal');
+                _orderObservationModalInfo = document.getElementById('order-observation-modal-info');
+                _orderObservationHistory = document.getElementById('order-observation-history');
+                _orderObservationTextarea = document.getElementById('order-observation-textarea');
+                _saveOrderObservationBtn = document.getElementById('save-order-observation-btn');
+                _cancelOrderObservationBtn = document.getElementById('cancel-order-observation-btn');
+                _orderObservationCharCount = document.getElementById('order-observation-char-count');
                 // NOVO: Cache dos elementos do modal de observação de requisição
                 _requisitionObservationModal = document.getElementById('requisition-observation-modal');
                 _requisitionObservationModalInfo = document.getElementById('requisition-observation-modal-info');

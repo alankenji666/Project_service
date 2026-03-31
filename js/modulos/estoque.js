@@ -274,6 +274,10 @@ export const EstoqueApp = (function() {
      * @param {number} novoEstoque 
      */
     function updateProductStockInTable(codigo, novoEstoque) {
+        // 0. Atualiza na memória local interna
+        const product = _allProducts.find(p => String(p.codigo) === String(codigo));
+        if (product) product.estoque = novoEstoque;
+
         if (!_dom.pageEstoque) return;
 
         // Procura a linha que contém o código do produto
@@ -298,6 +302,10 @@ export const EstoqueApp = (function() {
      * @param {string} novoNome 
      */
     function updateProductNameInTable(codigo, novoNome) {
+        // 0. Atualiza na memória local interna
+        const product = _allProducts.find(p => String(p.codigo) === String(codigo));
+        if (product) product.descricao = novoNome;
+
         if (!_dom.pageEstoque) return;
 
         const row = _dom.pageEstoque.querySelector(`tr[data-product-code="${codigo}"]`);

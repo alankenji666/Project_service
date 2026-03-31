@@ -513,6 +513,10 @@ export const SaidaItens = (function() {
      * @param {number} novoEstoque 
      */
     function updateProductStockInTable(codigo, novoEstoque) {
+        // 0. Atualiza na memória local interna
+        const product = _allProducts.find(p => String(p.codigo) === String(codigo));
+        if (product) product.estoque = novoEstoque;
+
         // 1. Tenta atualizar na página de listagem principal de saída
         if (_dom.pageGerenciarSaida) {
             const row = _dom.pageGerenciarSaida.querySelector(`tr[data-product-code="${codigo}"]`);
@@ -546,6 +550,10 @@ export const SaidaItens = (function() {
      * @param {string} novoNome 
      */
     function updateProductNameInTable(codigo, novoNome) {
+        // 0. Atualiza na memória local interna
+        const product = _allProducts.find(p => String(p.codigo) === String(codigo));
+        if (product) product.descricao = novoNome;
+
         // 1. Tenta atualizar na página de listagem principal de saída
         if (_dom.pageGerenciarSaida) {
             const row = _dom.pageGerenciarSaida.querySelector(`tr[data-product-code="${codigo}"]`);

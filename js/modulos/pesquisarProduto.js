@@ -134,6 +134,10 @@ export const PesquisarProduto = (function() {
      * @param {string} novoNome 
      */
     function updateProductNameDisplay(productId, novoNome) {
+        // 0. Atualiza na memória local interna para que a paginação/filtro não reverta o nome
+        const product = _allProducts.find(p => String(p.id) === String(productId));
+        if (product) product.descricao = novoNome;
+
         // 1. Atualiza no painel de detalhes se for o produto ativo
         if (String(_activeProductId) === String(productId) && _dom.product_details) {
             const nameElement = _dom.product_details.querySelector('.product-detail-name');
@@ -163,6 +167,10 @@ export const PesquisarProduto = (function() {
      * @param {string} novaLocalizacao 
      */
     function updateProductLocationDisplay(productId, novaLocalizacao) {
+        // 0. Atualiza na memória local interna
+        const product = _allProducts.find(p => String(p.id) === String(productId));
+        if (product) product.localizacao = novaLocalizacao;
+
         if (String(_activeProductId) === String(productId) && _dom.product_details) {
             const locationElement = _dom.product_details.querySelector('.product-detail-location');
             if (locationElement) {
@@ -179,6 +187,10 @@ export const PesquisarProduto = (function() {
      * @param {string} novoCodigo 
      */
     function updateProductCodeDisplay(productId, novoCodigo) {
+        // 0. Atualiza na memória local interna
+        const product = _allProducts.find(p => String(p.id) === String(productId));
+        if (product) product.codigo = novoCodigo;
+
         // 1. Atualiza no painel de detalhes se for o produto ativo
         if (String(_activeProductId) === String(productId) && _dom.product_details) {
             const codeElement = _dom.product_details.querySelector('.product-detail-code');
@@ -408,6 +420,12 @@ export const PesquisarProduto = (function() {
      * @param {number} novoEstoque 
      */
     function updateStockDisplay(novoEstoque) {
+        // 0. Atualiza na memória local interna
+        if (_activeProductId) {
+            const product = _allProducts.find(p => String(p.id) === String(_activeProductId));
+            if (product) product.estoque = novoEstoque;
+        }
+
         if (!_dom.product_details) return;
         
         // Procura o elemento que contém o texto "Estoque Atual" e seu valor
@@ -428,6 +446,10 @@ export const PesquisarProduto = (function() {
      * @param {number} novoPreco 
      */
     function updateProductCostPriceDisplay(productId, novoPreco) {
+        // 0. Atualiza na memória local interna
+        const product = _allProducts.find(p => String(p.id) === String(productId));
+        if (product) product.preco_de_custo = novoPreco;
+
         if (String(_activeProductId) === String(productId) && _dom.product_details) {
             const priceElement = _dom.product_details.querySelector('.product-detail-cost-price');
             if (priceElement) {
