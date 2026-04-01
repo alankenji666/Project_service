@@ -147,7 +147,7 @@ export const GerenciarPedidosApp = (function () {
         if (_searchInput) _searchInput.value = '';
         if (_startDateInput) _startDateInput.value = '';
         if (_endDateInput) _endDateInput.value = '';
-        if (_statusSelect) _statusSelect.value = 'all';
+        if (_statusSelect) _statusSelect.value = 'pendente';
         if (_yearFilter) {
             const currentYearStr = new Date().getFullYear().toString();
             // Verifica se a opção existe
@@ -168,7 +168,7 @@ export const GerenciarPedidosApp = (function () {
 
     async function fetchPedidos(force = false) {
         if (!force && _allPedidos.length > 0) {
-            _renderTable(_allPedidos);
+            _filterPedidos(); // Chama _filterPedidos em vez de _renderTable diretamente
             return;
         }
 
