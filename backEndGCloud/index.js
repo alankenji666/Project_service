@@ -80,6 +80,7 @@ const SHEET_NAME_PRODUTOS_ESTOQUE = 'Produtos Estoque';
 const SHEET_NAME_VENDAS_LOJA_INTEGRADA = 'VendasLojaIntegrada'; // <-- ADICIONE ESTA LINHA
 const SHEET_NAME_LOJA_INTEGRADA_CONFIG = 'configuracaoLojaIntegrada'; // <-- ADICIONE ESTA LINHA
 const SHEET_NAME_PEDIDOS_BLING = 'PedidosBling'; // NOVO
+const SHEET_NAME_PEDIDOS_COMPRAS = 'Pedidos Compras'; // ENTRADAS NF-e
 
 
 // URLs
@@ -893,6 +894,14 @@ const pedidosRouter = createPedidosRouter(
 );
 app.use('/pedidos', pedidosRouter);
 
+// Roteador de Entradas de NF (NOVO)
+const createEntradasRouter = require('./entradas.js');
+const entradasRouter = createEntradasRouter(
+    getInitializedSheetsClient,
+    SPREADSHEET_ID_ESTOQUE,       // Planilha de estoque (mesma que tem os Produtos)
+    SHEET_NAME_PEDIDOS_COMPRAS    // Aba 'Pedidos Compras'
+);
+app.use('/entradas', entradasRouter);
 
 // --- EXPORTAÇÃO DA APLICAÇÃO EXPRESS ---
 // Middleware de Erro Global - Captura todos os erros lançados nas rotas

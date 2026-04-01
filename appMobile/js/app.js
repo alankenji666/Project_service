@@ -39,11 +39,28 @@ const requisitionListContainer = document.getElementById('requisition-list-conta
 const launchFactoryBtn = document.getElementById('launch-factory-btn');
 const launchTerceirosBtn = document.getElementById('launch-terceiros-btn');
 
+// Entrada View Elements
+const entradaView = document.getElementById('entrada-view');
+const goToEntradaBtn = document.getElementById('go-to-entrada-btn');
+const entradaBackToMenuBtn = document.getElementById('entrada-back-to-menu-btn');
+const entradaStartScanBtn = document.getElementById('entrada-start-scan-btn');
+const entradaStopScanBtn = document.getElementById('entrada-stop-scan-btn');
+const entradaScannerContainer = document.getElementById('entrada-scanner-container');
+const entradaFormContainer = document.getElementById('entrada-form-container');
+const entradaChaveAcesso = document.getElementById('entrada-chave-acesso');
+const entradaNumeroNota = document.getElementById('entrada-numero-nota');
+const entradaDataEmissao = document.getElementById('entrada-data-emissao');
+const entradaFornecedor = document.getElementById('entrada-fornecedor');
+const entradaValorTotal = document.getElementById('entrada-valor-total');
+const entradaObservacao = document.getElementById('entrada-observacao');
+const entradaSaveBtn = document.getElementById('entrada-save-btn');
+const entradaCancelBtn = document.getElementById('entrada-cancel-btn');
+
 // App State
 let allProducts = [];
 let adjustSelectedProduct = null;
 let requisitionItems = [];
-let adjustScanner, reqScanner;
+let adjustScanner, reqScanner, entradaScanner;
 let db;
 const DB_NAME = 'ajuste-estoque-db';
 const STORE_NAME = 'pending-adjustments';
@@ -53,6 +70,7 @@ function showView(viewId) {
     menuView.classList.add('hidden');
     adjustView.classList.add('hidden');
     requisitionView.classList.add('hidden');
+    entradaView.classList.add('hidden');
     stopAllScanners();
     
     if (viewId === 'menu-view') {
@@ -65,18 +83,25 @@ function showView(viewId) {
         requisitionView.classList.remove('hidden');
         document.title = 'Criar Requisição';
         renderRequisitionList();
+    } else if (viewId === 'entrada-view') {
+        entradaView.classList.remove('hidden');
+        document.title = 'Gerenciar Entrada';
     }
 }
 
 function stopAllScanners() {
     if (adjustScanner && adjustScanner.isScanning) adjustScanner.stop().catch(console.error);
     if (reqScanner && reqScanner.isScanning) reqScanner.stop().catch(console.error);
+    if (entradaScanner && entradaScanner.isScanning) entradaScanner.stop().catch(console.error);
     scannerContainer.classList.add('hidden');
     stopScanBtn.classList.add('hidden');
     startScanBtn.classList.remove('hidden');
     reqScannerContainer.classList.add('hidden');
     reqStopScanBtn.classList.add('hidden');
     reqStartScanBtn.classList.remove('hidden');
+    entradaScannerContainer.classList.add('hidden');
+    entradaStopScanBtn.classList.add('hidden');
+    entradaStartScanBtn.classList.remove('hidden');
 }
 
 // --- General Helpers & DB ---
@@ -363,6 +388,142 @@ async function launchRequisition(type) {
     }
 }
 
+// --- ENTRADA NF-e LOGIC ---
+
+/**
+ * Extrai a chave de acesso NF-e de uma URL de QR Code de NF-e.
+ * A chave fica no paramâmetro 'chNFe' da URL.
+ * Se não for uma URL, assume que o código escaneado é a chave diretamente.
+ */
+function extrairChaveNFe(decodedText) {
+    try {
+        const url = new URL(decodedText);
+        const chave = url.searchParams.get('chNFe');
+        if (chave && chave.length === 44) return chave;
+    } catch (e) {
+        // Não é uma URL válida
+    }
+    // Verifica se é diretamente uma chave de 44 dígitos
+    const somenteNumeros = decodedText.replace(/\D/g, '');
+    if (somenteNumeros.length === 44) return somenteNumeros;
+    return null;
+}
+
+/**
+ * Decoda a data de emissão da chave NF-e.
+ * Posições 2-5 da chave = AAMM (ano/mês)
+ * Posições 6-7 = CNPJ começa na posição 6, então a data está em [2..5]
+ */
+function extrairDataEmissao(chave) {
+    try {
+        if (!chave || chave.length < 10) return '';
+        // Chave: cUF(2) + AAMM(4) + CNPJ(14) + ...
+        const aamm = chave.substring(2, 6); // ex: "2503" = março de 2025
+        const ano = '20' + aamm.substring(0, 2);
+        const mes = aamm.substring(2, 4);
+        return `${mes}/${ano}`;
+    } catch (e) {
+        return '';
+    }
+}
+
+async function onEntradaScanSuccess(decodedText) {
+    stopAllScanners();
+    const chave = extrairChaveNFe(decodedText);
+
+    if (!chave) {
+        alert(`QR Code não reconhecido como Nota Fiscal.\nTente novamente ou verifique se é um QR Code NF-e válido.`);
+        return;
+    }
+
+    // Preenche o formulário com os dados extraídos
+    entradaChaveAcesso.value = chave;
+    entradaDataEmissao.value = extrairDataEmissao(chave);
+    entradaNumeroNota.value = '';
+    entradaFornecedor.value = '';
+    entradaValorTotal.value = '';
+    entradaObservacao.value = '';
+
+    // Exibe o formulário
+    entradaFormContainer.classList.remove('hidden');
+    entradaFornecedor.focus();
+}
+
+async function startEntradaScan() {
+    entradaFormContainer.classList.add('hidden');
+    entradaScannerContainer.classList.remove('hidden');
+    entradaStartScanBtn.classList.add('hidden');
+    entradaStopScanBtn.classList.remove('hidden');
+
+    entradaScanner = new Html5Qrcode("entrada-reader");
+    try {
+        await entradaScanner.start(
+            { facingMode: "environment" },
+            {
+                fps: 10,
+                // Box retangular: ideal para código de barras linear (Code 128) do DANFE
+                qrbox: { width: 320, height: 100 },
+                // Habilita QR Code E Code 128 (barcode DANFE)
+                formatsToSupport: [
+                    Html5QrcodeSupportedFormats.QR_CODE,
+                    Html5QrcodeSupportedFormats.CODE_128,
+                    Html5QrcodeSupportedFormats.CODE_39,
+                ]
+            },
+            onEntradaScanSuccess,
+            () => {}
+        );
+    } catch (err) {
+        alert("Erro ao iniciar a câmera. Verifique as permissões.");
+        stopAllScanners();
+    }
+}
+
+async function saveEntrada() {
+    const chave = entradaChaveAcesso.value.trim();
+    const fornecedor = entradaFornecedor.value.trim();
+
+    if (!chave) return alert('Chave de acesso não encontrada. Faça o scan novamente.');
+    if (!fornecedor) return alert('Por favor, informe o Fornecedor.');
+
+    let userName = 'AppMobile';
+    try { userName = JSON.parse(localStorage.getItem('userInfo')).nome || userName; } catch(e){}
+
+    const today = new Date();
+    const dataRegistro = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
+
+    const payload = {
+        dataRegistro,
+        chaveAcesso: chave,
+        numeroNota: entradaNumeroNota.value.trim(),
+        dataEmissao: entradaDataEmissao.value.trim(),
+        fornecedor,
+        valorTotal: parseFloat(entradaValorTotal.value) || 0,
+        observacao: entradaObservacao.value.trim(),
+        registradoPor: userName
+    };
+
+    toggleLoading(true, 'Registrando entrada...');
+    try {
+        const res = await fetch(API_URLS.ENTRADAS_NOTA, {
+            method: 'POST',
+            mode: 'cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`Erro da API: ${res.status}`);
+        await res.json();
+        alert('✅ Entrada de NF registrada com sucesso!');
+        entradaFormContainer.classList.add('hidden');
+        showView('menu-view');
+    } catch (error) {
+        console.error('Falha ao registrar entrada:', error);
+        alert(`Falha ao registrar: ${error.message}`);
+    } finally {
+        toggleLoading(false);
+    }
+}
+
 // --- INITIALIZATION ---
 function initializeApp() {
     initDB();
@@ -370,7 +531,9 @@ function initializeApp() {
     // Navigation
     goToAdjustBtn.addEventListener('click', () => showView('adjust-view'));
     goToRequisitionBtn.addEventListener('click', () => showView('requisition-view'));
+    goToEntradaBtn.addEventListener('click', () => showView('entrada-view'));
     adjustBackToMenuBtn.addEventListener('click', () => showView('menu-view'));
+    entradaBackToMenuBtn.addEventListener('click', () => showView('menu-view'));
     reqBackToMenuBtn.addEventListener('click', () => {
         if (requisitionItems.length === 0 || confirm("Deseja sair e limpar a lista de requisição atual?")) {
             requisitionItems = [];
@@ -394,6 +557,15 @@ function initializeApp() {
     requisitionListContainer.addEventListener('click', handleRequisitionListClick);
     launchFactoryBtn.addEventListener('click', () => launchRequisition('fabrica'));
     launchTerceirosBtn.addEventListener('click', () => launchRequisition('terceiros'));
+
+    // Entrada View Listeners
+    entradaStartScanBtn.addEventListener('click', startEntradaScan);
+    entradaStopScanBtn.addEventListener('click', stopAllScanners);
+    entradaSaveBtn.addEventListener('click', saveEntrada);
+    entradaCancelBtn.addEventListener('click', () => {
+        entradaFormContainer.classList.add('hidden');
+        entradaChaveAcesso.value = '';
+    });
 
     showView('menu-view');
 }

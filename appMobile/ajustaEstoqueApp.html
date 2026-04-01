@@ -10,8 +10,8 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-        #reader, #req-reader { width: 100%; border-radius: 8px; overflow: hidden; }
-        #reader video, #req-reader video { width: 100% !important; height: auto !important; }
+        #reader, #req-reader, #entrada-reader { width: 100%; border-radius: 8px; overflow: hidden; }
+        #reader video, #req-reader video, #entrada-reader video { width: 100% !important; height: auto !important; }
         .scanner-container { position: relative; width: 100%; }
         .scanner-container .overlay-line {
             position: absolute; left: 5%; right: 5%; top: 50%; height: 2px;
@@ -38,6 +38,9 @@
                 </button>
                 <button id="go-to-requisition-btn" class="w-full bg-purple-600 text-white font-bold py-4 px-4 rounded-lg shadow-lg hover:bg-purple-700 transition-all duration-200 text-lg">
                     Opção 2: Criar Requisição
+                </button>
+                <button id="go-to-entrada-btn" class="w-full bg-green-600 text-white font-bold py-4 px-4 rounded-lg shadow-lg hover:bg-green-700 transition-all duration-200 text-lg">
+                    Opção 3: Gerenciar Entrada (NF)
                 </button>
             </div>
         </div>
@@ -104,6 +107,77 @@
             <div class="mt-6 grid grid-cols-2 gap-3">
                 <button id="launch-factory-btn" class="w-full bg-orange-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-orange-600">Fábrica</button>
                 <button id="launch-terceiros-btn" class="w-full bg-teal-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-teal-600">Terceiros</button>
+            </div>
+        </div>
+
+        <!-- TELA DE GERENCIAR ENTRADA (NF-e) -->
+        <div id="entrada-view" class="hidden">
+            <div class="bg-white p-4 rounded-lg shadow-md mb-4 flex items-center relative">
+                <button id="entrada-back-to-menu-btn" class="absolute left-4 text-green-600 hover:text-green-800">
+                    <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                </button>
+                <div class="flex-grow text-center">
+                    <h1 class="text-2xl font-bold text-gray-800">Gerenciar Entrada</h1>
+                    <p class="text-sm text-gray-500">Escaneie o QR Code da Nota Fiscal</p>
+                </div>
+            </div>
+
+            <!-- Scanner -->
+            <div id="entrada-scanner-container" class="scanner-container bg-black rounded-lg mb-4 hidden">
+                <div id="entrada-reader"></div>
+                <div class="overlay-line"></div>
+            </div>
+            <button id="entrada-start-scan-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-green-700 flex items-center justify-center text-lg">
+                <svg class="w-6 h-6 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 12.75a.75.75 0 01.75-.75h9a.75.75 0 010 1.5h-9a.75.75 0 01-.75-.75z" /></svg>
+                Escanear QR Code da NF
+            </button>
+            <button id="entrada-stop-scan-btn" class="w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-red-700 hidden mt-2">Parar Câmera</button>
+
+            <!-- Formulário de Dados da NF -->
+            <div id="entrada-form-container" class="bg-white p-4 rounded-lg shadow-md mt-4 hidden">
+                <h2 class="text-xl font-bold text-gray-700 border-b pb-2 mb-4">Dados da Nota Fiscal</h2>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Chave de Acesso NF-e</label>
+                    <input type="text" id="entrada-chave-acesso" readonly
+                        class="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-xs text-gray-600 font-mono" placeholder="Será preenchida automaticamente">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Nº da Nota</label>
+                        <input type="text" id="entrada-numero-nota"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Ex: 1234">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Data de Emissão</label>
+                        <input type="text" id="entrada-data-emissao" readonly
+                            class="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600" placeholder="Auto">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Fornecedor</label>
+                    <input type="text" id="entrada-fornecedor"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Nome do fornecedor">
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Valor Total (R$)</label>
+                    <input type="number" step="0.01" id="entrada-valor-total"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="0,00">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Observação</label>
+                    <textarea id="entrada-observacao" rows="2"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Opcional..."></textarea>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button id="entrada-cancel-btn" class="w-1/3 bg-gray-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-gray-600">Cancelar</button>
+                    <button id="entrada-save-btn" class="w-2/3 bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-green-700">Registrar Entrada</button>
+                </div>
             </div>
         </div>
     </div>
