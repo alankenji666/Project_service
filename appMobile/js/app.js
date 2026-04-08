@@ -45,6 +45,7 @@ const goToEntradaBtn = document.getElementById('go-to-entrada-btn');
 const entradaBackToMenuBtn = document.getElementById('entrada-back-to-menu-btn');
 const entradaStartScanBtn = document.getElementById('entrada-start-scan-btn');
 const entradaStopScanBtn = document.getElementById('entrada-stop-scan-btn');
+const entradaManualBtn = document.getElementById('entrada-manual-btn');
 const entradaScannerContainer = document.getElementById('entrada-scanner-container');
 const entradaFormContainer = document.getElementById('entrada-form-container');
 const entradaChaveAcesso = document.getElementById('entrada-chave-acesso');
@@ -427,6 +428,31 @@ function extrairDataEmissao(chave) {
     }
 }
 
+/**
+ * Extrai o número da NF-e (nNF) e o CNPJ da chave.
+ * Posições da chave:
+ * cUF(2) + AAMM(4) + CNPJ(14) + mod(2) + serie(3) + nNF(9) + tpEmis(1) + cNF(8) + cDV(1)
+ */
+function extrairDadosChave(chave) {
+    if (!chave || chave.length !== 44) return null;
+    const mesAno = extrairDataEmissao(chave);
+    const cnpj = chave.substring(6, 20);
+    const nNFStr = chave.substring(25, 34);
+    const nNF = parseInt(nNFStr, 10).toString(); // remove zeros à esquerda
+    return { mesAno, cnpj, nNF };
+}
+
+async function buscarFornecedor(cnpj) {
+    try {
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+        if (!res.ok) return '';
+        const data = await res.json();
+        return data.nome_fantasia || data.razao_social || '';
+    } catch (e) {
+        return '';
+    }
+}
+
 async function onEntradaScanSuccess(decodedText) {
     stopAllScanners();
     const chave = extrairChaveNFe(decodedText);
@@ -436,16 +462,12 @@ async function onEntradaScanSuccess(decodedText) {
         return;
     }
 
-    // Preenche o formulário com os dados extraídos
-    entradaChaveAcesso.value = chave;
-    entradaDataEmissao.value = extrairDataEmissao(chave);
-    entradaNumeroNota.value = '';
-    entradaFornecedor.value = '';
-    entradaValorTotal.value = '';
-    entradaObservacao.value = '';
-
-    // Exibe o formulário
+    // Exibe o formulário e aciona a extração de dados
     entradaFormContainer.classList.remove('hidden');
+    entradaChaveAcesso.value = chave;
+    const event = new Event('input', { bubbles: true });
+    entradaChaveAcesso.dispatchEvent(event);
+    
     entradaFornecedor.focus();
 }
 
@@ -561,6 +583,39 @@ function initializeApp() {
     // Entrada View Listeners
     entradaStartScanBtn.addEventListener('click', startEntradaScan);
     entradaStopScanBtn.addEventListener('click', stopAllScanners);
+    
+    entradaManualBtn.addEventListener('click', () => {
+        stopAllScanners();
+        entradaFormContainer.classList.remove('hidden');
+        entradaChaveAcesso.value = '';
+        entradaDataEmissao.value = '';
+        entradaNumeroNota.value = '';
+        entradaFornecedor.value = '';
+        entradaValorTotal.value = '';
+        entradaObservacao.value = '';
+        entradaChaveAcesso.focus();
+    });
+
+    entradaChaveAcesso.addEventListener('input', async (e) => {
+        const value = e.target.value.replace(/\D/g, '');
+        e.target.value = value;
+        if (value.length === 44) {
+            const dados = extrairDadosChave(value);
+            if (dados) {
+                entradaDataEmissao.value = dados.mesAno;
+                entradaNumeroNota.value = dados.nNF;
+                if (!entradaFornecedor.value) {
+                    entradaFornecedor.placeholder = "Buscando fornecedor...";
+                    const nome = await buscarFornecedor(dados.cnpj);
+                    if (nome) entradaFornecedor.value = nome;
+                    entradaFornecedor.placeholder = "Nome do fornecedor";
+                }
+            }
+        } else {
+            entradaDataEmissao.value = '';
+        }
+    });
+
     entradaSaveBtn.addEventListener('click', saveEntrada);
     entradaCancelBtn.addEventListener('click', () => {
         entradaFormContainer.classList.add('hidden');

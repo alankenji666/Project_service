@@ -13,8 +13,10 @@ export const GerenciarPedidosApp = (function () {
     let _tableContent, _searchInput, _loadingEl, _noMessageEl;
     let _startDateInput, _endDateInput, _dateRadios, _clearFiltersBtn, _statusSelect, _yearFilter;
     let _paginationContainer, _paginationTopContainer, _tableHeaders;
+    let _selectAllCheckbox, _batchActionsContainer, _selectedCountSpan, _batchAttendBtn;
     let _isInitialized = false;
     let _lastHoveredRowId = null;
+    let _currentModalPedidoId = null; // ID do pedido aberto no modal
 
     function _getVendedorName(vendedor) {
         if (!vendedor) return '-';
@@ -31,6 +33,14 @@ export const GerenciarPedidosApp = (function () {
         return vendedor;
     }
 
+    function _fmtData(str) {
+        if (!str) return '-';
+        // Aceita yyyy-mm-dd ou yyyy/mm/dd e converte para dd/mm/aaaa
+        const m = String(str).match(/^(\d{4})[\-\/](\d{2})[\-\/](\d{2})/);
+        if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+        return str; // Devolve original se não reconhece
+    }
+
     function _cacheDom() {
         _tableContent = document.getElementById('pedidos-table-content');
         _searchInput = document.getElementById('pedidos-search-input');
@@ -45,6 +55,11 @@ export const GerenciarPedidosApp = (function () {
         _paginationContainer = document.getElementById('pedidos-pagination-container');
         _paginationTopContainer = document.getElementById('pedidos-pagination-top-container');
         _tableHeaders = document.querySelectorAll('th[data-pedidos-sort]');
+        
+        _selectAllCheckbox = document.getElementById('pedidos-select-all');
+        _batchActionsContainer = document.getElementById('pedidos-batch-actions');
+        _selectedCountSpan = document.getElementById('pedidos-selected-count');
+        _batchAttendBtn = document.getElementById('pedidos-batch-attend-btn');
     }
 
     function _bindEvents() {
@@ -63,6 +78,13 @@ export const GerenciarPedidosApp = (function () {
         }
         if (_tableHeaders) {
             _tableHeaders.forEach(th => th.addEventListener('click', _handleSort));
+        }
+        
+        if (_selectAllCheckbox) {
+            _selectAllCheckbox.addEventListener('change', _handleSelectAllToggle);
+        }
+        if (_batchAttendBtn) {
+            _batchAttendBtn.addEventListener('click', _handleBatchAttend);
         }
 
         if (_tableContent) {
@@ -91,8 +113,545 @@ export const GerenciarPedidosApp = (function () {
                 const obsBtn = e.target.closest('.edit-order-observation-btn');
                 if (obsBtn && _state.openOrderObservationModal) {
                     _state.openOrderObservationModal(obsBtn.dataset.targetId);
+                    return;
+                }
+                
+                if (e.target.closest('.pedido-row-checkbox') || e.target.closest('input[type="checkbox"]')) {
+                    return; // Ignore checkbox clicks
+                }
+
+                const tr = e.target.closest('tr');
+                if (tr) {
+                    const orderNumber = tr.dataset.orderNumber;
+                    if (orderNumber) {
+                        _openOrderDetailsModal(orderNumber);
+                    }
                 }
             });
+            _tableContent.addEventListener('change', (e) => {
+                if (e.target.classList.contains('pedido-row-checkbox')) {
+                    _updateBatchSelectionState();
+                }
+            });
+        }
+
+        const closeOrderModalBtn = document.getElementById('close-order-modal-btn');
+        if (closeOrderModalBtn) {
+            closeOrderModalBtn.addEventListener('click', () => {
+                const modal = document.getElementById('order-details-modal');
+                if (modal) modal.classList.add('hidden');
+            });
+        }
+
+        const toggleValoresChk = document.getElementById('modal-toggle-valores');
+        if (toggleValoresChk) {
+            toggleValoresChk.addEventListener('change', _handleModalToggleValores);
+        }
+
+        const printBtn = document.getElementById('modal-print-btn');
+        if (printBtn) {
+            printBtn.addEventListener('click', _handleModalPrint);
+        }
+
+        const attendBtn = document.getElementById('modal-attend-btn');
+        if (attendBtn) {
+            attendBtn.addEventListener('click', _handleModalAttend);
+        }
+    }
+
+    function _handleSelectAllToggle(e) {
+        if (!_tableContent) return;
+        const isChecked = e.target.checked;
+        const checkboxes = _tableContent.querySelectorAll('.pedido-row-checkbox');
+        checkboxes.forEach(cb => cb.checked = isChecked);
+        _updateBatchSelectionState();
+    }
+
+    function _updateBatchSelectionState() {
+        if (!_tableContent || !_batchActionsContainer || !_selectedCountSpan) return;
+        const checkedBoxes = _tableContent.querySelectorAll('.pedido-row-checkbox:checked');
+        const totalChecked = checkedBoxes.length;
+        
+        _selectedCountSpan.textContent = totalChecked;
+        if (totalChecked > 0) {
+            _batchActionsContainer.classList.remove('hidden');
+        } else {
+            _batchActionsContainer.classList.add('hidden');
+        }
+        
+        if (_selectAllCheckbox) {
+            const allCheckboxes = _tableContent.querySelectorAll('.pedido-row-checkbox');
+            _selectAllCheckbox.checked = allCheckboxes.length > 0 && totalChecked === allCheckboxes.length;
+        }
+    }
+
+    function _openOrderDetailsModal(orderNumber) {
+        const modal = document.getElementById('order-details-modal');
+        const content = document.getElementById('modal-order-content');
+        const title = document.getElementById('modal-order-title');
+        
+        if (!modal || !content || !title) return;
+
+        const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
+        if (!pedido) {
+            content.innerHTML = '<p class="text-center text-red-500">Pedido não encontrado.</p>';
+            modal.classList.remove('hidden');
+            return;
+        }
+
+        // Salvar o ID do pedido atual no modal
+        const pedidoId = pedido.id || pedido.id_pedido || pedido['id pedido'] || '';
+        _currentModalPedidoId = pedidoId || orderNumber;
+        modal.dataset.currentOrderNumber = orderNumber;
+
+        // Mostrar/ocultar botão Atender se estiver em aberto
+        const attendBtn = document.getElementById('modal-attend-btn');
+        const situacaoCheck = (pedido.situação || pedido.situacao || '').toLowerCase();
+        if (attendBtn) {
+            if (situacaoCheck.includes('abert') || situacaoCheck.includes('pendent')) {
+                attendBtn.classList.remove('hidden');
+            } else {
+                attendBtn.classList.add('hidden');
+            }
+        }
+
+        // Reset toggle com valor
+        const toggleChk = document.getElementById('modal-toggle-valores');
+        if (toggleChk) toggleChk.checked = true;
+
+        const numero = pedido.número || pedido.numero || orderNumber;
+        title.innerText = `Pedido Nº ${numero}`;
+
+        // --- Mapeamento de campos a ignorar ou tratar especialmente ---
+        const ignoreKeys = ['id', 'id_pedido', 'id pedido', 'updatedAt'];
+        const situacao = pedido.situação || pedido.situacao || '-';
+        const sitLower = situacao.toLowerCase();
+        let badge = 'bg-gray-100 text-gray-700';
+        if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badge = 'bg-green-100 text-green-700';
+        else if (sitLower.includes('cancel')) badge = 'bg-red-100 text-red-700';
+        else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento')) badge = 'bg-yellow-100 text-yellow-700';
+
+        // --- Cabeçalho resumido do pedido ---
+        const cliente = pedido.contato_nome || pedido['contato nome'] || pedido.cliente || '-';
+        const cpfCnpj = pedido.cpf_cnpj || pedido['cpf cnpj'] || pedido['cpf/cnpj'] || '';
+        const data = _fmtData(pedido.data) || '-';
+        const totalVal = parseFloat(pedido.total_pedido || pedido['total pedido'] || pedido.total || 0);
+        const totalFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVal);
+        const vendedorRaw = pedido.vendedor || '-';
+        const vendedorName = _getVendedorName(vendedorRaw);
+
+        // --- Info grid (campos gerais, excluindo ID e itens) ---
+        const skipInGrid = [...ignoreKeys, 'numero', 'número', 'itens', 'situação', 'situacao', 'vendedor',
+            'contato_nome', 'contato nome', 'cpf_cnpj', 'cpf cnpj', 'cpf/cnpj', 'data', 'total', 'total_pedido', 'total pedido'];
+
+        let gridHtml = '';
+        Object.entries(pedido).forEach(([key, value]) => {
+            if (!skipInGrid.includes(key.toLowerCase()) && value) {
+                const niceKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                // Formata valores que parecem datas (yyyy-mm-dd)
+                const displayValue = /^\d{4}-\d{2}-\d{2}/.test(String(value)) ? _fmtData(String(value)) : value;
+                gridHtml += `
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <span class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">${niceKey}</span>
+                        <span class="block text-sm text-gray-800 break-words">${displayValue}</span>
+                    </div>`;
+            }
+        });
+
+        // --- Itens: parse da string "(codigo, qtd, valor)" ---
+        const itensRaw = pedido.itens || pedido.Itens || '';
+        let itensHtml = '';
+        if (itensRaw) {
+            const itensList = _parseItens(itensRaw);
+            if (itensList.length > 0) {
+                itensHtml = `
+                <div class="mt-6">
+                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Itens do Pedido</h3>
+                    <div id="pedido-modal-itens-container">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm rounded-lg overflow-hidden">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Produto</th>
+                                    <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase">Qtd</th>
+                                    <th class="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pedido-modal-itens-body" class="bg-white divide-y divide-gray-100">
+                                ${itensList.map(item => `
+                                    <tr data-item-codigo="${item.codigo}">
+                                        <td class="px-4 py-3">
+                                            <div class="flex items-center gap-3">
+                                                <img id="img-${item.codigo}" src="https://placehold.co/48x48/e2e8f0/64748b?text=..." 
+                                                     alt="" class="w-12 h-12 rounded-lg object-cover bg-gray-100 flex-shrink-0"
+                                                     onerror="this.src='https://placehold.co/48x48/e2e8f0/64748b?text=?'">
+                                                <div>
+                                                    <p class="font-medium text-gray-800" id="desc-${item.codigo}">${item.codigo}</p>
+                                                    <p class="text-xs text-gray-400">${item.codigo}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-center text-gray-700">${item.quantidade}</td>
+                                        <td class="px-4 py-3 text-right font-semibold text-gray-800">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.valor)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+
+                // Após renderizar, buscar imagens e descrições dos produtos
+                setTimeout(() => _enrichItensWithProductData(itensList), 50);
+            }
+        }
+
+        content.innerHTML = `
+            <!-- Cabeçalho resumido -->
+            <div class="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-gray-100">
+                <div>
+                    <p class="text-lg font-semibold text-gray-900">${cliente}</p>
+                    ${cpfCnpj ? `<p class="text-xs text-gray-400 mt-0.5">${cpfCnpj}</p>` : ''}
+                </div>
+                <span class="px-3 py-1 text-xs font-bold uppercase rounded-full ${badge}">${situacao}</span>
+            </div>
+
+            <!-- Dados rápidos -->
+            <div class="grid grid-cols-3 gap-3 mt-4">
+                <div class="text-center bg-blue-50 rounded-lg p-3">
+                    <p class="text-[10px] text-blue-400 uppercase font-bold">Data</p>
+                    <p class="text-sm font-semibold text-blue-700 mt-1">${_fmtData(data)}</p>
+                </div>
+                <div class="text-center bg-green-50 rounded-lg p-3">
+                    <p class="text-[10px] text-green-400 uppercase font-bold">Total</p>
+                    <p class="text-sm font-semibold text-green-700 mt-1">${totalFmt}</p>
+                </div>
+                <div class="text-center bg-purple-50 rounded-lg p-3">
+                    <p class="text-[10px] text-purple-400 uppercase font-bold">Vendedor</p>
+                    <p class="text-sm font-semibold text-purple-700 mt-1 truncate" title="${vendedorName}">${vendedorName.split(' ')[0]}</p>
+                </div>
+            </div>
+
+            <!-- Grid de demais campos -->
+            ${gridHtml ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">${gridHtml}</div>` : ''}
+
+            <!-- Tabela de itens -->
+            ${itensHtml}
+        `;
+
+        modal.classList.remove('hidden');
+    }
+
+    function _parseItens(raw) {
+        // Formato esperado: "(503070587, 1.00, 609.17)" ou múltiplos separados por "; " ou newline
+        const results = [];
+        const cleaned = String(raw).trim();
+        // Cada item pode ser "(cod, qtd, val)"
+        const regex = /\(([^)]+)\)/g;
+        let match;
+        while ((match = regex.exec(cleaned)) !== null) {
+            const parts = match[1].split(',').map(s => s.trim());
+            if (parts.length >= 3) {
+                results.push({
+                    codigo: parts[0],
+                    quantidade: parseFloat(parts[1]) || 1,
+                    valor: parseFloat(parts[2]) || 0
+                });
+            } else if (parts.length === 2) {
+                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: 0 });
+            }
+        }
+        // Fallback: se não tiver parênteses, tenta vírgula simples
+        if (results.length === 0 && cleaned) {
+            const parts = cleaned.replace(/[()]/g, '').split(',').map(s => s.trim());
+            if (parts.length >= 3) {
+                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: parseFloat(parts[2]) || 0 });
+            } else if (parts.length > 0 && parts[0]) {
+                results.push({ codigo: parts[0], quantidade: 1, valor: 0 });
+            }
+        }
+        return results;
+    }
+
+    async function _enrichItensWithProductData(itensList) {
+        try {
+            const res = await fetch(`${API_URLS.PRODUCTS}?t=${Date.now()}`, { mode: 'cors' });
+            if (!res.ok) return;
+            const json = await res.json();
+            const products = json.data || json || [];
+
+            itensList.forEach(item => {
+                const prod = products.find(p =>
+                    String(p.codigo || '').trim() === String(item.codigo).trim()
+                );
+                if (!prod) return;
+
+                const imgEl = document.getElementById(`img-${item.codigo}`);
+                const descEl = document.getElementById(`desc-${item.codigo}`);
+
+                if (imgEl && prod.url_imagens_externas && prod.url_imagens_externas[0]) {
+                    imgEl.src = prod.url_imagens_externas[0];
+                }
+                if (descEl && prod.descricao) {
+                    descEl.textContent = prod.descricao;
+                }
+            });
+        } catch (e) {
+            console.warn('Não foi possível enriquecer itens com dados de produto:', e);
+        }
+    }
+
+    function _handleModalToggleValores(e) {
+        const showValor = e.target.checked;
+        // Mostrar/ocultar a última coluna (valor) em thead e tbody
+        const modal = document.getElementById('order-details-modal');
+        if (!modal) return;
+        const thValor = modal.querySelectorAll('table thead th:last-child');
+        const tdValor = modal.querySelectorAll('table tbody td:last-child');
+        [...thValor, ...tdValor].forEach(el => {
+            el.style.display = showValor ? '' : 'none';
+        });
+    }
+
+    function _handleModalPrint() {
+        const modal = document.getElementById('order-details-modal');
+        if (!modal) return;
+        const orderNumber = modal.dataset.currentOrderNumber;
+        if (!orderNumber) return;
+
+        const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
+        if (!pedido) return;
+
+        // Verificar se valor deve ser incluído
+        const showValor = document.getElementById('modal-toggle-valores')?.checked !== false;
+
+        // Dados do pedido
+        const numero     = pedido.número || pedido.numero || orderNumber;
+        const cliente    = pedido.contato_nome || pedido['contato nome'] || pedido.cliente || '-';
+        const cpfCnpj    = pedido.cpf_cnpj || pedido['cpf cnpj'] || pedido['cpf/cnpj'] || '';
+        const data       = _fmtData(pedido.data) || '-';
+        const dataSaida  = _fmtData(pedido.data_saida || pedido['data saida'] || '');
+        const situacao   = pedido.situação || pedido.situacao || '-';
+        const vendedor   = _getVendedorName(pedido.vendedor || '');
+        const loja       = pedido.loja || '';
+        const totalProd  = parseFloat(pedido.total_produtos || pedido['total produtos'] || 0);
+        const totalPed   = parseFloat(pedido.total_pedido   || pedido['total pedido']   || pedido.total || 0);
+        const fmtBRL = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+        // Itens
+        const itensRaw = pedido.itens || pedido.Itens || '';
+        const itensList = _parseItens(itensRaw);
+
+        // Montar linhas da tabela a partir das imagens já carregadas no modal
+        const itensRows = itensList.map(item => {
+            const imgEl  = document.getElementById(`img-${item.codigo}`);
+            const descEl = document.getElementById(`desc-${item.codigo}`);
+            const imgSrc = imgEl?.src || '';
+            const desc   = descEl?.textContent || item.codigo;
+            const valorCol = showValor ? `<td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;">${fmtBRL(item.valor)}</td>` : '';
+            return `
+                <tr>
+                    <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;">
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            ${imgSrc && !imgSrc.includes('placehold.co') ? `<img src="${imgSrc}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;flex-shrink:0;">` : '<div style="width:44px;height:44px;background:#f1f5f9;border-radius:6px;border:1px solid #e2e8f0;flex-shrink:0;"></div>'}
+                            <div>
+                                <div style="font-weight:600;font-size:13px;color:#1e293b;">${desc}</div>
+                                <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Cód: ${item.codigo}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:center;color:#475569;">${item.quantidade}</td>
+                    ${valorCol}
+                </tr>`;
+        }).join('');
+
+        const totalHeader = showValor ? '<th style="padding:10px 14px;background:#f8fafc;font-size:11px;text-transform:uppercase;color:#64748b;text-align:right;">Valor</th>' : '';
+        const totalFooter = showValor ? `
+            <tr style="background:#f0fdf4;">
+                <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:14px;color:#15803d;">Total</td>
+                <td style="padding:12px 14px;font-weight:700;font-size:15px;color:#15803d;text-align:right;">${fmtBRL(totalPed)}</td>
+            </tr>` : '';
+
+        const now = new Date().toLocaleString('pt-BR');
+
+        const printWindow = window.open('', '_blank', 'width=850,height=750');
+        printWindow.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Pedido Nº ${numero}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #1e293b; background: #fff; padding: 32px; }
+
+        /* Cabeçalho */
+        .doc-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1e40af; padding-bottom: 16px; margin-bottom: 20px; }
+        .doc-header .title { font-size: 22px; font-weight: 800; color: #1e40af; }
+        .doc-header .meta { text-align: right; font-size: 11px; color: #64748b; line-height: 1.6; }
+        .doc-header .meta strong { color: #1e293b; font-size: 13px; }
+
+        /* Bloco cliente */
+        .client-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 18px; }
+        .client-block .name { font-size: 15px; font-weight: 700; color: #0f172a; }
+        .client-block .sub  { font-size: 12px; color: #64748b; margin-top: 3px; }
+        .badge { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 3px 10px; border-radius: 999px; margin-top: 6px; }
+        .badge-yellow { background: #fef9c3; color: #854d0e; }
+        .badge-green  { background: #dcfce7; color: #166534; }
+        .badge-red    { background: #fee2e2; color: #991b1b; }
+        .badge-gray   { background: #f1f5f9; color: #475569; }
+
+        /* Grid de info */
+        .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+        .info-box { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; }
+        .info-box .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: .05em; margin-bottom: 4px; }
+        .info-box .val { font-size: 13px; font-weight: 600; color: #1e293b; }
+
+        /* Tabela itens */
+        .items-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: .06em; margin-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+        thead th { background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: left; }
+        thead th:last-child { text-align: right; }
+
+        /* Rodapé */
+        .doc-footer { margin-top: 28px; border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 11px; color: #94a3b8; text-align: right; }
+
+        @media print {
+            body { padding: 20px; }
+            @page { margin: 15mm; }
+        }
+    </style>
+</head>
+<body>
+    <div class="doc-header">
+        <div>
+            <div class="title">Pedido Nº ${numero}</div>
+            ${loja ? `<div style="font-size:12px;color:#64748b;margin-top:4px;">Via ${loja}</div>` : ''}
+        </div>
+        <div class="meta">
+            <strong>GestorApp</strong><br>
+            Emitido em: ${now}
+        </div>
+    </div>
+
+    <div class="client-block">
+        <div class="name">${cliente}</div>
+        ${cpfCnpj ? `<div class="sub">CNPJ/CPF: ${cpfCnpj}</div>` : ''}
+        <span class="badge ${situacao.toLowerCase().includes('abert') || situacao.toLowerCase().includes('pendent') ? 'badge-yellow' : situacao.toLowerCase().includes('atendid') || situacao.toLowerCase().includes('conclu') ? 'badge-green' : situacao.toLowerCase().includes('cancel') ? 'badge-red' : 'badge-gray'}">${situacao}</span>
+    </div>
+
+    <div class="info-grid">
+        <div class="info-box"><div class="lbl">Data Pedido</div><div class="val">${data}</div></div>
+        ${dataSaida ? `<div class="info-box"><div class="lbl">Data Saída</div><div class="val">${dataSaida}</div></div>` : ''}
+        <div class="info-box"><div class="lbl">Vendedor</div><div class="val">${vendedor}</div></div>
+        ${showValor ? `<div class="info-box"><div class="lbl">Total Produtos</div><div class="val">${fmtBRL(totalProd || totalPed)}</div></div>` : ''}
+        ${showValor ? `<div class="info-box"><div class="lbl">Total Pedido</div><div class="val" style="color:#15803d;">${fmtBRL(totalPed)}</div></div>` : ''}
+    </div>
+
+    ${itensList.length > 0 ? `
+    <div class="items-title">Itens do Pedido</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Produto</th>
+                <th style="text-align:center;width:80px;">Qtd</th>
+                ${totalHeader}
+            </tr>
+        </thead>
+        <tbody>
+            ${itensRows}
+            ${totalFooter}
+        </tbody>
+    </table>` : ''}
+
+    <div class="doc-footer">Documento gerado pelo sistema MKS-SERVICE &bull; ${now}</div>
+    <script>window.onload = function(){ window.print(); }<\/script>
+</body>
+</html>`);
+        printWindow.document.close();
+    }
+
+
+    async function _handleModalAttend() {
+        const orderNumber = document.getElementById('order-details-modal')?.dataset?.currentOrderNumber;
+        if (!orderNumber) return;
+
+        const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
+        const idParaEnviar = pedido?.id || pedido?.id_pedido || pedido?.['id pedido'] || orderNumber;
+
+        if (!confirm(`Marcar o Pedido Nº ${orderNumber} como "Atendido" no Bling e na planilha?`)) return;
+
+        const attendBtn = document.getElementById('modal-attend-btn');
+        if (attendBtn) {
+            attendBtn.disabled = true;
+            attendBtn.textContent = 'Aguarde...';
+        }
+
+        try {
+            const backendUrl = `${API_URLS.ORDERS_BLING}/update-status`;
+            const response = await fetch(backendUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: [idParaEnviar], idSituacao: 9 })
+            });
+            const json = await response.json();
+            if (!response.ok) throw new Error(json.message || 'Erro ao atualizar');
+
+            // Atualizar localmente o pedido em memória
+            if (pedido) {
+                if (pedido.situação !== undefined) pedido.situação = 'Atendido';
+                if (pedido.situacao !== undefined) pedido.situacao = 'Atendido';
+            }
+
+            // Ocultar botão atender e mostrar badge atualizado
+            if (attendBtn) attendBtn.classList.add('hidden');
+            alert(`Pedido Nº ${orderNumber} marcado como Atendido com sucesso!`);
+
+            // Fechar e recarregar
+            document.getElementById('order-details-modal')?.classList.add('hidden');
+            await fetchPedidos(true);
+
+        } catch (err) {
+            console.error('Erro ao marcar pedido como atendido:', err);
+            alert('Erro: ' + err.message);
+            if (attendBtn) {
+                attendBtn.disabled = false;
+                attendBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Marcar Atendido`;
+            }
+        }
+    }
+
+
+    async function _handleBatchAttend() {
+        const checkedBoxes = _tableContent.querySelectorAll('.pedido-row-checkbox:checked');
+        const ids = Array.from(checkedBoxes).map(cb => cb.value);
+        if (ids.length === 0) return;
+
+        if (!confirm(`Tem certeza que deseja marcar ${ids.length} pedido(s) como "Atendido" no Bling e na planilha?`)) {
+            return;
+        }
+
+        if (_loadingEl) _loadingEl.classList.remove('hidden');
+        if (_tableContent) _tableContent.innerHTML = '';
+        _batchActionsContainer.classList.add('hidden');
+
+        try {
+            const backendUrl = API_URLS.ORDERS_BLING ? API_URLS.ORDERS_BLING.replace('/pedidos', '/pedidos/update-status') : "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos/update-status";
+            const response = await fetch(backendUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: ids, idSituacao: 9 })
+            });
+
+            const json = await response.json();
+            if (!response.ok) throw new Error(json.message || 'Erro ao atualizar pedidos');
+
+            alert(`Pedidos atualizados. Sucessos: ${json.data?.sucessos?.length || 0}. Erros: ${json.data?.erros?.length || 0}.`);
+            
+            // Recarregar os dados para refletir mudanças
+            await fetchPedidos(true);
+
+        } catch (error) {
+            console.error("Erro ao atualizar lote de pedidos:", error);
+            alert("Erro ao tentar atualizar a situação dos pedidos. Detalhes: " + error.message);
+            await fetchPedidos(true); // Recarrega mesmo em caso de erro para manter integridade visual
         }
     }
 
@@ -398,6 +957,9 @@ export const GerenciarPedidosApp = (function () {
 
                 return `
                     <tr id="pedido-row-${numero}" data-order-number="${numero}" class="hover:bg-gray-50 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap text-left text-sm">
+                            <input type="checkbox" class="pedido-row-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" value="${p.id || p.numero || numero}">
+                        </td>
                         <td class="order-cell-numero px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">${numero}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${dateFormatted}</td>
                         <td class="px-6 py-4 text-sm text-gray-900 max-w-[250px] truncate" title="${cliente}">${cliente}</td>
@@ -428,6 +990,10 @@ export const GerenciarPedidosApp = (function () {
                 th.innerText = baseText + (isSorted ? (_state.sortDir === 'asc' ? ' ▲' : ' ▼') : '');
             });
         }
+        
+        // Reset check all
+        if (_selectAllCheckbox) _selectAllCheckbox.checked = false;
+        _updateBatchSelectionState();
 
         _renderPaginationUI(totalItems, totalPages, startIndex);
     }

@@ -505,6 +505,15 @@
                         </svg>
                         Gerenciar Pedidos (Bling)
                     </h2>
+                    
+                    <div id="pedidos-batch-actions" class="hidden flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
+                        <span class="text-sm text-blue-800 font-medium whitespace-nowrap"><span id="pedidos-selected-count">0</span> selecionado(s)</span>
+                        <div class="h-4 w-px bg-blue-200"></div>
+                        <button id="pedidos-batch-attend-btn" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition-colors flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            Marcar como Atendido
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Card Consolidado: Busca, Paginação e Tabela -->
@@ -530,6 +539,9 @@
                         <table class="min-w-full divide-y divide-gray-200" id="pedidos-table">
                             <thead class="bg-gray-50">
                                 <tr>
+                                    <th scope="col" class="px-6 py-3 w-10 text-left">
+                                        <input type="checkbox" id="pedidos-select-all" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+                                    </th>
                                     <th scope="col" data-pedidos-sort="numero" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Pedido Nº</th>
                                     <th scope="col" data-pedidos-sort="data" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Data</th>
                                     <th scope="col" data-pedidos-sort="cliente" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Cliente</th>
@@ -830,16 +842,38 @@
     </div>
     <div id="order-details-modal"
         class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white p-6 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative">
-            <button id="close-order-modal-btn" class="absolute top-3 right-3 text-gray-500 hover:text-gray-800">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
-                    </path>
-                </svg>
-            </button>
-            <h2 id="modal-order-title" class="text-2xl font-bold text-gray-800 mb-4">Detalhes do Pedido</h2>
-            <div id="modal-order-content">
+        <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col relative">
+            <!-- Cabeçalho do modal com ações -->
+            <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+                <h2 id="modal-order-title" class="text-xl font-bold text-gray-800">Detalhes do Pedido</h2>
+                <div class="flex items-center gap-2 flex-wrap justify-end">
+                    <!-- Toggle Com/Sem Valor -->
+                    <label class="flex items-center gap-1.5 cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors text-sm text-gray-600 font-medium" title="Mostrar/ocultar coluna de valores">
+                        <input type="checkbox" id="modal-toggle-valores" checked class="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer">
+                        Com Valor
+                    </label>
+                    <!-- Botão Atender -->
+                    <button id="modal-attend-btn"
+                        class="hidden text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Marcar Atendido
+                    </button>
+                    <!-- Botão Imprimir -->
+                    <button id="modal-print-btn"
+                        class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a1 1 0 001-1v-5H8v5a1 1 0 001 1zm1-9V4a1 1 0 011-1h2a1 1 0 011 1v4"/></svg>
+                        Imprimir
+                    </button>
+                    <!-- Fechar -->
+                    <button id="close-order-modal-btn" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <!-- Conteúdo scrollável -->
+            <div id="modal-order-content" class="overflow-y-auto p-6 flex-1">
                 <p class="text-center text-gray-500">Carregando detalhes do pedido...</p>
             </div>
         </div>

@@ -890,7 +890,10 @@ const createPedidosRouter = require('./pedidos.js');
 const pedidosRouter = createPedidosRouter(
     getInitializedSheetsClient,
     SPREADSHEET_ID_NFE,
-    SHEET_NAME_PEDIDOS_BLING
+    SHEET_NAME_PEDIDOS_BLING,
+    axios,
+    APPS_SCRIPT_TOKEN_URL,
+    BLING_API_BASE_URL
 );
 app.use('/pedidos', pedidosRouter);
 
