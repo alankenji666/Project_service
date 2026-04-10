@@ -161,7 +161,9 @@ const COLUMNS_PEDIDOS_BLING = {
     LOJA: 12,
     ID_NOTA: 13,
     OBSERVACAO: 14,
-    ITENS: 15
+    ITENS: 15,
+    // Coluna Q (16) reservada (Observação extra no Apps Script)
+    ORCAMENTO: 17  // Coluna R - Extraído de observaçõesInternas do Bling
 };
 
 // Rota para Lançamento de Requisição - TERCEIROS

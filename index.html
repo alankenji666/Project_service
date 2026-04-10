@@ -171,6 +171,15 @@
                         <div id="global-category-checkboxes" class="p-4 space-y-2 text-sm"></div>
                     </div>
                 </div>
+                <!-- Catalog Action -->
+                <div class="relative w-full sm:w-auto" id="catalog-action-container">
+                    <button id="generate-catalog-btn" class="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none hidden transition-colors gap-2 w-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z" />
+                        </svg>
+                        Catálogo
+                    </button>
+                </div>
             </div>
             <!-- Contagem de itens selecionados e botão Criar Requisição (visível apenas para Gerenciar Estoque) -->
             <div id="stock-actions"
@@ -304,9 +313,9 @@
                 <label for="pedidos-status-select" class="block text-sm font-medium text-gray-700">Situação:</label>
                 <select id="pedidos-status-select" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                     <option value="all">Todas</option>
-                    <option value="atendido">Atendido / Entregue</option>
-                    <option value="pendente" selected>Pendente / Em Andamento</option>
-                    <option value="preparando">Preparando / Impresso</option>
+                    <option value="atendido">Atendido</option>
+                    <option value="aberto" selected>Em Aberto</option>
+                    <option value="producao">Em Produção</option>
                     <option value="cancelado">Cancelado</option>
                 </select>
             </div>
@@ -509,10 +518,17 @@
                     <div id="pedidos-batch-actions" class="hidden flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
                         <span class="text-sm text-blue-800 font-medium whitespace-nowrap"><span id="pedidos-selected-count">0</span> selecionado(s)</span>
                         <div class="h-4 w-px bg-blue-200"></div>
-                        <button id="pedidos-batch-attend-btn" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition-colors flex items-center gap-1">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            Marcar como Atendido
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button id="pedidos-batch-open-btn" class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded border border-yellow-200 font-bold transition-colors">
+                                Aberto
+                            </button>
+                            <button id="pedidos-batch-prod-btn" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded border border-blue-200 font-bold transition-colors">
+                                Produção
+                            </button>
+                            <button id="pedidos-batch-attend-btn" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-bold shadow-sm transition-colors">
+                                Atendido
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -723,6 +739,33 @@
 
     <!-- NOVO: Área de conteúdo para impressão direta -->
     <div id="print-area" class="hidden"></div>
+    
+    <!-- NOVO: Modal do Catálogo Virtual -->
+    <div id="virtual-catalog-modal" class="fixed hidden inset-0 bg-gray-900 bg-opacity-90 flex items-center justify-center z-[100] p-4">
+        <div class="bg-gray-100 rounded-lg shadow-2xl w-full max-w-6xl h-[95vh] flex flex-col relative overflow-hidden">
+            <!-- Header do Catálogo -->
+            <div class="bg-white px-6 py-4 border-b flex justify-between items-center shrink-0 shadow-sm z-10">
+                <div class="flex items-center gap-3">
+                    <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                    <h2 class="text-2xl font-bold text-gray-800">Catálogo Virtual</h2>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="print-virtual-catalog-btn" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                        Imprimir / PDF
+                    </button>
+                    <button id="close-virtual-catalog-btn" class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Conteúdo do Catálogo -->
+            <div id="virtual-catalog-content" class="flex-grow overflow-y-auto p-4 sm:p-8 flex flex-col items-center">
+                 <!-- Injetado pelo JS -->
+            </div>
+        </div>
+    </div>
 
     <!-- ... O RESTANTE DO HTML (MODAIS, ETC.) CONTINUA IGUAL ... -->
     <div id="terceiros-orders-modal"
@@ -852,12 +895,21 @@
                         <input type="checkbox" id="modal-toggle-valores" checked class="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer">
                         Com Valor
                     </label>
-                    <!-- Botão Atender -->
-                    <button id="modal-attend-btn"
-                        class="hidden text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 font-medium">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        Marcar Atendido
-                    </button>
+                    <!-- Botões de Troca de Status -->
+                    <div id="modal-status-actions" class="flex gap-2">
+                        <button id="modal-status-open-btn" title="Mudar para Em Aberto"
+                            class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded-lg shadow-sm transition-colors border border-yellow-200 font-bold">
+                            Em Aberto
+                        </button>
+                        <button id="modal-status-prod-btn" title="Mudar para Em Produção"
+                            class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-lg shadow-sm transition-colors border border-blue-200 font-bold">
+                            Produção
+                        </button>
+                        <button id="modal-status-attend-btn" title="Mudar para Atendido"
+                            class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors font-bold">
+                            Atendido
+                        </button>
+                    </div>
                     <!-- Botão Imprimir -->
                     <button id="modal-print-btn"
                         class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 font-medium">
@@ -1345,6 +1397,58 @@
                     class="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">Cancelar</button>
                 <button id="confirm-product-cost-price-edit-btn"
                     class="read-only-disable px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar Preço</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOVO: Modal de Edição Rápida de Item (Pedido) -->
+    <div id="item-quick-edit-modal"
+        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full relative">
+            <button id="close-item-quick-edit-modal-btn"
+                class="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+            <h3 class="text-xl font-bold mb-1 text-gray-800">Ajuste Rápido de Item</h3>
+            <p id="quick-edit-product-name" class="text-sm text-gray-500 mb-6 line-clamp-2"></p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="quick-edit-cost-price" class="block text-sm font-semibold text-gray-700 mb-1">Preço de Custo (R$)</label>
+                    <input type="number" step="0.01" id="quick-edit-cost-price"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        placeholder="0.00">
+                </div>
+                <div>
+                    <label for="quick-edit-stock" class="block text-sm font-semibold text-gray-700 mb-1">Estoque Atual (Balanço)</label>
+                    <input type="number" id="quick-edit-stock"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        placeholder="Quantidade física na prateleira">
+                    <p class="text-xs text-gray-400 mt-1">* Isso substituirá o estoque atual no Bling.</p>
+                </div>
+                <div>
+                    <label for="quick-edit-location" class="block text-sm font-semibold text-gray-700 mb-1">Localização</label>
+                    <input type="text" id="quick-edit-location"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        placeholder="Ex: 14A, Prateleira 2">
+                </div>
+            </div>
+
+            <div id="quick-edit-loading" class="hidden mt-4 flex items-center justify-center space-x-2 text-blue-600">
+                <svg class="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"></circle>
+                    <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span class="text-sm font-medium">Salvando alterações...</span>
+            </div>
+
+            <div class="flex justify-end space-x-3 mt-8">
+                <button id="cancel-item-quick-edit-btn"
+                    class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors">Cancelar</button>
+                <button id="save-item-quick-edit-btn"
+                    class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-md transition-colors">Salvar</button>
             </div>
         </div>
     </div>

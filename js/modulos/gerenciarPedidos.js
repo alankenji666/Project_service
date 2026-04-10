@@ -17,6 +17,7 @@ export const GerenciarPedidosApp = (function () {
     let _isInitialized = false;
     let _lastHoveredRowId = null;
     let _currentModalPedidoId = null; // ID do pedido aberto no modal
+    let _enrichedProductsMap = {}; // Mapa para cachear dados de produtos do modal
 
     function _getVendedorName(vendedor) {
         if (!vendedor) return '-';
@@ -41,6 +42,26 @@ export const GerenciarPedidosApp = (function () {
         return str; // Devolve original se não reconhece
     }
 
+    function _parseNumber(val) {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        
+        // Remove símbolos de moeda, espaços e pontos de milhar
+        let clean = String(val).trim().replace(/[R$\s]/g, '');
+        
+        // Se tem ponto e vírgula, ex: 1.234,56 -> 1234.56
+        if (clean.includes('.') && clean.includes(',')) {
+            clean = clean.replace(/\./g, '').replace(',', '.');
+        } 
+        // Se tem apenas vírgula, ex: 150,90 -> 150.90
+        else if (clean.includes(',')) {
+            clean = clean.replace(',', '.');
+        }
+        
+        const res = parseFloat(clean);
+        return isNaN(res) ? 0 : res;
+    }
+
     function _cacheDom() {
         _tableContent = document.getElementById('pedidos-table-content');
         _searchInput = document.getElementById('pedidos-search-input');
@@ -60,6 +81,17 @@ export const GerenciarPedidosApp = (function () {
         _batchActionsContainer = document.getElementById('pedidos-batch-actions');
         _selectedCountSpan = document.getElementById('pedidos-selected-count');
         _batchAttendBtn = document.getElementById('pedidos-batch-attend-btn');
+
+        // Novos elementos do Modal de Edição Rápida
+        _state.quickEditModal = document.getElementById('item-quick-edit-modal');
+        _state.quickEditItemName = document.getElementById('quick-edit-product-name');
+        _state.quickEditCostInput = document.getElementById('quick-edit-cost-price');
+        _state.quickEditStockInput = document.getElementById('quick-edit-stock');
+        _state.quickEditLocInput = document.getElementById('quick-edit-location');
+        _state.quickEditLoading = document.getElementById('quick-edit-loading');
+        _state.quickEditSaveBtn = document.getElementById('save-item-quick-edit-btn');
+        _state.quickEditCancelBtn = document.getElementById('cancel-item-quick-edit-btn');
+        _state.quickEditCloseBtn = document.getElementById('close-item-quick-edit-modal-btn');
     }
 
     function _bindEvents() {
@@ -84,8 +116,15 @@ export const GerenciarPedidosApp = (function () {
             _selectAllCheckbox.addEventListener('change', _handleSelectAllToggle);
         }
         if (_batchAttendBtn) {
-            _batchAttendBtn.addEventListener('click', _handleBatchAttend);
+            _batchAttendBtn.addEventListener('click', () => _handleBatchChangeStatus(9, 'Atendido'));
         }
+        
+        // Novos botões de lote no topo da tabela
+        const batchOpenBtn = document.getElementById('pedidos-batch-open-btn');
+        const batchProdBtn = document.getElementById('pedidos-batch-prod-btn');
+        
+        if (batchOpenBtn) batchOpenBtn.addEventListener('click', () => _handleBatchChangeStatus(6, 'Em Aberto'));
+        if (batchProdBtn) batchProdBtn.addEventListener('click', () => _handleBatchChangeStatus(447331, 'Em Produção'));
 
         if (_tableContent) {
             _tableContent.addEventListener('mouseover', (e) => {
@@ -94,7 +133,7 @@ export const GerenciarPedidosApp = (function () {
                     const id = tr.querySelector('td')?.innerText;
                     if (id && id !== _lastHoveredRowId) {
                         _lastHoveredRowId = id;
-                        if (typeof Toastify !== 'undefined' && false) { // Desativei o toast que fica piscando
+                        if (typeof Toastify !== 'undefined') {
                             Toastify({
                                 text: "Em desenvolvimento",
                                 duration: 1500,
@@ -116,8 +155,9 @@ export const GerenciarPedidosApp = (function () {
                     return;
                 }
                 
-                if (e.target.closest('.pedido-row-checkbox') || e.target.closest('input[type="checkbox"]')) {
-                    return; // Ignore checkbox clicks
+                // Somente abre o modal se clicar em uma célula explicitamente clicável
+                if (!e.target.closest('.clickable-cell')) {
+                    return;
                 }
 
                 const tr = e.target.closest('tr');
@@ -153,10 +193,19 @@ export const GerenciarPedidosApp = (function () {
             printBtn.addEventListener('click', _handleModalPrint);
         }
 
-        const attendBtn = document.getElementById('modal-attend-btn');
-        if (attendBtn) {
-            attendBtn.addEventListener('click', _handleModalAttend);
-        }
+        // Novos botões de status no modal
+        const openBtn = document.getElementById('modal-status-open-btn');
+        const prodBtn = document.getElementById('modal-status-prod-btn');
+        const attendBtn = document.getElementById('modal-status-attend-btn');
+        
+        if (openBtn) openBtn.addEventListener('click', () => _handleModalChangeStatus(6, 'Em Aberto'));
+        if (prodBtn) prodBtn.addEventListener('click', () => _handleModalChangeStatus(447331, 'Em Produção'));
+        if (attendBtn) attendBtn.addEventListener('click', () => _handleModalChangeStatus(9, 'Atendido'));
+
+        // Eventos do Modal de Edição Rápida
+        if (_state.quickEditCancelBtn) _state.quickEditCancelBtn.addEventListener('click', _closeQuickEditModal);
+        if (_state.quickEditCloseBtn) _state.quickEditCloseBtn.addEventListener('click', _closeQuickEditModal);
+        if (_state.quickEditSaveBtn) _state.quickEditSaveBtn.addEventListener('click', _saveItemQuickEdit);
     }
 
     function _handleSelectAllToggle(e) {
@@ -185,33 +234,58 @@ export const GerenciarPedidosApp = (function () {
         }
     }
 
-    function _openOrderDetailsModal(orderNumber) {
+    function _openOrderDetailsModal(orderRef) {
         const modal = document.getElementById('order-details-modal');
         const content = document.getElementById('modal-order-content');
         const title = document.getElementById('modal-order-title');
         
         if (!modal || !content || !title) return;
 
-        const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
+        let pedido;
+        // Se já recebeu o objeto do pedido, usa ele diretamente
+        if (orderRef && typeof orderRef === 'object') {
+            pedido = orderRef;
+        } else {
+            // Caso contrário, busca na lista convertendo tudo para String (mais seguro)
+            const refStr = String(orderRef);
+            pedido = _allPedidos.find(p => 
+                String(p.id || '') === refStr || 
+                String(p.número || '') === refStr || 
+                String(p.numero || '') === refStr
+            );
+        }
+
         if (!pedido) {
             content.innerHTML = '<p class="text-center text-red-500">Pedido não encontrado.</p>';
             modal.classList.remove('hidden');
             return;
         }
 
+        const orderNumber = pedido.numero || pedido.número || orderRef;
+
         // Salvar o ID do pedido atual no modal
         const pedidoId = pedido.id || pedido.id_pedido || pedido['id pedido'] || '';
         _currentModalPedidoId = pedidoId || orderNumber;
         modal.dataset.currentOrderNumber = orderNumber;
 
-        // Mostrar/ocultar botão Atender se estiver em aberto
-        const attendBtn = document.getElementById('modal-attend-btn');
-        const situacaoCheck = (pedido.situação || pedido.situacao || '').toLowerCase();
-        if (attendBtn) {
-            if (situacaoCheck.includes('abert') || situacaoCheck.includes('pendent')) {
-                attendBtn.classList.remove('hidden');
-            } else {
-                attendBtn.classList.add('hidden');
+        // Gerenciar visibilidade dos botões de troca de status
+        const situacaoCheckRaw = (pedido.situação || pedido.situacao || '').toLowerCase();
+        
+        const btnOpen = document.getElementById('modal-status-open-btn');
+        const btnProd = document.getElementById('modal-status-prod-btn');
+        const btnAttend = document.getElementById('modal-status-attend-btn');
+
+        if (btnOpen && btnProd && btnAttend) {
+            // Mostra todos por padrão
+            [btnOpen, btnProd, btnAttend].forEach(b => b.classList.remove('hidden'));
+
+            // Oculta o botão que corresponde à situação atual
+            if (situacaoCheckRaw.includes('abert') || situacaoCheckRaw.includes('pendent')) {
+                btnOpen.classList.add('hidden');
+            } else if (situacaoCheckRaw.includes('atendid') || situacaoCheckRaw.includes('entregue') || situacaoCheckRaw.includes('conclu')) {
+                btnAttend.classList.add('hidden');
+            } else if (situacaoCheckRaw.includes('produ')) {
+                btnProd.classList.add('hidden');
             }
         }
 
@@ -235,7 +309,7 @@ export const GerenciarPedidosApp = (function () {
         const cliente = pedido.contato_nome || pedido['contato nome'] || pedido.cliente || '-';
         const cpfCnpj = pedido.cpf_cnpj || pedido['cpf cnpj'] || pedido['cpf/cnpj'] || '';
         const data = _fmtData(pedido.data) || '-';
-        const totalVal = parseFloat(pedido.total_pedido || pedido['total pedido'] || pedido.total || 0);
+        const totalVal = _parseNumber(pedido.total_pedido || pedido['total pedido'] || pedido.total || pedido.valor_total || pedido.total_venda || 0);
         const totalFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVal);
         const vendedorRaw = pedido.vendedor || '-';
         const vendedorName = _getVendedorName(vendedorRaw);
@@ -248,8 +322,22 @@ export const GerenciarPedidosApp = (function () {
         Object.entries(pedido).forEach(([key, value]) => {
             if (!skipInGrid.includes(key.toLowerCase()) && value) {
                 const niceKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                
+                let displayValue = value;
                 // Formata valores que parecem datas (yyyy-mm-dd)
-                const displayValue = /^\d{4}-\d{2}-\d{2}/.test(String(value)) ? _fmtData(String(value)) : value;
+                if (/^\d{4}-\d{2}-\d{2}/.test(String(value))) {
+                    displayValue = _fmtData(String(value));
+                } 
+                // Formata campos de valor/total/preço como moeda
+                else if (key.toLowerCase().includes('total') || 
+                         key.toLowerCase().includes('preco') || 
+                         key.toLowerCase().includes('preço') || 
+                         key.toLowerCase().includes('valor') ||
+                         key.toLowerCase().includes('custo')) {
+                    const numVal = _parseNumber(value);
+                    displayValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numVal);
+                }
+
                 gridHtml += `
                     <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
                         <span class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">${niceKey}</span>
@@ -273,13 +361,14 @@ export const GerenciarPedidosApp = (function () {
                                 <tr>
                                     <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Produto</th>
                                     <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase">Qtd</th>
+                                    <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase">Estoque</th>
                                     <th class="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase">Valor</th>
                                 </tr>
                             </thead>
                             <tbody id="pedido-modal-itens-body" class="bg-white divide-y divide-gray-100">
                                 ${itensList.map(item => `
-                                    <tr data-item-codigo="${item.codigo}">
-                                        <td class="px-4 py-3">
+                                    <tr data-item-codigo="${item.codigo}" class="cursor-pointer hover:bg-gray-50 transition-colors item-row">
+                                        <td class="px-4 py-3" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">
                                             <div class="flex items-center gap-3">
                                                 <img id="img-${item.codigo}" src="https://placehold.co/48x48/e2e8f0/64748b?text=..." 
                                                      alt="" class="w-12 h-12 rounded-lg object-cover bg-gray-100 flex-shrink-0"
@@ -290,8 +379,11 @@ export const GerenciarPedidosApp = (function () {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="px-4 py-3 text-center text-gray-700">${item.quantidade}</td>
-                                        <td class="px-4 py-3 text-right font-semibold text-gray-800">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.valor)}</td>
+                                        <td class="px-4 py-3 text-center text-gray-700" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">${item.quantidade}</td>
+                                        <td class="px-4 py-3 text-center" id="stock-col-${item.codigo}" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">
+                                            <span class="text-xs text-gray-400 italic">carregando...</span>
+                                        </td>
+                                        <td class="px-4 py-3 text-right font-semibold text-gray-800" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(_parseNumber(item.valor))}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -353,7 +445,7 @@ export const GerenciarPedidosApp = (function () {
                 results.push({
                     codigo: parts[0],
                     quantidade: parseFloat(parts[1]) || 1,
-                    valor: parseFloat(parts[2]) || 0
+                    valor: _parseNumber(parts[2]) || 0
                 });
             } else if (parts.length === 2) {
                 results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: 0 });
@@ -363,7 +455,7 @@ export const GerenciarPedidosApp = (function () {
         if (results.length === 0 && cleaned) {
             const parts = cleaned.replace(/[()]/g, '').split(',').map(s => s.trim());
             if (parts.length >= 3) {
-                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: parseFloat(parts[2]) || 0 });
+                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: _parseNumber(parts[2]) || 0 });
             } else if (parts.length > 0 && parts[0]) {
                 results.push({ codigo: parts[0], quantidade: 1, valor: 0 });
             }
@@ -378,14 +470,24 @@ export const GerenciarPedidosApp = (function () {
             const json = await res.json();
             const products = json.data || json || [];
 
+            _enrichedProductsMap = {}; // Reset
+
             itensList.forEach(item => {
                 const prod = products.find(p =>
                     String(p.codigo || '').trim() === String(item.codigo).trim()
                 );
-                if (!prod) return;
+                if (!prod) {
+                    const stockCol = document.getElementById(`stock-col-${item.codigo}`);
+                    if (stockCol) stockCol.innerHTML = '<span class="text-xs text-red-400">N/A</span>';
+                    return;
+                }
+
+                // Salvar no mapa local para uso no Quick Edit
+                _enrichedProductsMap[item.codigo] = prod;
 
                 const imgEl = document.getElementById(`img-${item.codigo}`);
                 const descEl = document.getElementById(`desc-${item.codigo}`);
+                const stockCol = document.getElementById(`stock-col-${item.codigo}`);
 
                 if (imgEl && prod.url_imagens_externas && prod.url_imagens_externas[0]) {
                     imgEl.src = prod.url_imagens_externas[0];
@@ -393,9 +495,122 @@ export const GerenciarPedidosApp = (function () {
                 if (descEl && prod.descricao) {
                     descEl.textContent = prod.descricao;
                 }
+
+                if (stockCol) {
+                    const disponivel = parseFloat(prod.estoque) || 0;
+                    const pedidoQty = parseFloat(item.quantidade) || 0;
+                    if (disponivel >= pedidoQty) {
+                        stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800" title="Disponível: ${disponivel}">OK</span>`;
+                    } else {
+                        stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title="Disponível: ${disponivel}">Sem Estoque</span>`;
+                    }
+                }
             });
         } catch (e) {
             console.warn('Não foi possível enriquecer itens com dados de produto:', e);
+        }
+    }
+
+    // --- LOGICA DE EDIÇÃO RÁPIDA DE ITEM ---
+
+    function handleItemClick(codigo) {
+        const prod = _enrichedProductsMap[codigo];
+        if (!prod) return;
+        _openQuickEditModal(prod);
+    }
+
+    function _openQuickEditModal(prod) {
+        if (!_state.quickEditModal) return;
+
+        _state.currentEditingProduct = prod;
+
+        if (_state.quickEditItemName) _state.quickEditItemName.textContent = `[${prod.codigo}] ${prod.descricao || ''}`;
+        if (_state.quickEditCostInput) _state.quickEditCostInput.value = _parseNumber(prod.preco_de_custo).toFixed(2);
+        if (_state.quickEditStockInput) _state.quickEditStockInput.value = _parseNumber(prod.estoque);
+        if (_state.quickEditLocInput) _state.quickEditLocInput.value = prod.localizacao || '';
+
+        _state.quickEditModal.classList.remove('hidden');
+    }
+
+    function _closeQuickEditModal() {
+        if (_state.quickEditModal) _state.quickEditModal.classList.add('hidden');
+        if (_state.quickEditLoading) _state.quickEditLoading.classList.add('hidden');
+        if (_state.quickEditSaveBtn) _state.quickEditSaveBtn.disabled = false;
+    }
+
+    async function _saveItemQuickEdit() {
+        const prod = _state.currentEditingProduct;
+        if (!prod) return;
+
+        const newCost = parseFloat(_state.quickEditCostInput.value);
+        const newStock = parseFloat(_state.quickEditStockInput.value);
+        const newLoc = _state.quickEditLocInput.value.trim();
+
+        if (isNaN(newCost) || isNaN(newStock)) {
+            alert('Por favor, insira valores válidos para preço e estoque.');
+            return;
+        }
+
+        _state.quickEditLoading.classList.remove('hidden');
+        _state.quickEditSaveBtn.disabled = true;
+
+        try {
+            // 1. Atualizar Detalhes (Custo e Localização)
+            console.log(`[QuickEdit] Atualizando detalhes do produto ${prod.id}...`);
+            const updateDetailsRes = await fetch(`${API_URLS.PRODUCTS}/${prod.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    preco_de_custo: newCost,
+                    localizacao: newLoc
+                })
+            });
+
+            if (!updateDetailsRes.ok) throw new Error('Falha ao atualizar detalhes do produto.');
+
+            // 2. Atualizar Estoque (Balanço)
+            console.log(`[QuickEdit] Atualizando estoque (Balanço) do produto ${prod.codigo}...`);
+            const updateStockRes = await fetch(`${API_URLS.STOCK}/update-stock`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    produto: { id: prod.id, codigo: prod.codigo },
+                    operacaoBling: 'B', // Balanço
+                    quantidadeFinal: newStock,
+                    tipoEntrada: 'Ajuste Rápido no Pedido',
+                    observacoes: 'Ajuste realizado durante a separação do pedido.'
+                })
+            });
+
+            if (!updateStockRes.ok) throw new Error('Falha ao atualizar estoque.');
+
+            // Sucesso!
+            _closeQuickEditModal();
+
+            // Mensagem de sucesso amigável
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Produto atualizado com sucesso!",
+                    duration: 2000,
+                    gravity: "top",
+                    position: "center",
+                    style: { background: "#10b981" }
+                }).showToast();
+            }
+
+            // Atualizar o modal de detalhes do pedido para refletir as mudanças (badges etc)
+            const modal = document.getElementById('order-details-modal');
+            const orderNumber = modal?.dataset?.currentOrderNumber;
+            if (orderNumber) {
+                // Pequeno delay para garantir que o cache da API de produtos limpou ou refletiu a mudança
+                setTimeout(() => _openOrderDetailsModal(orderNumber), 500);
+            }
+
+        } catch (error) {
+            console.error('[QuickEdit] Erro:', error);
+            alert(`Erro ao salvar: ${error.message}`);
+            _state.quickEditSaveBtn.disabled = false;
+            _state.quickEditLoading.classList.add('hidden');
         }
     }
 
@@ -534,7 +749,7 @@ export const GerenciarPedidosApp = (function () {
     <div class="client-block">
         <div class="name">${cliente}</div>
         ${cpfCnpj ? `<div class="sub">CNPJ/CPF: ${cpfCnpj}</div>` : ''}
-        <span class="badge ${situacao.toLowerCase().includes('abert') || situacao.toLowerCase().includes('pendent') ? 'badge-yellow' : situacao.toLowerCase().includes('atendid') || situacao.toLowerCase().includes('conclu') ? 'badge-green' : situacao.toLowerCase().includes('cancel') ? 'badge-red' : 'badge-gray'}">${situacao}</span>
+        <span class="badge ${situacao.toLowerCase().includes('abert') || situacao.toLowerCase().includes('pendent') || situacao.toLowerCase().includes('andamento') ? 'badge-yellow' : situacao.toLowerCase().includes('atendid') || situacao.toLowerCase().includes('conclu') ? 'badge-green' : situacao.toLowerCase().includes('cancel') ? 'badge-red' : situacao.toLowerCase().includes('produ') ? 'badge-blue' : 'badge-gray'}">${situacao}</span>
     </div>
 
     <div class="info-grid">
@@ -569,19 +784,19 @@ export const GerenciarPedidosApp = (function () {
     }
 
 
-    async function _handleModalAttend() {
+    async function _handleModalChangeStatus(newStatusId, label) {
         const orderNumber = document.getElementById('order-details-modal')?.dataset?.currentOrderNumber;
         if (!orderNumber) return;
 
         const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
         const idParaEnviar = pedido?.id || pedido?.id_pedido || pedido?.['id pedido'] || orderNumber;
 
-        if (!confirm(`Marcar o Pedido Nº ${orderNumber} como "Atendido" no Bling e na planilha?`)) return;
+        if (!confirm(`Mudar o Pedido Nº ${orderNumber} para "${label}"?`)) return;
 
-        const attendBtn = document.getElementById('modal-attend-btn');
-        if (attendBtn) {
-            attendBtn.disabled = true;
-            attendBtn.textContent = 'Aguarde...';
+        const container = document.getElementById('modal-status-actions');
+        if (container) {
+            container.style.opacity = '0.5';
+            container.style.pointerEvents = 'none';
         }
 
         try {
@@ -589,44 +804,65 @@ export const GerenciarPedidosApp = (function () {
             const response = await fetch(backendUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: [idParaEnviar], idSituacao: 9 })
+                body: JSON.stringify({ ids: [idParaEnviar], idSituacao: newStatusId })
             });
             const json = await response.json();
             if (!response.ok) throw new Error(json.message || 'Erro ao atualizar');
 
             // Atualizar localmente o pedido em memória
             if (pedido) {
-                if (pedido.situação !== undefined) pedido.situação = 'Atendido';
-                if (pedido.situacao !== undefined) pedido.situacao = 'Atendido';
+                if (pedido.situação !== undefined) pedido.situação = label;
+                if (pedido.situacao !== undefined) pedido.situacao = label;
             }
 
-            // Ocultar botão atender e mostrar badge atualizado
-            if (attendBtn) attendBtn.classList.add('hidden');
-            alert(`Pedido Nº ${orderNumber} marcado como Atendido com sucesso!`);
+            alert(`Pedido Nº ${orderNumber} alterado para "${label}" com sucesso!`);
 
             // Fechar e recarregar
             document.getElementById('order-details-modal')?.classList.add('hidden');
             await fetchPedidos(true);
 
         } catch (err) {
-            console.error('Erro ao marcar pedido como atendido:', err);
+            console.error('Erro ao mudar status do pedido:', err);
             alert('Erro: ' + err.message);
-            if (attendBtn) {
-                attendBtn.disabled = false;
-                attendBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Marcar Atendido`;
+            if (container) {
+                container.style.opacity = '1';
+                container.style.pointerEvents = 'auto';
             }
         }
     }
 
 
-    async function _handleBatchAttend() {
+    async function _handleBatchChangeStatus(newStatusId, label) {
         const checkedBoxes = _tableContent.querySelectorAll('.pedido-row-checkbox:checked');
-        const ids = Array.from(checkedBoxes).map(cb => cb.value);
-        if (ids.length === 0) return;
+        const allIds = Array.from(checkedBoxes).map(cb => cb.value);
+        if (allIds.length === 0) return;
 
-        if (!confirm(`Tem certeza que deseja marcar ${ids.length} pedido(s) como "Atendido" no Bling e na planilha?`)) {
+        // Filtrar pedidos que já possuem o status alvo para evitar erro no Bling
+        const idsToUpdate = allIds.filter(id => {
+            const p = _allPedidos.find(p => String(p.id) === String(id) || String(p.numero) === String(id) || String(p.número) === String(id));
+            if (!p) return true; 
+            
+            const situacaoAtual = (p.situação || p.situacao || '').toLowerCase();
+            const labelLower = label.toLowerCase();
+            
+            // Mapeamento de termos para evitar redundância
+            if (labelLower.includes('atendid') && (situacaoAtual.includes('atendid') || situacaoAtual.includes('conclu') || situacaoAtual.includes('entreg'))) return false;
+            if (labelLower.includes('abert') && (situacaoAtual.includes('abert') || situacaoAtual.includes('pendent'))) return false;
+            if (labelLower.includes('produ') && situacaoAtual.includes('produ')) return false;
+            
+            return true;
+        });
+
+        if (idsToUpdate.length === 0) {
+            alert(`Todos os ${allIds.length} pedidos selecionados já estão com a situação "${label}".`);
             return;
         }
+
+        const msg = idsToUpdate.length === allIds.length 
+            ? `Mudar ${idsToUpdate.length} pedido(s) para "${label}"?`
+            : `Mudar ${idsToUpdate.length} pedido(s) para "${label}"?\n(${allIds.length - idsToUpdate.length} pedidos já estão nessa situação e serão ignorados).`;
+
+        if (!confirm(msg)) return;
 
         if (_loadingEl) _loadingEl.classList.remove('hidden');
         if (_tableContent) _tableContent.innerHTML = '';
@@ -637,20 +873,20 @@ export const GerenciarPedidosApp = (function () {
             const response = await fetch(backendUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: ids, idSituacao: 9 })
+                body: JSON.stringify({ ids: idsToUpdate, idSituacao: newStatusId })
             });
 
             const json = await response.json();
             if (!response.ok) throw new Error(json.message || 'Erro ao atualizar pedidos');
 
-            alert(`Pedidos atualizados. Sucessos: ${json.data?.sucessos?.length || 0}. Erros: ${json.data?.erros?.length || 0}.`);
+            alert(`Pedidos atualizados para "${label}". Sucessos: ${json.data?.sucessos?.length || 0}. Erros: ${json.data?.erros?.length || 0}.`);
             
             // Recarregar os dados para refletir mudanças
             await fetchPedidos(true);
 
         } catch (error) {
             console.error("Erro ao atualizar lote de pedidos:", error);
-            alert("Erro ao tentar atualizar a situação dos pedidos. Detalhes: " + error.message);
+            alert("Erro ao tentar mudar situação dos pedidos. Detalhes: " + error.message);
             await fetchPedidos(true); // Recarrega mesmo em caso de erro para manter integridade visual
         }
     }
@@ -706,7 +942,7 @@ export const GerenciarPedidosApp = (function () {
         if (_searchInput) _searchInput.value = '';
         if (_startDateInput) _startDateInput.value = '';
         if (_endDateInput) _endDateInput.value = '';
-        if (_statusSelect) _statusSelect.value = 'pendente';
+        if (_statusSelect) _statusSelect.value = 'aberto';
         if (_yearFilter) {
             const currentYearStr = new Date().getFullYear().toString();
             // Verifica se a opção existe
@@ -850,14 +1086,20 @@ export const GerenciarPedidosApp = (function () {
                 const sel = _statusSelect.value;
                 const sitLower = (p.situação || p.situacao || p.situao || '').toLowerCase();
                 
-                if (sel === 'atendido') statusMatch = (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu'));
-                else if (sel === 'pendente') statusMatch = (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento') || sitLower.includes('em andamento'));
-                else if (sel === 'preparando') statusMatch = (sitLower.includes('prepar') || sitLower.includes('impress') || sitLower.includes('verificad'));
-                else if (sel === 'cancelado') statusMatch = sitLower.includes('cancel');
+                if (sel === 'atendido') {
+                    statusMatch = (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu'));
+                } else if (sel === 'aberto') {
+                    statusMatch = (sitLower.includes('abert') || sitLower.includes('pendent') || sitLower.includes('andamento'));
+                } else if (sel === 'producao') {
+                    statusMatch = sitLower.includes('produ');
+                } else if (sel === 'cancelado') {
+                    statusMatch = sitLower.includes('cancel');
+                }
             }
 
             const vendedor = _getVendedorName(p.vendedor || '').toLowerCase();
-            const termMatch = numero.includes(term) || cliente.includes(term) || vendedor.includes(term);
+            const orcamento = String(p.orcamento || p['orcamento'] || p.orçamento || '').toLowerCase();
+            const termMatch = numero.includes(term) || cliente.includes(term) || vendedor.includes(term) || orcamento.includes(term);
             return dateMatch && statusMatch && yearMatch && termMatch;
         });
 
@@ -915,8 +1157,8 @@ export const GerenciarPedidosApp = (function () {
                 return valA.localeCompare(valB) * dir;
             }
             if (key === 'total') {
-                valA = parseFloat(a.total_pedido || a['total pedido'] || a.valortotal || a.total || 0);
-                valB = parseFloat(b.total_pedido || b['total pedido'] || b.valortotal || b.total || 0);
+                valA = _parseNumber(a.total_pedido || a['total pedido'] || a.valortotal || a.total || a.valor_total || a.total_venda || 0);
+                valB = _parseNumber(b.total_pedido || b['total pedido'] || b.valortotal || b.total || b.valor_total || b.total_venda || 0);
                 return (valA - valB) * dir;
             }
             return 0;
@@ -937,7 +1179,7 @@ export const GerenciarPedidosApp = (function () {
                 const cliente = p.contato_nome || p['contato nome'] || p.cliente || '-';
                 const vendedor = _getVendedorName(p.vendedor);
                 const situacao = p.situação || p.situacao || p.situao || '-';
-                const totalVal = parseFloat(p.total_pedido || p['total pedido'] || p.valortotal || p.total || 0);
+                const totalVal = _parseNumber(p.total_pedido || p['total pedido'] || p.valortotal || p.total || p.valor_total || p.total_venda || 0);
                 const totalFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVal);
                 
                 const dataStr = p.data || p.data_criacao || '';
@@ -952,22 +1194,25 @@ export const GerenciarPedidosApp = (function () {
                 const sitLower = situacao.toLowerCase();
                 if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badgeClass = 'bg-green-100 text-green-800';
                 else if (sitLower.includes('cancel')) badgeClass = 'bg-red-100 text-red-800';
-                else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento') || sitLower.includes('em andamento')) badgeClass = 'bg-yellow-100 text-yellow-800';
-                else if (sitLower.includes('prepar') || sitLower.includes('impress') || sitLower.includes('verificad')) badgeClass = 'bg-blue-100 text-blue-800';
+                else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento')) badgeClass = 'bg-yellow-100 text-yellow-800';
+                else if (sitLower.includes('produ')) badgeClass = 'bg-blue-100 text-blue-800';
 
                 return `
                     <tr id="pedido-row-${numero}" data-order-number="${numero}" class="hover:bg-gray-50 transition-colors">
                         <td class="px-6 py-4 whitespace-nowrap text-left text-sm">
                             <input type="checkbox" class="pedido-row-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" value="${p.id || p.numero || numero}">
                         </td>
-                        <td class="order-cell-numero px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">${numero}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${dateFormatted}</td>
-                        <td class="px-6 py-4 text-sm text-gray-900 max-w-[250px] truncate" title="${cliente}">${cliente}</td>
-                        <td class="px-6 py-4 text-sm text-gray-500">${vendedor}</td>
-                        <td class="order-cell-status px-6 py-4 whitespace-nowrap">
+                        <td class="order-cell-numero px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <span class="text-blue-600">${numero}</span>
+                            ${(p.orcamento && p.orcamento !== '0') ? `<div class="text-[11px] text-gray-400 mt-0.5" title="Orçamento">${p.orcamento}</div>` : ''}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 cursor-pointer clickable-cell">${dateFormatted}</td>
+                        <td class="px-6 py-4 text-sm text-gray-900 max-w-[250px] truncate cursor-pointer clickable-cell" title="${cliente}">${cliente}</td>
+                        <td class="px-6 py-4 text-sm text-gray-500 cursor-pointer clickable-cell">${vendedor}</td>
+                        <td class="order-cell-status px-6 py-4 whitespace-nowrap cursor-pointer clickable-cell">
                             <span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${situacao}</span>
                         </td>
-                        <td class="order-cell-total px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-right">${totalFormatted}</td>
+                        <td class="order-cell-total px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-right cursor-pointer clickable-cell">${totalFormatted}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
                             <span class="edit-order-observation-btn cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block" 
                                 data-target-id="${numero}" 
@@ -1068,12 +1313,18 @@ export const GerenciarPedidosApp = (function () {
     }
 
     return {
+        handleItemClick: handleItemClick,
         init: function (config = {}) {
             if (config.openOrderObservationModal) {
                 _state.openOrderObservationModal = config.openOrderObservationModal;
             }
             if (!_isInitialized) {
                 _cacheDom();
+                if (_statusSelect && !_statusSelect.value) {
+                    _statusSelect.value = 'aberto';
+                } else if (_statusSelect && _statusSelect.value === 'all') {
+                    _statusSelect.value = 'aberto';
+                }
                 _bindEvents();
                 _isInitialized = true;
             }
@@ -1123,7 +1374,7 @@ export const GerenciarPedidosApp = (function () {
                 if (data.total !== undefined) {
                     const totalCell = row.querySelector('.order-cell-total');
                     if (totalCell) {
-                        const totalVal = parseFloat(data.total || 0);
+                        const totalVal = _parseNumber(data.total || 0);
                         const totalFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVal);
                         totalCell.innerText = totalFormatted;
                     }
@@ -1146,6 +1397,20 @@ export const GerenciarPedidosApp = (function () {
                     iconSvg.classList.toggle('text-red-500', hasObs);
                     iconSvg.classList.toggle('text-gray-300', !hasObs);
                 }
+            }
+        },
+        openOrderDetailsByNumber: function(orderNumber) {
+            console.log(`[GerenciarPedidos] Tentando abrir modal para o pedido nº ${orderNumber}`);
+            // Já busca o pedido aqui para garantir que temos o objeto
+            const pedido = _allPedidos.find(p => 
+                String(p.numero || '') === String(orderNumber) || 
+                String(p.número || '') === String(orderNumber)
+            );
+            
+            if (pedido) {
+                _openOrderDetailsModal(pedido);
+            } else {
+                console.warn(`[GerenciarPedidos] Pedido ${orderNumber} não encontrado localmente.`);
             }
         }
     };

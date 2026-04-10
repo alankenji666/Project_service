@@ -461,6 +461,88 @@ export const PesquisarProduto = (function() {
         }
     }
 
+    /**
+     * Gera e imprime um Catálogo dos produtos atualmente filtrados em _allProducts
+     */
+    function generateCatalog() {
+        if (!_allProducts || _allProducts.length === 0) {
+            alert('Não há produtos disponíveis para gerar o catálogo.');
+            return;
+        }
+
+        const printArea = document.getElementById('print-area');
+        if (!printArea) {
+            console.error('Elemento print-area não encontrado.');
+            return;
+        }
+
+        const dateString = new Date().toLocaleDateString('pt-BR');
+        
+        let catalogHTML = `
+            <div dir="ltr" style="font-family: Arial, sans-serif; padding: 20px;">
+                <!-- Capa -->
+                <div style="text-align: center; margin-bottom: 50px; page-break-after: always; display: flex; flex-direction: column; justify-content: center; height: 90vh;">
+                    <h1 style="font-size: 3rem; color: #1f2937; margin-bottom: 10px;">Catálogo de Produtos</h1>
+                    <h2 style="font-size: 1.5rem; color: #4b5563; font-weight: normal;">Gerado em ${dateString}</h2>
+                    <div style="margin-top: 40px; border-top: 2px solid #e5e7eb; width: 50%; margin-left: auto; margin-right: auto;"></div>
+                </div>
+                
+                <!-- Grid de Produtos -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+        `;
+
+        _allProducts.forEach(product => {
+            const imageUrl = product.url_imagens_externas && product.url_imagens_externas[0] 
+                ? product.url_imagens_externas[0] 
+                : 'https://placehold.co/150x150/e2e8f0/64748b?text=Sem+Foto';
+                
+            const price = (product.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            
+            catalogHTML += `
+                <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; text-align: center; page-break-inside: avoid; background: white;">
+                    <img src="${imageUrl}" alt="Imagem" style="width: 100%; height: 180px; object-fit: contain; margin-bottom: 15px;">
+                    <h3 style="font-size: 14px; color: #111827; margin: 0 0 10px 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; min-height: 50px;">${product.descricao}</h3>
+                    <p style="font-size: 11px; color: #6b7280; margin: 0 0 5px 0;">Cód: ${product.codigo}</p>
+                    <p style="font-size: 18px; color: #059669; font-weight: bold; margin: 0;">${price}</p>
+                </div>
+            `;
+        });
+
+        catalogHTML += `
+                </div>
+            </div>
+        `;
+
+        printArea.innerHTML = catalogHTML;
+        
+        const virtualContent = document.getElementById('virtual-catalog-content');
+        const virtualModal = document.getElementById('virtual-catalog-modal');
+        
+        if (virtualContent && virtualModal) {
+            virtualContent.innerHTML = catalogHTML;
+            virtualModal.classList.remove('hidden');
+        }
+
+        const printStylesId = 'catalog-print-styles';
+        let styleTag = document.getElementById(printStylesId);
+        if (!styleTag) {
+            styleTag = document.createElement('style');
+            styleTag.id = printStylesId;
+            document.head.appendChild(styleTag);
+        }
+        
+        styleTag.innerHTML = `
+            @media print {
+                body * { visibility: hidden; }
+                #print-area, #print-area * { visibility: visible; }
+                #print-area {
+                    position: absolute; left: 0; top: 0; width: 100%; display: block !important; backgroundColor: white; margin: 0; padding: 0;
+                }
+                @page { size: A4; margin: 1cm; }
+            }
+        `;
+    }
+
     // Expõe as funções públicas
     return {
         init,
@@ -472,6 +554,7 @@ export const PesquisarProduto = (function() {
         updateProductNameDisplay,
         updateProductLocationDisplay,
         updateProductCodeDisplay,
-        updateProductCostPriceDisplay
+        updateProductCostPriceDisplay,
+        generateCatalog
     };
 })();

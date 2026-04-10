@@ -20,6 +20,17 @@ function traduzirSituacaoPedido(id) {
     return s[id] || "ID: " + id;
 }
 
+/**
+ * Extrai o número do Orçamento/Pedido CRM do campo observaçõesInternas.
+ * Segue a mesma lógica do Apps Script (Apps Script v3.7).
+ */
+function extrairOrcamentoCRM(texto) {
+    if (!texto) return "0";
+    const regex = /Pedido\s(\d+-\d+|\d+)/i;
+    const match = texto.match(regex);
+    return match ? match[1] : "0";
+}
+
 module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME, BLING_API_BASE_URL, COLUMNS, APPS_SCRIPT_TOKEN_URL) {
     const router = express.Router();
     let webhookQueue = Promise.resolve();
@@ -82,13 +93,14 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     }
                 }
 
-                const rowValues = new Array(16).fill('');
+                const rowValues = new Array(18).fill('');  // 18 colunas (A-R)
                 
                 if (action === 'deleted') {
                     rowValues[COLUMNS.CONFERIDO] = dadosManuais.conferido;
                     rowValues[COLUMNS.ID] = String(pedidoId);
                     rowValues[COLUMNS.SITUACAO] = 'Cancelado (Excluído)';
                     rowValues[COLUMNS.OBSERVACAO] = dadosManuais.observacao;
+                    // Mantém orçamento vazio em deletão
                 } else if (!p) {
                     throw new Error(`Dados do pedido ${pedidoId} não encontrados após consulta.`);
                 } else {
@@ -121,6 +133,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     rowValues[COLUMNS.LOJA] = origemLoja;
                     rowValues[COLUMNS.ID_NOTA] = p.notaFiscal ? (p.notaFiscal.id || "") : "";
                     rowValues[COLUMNS.OBSERVACAO] = dadosManuais.observacao;
+                    rowValues[COLUMNS.ORCAMENTO] = extrairOrcamentoCRM(p.observacoesInternas); // Col R
 
                     if (p.itens && Array.isArray(p.itens)) {
                         rowValues[COLUMNS.ITENS] = p.itens.map(i => `(${i.codigo}, ${parseFloat(i.quantidade).toFixed(2)}, ${parseFloat(i.valor).toFixed(2)})`).join(' ');

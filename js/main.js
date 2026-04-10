@@ -12,6 +12,7 @@
         import { SaidaItens } from './modulos/saidaItens.js';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js';
         import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js';
+        window.GerenciarPedidosApp = GerenciarPedidosApp;
 
         // Início do padrão Revealing Module para a aplicação principal
         const App = (function () {
@@ -28,6 +29,11 @@
             let _selectedStockItems = new Set();
             let _isInitialized = false;
             let _activePageId = null;
+            
+            let _generateCatalogBtn;
+            let _virtualCatalogModal;
+            let _closeVirtualCatalogBtn;
+            let _printVirtualCatalogBtn;
             
             // Variáveis do Firebase
             let _db;
@@ -207,6 +213,8 @@
 
             // --- NOVO: LÓGICA DE NOTIFICAÇÕES ---
             let _notificationCount = 0;
+            let _notificationHistory = []; // NOVO: Histórico persistente das últimas 8 notificações
+            const _MAX_NOTIFICATIONS = 8;
             
             let _notificationsInitialized = false;
             function _initNotifications() {
@@ -232,6 +240,10 @@
                             dropdown.classList.add('hidden');
                         }
                     });
+
+                    // NOVO: Carregar histórico na inicialização
+                    _loadNotifications();
+                    
                     _notificationsInitialized = true;
                 }
                 
@@ -239,37 +251,10 @@
                     clearBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         
-                        // Grava os números das NFes atuais no localStorage para não voltarem no refresh
-                        const list = document.getElementById('notification-list');
-                        if (list) {
-                            const items = list.querySelectorAll('li[data-numero]');
-                            if (items.length > 0) {
-                                const dismissed = JSON.parse(localStorage.getItem('dismissed_nfes') || '[]');
-                                items.forEach(li => {
-                                    const num = li.getAttribute('data-numero');
-                                    if (num && !dismissed.includes(num)) dismissed.push(num);
-                                });
-                                // Keep only the last 50 to avoid bloat
-                                if (dismissed.length > 50) dismissed.splice(0, dismissed.length - 50);
-                                localStorage.setItem('dismissed_nfes', JSON.stringify(dismissed));
-                            }
-
-                            const orderItems = list.querySelectorAll('li[data-order-notif]');
-                            if (orderItems.length > 0) {
-                                const dismissedOrders = JSON.parse(localStorage.getItem('dismissed_orders') || '[]');
-                                orderItems.forEach(li => {
-                                    const key = li.getAttribute('data-order-notif');
-                                    if (key && !dismissedOrders.includes(key)) dismissedOrders.push(key);
-                                });
-                                if (dismissedOrders.length > 50) dismissedOrders.splice(0, dismissedOrders.length - 50);
-                                localStorage.setItem('dismissed_orders', JSON.stringify(dismissedOrders));
-                            }
-                            
-                            list.innerHTML = '<li class="px-4 py-3 text-sm text-gray-500 text-center">Nenhuma notificação nova.</li>';
-                        }
-                        
-                        _notificationCount = 0;
-                        _updateNotificationBadge();
+                        // NOVO: Limpa o histórico em vez de apenas o DOM
+                        _notificationHistory = [];
+                        _saveNotifications();
+                        _renderNotificationList();
                     });
                 }
             }
@@ -277,6 +262,9 @@
             function _updateNotificationBadge() {
                 const badge = document.getElementById('notification-badge');
                 if (badge) {
+                    // O count é baseado em itens não lidos no histórico
+                    _notificationCount = _notificationHistory.filter(n => !n.read).length;
+                    
                     if (_notificationCount > 0) {
                         badge.textContent = _notificationCount > 99 ? '99+' : _notificationCount;
                         badge.classList.remove('hidden');
@@ -286,16 +274,181 @@
                 }
             }
 
+            function _saveNotifications() {
+                localStorage.setItem('notification_history_v2', JSON.stringify(_notificationHistory));
+            }
+
+            function _loadNotifications() {
+                try {
+                    const saved = localStorage.getItem('notification_history_v2');
+                    if (saved) {
+                        _notificationHistory = JSON.parse(saved);
+                        // Limpeza de segurança (garantir limite)
+                        if (_notificationHistory.length > _MAX_NOTIFICATIONS) {
+                            _notificationHistory = _notificationHistory.slice(0, _MAX_NOTIFICATIONS);
+                        }
+                    }
+                } catch (e) {
+                    console.error('[Notifications] Erro ao carregar histórico:', e);
+                    _notificationHistory = [];
+                }
+                _renderNotificationList();
+            }
+
+            function _renderNotificationList() {
+                const list = document.getElementById('notification-list');
+                if (!list) return;
+
+                if (_notificationHistory.length === 0) {
+                    list.innerHTML = '<li class="px-4 py-3 text-sm text-gray-500 text-center">Nenhuma notificação nova.</li>';
+                    _updateNotificationBadge();
+                    return;
+                }
+
+                // Limpa a lista
+                list.innerHTML = '';
+
+                // Renderiza do mais novo para o mais antigo
+                [..._notificationHistory].reverse().forEach((notif, index) => {
+                    const li = document.createElement('li');
+                    const isRead = notif.read;
+                    const opacityClass = isRead ? 'opacity-50 notification-read' : '';
+                    const hoverClass = notif.type === 'nfe' ? 'hover:bg-blue-50' : 'hover:bg-green-50';
+                    const title = notif.type === 'nfe' ? 'Nova NF-e' : 'Pedido Atualizado';
+                    const colorClass = notif.type === 'nfe' ? 'text-blue-600' : 'text-green-600';
+                    const contentIcon = notif.type === 'nfe' ? 'NFe Nº:' : 'O Pedido Nº:';
+                    
+                    li.className = `relative px-4 py-3 border-b border-gray-50 transition-colors cursor-pointer select-none ${hoverClass} ${opacityClass}`;
+                    
+                    li.innerHTML = `
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="font-bold text-sm text-gray-800">${title}</span>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-500">${notif.time || ''}</span>
+                                <button class="delete-notification-btn text-gray-400 hover:text-red-500 focus:outline-none" title="Remover">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-600 mb-1">${contentIcon} <span class="font-semibold ${colorClass}">${notif.identifier}</span> ${notif.subText || ''}</p>
+                        <p class="text-[10px] text-gray-400 truncate mt-1">${notif.cliente || 'Cliente não informado'}</p>
+                    `;
+
+                    // Botão Deletar
+                    li.querySelector('.delete-notification-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        
+                        // Grava na blacklist permanente para não voltar no refresh
+                        const type = notif.type === 'nfe' ? 'dismissed_nfes_v2' : 'dismissed_orders_v2';
+                        const key = notif.type === 'nfe' ? String(notif.identifier) : `${notif.identifier}_${notif.subText}`;
+                        const dismissed = JSON.parse(localStorage.getItem(type) || '[]');
+                        if (!dismissed.includes(key)) {
+                            dismissed.push(key);
+                            if (dismissed.length > 50) dismissed.shift();
+                            localStorage.setItem(type, JSON.stringify(dismissed));
+                        }
+
+                        _notificationHistory = _notificationHistory.filter(n => n.id !== notif.id);
+                        _saveNotifications();
+                        _renderNotificationList();
+                    };
+
+                    // Clique na Notificação
+                    li.onclick = (e) => {
+                        if (e.target.closest('.delete-notification-btn')) return;
+
+                        // Marcar como lido
+                        if (!notif.read) {
+                            notif.read = true;
+                            _saveNotifications();
+                            _renderNotificationList(); // Re-render para atualizar opacidade e badge
+                        }
+
+                        // Ações específicas
+                        if (notif.type === 'nfe') {
+                            if (notif.link && notif.link !== '#') {
+                                window.open(notif.link, '_blank');
+                            } else {
+                                _showToastNotification('Link da Danfe indisponível!', 'error');
+                            }
+                        } else {
+                            // Pedido
+                            const navBtn = document.getElementById('nav-gerenciar-pedidos');
+                            if (navBtn) navBtn.click();
+                            if (typeof GerenciarPedidosApp !== 'undefined') {
+                                GerenciarPedidosApp.openOrderDetailsByNumber(notif.identifier);
+                            }
+                        }
+                        
+                        document.getElementById('notification-dropdown').classList.add('hidden');
+                    };
+
+                    list.appendChild(li);
+                });
+
+                _updateNotificationBadge();
+            }
+
+            function _translateOrderStatus(val) {
+                const s = { 
+                    6: "Em aberto", 
+                    9: "Atendido", 
+                    12: "Cancelado", 
+                    15: "Em andamento", 
+                    18: "Venda agenciada", 
+                    21: "Para entregar", 
+                    24: "Em digitação", 
+                    27: "Verificado", 
+                    447331: "Em produção" 
+                };
+                // Se for numérico ou string que represente número, tenta traduzir
+                const id = Number(val);
+                if (!isNaN(id) && s[id]) return s[id];
+                return val; // Caso contrário devolve o original
+            }
+
+            function _addNotificationToHistory(type, data, identifier, subText, time, link = null) {
+                // NOVO: Deduplicação - Se for um pedido, remove a notificação antiga do mesmo pedido
+                if (type === 'order') {
+                    _notificationHistory = _notificationHistory.filter(n => !(n.type === 'order' && n.identifier === identifier));
+                }
+                
+                const newNotif = {
+                    id: Date.now() + Math.random().toString(36).substr(2, 9),
+                    type,
+                    data,
+                    identifier,
+                    subText,
+                    time,
+                    link,
+                    cliente: data.cliente || 'Cliente não informado',
+                    read: false,
+                    timestamp: Date.now()
+                };
+
+                // Adiciona ao final (será o primeiro no reverse)
+                _notificationHistory.push(newNotif);
+
+                // Mantém apenas as últimas 8
+                if (_notificationHistory.length > _MAX_NOTIFICATIONS) {
+                    _notificationHistory.shift(); // Remove a mais antiga
+                }
+
+                _saveNotifications();
+                _renderNotificationList();
+            }
+
             async function _showNewNFeNotification(data) {
                 const numeroNota = data.numero || data.numero_da_nota || 'Desconhecido';
                 
-                // Evita mostrar notificações que o usuário já descartou e o Firebase releu no refresh
-                const dismissed = JSON.parse(localStorage.getItem('dismissed_nfes') || '[]');
+                // Evita mostrar notificações duplicadas OU que já foram deletadas/descartadas pelo usuário
+                const dismissed = JSON.parse(localStorage.getItem('dismissed_nfes_v2') || '[]');
                 if (dismissed.includes(String(numeroNota))) return;
+
+                if (_notificationHistory.find(n => n.type === 'nfe' && n.identifier === numeroNota)) return;
                 
                 const cliente = data.cliente || 'Cliente não informado';
                 let linkDanfe = data['Link DANFE'] || data.link_danfe || data.linkDanfe || data.link || '#';
-
                 let notificationTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
                 // Busca o link e data silenciosamente se o webhook não o tiver enviado
@@ -305,8 +458,7 @@
                         if (nfeRes.ok) {
                             const nfeJson = await nfeRes.json();
                             if (nfeJson.data && Array.isArray(nfeJson.data)) {
-                                _allNFeData = nfeJson.data; // Atualiza a memória p/ tabelas futuras
-                                // Extrai apenas números para comparação, já que o webhook pode mandar "000114" e a API "114"
+                                _allNFeData = nfeJson.data;
                                 const cleanNumWebhook = Number(String(numeroNota).replace(/\D/g, ''));
                                 const foundNfe = _allNFeData.find(n => {
                                     const cleanNumAPI = Number(String(n.numero_da_nota || n.numero).replace(/\D/g, ''));
@@ -315,165 +467,40 @@
                                 
                                 if (foundNfe) {
                                     linkDanfe = foundNfe['Link DANFE'] || foundNfe.link_danfe || foundNfe.linkDanfe || foundNfe.link || '#';
-                                    
-                                    // NOVO: Usa a hora da emissão da nota se disponível
                                     const rawDate = foundNfe.data_de_emissao || foundNfe.data_emissao;
                                     if (rawDate) {
                                         const dateObj = new Date(rawDate);
                                         if (!isNaN(dateObj.getTime())) {
                                             notificationTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                                        } else if (typeof rawDate === 'string' && rawDate.includes(':')) {
-                                            // Fallback para strings que já tenham hora mas não sejam ISO perfeitas
-                                            const match = rawDate.match(/(\d{2}:\d{2})/);
-                                            if (match) notificationTime = match[1];
                                         }
                                     }
                                 }
                             }
                         }
                     } catch (e) {
-                        console.warn('[Firestore Sync] Erro ao buscar dados da NFe em background:', e);
+                        console.warn('[Notifications] Erro ao buscar dados extras:', e);
                     }
                 }
 
-                _notificationCount++;
-                _updateNotificationBadge();
-                
-                const list = document.getElementById('notification-list');
-                if (!list) return; // Segurança
-                
-                // Se for a primeira notificação, limpa o texto "Nenhuma notificação"
-                if (list.querySelector('li.text-center')) {
-                    list.innerHTML = '';
-                }
-                
-                const time = notificationTime;
-                
-                const itemHtml = `
-                    <li class="relative px-4 py-3 border-b border-gray-50 hover:bg-blue-50 transition-colors cursor-pointer select-none" data-numero="${numeroNota}">
-                        <div class="flex justify-between items-start mb-1">
-                            <span class="font-bold text-sm text-gray-800">Nova NF-e</span>
-                            <div class="flex items-center space-x-2">
-                                <span class="text-xs text-gray-500">${time}</span>
-                                <button class="delete-notification-btn text-gray-400 hover:text-red-500 focus:outline-none" title="Remover">
-                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                </button>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-600 mb-1">Chegou a NFe Nº: <span class="font-semibold text-blue-600">${numeroNota}</span></p>
-                        <p class="text-[10px] text-gray-400 truncate mt-1">${cliente}</p>
-                    </li>
-                `;
-                
-                list.insertAdjacentHTML('afterbegin', itemHtml);
-                const newItem = list.firstElementChild;
-                
-                // Botão de deletar
-                const deleteBtn = newItem.querySelector('.delete-notification-btn');
-                if (deleteBtn) {
-                    deleteBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        newItem.remove();
-                        if (_notificationCount > 0) _notificationCount--;
-                        _updateNotificationBadge();
-                        
-                        // Grava no localStorage para não voltar no refresh
-                        const dismissedList = JSON.parse(localStorage.getItem('dismissed_nfes') || '[]');
-                        if (!dismissedList.includes(String(numeroNota))) {
-                            dismissedList.push(String(numeroNota));
-                            if (dismissedList.length > 50) dismissedList.shift();
-                            localStorage.setItem('dismissed_nfes', JSON.stringify(dismissedList));
-                        }
-                        
-                        if (list.children.length === 0) {
-                            list.innerHTML = '<li class="px-4 py-3 text-sm text-gray-500 text-center">Nenhuma notificação nova.</li>';
-                        }
-                    });
-                }
-                
-                // Clique na notificação abre o link e fecha o menu
-                newItem.addEventListener('click', (e) => {
-                   if (e.target.closest('.delete-notification-btn')) return; // ignora se clicou no X
-                   
-                   if (linkDanfe && linkDanfe !== '#') {
-                       window.open(linkDanfe, '_blank');
-                   } else {
-                       _showToastNotification('Link da Danfe indisponível! Nem o webhook nem a API retornaram o link.', 'error');
-                   }
-                   document.getElementById('notification-dropdown').classList.add('hidden');
-                });
-                
-                // Exibir um Toast estilizado na tela para chamar a atenção temporariamente
-                if (linkDanfe && linkDanfe !== '#') {
-                    _showToastNotification(`Chegou uma nova Nota Fiscal no sistema!<br>NFe N°: <b>${numeroNota}</b>`, 'info', linkDanfe);
-                } else {
-                    _showToastNotification(`Chegou uma nova NFe N°: <b>${numeroNota}</b><br><span class="text-xs text-red-500">Sem link disponível</span>`, 'error');
-                }
+                // NOVO: Adiciona ao sistema de histórico persistente
+                _addNotificationToHistory('nfe', data, numeroNota, '', notificationTime, linkDanfe);
             }
 
             async function _showOrderUpdateNotification(data) {
                 const numeroPedido = data.numero || 'Desconhecido';
-                const situacao = data.situacao || 'Status atualizado';
-                const notifKey = `${numeroPedido}_${situacao}`;
+                const situacaoRaw = data.situacao || 'Status atualizado';
+                const situacao = _translateOrderStatus(situacaoRaw);
+                const subTextKey = `mudou para <b>${situacao}</b>`;
                 
-                const dismissed = JSON.parse(localStorage.getItem('dismissed_orders') || '[]');
-                if (dismissed.includes(notifKey)) return;
-                
+                // Evita mostrar notificações deletadas (blacklist permanente)
+                const dismissed = JSON.parse(localStorage.getItem('dismissed_orders_v2') || '[]');
+                if (dismissed.includes(`${numeroPedido}_${subTextKey}`)) return;
+
                 const cliente = data.cliente || 'Cliente não informado';
+                const notificationTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-                let notificationTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-                _notificationCount++;
-                _updateNotificationBadge();
-                
-                const list = document.getElementById('notification-list');
-                if (!list) return;
-                
-                if (list.querySelector('li.text-center')) {
-                    list.innerHTML = '';
-                }
-                
-                const itemHtml = `
-                    <li class="relative px-4 py-3 border-b border-gray-50 hover:bg-green-50 transition-colors cursor-pointer select-none" data-order-notif="${notifKey}">
-                        <div class="flex justify-between items-start mb-1">
-                            <span class="font-bold text-sm text-gray-800">Pedido Atualizado</span>
-                            <div class="flex items-center space-x-2">
-                                <span class="text-xs text-gray-500">${notificationTime}</span>
-                                <button class="delete-notification-btn text-gray-400 hover:text-red-500 focus:outline-none" title="Remover">
-                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                </button>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-600 mb-1">O Pedido Nº: <span class="font-semibold text-green-600">${numeroPedido}</span> mudou para <b>${situacao}</b></p>
-                        <p class="text-[10px] text-gray-400 truncate mt-1">${cliente}</p>
-                    </li>
-                `;
-                
-                list.insertAdjacentHTML('afterbegin', itemHtml);
-                const newItem = list.firstElementChild;
-                
-                const deleteBtn = newItem.querySelector('.delete-notification-btn');
-                if (deleteBtn) {
-                    deleteBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        newItem.remove();
-                        if (_notificationCount > 0) _notificationCount--;
-                        _updateNotificationBadge();
-                        
-                        const dismissedList = JSON.parse(localStorage.getItem('dismissed_orders') || '[]');
-                        if (!dismissedList.includes(notifKey)) {
-                            dismissedList.push(notifKey);
-                            if (dismissedList.length > 50) dismissedList.shift();
-                            localStorage.setItem('dismissed_orders', JSON.stringify(dismissedList));
-                        }
-                        
-                        if (list.children.length === 0) {
-                            list.innerHTML = '<li class="px-4 py-3 text-sm text-gray-500 text-center">Nenhuma notificação nova.</li>';
-                        }
-                    });
-                }
-                
-                _showToastNotification(`O Pedido Nº: <b>${numeroPedido}</b> mudou para <b>${situacao}</b>!`, 'success');
+                // NOVO: Adiciona ao sistema de histórico persistente
+                _addNotificationToHistory('order', data, numeroPedido, subTextKey, notificationTime);
             }
 
             function _showToastNotification(message, type = 'info', link = '#') {
@@ -580,7 +607,7 @@
             // --- REFERÊNCIAS PRIVADAS A ELEMENTOS DO DOM ---
             let _navPesquisar, _navEstoque, _navGerenciarSaida, _navGerenciarPedidos, _navDashboards, _navAtendimento;
             let _refreshButton, _loadingOverlay;
-            let _globalFilterBar, _pedidosFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer;
+            let _globalFilterBar, _pedidosFilterBar, _dashboardFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer;
             let _product_list_container, _product_details_container, _details_placeholder, _product_details, _requisitionOverviewCardsContainer, _saidaOverviewCards, _ordersTableTitle, _ordersTableContent, _noOrdersMessage, _noOrdersMessageModal, _ordersSearchInput;
             let _saidaActionsContainer, _selectedSaidaItemsCount, _clearSaidaSelectionBtn, _viewSaidasBtn, _createSaidaBtn;
             let _ordersTableActionsMenuContainer, _ordersTableActionsButton, _ordersTableActionsDropdown, _ordersTableActionPrintGeneric, _ordersTableActionPrintList, _ordersTableActionPrintSolicitation, _ordersTableActionExcel;
@@ -761,7 +788,22 @@ const data = filteredProducts.map(product => {
                     }
                 }
 
-                // Se não for o formato acima, tenta analisar diretamente (lida com ISO 8601)
+                // Se não for o formato acima, tenta analisar o formato yyyy-mm-dd (ISO) manualmente
+                // Isso é essencial para evitar que o JS interprete como UTC (que causa erro de fuso-horário)
+                if (dateString.includes('-')) {
+                    const parts = dateString.split(' ')[0].split('-');
+                    if (parts.length === 3) {
+                        const year = parseInt(parts[0], 10);
+                        const month = parseInt(parts[1], 10) - 1;
+                        const day = parseInt(parts[2], 10);
+                        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                            const date = new Date(year, month, day);
+                            if (!isNaN(date.getTime())) return date;
+                        }
+                    }
+                }
+
+                // Se não for nenhum dos anteriores, tenta o construtor padrão (pode ter erro de fuso em strings ISO)
                 const date = new Date(dateString);
                 return !isNaN(date.getTime()) ? date : null;
             }
@@ -1399,6 +1441,7 @@ const data = filteredProducts.map(product => {
                 if (_requisitionActionBar) _requisitionActionBar.classList.add('hidden'); // Add this line to hide by default
                 if (_saidaReportActionBar) _saidaReportActionBar.classList.add('hidden');
                 if (_saidaActionBar) _saidaActionBar.classList.add('hidden');
+                if (_dashboardFilterBar) _dashboardFilterBar.classList.add('hidden');
 
                 if (pageId === 'pesquisar') {
                     _pagePesquisar.classList.remove('hidden');
@@ -1409,6 +1452,7 @@ const data = filteredProducts.map(product => {
                         _globalFilterButton.classList.remove('hidden');
                         _stockActionsContainer.classList.add('hidden'); // Explicitly hide stock actions
                         _saidaActionsContainer.classList.add('hidden');
+                        if (_generateCatalogBtn) _generateCatalogBtn.classList.remove('hidden');
                     }
                 } else if (pageId === 'estoque') {
                     _pageEstoque.classList.remove('hidden');
@@ -1419,6 +1463,7 @@ const data = filteredProducts.map(product => {
                         _globalFilterButton.classList.remove('hidden');
                         _stockActionsContainer.classList.remove('hidden'); // Explicitly show stock actions
                         _saidaActionsContainer.classList.add('hidden');
+                        if (_generateCatalogBtn) _generateCatalogBtn.classList.add('hidden');
                     }
                     if (typeof EstoqueApp !== 'undefined') {
                         EstoqueApp.updateSelectedCountDisplay();
@@ -1446,6 +1491,7 @@ const data = filteredProducts.map(product => {
                         _globalFilterButton.classList.remove('hidden');
                         _stockActionsContainer.classList.add('hidden');
                         _saidaActionsContainer.classList.remove('hidden');
+                        if (_generateCatalogBtn) _generateCatalogBtn.classList.add('hidden');
                     }
                 } else if (pageId === 'gerenciar-pedidos') {
                     _pageGerenciarPedidos.classList.remove('hidden');
@@ -1463,6 +1509,7 @@ const data = filteredProducts.map(product => {
                 } else if (pageId === 'dashboards') {
                     _pageDashboards.classList.remove('hidden');
                     _navDashboards.classList.add('active');
+                    if (_dashboardFilterBar) _dashboardFilterBar.classList.remove('hidden');
                     if (typeof DashboardApp !== 'undefined') {
                         // Pegamos os pedidos que já foram carregados pelo GerenciarPedidosApp
                         const allPedidosBling = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
@@ -3693,6 +3740,26 @@ const data = filteredProducts.map(product => {
                 if (_navDashboards) _navDashboards.addEventListener('click', (e) => { e.preventDefault(); _showPage('dashboards'); });
                 if (_viewRequisitionsBtn) _viewRequisitionsBtn.addEventListener('click', (e) => { e.preventDefault(); _showPage('overview-requisitions'); });
                 if (_requisitionBackBtn) _requisitionBackBtn.addEventListener('click', () => _showPage('estoque'));
+                
+                if (_generateCatalogBtn) {
+                    _generateCatalogBtn.addEventListener('click', () => {
+                        if (typeof PesquisarProduto !== 'undefined' && PesquisarProduto.generateCatalog) {
+                            PesquisarProduto.generateCatalog();
+                        }
+                    });
+                }
+                
+                if (_closeVirtualCatalogBtn) {
+                    _closeVirtualCatalogBtn.addEventListener('click', () => {
+                        if (_virtualCatalogModal) _virtualCatalogModal.classList.add('hidden');
+                    });
+                }
+
+                if (_printVirtualCatalogBtn) {
+                    _printVirtualCatalogBtn.addEventListener('click', () => {
+                        window.print();
+                    });
+                }
 
                 if (_refreshButton) _refreshButton.addEventListener('click', _fetchData);
                 if (_globalSearchInput) _globalSearchInput.addEventListener('input', debouncedApplyGlobalFilters);
@@ -3897,8 +3964,13 @@ if (_generateProductReportBtn) {
                 _loadingOverlay = document.getElementById('loading-overlay');
                 _globalFilterBar = document.getElementById('global-filter-bar');
                 _pedidosFilterBar = document.getElementById('pedidos-filter-bar');
+                _dashboardFilterBar = document.getElementById('dashboard-filter-bar');
                 _globalSearchInput = document.getElementById('global-search-input');
                 _globalFilterButton = document.getElementById('global-filter-button');
+                _generateCatalogBtn = document.getElementById('generate-catalog-btn');
+                _virtualCatalogModal = document.getElementById('virtual-catalog-modal');
+                _closeVirtualCatalogBtn = document.getElementById('close-virtual-catalog-btn');
+                _printVirtualCatalogBtn = document.getElementById('print-virtual-catalog-btn');
                 _globalFilterDropdown = document.getElementById('global-filter-dropdown');
                 _globalCategoryCheckboxesContainer = document.getElementById('global-category-checkboxes');
                 _selectedItemsCountDisplay = document.getElementById('selected-items-count');
