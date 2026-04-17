@@ -6,6 +6,7 @@
         // ATENÇÃO: Substitua estas URLs pelas URLs de IMPLANTAÇÃO dos seus respectivos scripts
         import { API_URLS } from './apiConfig.js';
         import { PesquisarProduto } from './modulos/pesquisarProduto.js';
+        window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js';
         import { DashboardApp } from './modulos/dashboard.js';
         import { EstoqueApp } from './modulos/estoque.js';
@@ -13,6 +14,7 @@
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js';
         import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
+        import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js';
 
         // Início do padrão Revealing Module para a aplicação principal
         const App = (function () {
@@ -34,9 +36,12 @@
             let _virtualCatalogModal;
             let _closeVirtualCatalogBtn;
             let _printVirtualCatalogBtn;
-            
+            let _pagePecasEquipamento;
+            let _navPecasEquipamento;
+
             // Variáveis do Firebase
             let _db;
+            const _myClientId = sessionStorage.getItem('mks_desktop_client_id') || (()=>{ const id="desk_"+Math.random().toString(36).substring(7); sessionStorage.setItem('mks_desktop_client_id', id); return id; })();
 
             /**
              * Inicializa a sincronização em tempo real via Firestore Sync.
@@ -204,6 +209,65 @@
                         console.log(`[Firestore Sync] Nova NF-e ${data.numero} recebida do cliente ${data.cliente}.`);
                         // ATUALIZADO: Em vez de recarregar todos os dados de forma intrusiva, apenas mostra uma notificação.
                         _showNewNFeNotification(data);
+                        break;
+
+                    case 'orderObservationUpdated':
+                        console.log(`[Firestore Sync] Observação do Pedido Bling ${data.numeroPedido} atualizada por outro dispositivo.`);
+                        
+                        // IGNORAR SE FOR EU MESMO PARA EVITAR DUPLICIDADE
+                        if (data.senderId === _myClientId) {
+                            console.log("[Firestore Sync] Ignorando aviso próprio para evitar duplicidade.");
+                            return;
+                        }
+
+                        // NOVO: Se o evento já trouxer a observação atualizada, usar diretamente (mais rápido)
+                        if (data.novaObservacao) {
+                            console.log('[Firestore Sync] Sincronização direta recebida. Atualizando chat local...');
+                            
+                            // Split super robusto (detecta \n literal, \n escapado, etc)
+                            const parsedObs = String(data.novaObservacao)
+                                .split(/\n|\\n|\r\n|\\r\\n/)
+                                .map(s => s.trim())
+                                .filter(s => s !== '');
+                            
+                            // 1. Atualizar o estado global (cache de memória)
+                            if (typeof GerenciarPedidosApp !== 'undefined') {
+                                GerenciarPedidosApp.updateOrderObservationStatus(data.numeroPedido, parsedObs);
+                            }
+                            
+                            // 2. Atualizar a UI do Modal se estiver aberto para ESTE pedido
+                            if (_orderObservationModal && !_orderObservationModal.classList.contains('hidden')) {
+                                const currentOpenOrderId = _orderObservationModal.dataset.orderId;
+                                // Verifica se o ID aberto bate com o do evento (compara por número ou ID)
+                                const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
+                                const targetOrder = allPedidos.find(o => 
+                                    String(o.id) === String(data.numeroPedido) || 
+                                    String(o.id) === String(data.numero) ||
+                                    String(o.numero) === String(data.numeroPedido) ||
+                                    String(o.número) === String(data.numeroPedido)
+                                );
+                                
+                                const isSameOrder = String(currentOpenOrderId) === String(data.numeroPedido) || 
+                                                  (targetOrder && String(currentOpenOrderId) === String(targetOrder.id)) ||
+                                                  (targetOrder && String(currentOpenOrderId) === String(targetOrder.numero));
+
+                                if (isSameOrder) {
+                                    console.log('[Firestore Sync] Refletindo nova mensagem no chat desktop instantaneamente.');
+                                    _renderObservationChat(parsedObs);
+                                }
+                            }
+                        } else {
+                            // Fallback: Se não vier a observação, faz a busca tradicional
+                            if (_orderObservationModal && !_orderObservationModal.classList.contains('hidden')) {
+                                const currentOpenOrderId = _orderObservationModal.dataset.orderId;
+                                if (String(currentOpenOrderId) === String(data.numeroPedido)) {
+                                    _openOrderObservationModal(currentOpenOrderId);
+                                }
+                            }
+                            if (typeof GerenciarPedidosApp !== 'undefined' && typeof GerenciarPedidosApp.fetchPedidos === 'function') {
+                                GerenciarPedidosApp.fetchPedidos();
+                            }
+                        }
                         break;
 
                     default:
@@ -1093,7 +1157,7 @@ const data = filteredProducts.map(product => {
                 }
             }
 
-            function _openOrderObservationModal(orderId) {
+            async function _openOrderObservationModal(orderId) {
                 const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
                 const order = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
                 if (!order) {
@@ -1103,11 +1167,41 @@ const data = filteredProducts.map(product => {
                 if (_orderObservationModal) {
                     _orderObservationModal.dataset.orderId = orderId;
                     _orderObservationModalInfo.innerHTML = `Editando observação para o Pedido Nº: <b>${order.numero || order.numeroLoja || 'N/A'}</b>`;
+                    
+                    // Mostrar modal imediatamente com os dados em cache
                     _renderObservationChat(order.observacao);
                     _orderObservationTextarea.value = '';
                     _updateObservationCharCount();
                     _orderObservationModal.classList.remove('hidden');
                     _orderObservationTextarea.focus();
+
+                    // Buscar dados atualizados do servidor em background para pegar obs de outros dispositivos
+                    try {
+                        const freshUrl = `${API_URLS.ORDERS_BLING}?t=${Date.now()}`;
+                        const res = await fetch(freshUrl, { mode: 'cors' });
+                        if (res.ok) {
+                            const json = await res.json();
+                            const freshOrders = json.data || [];
+                            const freshOrder = freshOrders.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId));
+                            if (freshOrder && freshOrder.observacao) {
+                                // A API retorna a observação como string bruta com '\n' literal como separador
+                                // Precisa converter para array antes de renderizar
+                                const rawObs = String(freshOrder.observacao);
+                                const parsedObs = rawObs
+                                    .split(/\\n|\n/)
+                                    .map(s => s.trim())
+                                    .filter(s => s !== '');
+                                
+                                if (parsedObs.length > 0) {
+                                    order.observacao = parsedObs;
+                                    _renderObservationChat(order.observacao);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Silencioso — o modal já está aberto com os dados em cache
+                        console.warn('[Observação] Falha ao buscar dados frescos:', e.message);
+                    }
                 }
             }
 
@@ -1128,7 +1222,11 @@ const data = filteredProducts.map(product => {
                 _updateObservationCharCount();
 
                 try {
-                    const payload = { numero_do_pedido: orderId, observacao: newObservation };
+                    const payload = { 
+                        numero_do_pedido: orderId, 
+                        observacao: newObservation,
+                        senderId: _myClientId
+                    };
                     const response = await fetch(API_URLS.ORDER_OBSERVATION, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
 
@@ -1413,6 +1511,14 @@ const data = filteredProducts.map(product => {
                 if (_activePageId === pageId) return; // Otimização: Não faz nada se já estiver na página
                 _activePageId = pageId;
 
+                if (_navPesquisar) _navPesquisar.classList.remove('active');
+                if (_navEstoque) _navEstoque.classList.remove('active');
+                if (_navGerenciarSaida) _navGerenciarSaida.classList.remove('active');
+                if (_navGerenciarPedidos) _navGerenciarPedidos.classList.remove('active');
+                if (_navDashboards) _navDashboards.classList.remove('active');
+                if (_navAtendimento) _navAtendimento.classList.remove('active');
+                if (typeof _navPecasEquipamento !== 'undefined' && _navPecasEquipamento) _navPecasEquipamento.classList.remove('active');
+
                 _pagePesquisar.classList.add('hidden');
                 _pageEstoque.classList.add('hidden');
                 _pageOverviewSaidas.classList.add('hidden');
@@ -1423,13 +1529,6 @@ const data = filteredProducts.map(product => {
                 _pageGerenciarPedidos.classList.add('hidden');
                 _pageDashboards.classList.add('hidden');
                 _pageAtendimento.classList.add('hidden');
-
-                _navPesquisar.classList.remove('active');
-                _navEstoque.classList.remove('active');
-                _navGerenciarSaida.classList.remove('active');
-                _navGerenciarPedidos.classList.remove('active');
-                _navDashboards.classList.remove('active');
-                _navAtendimento.classList.remove('active');
 
 
 

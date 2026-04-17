@@ -41,5 +41,8 @@
           ATENDIMENTOS_GET: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/whatsapp/get-atendimentos",
           ATENDIMENTO_STATUS_UPDATE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/whatsapp/update-status",
           ATENDIMENTO_START: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/whatsapp/iniciar-atendimento",
+
+          // Árvore de Peças por Equipamento
+          PECAS_EQUIPAMENTO: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pecas-equipamento",
       };
       

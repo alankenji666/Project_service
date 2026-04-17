@@ -57,12 +57,40 @@ const entradaObservacao = document.getElementById('entrada-observacao');
 const entradaSaveBtn = document.getElementById('entrada-save-btn');
 const entradaCancelBtn = document.getElementById('entrada-cancel-btn');
 
+// Pedidos View Elements
+const pedidosView = document.getElementById('pedidos-view');
+const goToPedidosBtn = document.getElementById('go-to-pedidos-btn');
+const pedidosBackToMenuBtn = document.getElementById('pedidos-back-to-menu-btn');
+const pedidosSearchInput = document.getElementById('pedidos-search-input');
+const pedidosStatusFilter = document.getElementById('pedidos-status-filter');
+const pedidosListContainer = document.getElementById('pedidos-list-container');
+const pedidosObsModal = document.getElementById('pedidos-obs-modal');
+const pedidosObsModalInfo = document.getElementById('pedidos-obs-modal-info');
+const pedidosObsHistory = document.getElementById('pedidos-obs-history');
+const pedidosObsTextarea = document.getElementById('pedidos-obs-textarea');
+const pedidosObsCharCount = document.getElementById('pedidos-obs-char-count');
+const savePedidosObsBtn = document.getElementById('save-pedidos-obs-btn');
+const closePedidosObsModalBtn = document.getElementById('close-pedidos-obs-modal-btn');
+const pedidosObsItemSelect = document.getElementById('pedidos-obs-item-select');
+const pedidosDetalhesModal = document.getElementById('pedidos-detalhes-modal');
+const pedidosDetalhesHeader = document.getElementById('pedidos-detalhes-header');
+const pedidosDetalhesContent = document.getElementById('pedidos-detalhes-content');
+const closePedidosDetalhesModalBtn = document.getElementById('close-pedidos-detalhes-modal-btn');
+const openObsFromDetalhesBtn = document.getElementById('open-obs-from-detalhes-btn');
+const imageZoomModal = document.getElementById('image-zoom-modal');
+const imageZoomImg = document.getElementById('image-zoom-img');
+const closeImageZoomBtn = document.getElementById('close-image-zoom-btn');
+
 // App State
 let allProducts = [];
+let allPedidos = [];
+let filteredPedidos = [];
 let adjustSelectedProduct = null;
 let requisitionItems = [];
 let adjustScanner, reqScanner, entradaScanner;
 let db;
+let currentObsOrderId = null;
+const myClientId = sessionStorage.getItem('mks_client_id') || (()=>{ const id=Math.random().toString(36).substring(7); sessionStorage.setItem('mks_client_id', id); return id; })();
 const DB_NAME = 'ajuste-estoque-db';
 const STORE_NAME = 'pending-adjustments';
 
@@ -72,6 +100,7 @@ function showView(viewId) {
     adjustView.classList.add('hidden');
     requisitionView.classList.add('hidden');
     entradaView.classList.add('hidden');
+    pedidosView.classList.add('hidden');
     stopAllScanners();
     
     if (viewId === 'menu-view') {
@@ -87,6 +116,181 @@ function showView(viewId) {
     } else if (viewId === 'entrada-view') {
         entradaView.classList.remove('hidden');
         document.title = 'Gerenciar Entrada';
+    } else if (viewId === 'pedidos-view') {
+        pedidosView.classList.remove('hidden');
+        document.title = 'Pedidos';
+        fetchAllProducts().then(() => fetchPedidos());
+    }
+}
+
+// --- Firestore Sync (Real-time) ---
+let dbFirestore;
+async function initFirestoreSync() {
+    if (dbFirestore) return; // evitar re-inicialização
+    
+    const syncBadge = document.getElementById('sync-status-badge');
+    const setSyncStatus = (status) => {
+        if (!syncBadge) return;
+        if (status === 'ON') {
+            syncBadge.textContent = '🟢 SYNC';
+            syncBadge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-600 font-bold border border-green-200';
+        } else if (status === 'ERROR') {
+            syncBadge.textContent = '⚠️ ERR';
+            syncBadge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-yellow-100 text-yellow-600 font-bold border border-yellow-200';
+        } else {
+            syncBadge.textContent = 'OFFLINE';
+            syncBadge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-red-100 text-red-600 font-bold border border-red-200';
+        }
+    };
+
+    console.log("[Firestore Sync] Inicializando sincronização em tempo real no Mobile...");
+    
+    try {
+        const { initializeApp: initFB } = await import("firebase/app");
+        const { initializeFirestore, doc, onSnapshot } = await import("firebase/firestore");
+
+        const firebaseConfig = {
+            projectId: "mksservice-71367430-58374"
+        };
+
+        const appFirebase = initFB(firebaseConfig);
+        
+        // Forçar Long-Polling para evitar problemas de conexão WebSocket em browsers de celular
+        dbFirestore = initializeFirestore(appFirebase, {
+            experimentalForceLongPolling: true
+        });
+
+        console.log("[Firestore Sync] Conectado ao Firestore (Mobile) com Long-Polling.");
+        setSyncStatus('ON');
+
+        const syncDocRef = doc(dbFirestore, "sync", "updates");
+        onSnapshot(syncDocRef, (snapshot) => {
+            if (snapshot.exists()) {
+                const update = snapshot.data();
+                console.log("[Firestore Sync] Nova atualização detectada no Mobile:", update.type, update);
+                handleSyncUpdate(update);
+            }
+        }, (error) => {
+            console.error("[Firestore Sync] Erro no listener Mobile:", error);
+            setSyncStatus('ERROR');
+        });
+
+    } catch (error) {
+        console.error("[Firestore Sync] Erro ao inicializar Firestore Sync no Mobile:", error);
+        setSyncStatus('ERROR');
+    }
+}
+
+function handleSyncUpdate(update) {
+    const { type, data } = update;
+    const syncBadge = document.getElementById('sync-status-badge');
+
+    switch (type) {
+        case 'orderObservationUpdated':
+            console.log(`[Firestore Sync] Aviso recebido: Pedido ${data.numeroPedido} atualizado.`);
+            
+            // 1. Atualização Instantânea se os dados vierem no evento
+            if (data.novaObservacao) {
+                // IGNORAR SE FOR EU MESMO PARA EVITAR DUPLICIDADE
+                if (data.senderId === myClientId) {
+                    console.log("[Firestore Sync] Ignorando aviso próprio para evitar duplicidade.");
+                    return;
+                }
+
+                console.log("[Firestore Sync] Sincronização direta recebida. Conteúdo:", data.novaObservacao);
+                
+                // Busca de pedido super-robusta (verifica qualquer identificador possível)
+                const order = allPedidos.find(o => 
+                    String(o.id) === String(data.numeroPedido) || 
+                    String(o.id) === String(data.numero) ||
+                    String(o.numero) === String(data.numeroPedido) ||
+                    String(o.número) === String(data.numeroPedido)
+                );
+
+                if (order) {
+                    console.log("[Firestore Sync] Pedido encontrado. Atualizando...");
+                    // Split super robusto (detecta \n literal, \n escapado, etc)
+                    const parsedObs = String(data.novaObservacao)
+                        .split(/\n|\\n|\r\n|\\r\\n/)
+                        .map(s => s.trim())
+                        .filter(s => s !== '');
+                    
+                    order.observacao = parsedObs;
+                    
+                    const isVisible = pedidosObsModal && !pedidosObsModal.classList.contains('hidden');
+                    const isSameOrder = String(currentObsOrderId) === String(data.numeroPedido) || 
+                                      String(currentObsOrderId) === String(order.id) || 
+                                      String(currentObsOrderId) === String(order.numero);
+
+                    console.log(`[Firestore Sync] Modal aberto: ${isVisible}, Mesmo pedido: ${isSameOrder}`);
+
+                    if (isVisible && isSameOrder) {
+                        renderObservationChat(parsedObs);
+                    } else {
+                        renderPedidosList();
+                    }
+                } else {
+                    console.warn(`[Firestore Sync] Pedido ${data.numeroPedido} não encontrado localmente.`);
+                }
+                return; 
+            }
+
+            // 2. Fallback: Se não vierem os dados diretamentre (ex: backend não migrado), faz o fetch
+            console.log(`[Firestore Sync] Dados diretos ausentes. Iniciando fallback via re-busca em 1.5s...`);
+            if (syncBadge) {
+                syncBadge.textContent = '🔄 SYNCING';
+                syncBadge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-600 font-bold border border-blue-200';
+            }
+
+            setTimeout(() => {
+                fetchPedidos(true).then(() => {
+                    console.log(`[Firestore Sync] Re-busca concluída. Verificando se o modal do pedido ${data.numeroPedido} está aberto...`);
+                    
+                    if (syncBadge) {
+                        syncBadge.textContent = '🟢 SYNC';
+                        syncBadge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-600 font-bold border border-green-200';
+                    }
+
+                    // Encontrar o pedido no novo array com a mesma lógica robusta
+                    const order = allPedidos.find(o => 
+                        String(o.id) === String(data.numeroPedido) || 
+                        String(o.numero) === String(data.numeroPedido) ||
+                        String(o.número) === String(data.numeroPedido)
+                    );
+
+                    if (order) {
+                        const isVisible = pedidosObsModal && !pedidosObsModal.classList.contains('hidden');
+                        const isSameOrder = String(currentObsOrderId) === String(data.numeroPedido) || 
+                                          String(currentObsOrderId) === String(order.id) || 
+                                          String(currentObsOrderId) === String(order.numero);
+
+                        console.log(`[Firestore Sync Fallback] Modal: ${isVisible}, Mesmo pedido: ${isSameOrder} (ID Ativo: ${currentObsOrderId})`);
+
+                        if (isVisible && isSameOrder) {
+                            console.log('[Firestore Sync Fallback] Atualizando Chat UI...');
+                            // Garantir que a observação recém-baixada esteja em formato de array
+                            if (order.observacao && typeof order.observacao === 'string') {
+                                order.observacao = order.observacao.split(/\\n|\n/).map(s => s.trim()).filter(s => s !== '');
+                            }
+                            renderObservationChat(order.observacao);
+                        } else {
+                            renderPedidosList();
+                        }
+                    }
+                }).catch(err => {
+                    console.error('[Firestore Sync Fallback] Erro ao re-buscar dados:', err);
+                });
+            }, 1500);
+            break;
+            
+        case 'stockUpdated':
+            console.log(`[Firestore Sync] Estoque do item ${data.codigo} atualizado para ${data.novoEstoque}`);
+            // Atualiza memória local de produtos
+            const product = allProducts.find(p => String(p.codigo) === String(data.codigo));
+            if (product) {
+                product.estoque = data.novoEstoque;
+            }
+            break;
     }
 }
 
@@ -546,6 +750,384 @@ async function saveEntrada() {
     }
 }
 
+// --- PEDIDOS LOGIC ---
+
+async function fetchPedidos(silent = false) {
+    if (!silent) toggleLoading(true, "Buscando pedidos...");
+    try {
+        const url = `${API_URLS.ORDERS_BLING}?t=${Date.now()}`;
+        const response = await fetch(url, { mode: 'cors' });
+        if (!response.ok) throw new Error("Erro ao buscar pedidos.");
+        const result = await response.json();
+        allPedidos = result.data || [];
+        
+        // Garantir parsing de observação em todos os pedidos trazidos
+        allPedidos.forEach(order => {
+            if (order.observacao && typeof order.observacao === 'string') {
+                order.observacao = order.observacao.split(/\\n|\n/).map(s => s.trim()).filter(s => s !== '');
+            }
+        });
+
+        filterPedidos();
+        return allPedidos;
+    } catch (error) {
+        console.error(error);
+        if (!silent) alert("Não foi possível carregar os pedidos.");
+    } finally {
+        if (!silent) toggleLoading(false);
+    }
+}
+
+function filterPedidos() {
+    const term = (pedidosSearchInput.value || '').toLowerCase();
+    const statusFilter = pedidosStatusFilter.value;
+
+    filteredPedidos = allPedidos.filter(p => {
+        const numero = String(p.número || p.numero || '').toLowerCase();
+        const cliente = String(p.contato_nome || p['contato nome'] || p.cliente || '').toLowerCase();
+        const vendedor = String(p.vendedor || '').toLowerCase();
+        
+        let statusMatch = true;
+        if (statusFilter !== 'all') {
+            const sitLower = (p.situação || p.situacao || '').toLowerCase();
+            if (statusFilter === 'atendido') {
+                statusMatch = (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu'));
+            } else if (statusFilter === 'aberto') {
+                statusMatch = (sitLower.includes('abert') || sitLower.includes('pendent') || sitLower.includes('andamento'));
+            } else if (statusFilter === 'producao') {
+                statusMatch = sitLower.includes('produ');
+            } else if (statusFilter === 'cancelado') {
+                statusMatch = sitLower.includes('cancel');
+            }
+        }
+
+        const orcamento = String(p.orcamento || p.orçamento || '').toLowerCase();
+        const termMatch = numero.includes(term) || cliente.includes(term) || vendedor.includes(term) || orcamento.includes(term);
+        return statusMatch && termMatch;
+    });
+
+    renderPedidosList();
+}
+
+function renderPedidosList() {
+    pedidosListContainer.innerHTML = '';
+
+    if (filteredPedidos.length === 0) {
+        pedidosListContainer.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum pedido encontrado.</p>';
+        return;
+    }
+
+    // Ordenar por data decrescente por padrão
+    const sorted = [...filteredPedidos].sort((a, b) => {
+        const dateA = new Date(a.data || a.data_criacao || 0);
+        const dateB = new Date(b.data || b.data_criacao || 0);
+        return dateB - dateA;
+    });
+
+    sorted.forEach(p => {
+        const numero = p.número || p.numero || '-';
+        const cliente = p.contato_nome || p['contato nome'] || p.cliente || '-';
+        const situacao = p.situação || p.situacao || '-';
+        const totalVal = parseFloat(p.total_pedido || p['total pedido'] || p.total || 0);
+        const totalFmt = formatCurrency(totalVal);
+        const dataStr = p.data || p.data_criacao || '';
+        
+        let badgeClass = 'bg-gray-100 text-gray-800';
+        const sitLower = situacao.toLowerCase();
+        if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badgeClass = 'bg-green-100 text-green-800';
+        else if (sitLower.includes('cancel')) badgeClass = 'bg-red-100 text-red-800';
+        else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento')) badgeClass = 'bg-yellow-100 text-yellow-800';
+        else if (sitLower.includes('produ')) badgeClass = 'bg-blue-100 text-blue-800';
+
+        const orcamento = p.orcamento || p.orçamento || '';
+
+        const card = document.createElement('div');
+        card.className = 'bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col space-y-2 active:bg-gray-50 transition-colors cursor-pointer';
+        
+        const hasObs = Array.isArray(p.observacao) && p.observacao.length > 0;
+        const obsIcon = hasObs ? `
+            <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zm-4 0H9v2h2V9z" clip-rule="evenodd"></path>
+            </svg>
+        ` : '';
+
+        card.innerHTML = `
+            <div class="flex justify-between items-start">
+                <div class="flex items-center gap-2">
+                    <span class="text-blue-600 font-bold text-lg">#${numero}</span>
+                    ${orcamento ? `<span class="text-xs text-gray-400 font-medium">(${orcamento})</span>` : ''}
+                    ${obsIcon}
+                </div>
+                <span class="px-2 py-1 text-[10px] font-bold uppercase rounded-full ${badgeClass}">${situacao}</span>
+            </div>
+            <div>
+                <p class="font-semibold text-gray-800">${cliente}</p>
+                <p class="text-xs text-gray-400">${dataStr}</p>
+            </div>
+            <div class="flex justify-between items-center pt-2 border-t border-gray-50">
+                <span class="text-xs text-gray-500">Valor Total</span>
+                <span class="font-bold text-gray-800">${totalFmt}</span>
+            </div>
+        `;
+
+        card.addEventListener('click', () => openOrderDetailsModal(p.id || p.numero));
+        pedidosListContainer.appendChild(card);
+    });
+}
+
+// --- OBSERVATION & DETAILS FUNCTIONS ---
+
+function openOrderDetailsModal(orderId) {
+    const order = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId));
+    if (!order) {
+        alert("Pedido não encontrado.");
+        return;
+    }
+
+    currentObsOrderId = orderId; 
+    
+    const numero = order.numero || '-';
+    const cliente = order.contato_nome || order['contato nome'] || order.cliente || '-';
+    const situacao = order.situação || order.situacao || '-';
+    const total = formatCurrency(parseFloat(order.total_pedido || order['total pedido'] || order.total || 0));
+    
+    // Header
+    pedidosDetalhesHeader.innerHTML = `
+        <div class="flex flex-col space-y-1 mt-2">
+            <p><strong>Cliente:</strong> ${cliente}</p>
+            <div class="flex justify-between items-center text-xs mt-1">
+                <p>Status: <span class="capitalize font-bold">${situacao}</span></p>
+                <p>Total: <span class="text-blue-600 font-bold text-sm">${total}</span></p>
+            </div>
+        </div>
+    `;
+
+    // Items
+    const itensRaw = order.itens || order.Itens || '';
+    const itemList = parseOrderItems(itensRaw);
+
+    let itemsHtml = '';
+    if (itemList.length > 0) {
+        itemsHtml = itemList.map(item => {
+            // Try to find description in cached products, or just show code
+            const product = allProducts.find(p => String(p.codigo) === String(item.codigo));
+            const descricao = product && product.descricao ? product.descricao : `Código do Item: ${item.codigo}`;
+            const imgUrl = (product && product.url_imagens_externas && product.url_imagens_externas[0]) ? product.url_imagens_externas[0] : 'https://placehold.co/48x48/e2e8f0/64748b?text=Sem+Foto';
+            const quantidade = item.quantidade;
+            const valorUnitario = formatCurrency(item.valor);
+            
+            return `
+                <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+                    <img src="${imgUrl}" 
+                         class="w-14 h-14 rounded-lg object-cover bg-gray-100 shrink-0 cursor-pointer border border-gray-200" 
+                         onclick="openImageModal('${imgUrl}')"
+                         onerror="this.src='https://placehold.co/48x48/e2e8f0/64748b?text=?'" />
+                    <div class="flex-grow flex flex-col">
+                        <span class="font-medium text-gray-800 text-sm mb-1 leading-tight">${descricao}</span>
+                        <div class="flex justify-between items-center text-xs text-gray-500 mt-1 bg-gray-50 p-2 rounded-lg">
+                            <span>Qtd: <b>${quantidade}</b></span>
+                            <span>Unid: <b>${valorUnitario}</b></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        itemsHtml = '<p class="text-center text-gray-500 text-sm py-8">Nenhum item encontrado.</p>';
+    }
+
+    pedidosDetalhesContent.innerHTML = itemsHtml;
+    pedidosDetalhesModal.classList.remove('hidden');
+}
+
+function parseOrderItems(raw) {
+    const results = [];
+    if (!raw || raw === 'undefined' || raw === 'null') return results;
+    
+    const cleaned = String(raw).trim();
+    const regex = /\(([^)]+)\)/g;
+    let match;
+    while ((match = regex.exec(cleaned)) !== null) {
+        const parts = match[1].split(',').map(s => s.trim());
+        if (parts.length >= 3) {
+            results.push({
+                codigo: parts[0],
+                quantidade: parseFloat(parts[1]) || 1,
+                valor: parseFloat(String(parts[2]).replace(',', '.')) || 0
+            });
+        } else if (parts.length === 2) {
+            results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: 0 });
+        }
+    }
+    // Fallback se não tiver parênteses (ex: "codigo, qtd, valor")
+    if (results.length === 0 && cleaned) {
+        const parts = cleaned.replace(/[()]/g, '').split(',').map(s => s.trim());
+        if (parts.length >= 3) {
+            results.push({ 
+                codigo: parts[0], 
+                quantidade: parseFloat(parts[1]) || 1, 
+                valor: parseFloat(String(parts[2]).replace(',', '.')) || 0 
+            });
+        }
+    }
+    return results;
+}
+
+function openOrderObservationModal(orderId) {
+    const order = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId));
+    if (!order) {
+        alert("Pedido não encontrado.");
+        return;
+    }
+
+    currentObsOrderId = orderId;
+    pedidosObsModal.dataset.orderId = orderId;
+    pedidosObsModalInfo.innerHTML = `Pedido Nº: <b>${order.numero || 'N/A'}</b>`;
+    
+    // Popular o select de itens
+    if (pedidosObsItemSelect) {
+        pedidosObsItemSelect.innerHTML = '<option value="">Geral (Sem item específico)</option>';
+        const itensRaw = order.itens || order.Itens || '';
+        const itemList = parseOrderItems(itensRaw);
+        
+        if (itemList.length > 0) {
+            itemList.forEach(item => {
+                const product = allProducts.find(p => String(p.codigo) === String(item.codigo));
+                const descricao = product && product.descricao ? product.descricao : `Item Cód: ${item.codigo}`;
+                
+                const opt = document.createElement('option');
+                opt.value = `[${descricao}]`;
+                opt.textContent = `${descricao} (Qtd: ${item.quantidade})`;
+                pedidosObsItemSelect.appendChild(opt);
+            });
+            pedidosObsItemSelect.classList.remove('hidden');
+        } else {
+            pedidosObsItemSelect.classList.add('hidden');
+        }
+        pedidosObsItemSelect.value = ''; // seleciona o "Geral" por padrão
+    }
+
+    if (order.observacao && typeof order.observacao === 'string') {
+        order.observacao = order.observacao
+            .split(/\\n|\n/)
+            .map(s => s.trim())
+            .filter(s => s !== '');
+    }
+
+    renderObservationChat(order.observacao);
+    pedidosObsTextarea.value = '';
+    updateObservationCharCount();
+    pedidosObsModal.classList.remove('hidden');
+    pedidosObsTextarea.focus();
+}
+
+function renderObservationChat(observations) {
+    if (!pedidosObsHistory) return;
+    
+    if (!observations || !Array.isArray(observations) || observations.length === 0) {
+        pedidosObsHistory.innerHTML = '<p class="text-center text-gray-400 py-8 text-sm italic">Nenhuma observação registrada.</p>';
+        return;
+    }
+
+    pedidosObsHistory.innerHTML = observations.map(obsString => {
+        const parts = obsString.split(' - ');
+        const timestamp = parts.length > 1 ? parts[0] : '';
+        const message = parts.length > 1 ? parts.slice(1).join(' - ') : obsString;
+
+        return `
+            <div class="p-3 rounded-2xl bg-orange-50 text-gray-800 max-w-[85%] self-start border border-orange-100 shadow-sm">
+                <p class="text-sm whitespace-pre-wrap">${message}</p>
+                <div class="flex items-center justify-end mt-1 gap-1">
+                    <span class="text-[10px] text-gray-400">${timestamp}</span>
+                    <svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Auto-scroll para o final
+    setTimeout(() => {
+        pedidosObsHistory.scrollTop = pedidosObsHistory.scrollHeight;
+    }, 100);
+}
+
+async function saveOrderObservation() {
+    const orderId = currentObsOrderId;
+    let newObservation = pedidosObsTextarea.value;
+    
+    if (!orderId || !newObservation.trim()) return;
+    
+    // Adicionar a referência do item ao comentário, se selecionado
+    if (pedidosObsItemSelect && pedidosObsItemSelect.value) {
+        newObservation = `${pedidosObsItemSelect.value} - ${newObservation.trim()}`;
+    }
+
+    const orderToUpdate = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId));
+    if (!orderToUpdate) return;
+
+    savePedidosObsBtn.disabled = true;
+    loadingOverlay.classList.remove('hidden');
+    loadingText.textContent = 'Enviando observação...';
+
+    try {
+        const payload = { 
+            numero_do_pedido: orderId, 
+            observacao: newObservation,
+            senderId: myClientId
+        };
+        const response = await fetch(API_URLS.ORDER_OBSERVATION, {
+            method: 'POST',
+            mode: 'cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error(`Status: ${response.status}`);
+
+        const result = await response.json();
+        if (result.data && result.data.newObservation) {
+            const newHistoryAsString = result.data.newObservation;
+            orderToUpdate.observacao = newHistoryAsString.split('\n').filter(line => line.trim() !== '');
+            renderObservationChat(orderToUpdate.observacao);
+            pedidosObsTextarea.value = '';
+            updateObservationCharCount();
+            
+            // Atualizar ícone na lista
+            renderPedidosList();
+        }
+    } catch (error) {
+        console.error("Erro ao salvar observação:", error);
+        alert(`Erro ao salvar observação: ${error.message}`);
+    } finally {
+        savePedidosObsBtn.disabled = false;
+        loadingOverlay.classList.add('hidden');
+    }
+}
+
+function updateObservationCharCount() {
+    if (!pedidosObsTextarea || !pedidosObsCharCount) return;
+    pedidosObsCharCount.textContent = pedidosObsTextarea.value.length;
+}
+
+window.openImageModal = function(url) {
+    if (!url || url.includes('placehold.co')) return;
+    imageZoomImg.src = url;
+    imageZoomModal.classList.remove('hidden');
+}
+
+// --- UTILS ---
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 // --- INITIALIZATION ---
 function initializeApp() {
     initDB();
@@ -554,8 +1136,10 @@ function initializeApp() {
     goToAdjustBtn.addEventListener('click', () => showView('adjust-view'));
     goToRequisitionBtn.addEventListener('click', () => showView('requisition-view'));
     goToEntradaBtn.addEventListener('click', () => showView('entrada-view'));
+    goToPedidosBtn.addEventListener('click', () => showView('pedidos-view'));
     adjustBackToMenuBtn.addEventListener('click', () => showView('menu-view'));
     entradaBackToMenuBtn.addEventListener('click', () => showView('menu-view'));
+    pedidosBackToMenuBtn.addEventListener('click', () => showView('menu-view'));
     reqBackToMenuBtn.addEventListener('click', () => {
         if (requisitionItems.length === 0 || confirm("Deseja sair e limpar a lista de requisição atual?")) {
             requisitionItems = [];
@@ -622,7 +1206,29 @@ function initializeApp() {
         entradaChaveAcesso.value = '';
     });
 
+    // Pedidos Search & Filter
+    pedidosSearchInput.addEventListener('input', debounce(() => filterPedidos(), 300));
+    pedidosStatusFilter.addEventListener('change', () => filterPedidos());
+
+    // Pedidos Detalhes & Observation Modal
+    closePedidosDetalhesModalBtn.addEventListener('click', () => pedidosDetalhesModal.classList.add('hidden'));
+    openObsFromDetalhesBtn.addEventListener('click', () => {
+        if (currentObsOrderId) {
+            openOrderObservationModal(currentObsOrderId);
+        }
+    });
+
+    closePedidosObsModalBtn.addEventListener('click', () => pedidosObsModal.classList.add('hidden'));
+    savePedidosObsBtn.addEventListener('click', saveOrderObservation);
+    pedidosObsTextarea.addEventListener('input', updateObservationCharCount);
+    
+    // Zoom Modal
+    closeImageZoomBtn.addEventListener('click', () => imageZoomModal.classList.add('hidden'));
+
     showView('menu-view');
+    
+    // Inicializar Sync em tempo real globalmente logo no início
+    initFirestoreSync();
 }
 
 initializeApp();

@@ -178,13 +178,21 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                 await new Promise(resolve => setTimeout(resolve, 500));
 
             } catch (error) {
-                console.error('[Bling Webhook] Erro no processamento da fila:', error.message);
-                if (!res.headersSent) res.status(500).send({ status: 'error', message: error.message });
-                // Resolvemos com erro para manter a fila viva e permitir os próximos
+                console.error('[Bling Webhook] Erro detectado:', error.message);
+                
+                // Se o erro for um 404 do Bling, ignoramos silenciosamente para o Bling não desativar o webhook
+                const isBling404 = error.message.includes('code 404');
+                
+                if (!res.headersSent) {
+                    res.status(200).send({ 
+                        status: isBling404 ? 'ignored_404' : 'error_logged', 
+                        message: error.message 
+                    });
+                }
             }
         }).catch((fatalError) => {
-            console.error('[Bling Webhook] Erro FATAL na Promise-chain:', fatalError);
-            if (!res.headersSent) res.status(500).send({ status: 'fatal_error' });
+            console.error('[Bling Webhook] Erro FATAL:', fatalError);
+            if (!res.headersSent) res.status(200).send({ status: 'fatal_error_logged' });
         });
     });
 

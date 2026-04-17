@@ -19,7 +19,7 @@ async function getTokenWithRetry(axios, url, retries = 3) {
     throw new Error(`Não foi possível obter o token do Bling após ${retries} tentativas.`);
 }
 
-const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidosBling, axios, APPS_SCRIPT_TOKEN_URL, BLING_API_BASE_URL) => {
+const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidosBling, axios, APPS_SCRIPT_TOKEN_URL, BLING_API_BASE_URL, notifySync) => {
     const router = express.Router();
 
     router.get('/', async (req, res, next) => {
@@ -52,6 +52,13 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                         obj[h] = val;
                     }
                 });
+
+                // Forçar a observação a vir da Coluna Q (índice 16)
+                // Caso existam múltiplas colunas de observação, garantimos a correta aqui.
+                if (row.length > 16) {
+                    obj['observacao'] = row[16] || '';
+                }
+
                 // Compatibilidade com o frontend (mapia id_pedido para id)
                 if (obj.id_pedido) obj.id = obj.id_pedido;
                 return obj;
@@ -65,7 +72,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
     router.post('/observacao', async (req, res, next) => {
         try {
-            const { numero_do_pedido, observacao } = req.body;
+            const { numero_do_pedido, observacao, senderId } = req.body;
 
             if (!numero_do_pedido || !observacao) {
                 const error = new Error("Dados incompletos: 'numero_do_pedido' e 'observacao' são obrigatórios.");
@@ -91,10 +98,14 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             const idColIndex = headers.indexOf('id pedido') !== -1 ? headers.indexOf('id pedido') : headers.indexOf('id');
             const numColIndex = headers.indexOf('numero') !== -1 ? headers.indexOf('numero') : headers.indexOf('número');
             const numLojaColIndex = headers.indexOf('numero loja') !== -1 ? headers.indexOf('numero loja') : headers.indexOf('número loja');
-            const observacaoColIndex = headers.indexOf('observacao') !== -1 ? headers.indexOf('observacao') : headers.indexOf('observação');
+            
+            // A planilha tem DUAS colunas chamadas "Observação".
+            // A que o sistema desktop usa é a Coluna Q (índice fixo 16).
+            // Não podemos usar headers.indexOf() pois retorna a primeira (errada).
+            const observacaoColIndex = 16; // Coluna Q — Observação usada pelo sistema principal
 
-            if (observacaoColIndex === -1) {
-                throw new Error('Coluna "Observação" não encontrada na planilha de Pedidos Bling.');
+            if (rows[0].length <= observacaoColIndex) {
+                throw new Error('Coluna Q (Observação) não encontrada na planilha de Pedidos Bling.');
             }
 
             let rowIndexToUpdate = -1;
@@ -135,6 +146,16 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             });
 
             console.log(`Observação do Pedido ${numero_do_pedido} atualizada na linha ${rowIndexToUpdate + 1}.`);
+
+            // Notificar todos os clientes via Firestore Sync
+            if (typeof notifySync === 'function') {
+                notifySync('orderObservationUpdated', {
+                    numeroPedido: String(numero_do_pedido),
+                    novaObservacao: observacaoFinal,
+                    senderId: senderId || null
+                });
+            }
+
             res.status(200).send({ status: 'success', message: 'Observação adicionada com sucesso!', data: { newObservation: observacaoFinal } });
 
         } catch (error) {

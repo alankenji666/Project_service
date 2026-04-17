@@ -40,4 +40,8 @@ export const API_URLS = {
 
     // API de Entradas de NF
     ENTRADAS_NOTA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/entradas/nota",
+
+    // API de Pedidos Bling e Observações
+    ORDERS_BLING: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos",
+    ORDER_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos/observacao",
 };

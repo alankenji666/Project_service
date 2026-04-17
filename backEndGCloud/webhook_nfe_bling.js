@@ -209,7 +209,14 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
 
             res.status(200).send({ status: 'success' });
         } catch (error) {
-            next(error);
+            console.error('[Bling NF-e Webhook] Erro detectado:', error.message);
+            
+            if (!res.headersSent) {
+                res.status(200).send({ 
+                    status: 'error_logged', 
+                    message: error.message 
+                });
+            }
         }
     });
 

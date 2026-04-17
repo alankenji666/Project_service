@@ -81,6 +81,7 @@ const SHEET_NAME_VENDAS_LOJA_INTEGRADA = 'VendasLojaIntegrada'; // <-- ADICIONE 
 const SHEET_NAME_LOJA_INTEGRADA_CONFIG = 'configuracaoLojaIntegrada'; // <-- ADICIONE ESTA LINHA
 const SHEET_NAME_PEDIDOS_BLING = 'PedidosBling'; // NOVO
 const SHEET_NAME_PEDIDOS_COMPRAS = 'Pedidos Compras'; // ENTRADAS NF-e
+const SHEET_NAME_PECAS_EQUIPAMENTO = 'Pecas_Equipamento'; // Árvore de peças por equipamento
 
 
 // URLs
@@ -895,7 +896,8 @@ const pedidosRouter = createPedidosRouter(
     SHEET_NAME_PEDIDOS_BLING,
     axios,
     APPS_SCRIPT_TOKEN_URL,
-    BLING_API_BASE_URL
+    BLING_API_BASE_URL,
+    notifySync // Injetando Firestore Sync para obs em tempo real
 );
 app.use('/pedidos', pedidosRouter);
 
@@ -907,6 +909,15 @@ const entradasRouter = createEntradasRouter(
     SHEET_NAME_PEDIDOS_COMPRAS    // Aba 'Pedidos Compras'
 );
 app.use('/entradas', entradasRouter);
+
+// Roteador de Peças por Equipamento
+const createPecasEquipamentoRouter = require('./pecas_equipamento.js');
+const pecasEquipamentoRouter = createPecasEquipamentoRouter(
+    getInitializedSheetsClient,
+    SPREADSHEET_ID_ESTOQUE,
+    SHEET_NAME_PECAS_EQUIPAMENTO
+);
+app.use('/pecas-equipamento', pecasEquipamentoRouter);
 
 // --- EXPORTAÇÃO DA APLICAÇÃO EXPRESS ---
 // Middleware de Erro Global - Captura todos os erros lançados nas rotas
