@@ -188,9 +188,37 @@ export const GerenciarPedidosApp = (function () {
             toggleValoresChk.addEventListener('change', _handleModalToggleValores);
         }
 
-        const printBtn = document.getElementById('modal-print-btn');
-        if (printBtn) {
-            printBtn.addEventListener('click', _handleModalPrint);
+        const printDropdownBtn = document.getElementById('modal-print-dropdown-btn');
+        const printDropdownMenu = document.getElementById('modal-print-dropdown-menu');
+        const printOrderBtn = document.getElementById('modal-print-order-btn');
+        const printMarkerBtn = document.getElementById('modal-print-marker-btn');
+
+        if (printDropdownBtn && printDropdownMenu) {
+            printDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                printDropdownMenu.classList.toggle('hidden');
+            });
+
+            // Fechar dropdown ao clicar fora
+            document.addEventListener('click', (e) => {
+                if (!printDropdownBtn.contains(e.target) && !printDropdownMenu.contains(e.target)) {
+                    printDropdownMenu.classList.add('hidden');
+                }
+            });
+        }
+
+        if (printOrderBtn) {
+            printOrderBtn.addEventListener('click', () => {
+                printDropdownMenu.classList.add('hidden');
+                _handleModalPrint();
+            });
+        }
+
+        if (printMarkerBtn) {
+            printMarkerBtn.addEventListener('click', () => {
+                printDropdownMenu.classList.add('hidden');
+                _handlePrintMarker();
+            });
         }
 
         // Novos botões de status no modal
@@ -198,9 +226,9 @@ export const GerenciarPedidosApp = (function () {
         const prodBtn = document.getElementById('modal-status-prod-btn');
         const attendBtn = document.getElementById('modal-status-attend-btn');
         
-        if (openBtn) openBtn.addEventListener('click', () => _handleModalChangeStatus(6, 'Em Aberto'));
-        if (prodBtn) prodBtn.addEventListener('click', () => _handleModalChangeStatus(447331, 'Em Produção'));
-        if (attendBtn) attendBtn.addEventListener('click', () => _handleModalChangeStatus(9, 'Atendido'));
+        if (openBtn) openBtn.addEventListener('click', (e) => _handleModalChangeStatus(6, 'Em Aberto', e.currentTarget));
+        if (prodBtn) prodBtn.addEventListener('click', (e) => _handleModalChangeStatus(447331, 'Em Produção', e.currentTarget));
+        if (attendBtn) attendBtn.addEventListener('click', (e) => _handleModalChangeStatus(9, 'Atendido', e.currentTarget));
 
         // Eventos do Modal de Edição Rápida
         if (_state.quickEditCancelBtn) _state.quickEditCancelBtn.addEventListener('click', _closeQuickEditModal);
@@ -267,6 +295,13 @@ export const GerenciarPedidosApp = (function () {
         const pedidoId = pedido.id || pedido.id_pedido || pedido['id pedido'] || '';
         _currentModalPedidoId = pedidoId || orderNumber;
         modal.dataset.currentOrderNumber = orderNumber;
+
+        // Resetar o bloqueio visual do container de ações (caso tenha ficado desabilitado de uma transação anterior)
+        const statusContainer = document.getElementById('modal-status-actions');
+        if (statusContainer) {
+            statusContainer.style.opacity = '1';
+            statusContainer.style.pointerEvents = 'auto';
+        }
 
         // Gerenciar visibilidade dos botões de troca de status
         const situacaoCheckRaw = (pedido.situação || pedido.situacao || '').toLowerCase();
@@ -366,7 +401,13 @@ export const GerenciarPedidosApp = (function () {
                                 </tr>
                             </thead>
                             <tbody id="pedido-modal-itens-body" class="bg-white divide-y divide-gray-100">
-                                ${itensList.map(item => `
+                                ${itensList.map(item => {
+                                    const isService = String(item.codigo).trim().startsWith('7');
+                                    const initialStockHtml = isService 
+                                        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">Serviço</span>`
+                                        : `<span class="text-xs text-gray-400 italic">carregando...</span>`;
+
+                                    return `
                                     <tr data-item-codigo="${item.codigo}" class="cursor-pointer hover:bg-gray-50 transition-colors item-row">
                                         <td class="px-4 py-3" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">
                                             <div class="flex items-center gap-3">
@@ -381,11 +422,12 @@ export const GerenciarPedidosApp = (function () {
                                         </td>
                                         <td class="px-4 py-3 text-center text-gray-700" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">${item.quantidade}</td>
                                         <td class="px-4 py-3 text-center" id="stock-col-${item.codigo}" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">
-                                            <span class="text-xs text-gray-400 italic">carregando...</span>
+                                            ${initialStockHtml}
                                         </td>
                                         <td class="px-4 py-3 text-right font-semibold text-gray-800" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(_parseNumber(item.valor))}</td>
                                     </tr>
-                                `).join('')}
+                                    `;
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -473,12 +515,20 @@ export const GerenciarPedidosApp = (function () {
             _enrichedProductsMap = {}; // Reset
 
             itensList.forEach(item => {
+                const isService = String(item.codigo).trim().startsWith('7');
                 const prod = products.find(p =>
                     String(p.codigo || '').trim() === String(item.codigo).trim()
                 );
+
                 if (!prod) {
                     const stockCol = document.getElementById(`stock-col-${item.codigo}`);
-                    if (stockCol) stockCol.innerHTML = '<span class="text-xs text-red-400">N/A</span>';
+                    if (stockCol) {
+                        if (isService) {
+                            stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200" title="Item de Serviço Livre">Serviço</span>`;
+                        } else {
+                            stockCol.innerHTML = '<span class="text-xs text-red-400">N/A</span>';
+                        }
+                    }
                     return;
                 }
 
@@ -499,7 +549,9 @@ export const GerenciarPedidosApp = (function () {
                 if (stockCol) {
                     const disponivel = parseFloat(prod.estoque) || 0;
                     const pedidoQty = parseFloat(item.quantidade) || 0;
-                    if (disponivel >= pedidoQty) {
+                    if (isService) {
+                        stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200" title="Serviço">Serviço</span>`;
+                    } else if (disponivel >= pedidoQty) {
                         stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800" title="Disponível: ${disponivel}">OK</span>`;
                     } else {
                         stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title="Disponível: ${disponivel}">Sem Estoque</span>`;
@@ -570,7 +622,7 @@ export const GerenciarPedidosApp = (function () {
 
             // 2. Atualizar Estoque (Balanço)
             console.log(`[QuickEdit] Atualizando estoque (Balanço) do produto ${prod.codigo}...`);
-            const updateStockRes = await fetch(`${API_URLS.STOCK}/update-stock`, {
+            const updateStockRes = await fetch(API_URLS.ORDERS_UPDATE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -596,6 +648,28 @@ export const GerenciarPedidosApp = (function () {
                     position: "center",
                     style: { background: "#10b981" }
                 }).showToast();
+            }
+
+            // Sincronizar o cache frontend global
+            if (window._allProducts) {
+                const globalProd = window._allProducts.find(p => p.id === prod.id || p.codigo === prod.codigo);
+                if (globalProd) {
+                    globalProd.preco_de_custo = newCost;
+                    globalProd.localizacao = newLoc;
+                    globalProd.estoque = newStock;
+                }
+            }
+
+            // Propagar a atualização visual para outros módulos logados na memória
+            if (typeof PesquisarProduto !== 'undefined') {
+                if (PesquisarProduto.getSelectedProductCodigo && PesquisarProduto.getSelectedProductCodigo() === prod.codigo) {
+                    if (PesquisarProduto.updateStockDisplay) PesquisarProduto.updateStockDisplay(newStock);
+                }
+                if (PesquisarProduto.updateProductCostPriceDisplay) PesquisarProduto.updateProductCostPriceDisplay(prod.id, newCost);
+                if (PesquisarProduto.updateProductLocationDisplay) PesquisarProduto.updateProductLocationDisplay(prod.id, newLoc);
+            }
+            if (typeof SaidaItens !== 'undefined' && SaidaItens.updateProductStockInTable) {
+                SaidaItens.updateProductStockInTable(prod.codigo, newStock);
             }
 
             // Atualizar o modal de detalhes do pedido para refletir as mudanças (badges etc)
@@ -783,15 +857,195 @@ export const GerenciarPedidosApp = (function () {
         printWindow.document.close();
     }
 
+    function _handlePrintMarker() {
+        const modal = document.getElementById('order-details-modal');
+        if (!modal) return;
+        const orderNumber = modal.dataset.currentOrderNumber;
+        if (!orderNumber) return;
 
-    async function _handleModalChangeStatus(newStatusId, label) {
+        const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
+        if (!pedido) return;
+
+        const cliente = (pedido.contato_nome || pedido['contato nome'] || pedido.cliente || '-').toUpperCase();
+        const vendedor = _getVendedorName(pedido.vendedor || '');
+        const now = new Date().toLocaleString('pt-BR');
+
+        const printWindow = window.open('', '_blank', 'width=850,height=750');
+        printWindow.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Marcador - ${cliente}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Arial Black', Gadget, sans-serif; 
+            background: #fff; 
+            padding: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            width: 100vw;
+            height: 100vh;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .company-name { 
+            font-size: 180px; 
+            font-weight: 900; 
+            color: #000; 
+            line-height: 0.95;
+            margin-bottom: 15px;
+            word-wrap: break-word;
+            width: 100%;
+            text-transform: uppercase;
+        }
+
+        .mks-service { 
+            font-size: 52px; 
+            font-weight: normal; 
+            color: #000; 
+            margin-bottom: 10px;
+            font-family: Arial, sans-serif;
+            border-top: 8px solid #000;
+            padding-top: 15px;
+            display: inline-block;
+            width: 80%;
+        }
+
+        .vendedor { 
+            font-size: 34px; 
+            color: #333; 
+            font-family: Arial, sans-serif;
+            font-weight: normal;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 10px;
+            right: 15px;
+            font-size: 9px;
+            color: #999;
+            font-family: Arial, sans-serif;
+        }
+
+        @media print {
+            body { padding: 0; margin: 0; height: 100vh; width: 100vw; }
+            @page { size: A4 landscape; margin: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="print-container">
+        <div class="company-name" id="company-name">${cliente}</div>
+        <div class="mks-service">MKS - Service</div>
+        <br>
+        <div class="vendedor">Vendedor: ${vendedor}</div>
+    </div>
+    <div class="footer">Gerado em ${now}</div>
+    <script>
+        window.onload = function(){ 
+            const el = document.getElementById('company-name');
+            const container = document.getElementById('print-container');
+            
+            let fontSize = 180; 
+            el.style.fontSize = fontSize + 'px';
+            
+            // Verifica se a altura do container (conteúdo) passa da altura da janela
+            // Usamos um limite de 98% para capturar o transbordo real
+            function isTooBig() {
+                return container.offsetHeight > window.innerHeight * 0.98;
+            }
+
+            // Reduz gradualmente até caber na altura total disponível
+            // Definimos 40px como mínimo para que nunca fique "pequeno"
+            while (isTooBig() && fontSize > 40) {
+                fontSize -= 2;
+                el.style.fontSize = fontSize + 'px';
+            }
+            
+            setTimeout(() => {
+                window.print(); 
+                window.onafterprint = function(){ window.close(); } 
+            }, 600);
+        }
+    <\/script>
+</body>
+</html>`);
+        printWindow.document.close();
+    }
+
+
+    // --- Modais de Interface Customizados ---
+    function _showCustomConfirm(title, message) {
+        return new Promise(resolve => {
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200] transition-opacity';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full text-center transform scale-100 transition-transform">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">${title}</h3>
+                    <p class="text-gray-600 mb-6">${message}</p>
+                    <div class="flex justify-center gap-3">
+                        <button id="custom-modal-no" class="px-5 py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors w-full cursor-pointer">Cancelar</button>
+                        <button id="custom-modal-yes" class="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl shadow-md hover:bg-blue-700 transition-colors w-full cursor-pointer">Sim</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            document.getElementById('custom-modal-no').onclick = () => { overlay.remove(); resolve(false); };
+            document.getElementById('custom-modal-yes').onclick = () => { overlay.remove(); resolve(true); };
+        });
+    }
+
+    function _showCustomAlert(title, message, isSuccess = true) {
+        return new Promise(resolve => {
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200] transition-opacity';
+            const iconHtml = isSuccess 
+                ? `<div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>`
+                : `<div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></div>`;
+            
+            overlay.innerHTML = `
+                <div class="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full text-center transform scale-100 transition-transform">
+                    ${iconHtml}
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">${title}</h3>
+                    <p class="text-gray-600 mb-6">${message}</p>
+                    <button id="custom-alert-ok" class="px-6 py-2.5 ${isSuccess ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} text-white font-semibold rounded-xl shadow-md transition-colors w-full cursor-pointer">OK</button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            document.getElementById('custom-alert-ok').onclick = () => { overlay.remove(); resolve(); };
+        });
+    }
+
+    async function _handleModalChangeStatus(newStatusId, label, btnEl) {
         const orderNumber = document.getElementById('order-details-modal')?.dataset?.currentOrderNumber;
         if (!orderNumber) return;
 
         const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
         const idParaEnviar = pedido?.id || pedido?.id_pedido || pedido?.['id pedido'] || orderNumber;
 
-        if (!confirm(`Mudar o Pedido Nº ${orderNumber} para "${label}"?`)) return;
+        const confirmResult = await _showCustomConfirm('Atenção', `Deseja realmente alterar o Pedido Nº ${orderNumber} para <strong>${label}</strong>?`);
+        if (!confirmResult) return;
+
+        const originalBtnHtml = btnEl ? btnEl.innerHTML : null;
+        if (btnEl) {
+            btnEl.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-current inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Gravando...`;
+        }
 
         const container = document.getElementById('modal-status-actions');
         if (container) {
@@ -815,15 +1069,18 @@ export const GerenciarPedidosApp = (function () {
                 if (pedido.situacao !== undefined) pedido.situacao = label;
             }
 
-            alert(`Pedido Nº ${orderNumber} alterado para "${label}" com sucesso!`);
-
-            // Fechar e recarregar
+            // Fechar modal imediatamente para mostrar agilidade
             document.getElementById('order-details-modal')?.classList.add('hidden');
+            
+            await _showCustomAlert('Sucesso!', `Pedido Nº ${orderNumber} alterado para "${label}" com sucesso!`, true);
+
             await fetchPedidos(true);
 
         } catch (err) {
             console.error('Erro ao mudar status do pedido:', err);
-            alert('Erro: ' + err.message);
+            await _showCustomAlert('Erro na Atualização', err.message, false);
+        } finally {
+            if (btnEl && originalBtnHtml) btnEl.innerHTML = originalBtnHtml;
             if (container) {
                 container.style.opacity = '1';
                 container.style.pointerEvents = 'auto';
