@@ -82,6 +82,13 @@ export const GerenciarPedidosApp = (function () {
         _selectedCountSpan = document.getElementById('pedidos-selected-count');
         _batchAttendBtn = document.getElementById('pedidos-batch-attend-btn');
 
+        // Elementos do Modal de Detalhes do Pedido
+        _state.modalStatusCurrentText = document.getElementById('modal-status-current-text');
+        _state.modalStatusDropdownBtn = document.getElementById('modal-status-dropdown-btn');
+        _state.modalStatusDropdownMenu = document.getElementById('modal-status-dropdown-menu');
+        _state.modalEmitirNfeBtn = document.getElementById('modal-emitir-nfe-btn');
+        _state.modalPrintNfeBtn = document.getElementById('modal-print-nfe-btn');
+
         // Novos elementos do Modal de Edição Rápida
         _state.quickEditModal = document.getElementById('item-quick-edit-modal');
         _state.quickEditItemName = document.getElementById('quick-edit-product-name');
@@ -221,14 +228,41 @@ export const GerenciarPedidosApp = (function () {
             });
         }
 
-        // Novos botões de status no modal
-        const openBtn = document.getElementById('modal-status-open-btn');
-        const prodBtn = document.getElementById('modal-status-prod-btn');
-        const attendBtn = document.getElementById('modal-status-attend-btn');
-        
-        if (openBtn) openBtn.addEventListener('click', (e) => _handleModalChangeStatus(6, 'Em Aberto', e.currentTarget));
-        if (prodBtn) prodBtn.addEventListener('click', (e) => _handleModalChangeStatus(447331, 'Em Produção', e.currentTarget));
-        if (attendBtn) attendBtn.addEventListener('click', (e) => _handleModalChangeStatus(9, 'Atendido', e.currentTarget));
+        if (_state.modalPrintNfeBtn) {
+            _state.modalPrintNfeBtn.addEventListener('click', () => {
+                printDropdownMenu.classList.add('hidden');
+                _handlePrintNfe();
+            });
+        }
+
+        // Lógica do novo dropdown customizado de status
+        if (_state.modalStatusDropdownBtn && _state.modalStatusDropdownMenu) {
+            _state.modalStatusDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _state.modalStatusDropdownMenu.classList.toggle('hidden');
+            });
+
+            // Fechar ao clicar em uma opção ou fora
+            document.addEventListener('click', (e) => {
+                const optBtn = e.target.closest('.modal-status-option-btn');
+                if (optBtn) {
+                    const value = optBtn.dataset.value;
+                    const label = optBtn.innerText.trim();
+                    _state.modalStatusDropdownMenu.classList.add('hidden');
+                    _handleModalStatusChange(value, label);
+                    return;
+                }
+
+                if (!_state.modalStatusDropdownBtn.contains(e.target) && !_state.modalStatusDropdownMenu.contains(e.target)) {
+                    _state.modalStatusDropdownMenu.classList.add('hidden');
+                }
+            });
+        }
+
+        // Botão de Emitir NF-e
+        if (_state.modalEmitirNfeBtn) {
+            _state.modalEmitirNfeBtn.addEventListener('click', _handleEmitirNfe);
+        }
 
         // Eventos do Modal de Edição Rápida
         if (_state.quickEditCancelBtn) _state.quickEditCancelBtn.addEventListener('click', _closeQuickEditModal);
@@ -296,31 +330,50 @@ export const GerenciarPedidosApp = (function () {
         _currentModalPedidoId = pedidoId || orderNumber;
         modal.dataset.currentOrderNumber = orderNumber;
 
-        // Resetar o bloqueio visual do container de ações (caso tenha ficado desabilitado de uma transação anterior)
-        const statusContainer = document.getElementById('modal-status-actions');
-        if (statusContainer) {
-            statusContainer.style.opacity = '1';
-            statusContainer.style.pointerEvents = 'auto';
+        // Gerenciar valor e texto do dropdown customizado
+        const situacaoRaw = (pedido.situação || pedido.situacao || '').toLowerCase();
+        let currentStatusVal = "6";
+        let currentStatusLabel = "Em Aberto";
+ 
+        if (situacaoRaw.includes('abert') || situacaoRaw.includes('pendent')) {
+            currentStatusVal = "6";
+            currentStatusLabel = "Em Aberto";
+        } else if (situacaoRaw.includes('produ')) {
+            currentStatusVal = "447331";
+            currentStatusLabel = "Em Produção";
+        } else if (situacaoRaw.includes('atendid') || situacaoRaw.includes('entregue') || situacaoRaw.includes('conclu')) {
+            currentStatusVal = "9";
+            currentStatusLabel = "Atendido";
+        } else if (situacaoRaw.includes('cancel')) {
+            currentStatusVal = "12";
+            currentStatusLabel = "Cancelado";
         }
-
-        // Gerenciar visibilidade dos botões de troca de status
-        const situacaoCheckRaw = (pedido.situação || pedido.situacao || '').toLowerCase();
-        
-        const btnOpen = document.getElementById('modal-status-open-btn');
-        const btnProd = document.getElementById('modal-status-prod-btn');
-        const btnAttend = document.getElementById('modal-status-attend-btn');
-
-        if (btnOpen && btnProd && btnAttend) {
-            // Mostra todos por padrão
-            [btnOpen, btnProd, btnAttend].forEach(b => b.classList.remove('hidden'));
-
-            // Oculta o botão que corresponde à situação atual
-            if (situacaoCheckRaw.includes('abert') || situacaoCheckRaw.includes('pendent')) {
-                btnOpen.classList.add('hidden');
-            } else if (situacaoCheckRaw.includes('atendid') || situacaoCheckRaw.includes('entregue') || situacaoCheckRaw.includes('conclu')) {
-                btnAttend.classList.add('hidden');
-            } else if (situacaoCheckRaw.includes('produ')) {
-                btnProd.classList.add('hidden');
+ 
+        if (_state.modalStatusCurrentText) {
+            _state.modalStatusCurrentText.innerText = currentStatusLabel;
+        }
+        _updateModalStatusButtonStyle(currentStatusVal);
+ 
+        // Gerenciar visibilidade do botão de Emitir NF-e
+        const idNota = pedido.id_nota || pedido['id nota'] || pedido.idnotafiscal || '';
+        if (_state.modalEmitirNfeBtn) {
+            const btn = _state.modalEmitirNfeBtn;
+            if (idNota) {
+                btn.innerHTML = `
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    NF-e Emitida
+                `;
+                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                btn.classList.add('bg-green-600', 'hover:bg-green-700');
+                btn.title = "Nota Fiscal já foi emitida (ID: " + idNota + ")";
+            } else {
+                btn.innerHTML = `
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Emitir NF-e
+                `;
+                btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                btn.title = "Gerar Nota Fiscal Eletrônica no Bling";
             }
         }
 
@@ -674,7 +727,6 @@ export const GerenciarPedidosApp = (function () {
 
             // Atualizar o modal de detalhes do pedido para refletir as mudanças (badges etc)
             const modal = document.getElementById('order-details-modal');
-            const orderNumber = modal?.dataset?.currentOrderNumber;
             if (orderNumber) {
                 // Pequeno delay para garantir que o cache da API de produtos limpou ou refletiu a mudança
                 setTimeout(() => _openOrderDetailsModal(orderNumber), 500);
@@ -687,6 +739,160 @@ export const GerenciarPedidosApp = (function () {
             _state.quickEditLoading.classList.add('hidden');
         }
     }
+
+    // --- LOGICA DE TROCA DE STATUS E NF-E ---
+
+    function _updateModalStatusButtonStyle(val) {
+        if (!_state.modalStatusDropdownBtn) return;
+        const btn = _state.modalStatusDropdownBtn;
+        
+        // Remove classes antigas de cor e borda
+        btn.classList.remove('bg-yellow-50', 'text-yellow-700', 'border-yellow-200',
+                          'bg-blue-50', 'text-blue-700', 'border-blue-200',
+                          'bg-green-50', 'text-green-700', 'border-green-200',
+                          'bg-red-50', 'text-red-700', 'border-red-200',
+                          'bg-gray-50', 'text-gray-700', 'border-gray-200');
+
+        if (val === "6") { // Em Aberto
+            btn.classList.add('bg-yellow-50', 'text-yellow-700', 'border-yellow-200');
+        } else if (val === "447331") { // Produção
+            btn.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-200');
+        } else if (val === "9") { // Atendido
+            btn.classList.add('bg-green-50', 'text-green-700', 'border-green-200');
+        } else if (val === "12") { // Cancelado
+            btn.classList.add('bg-red-50', 'text-red-700', 'border-red-200');
+        } else {
+            btn.classList.add('bg-gray-50', 'text-gray-700', 'border-gray-200');
+        }
+    }
+
+    async function _handleModalStatusChange(idSituacao, label) {
+        const idPedido = _currentModalPedidoId;
+        if (!idPedido || !idSituacao) return;
+        
+        if (!confirm(`Deseja alterar a situação do pedido para "${label}"?`)) {
+            return;
+        }
+
+        try {
+            if (_state.modalStatusDropdownBtn) _state.modalStatusDropdownBtn.disabled = true;
+            if (_state.modalStatusCurrentText) _state.modalStatusCurrentText.innerText = label;
+            _updateModalStatusButtonStyle(idSituacao);
+            
+            const res = await fetch(`${API_URLS.ORDERS_BLING}/update-status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: [idPedido], idSituacao: idSituacao })
+            });
+
+            if (!res.ok) throw new Error('Falha ao atualizar status.');
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: `Status alterado para ${label}`,
+                    duration: 2000,
+                    style: { background: "#10b981" }
+                }).showToast();
+            }
+
+            // Atualizar o modal para refletir a nova situação (badges etc)
+            setTimeout(() => _openOrderDetailsModal(idPedido), 500);
+
+        } catch (err) {
+            alert('Erro: ' + err.message);
+            _openOrderDetailsModal(idPedido);
+        } finally {
+            if (_state.modalStatusDropdownBtn) _state.modalStatusDropdownBtn.disabled = false;
+        }
+    }
+
+    async function _handleEmitirNfe() {
+        const idPedido = _currentModalPedidoId;
+        if (!idPedido) return;
+
+        // Verificar se já tem nota
+        const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
+        const idNotaExistente = pedido?.id_nota || pedido?.['id nota'] || pedido?.idnotafiscal;
+        
+        if (idNotaExistente) {
+            if (confirm("Este pedido já possui uma nota fiscal emitida. Deseja imprimir a nota ao invés de emitir uma nova?")) {
+                _handlePrintNfe();
+                return;
+            }
+            return;
+        }
+
+        if (!confirm("Confirmar a emissão da Nota Fiscal Eletrônica no Bling? Esta ação é irreversível e gerará obrigações fiscais.")) {
+            return;
+        }
+
+        const btn = _state.modalEmitirNfeBtn;
+        const originalHtml = btn.innerHTML;
+        
+        try {
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin h-3.5 w-3.5 mr-1" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Emitindo...`;
+
+            const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${idPedido}/gerar-nfe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const result = await res.json();
+
+            if (!res.ok) {
+                // Se o erro for do Bling, ele virá formatado.
+                throw new Error(result.message || 'Falha ao gerar NF-e.');
+            }
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "🚀 NF-e Gerada com Sucesso!",
+                    duration: 4000,
+                    gravity: "top",
+                    position: "center",
+                    style: { background: "linear-gradient(to right, #00b09b, #96c93d)" }
+                }).showToast();
+            }
+
+            // O Bling atualiza o status para Atendido por padrão
+            _openOrderDetailsModal(idPedido);
+
+        } catch (err) {
+            console.error('[EmitirNFe] Erro:', err);
+            alert('Erro ao emitir nota: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+
+    function _handlePrintNfe() {
+        const idPedido = _currentModalPedidoId;
+        const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
+        const idNota = pedido?.id_nota || pedido?.['id nota'] || pedido?.idnotafiscal;
+
+        if (!idNota) {
+            if (confirm("Este pedido ainda não possui Nota Fiscal emitida. Deseja emitir agora?")) {
+                _handleEmitirNfe();
+            }
+            return;
+        }
+
+        // URL para DANFE do Bling (usando ID da nota) - Isso geralmente requer autenticação ou um link público
+        // Como o sistema está no Cloud Run e tem o token, poderíamos gerar um link.
+        // O padrão mais comum para o usuário é abrir no próprio Bling ou baixar o PDF.
+        // Aqui, vamos redirecionar para uma busca no Bling ou abrir um modal de ajuda.
+        
+        const win = window.open(`https://www.bling.com.br/notas.fiscais.php#edit/${idNota}`, '_blank');
+        if (win) {
+            win.focus();
+        } else {
+            alert('Por favor, permita pop-ups para abrir a nota fiscal.');
+        }
+    }
+
+    // --- LOGICA DE EDIÇÃO RÁPIDA DE ITEM ---
 
     function _handleModalToggleValores(e) {
         const showValor = e.target.checked;

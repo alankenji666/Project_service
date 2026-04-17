@@ -977,20 +977,41 @@
                         <input type="checkbox" id="modal-toggle-valores" checked class="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer">
                         Com Valor
                     </label>
-                    <!-- Botões de Troca de Status -->
-                    <div id="modal-status-actions" class="flex gap-2">
-                        <button id="modal-status-open-btn" title="Mudar para Em Aberto"
-                            class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded-lg shadow-sm transition-colors border border-yellow-200 font-bold">
-                            Em Aberto
+                    <!-- Botão de Ação: Emitir NF-e -->
+                    <button id="modal-emitir-nfe-btn"
+                        class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Emitir NF-e
+                    </button>
+
+                    <!-- Dropdown de Situação Customizado -->
+                    <div class="relative inline-block text-left" id="modal-status-dropdown-container">
+                        <button id="modal-status-dropdown-btn"
+                            class="text-sm bg-gray-50 hover:bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 font-medium border border-gray-200">
+                            <span id="modal-status-current-text">Em Aberto</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 ml-0.5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
                         </button>
-                        <button id="modal-status-prod-btn" title="Mudar para Em Produção"
-                            class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-lg shadow-sm transition-colors border border-blue-200 font-bold">
-                            Produção
-                        </button>
-                        <button id="modal-status-attend-btn" title="Mudar para Atendido"
-                            class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors font-bold">
-                            Atendido
-                        </button>
+                        <div id="modal-status-dropdown-menu" 
+                            class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 hidden overflow-hidden">
+                            <button class="modal-status-option-btn w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2" data-value="6">
+                                <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
+                                Em Aberto
+                            </button>
+                            <button class="modal-status-option-btn w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2" data-value="447331">
+                                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                Em Produção
+                            </button>
+                            <button class="modal-status-option-btn w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2" data-value="9">
+                                <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                                Atendido
+                            </button>
+                            <button class="modal-status-option-btn w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors flex items-center gap-2" data-value="12">
+                                <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                                Cancelado
+                            </button>
+                        </div>
                     </div>
                     <!-- Dropdown de Impressão -->
                     <div class="relative inline-block text-left" id="modal-print-dropdown-container">
@@ -1013,6 +1034,11 @@
                             <button id="modal-print-marker-btn" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2">
                                 <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z"></path></svg>
                                 Imprimir Marcador
+                            </button>
+                            <div class="border-t border-gray-100 mt-1"></div>
+                            <button id="modal-print-nfe-btn" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors flex items-center gap-2">
+                                <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                Imprimir NF-e
                             </button>
                         </div>
                     </div>

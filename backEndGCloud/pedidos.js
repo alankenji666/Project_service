@@ -228,12 +228,51 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 }
             }
 
-            res.status(200).send({
-                status: 'success',
-                message: `Processamento concluído. Sucessos: ${results.sucessos.length}. Erros: ${results.erros.length}.`,
-                data: results
+    router.post('/vendas/:id/gerar-nfe', async (req, res, next) => {
+        try {
+            const { id } = req.params;
+            if (!id) throw new Error("ID do pedido é obrigatório.");
+
+            const accessToken = await getTokenWithRetry(axios, APPS_SCRIPT_TOKEN_URL);
+            
+            console.log(`[Bling API] Gerando NF-e para o pedido ${id}...`);
+            const blingUrl = `${BLING_API_BASE_URL}/pedidos/vendas/${id}/gerar-nfe`;
+            
+            const blingResponse = await axios.post(blingUrl, {}, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             });
-        } catch (error) {
+            
+            console.log(`[Bling API] NF-e gerada com sucesso para o pedido ${id}. ID da Nota: ${blingResponse.data.idNotaFiscal}`);
+            
+            // Notificar via Firestore Sync que o pedido foi atualizado (para atualizar o id_nota na planilha/UI)
+            if (typeof notifySync === 'function') {
+                notifySync('pedidoBlingReceived', {
+                    id: id,
+                    id_nota: blingResponse.data.idNotaFiscal,
+                    situacao: 'Atendido' // O Bling geralmente muda para atendido ao gerar nota
+                });
+            }
+
+            res.status(201).send({
+                status: 'success',
+                message: 'Nota Fiscal gerada com sucesso!',
+                data: blingResponse.data
+            });
+        } catch (err) {
+            console.error(`[Bling API] Erro ao gerar NF-e para pedido ${req.params.id}:`, err.response?.data || err.message);
+            
+            // Extrair mensagem de erro amigável do Bling
+            let errorMsg = 'Erro ao gerar nota fiscal.';
+            if (err.response?.data?.error?.description) {
+                errorMsg = err.response.data.error.description;
+            } else if (err.response?.data?.error?.message) {
+                errorMsg = err.response.data.error.message;
+            } else {
+                errorMsg = err.message;
+            }
+
+            const error = new Error(errorMsg);
+            error.statusCode = err.response?.status || 500;
             next(error);
         }
     });
