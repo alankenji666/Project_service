@@ -120,14 +120,22 @@ export function positionTooltip(event, tooltipElement) {
     const { width: tooltipWidth, height: tooltipHeight } = tooltipElement.getBoundingClientRect(); // Declaração única
 
 
-    // Usa clientX/clientY para posicionamento relativo à viewport, o que é melhor para elementos 'fixed'
-    let top = event.clientY - tooltipHeight - 15; // 15px de espaço acima do cursor
-    let left = event.clientX - (tooltipWidth / 2);
+    // Usa pageX/pageY para posicionamento absoluto em relação ao documento (suporta scroll)
+    let top = event.pageY - tooltipHeight - 15; // 15px de espaço acima do cursor
+    let left = event.pageX - (tooltipWidth / 2);
 
-    // Ajusta a posição para não sair da tela
-    if (top < window.scrollY) top = event.pageY + 25; // Se for sair pelo topo, mostra abaixo
-    if (left < window.scrollX) left = window.scrollX + 5;
-    if (left + tooltipWidth > window.innerWidth + window.scrollX) left = window.innerWidth + window.scrollX - tooltipWidth - 5;
+    // Ajusta a posição para não sair do topo da tela (considerando scroll)
+    if (top < window.scrollY + 10) {
+        top = event.pageY + 25; // Se for sair pelo topo, mostra abaixo do cursor
+    }
+
+    // Ajusta a posição para não sair pelas laterais da janela
+    const rightEdge = window.innerWidth + window.scrollX;
+    if (left < window.scrollX + 5) {
+        left = window.scrollX + 5;
+    } else if (left + tooltipWidth > rightEdge - 5) {
+        left = rightEdge - tooltipWidth - 5;
+    }
 
     tooltipElement.style.top = `${top}px`;
     tooltipElement.style.left = `${left}px`;

@@ -169,7 +169,8 @@
                                         showMessageModal: _showMessageModal,
                                         positionTooltip: typeof positionTooltip !== 'undefined' ? positionTooltip : undefined,
                                         openOrderObservationModal: _openOrderObservationModal,
-                                        formatCnpjCpf: typeof formatCnpjCpf !== 'undefined' ? formatCnpjCpf : undefined
+                                        formatCnpjCpf: typeof formatCnpjCpf !== 'undefined' ? formatCnpjCpf : undefined,
+                                        createStatusPill: typeof createStatusPill !== 'undefined' ? createStatusPill : undefined
                                     });
                                     DashboardApp.start(_allNFeData, _allLojaIntegradaOrders, GerenciarPedidosApp.getAllPedidos(), _allProducts);
                                 }

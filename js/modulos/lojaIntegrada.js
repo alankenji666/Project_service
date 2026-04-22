@@ -53,6 +53,14 @@ export const LojaIntegradaApp = (function () {
          */
         fetchOrders: async function () {
             return await _fetchOrders();
+        },
+
+        /**
+         * Retorna os pedidos atualmente em cache.
+         * @returns {Array} Array de pedidos.
+         */
+        getOrders: function() {
+            return _allOrders;
         }
     };
 })();

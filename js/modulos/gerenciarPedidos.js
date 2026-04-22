@@ -88,6 +88,8 @@ export const GerenciarPedidosApp = (function () {
         _state.modalStatusDropdownMenu = document.getElementById('modal-status-dropdown-menu');
         _state.modalEmitirNfeBtn = document.getElementById('modal-emitir-nfe-btn');
         _state.modalPrintNfeBtn = document.getElementById('modal-print-nfe-btn');
+        _state.modalStatusSpinner = document.getElementById('modal-status-spinner');
+        _state.modalStatusChevron = document.getElementById('modal-status-chevron');
 
         // Novos elementos do Modal de Edição Rápida
         _state.quickEditModal = document.getElementById('item-quick-edit-modal');
@@ -776,7 +778,13 @@ export const GerenciarPedidosApp = (function () {
 
         try {
             if (_state.modalStatusDropdownBtn) _state.modalStatusDropdownBtn.disabled = true;
-            if (_state.modalStatusCurrentText) _state.modalStatusCurrentText.innerText = label;
+            if (_state.modalStatusSpinner) _state.modalStatusSpinner.classList.remove('hidden');
+            if (_state.modalStatusChevron) _state.modalStatusChevron.classList.add('hidden');
+            if (_state.modalStatusCurrentText) {
+                _state.modalStatusCurrentText.dataset.originalText = _state.modalStatusCurrentText.innerText;
+                _state.modalStatusCurrentText.innerText = 'Alterando...';
+            }
+            
             _updateModalStatusButtonStyle(idSituacao);
             
             const res = await fetch(`${API_URLS.ORDERS_BLING}/update-status`, {
@@ -787,6 +795,13 @@ export const GerenciarPedidosApp = (function () {
 
             if (!res.ok) throw new Error('Falha ao atualizar status.');
 
+            // Atualizar localmente o pedido em memória para manter consistência no UI
+            const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido) || String(p.número) === String(idPedido));
+            if (pedido) {
+                if (pedido.situação !== undefined) pedido.situação = label;
+                if (pedido.situacao !== undefined) pedido.situacao = label;
+            }
+
             if (typeof Toastify !== 'undefined') {
                 Toastify({
                     text: `Status alterado para ${label}`,
@@ -795,14 +810,23 @@ export const GerenciarPedidosApp = (function () {
                 }).showToast();
             }
 
+            // Atualizar a tabela ao fundo
+            _filterPedidos();
+
             // Atualizar o modal para refletir a nova situação (badges etc)
             setTimeout(() => _openOrderDetailsModal(idPedido), 500);
 
         } catch (err) {
             alert('Erro: ' + err.message);
+            // Restaurar texto original em caso de erro
+            if (_state.modalStatusCurrentText && _state.modalStatusCurrentText.dataset.originalText) {
+                _state.modalStatusCurrentText.innerText = _state.modalStatusCurrentText.dataset.originalText;
+            }
             _openOrderDetailsModal(idPedido);
         } finally {
             if (_state.modalStatusDropdownBtn) _state.modalStatusDropdownBtn.disabled = false;
+            if (_state.modalStatusSpinner) _state.modalStatusSpinner.classList.add('hidden');
+            if (_state.modalStatusChevron) _state.modalStatusChevron.classList.remove('hidden');
         }
     }
 
@@ -854,6 +878,23 @@ export const GerenciarPedidosApp = (function () {
                     style: { background: "linear-gradient(to right, #00b09b, #96c93d)" }
                 }).showToast();
             }
+
+            // Atualizar localmente o pedido com o novo ID da nota e status "Atendido"
+            const pedidoLocal = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
+            if (pedidoLocal) {
+                const idNota = result.data?.idNotaFiscal || result.idNotaFiscal || '';
+                if (idNota) {
+                    if (pedidoLocal.id_nota !== undefined) pedidoLocal.id_nota = idNota;
+                    if (pedidoLocal['id nota'] !== undefined) pedidoLocal['id nota'] = idNota;
+                    if (pedidoLocal['idnotafiscal'] !== undefined) pedidoLocal['idnotafiscal'] = idNota;
+                }
+                const atendidoLabel = "Atendido";
+                if (pedidoLocal.situação !== undefined) pedidoLocal.situação = atendidoLabel;
+                if (pedidoLocal.situacao !== undefined) pedidoLocal.situacao = atendidoLabel;
+            }
+
+            // Atualizar a tabela ao fundo
+            _filterPedidos();
 
             // O Bling atualiza o status para Atendido por padrão
             _openOrderDetailsModal(idPedido);

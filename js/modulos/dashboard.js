@@ -26,6 +26,8 @@ export const DashboardApp = (function() {
         startDate: null,
         endDate: null,
         lojaIntegradaSort: { key: 'numero_pedido', direction: 'desc' },
+        lojaIntegradaCurrentPage: 1,
+        lojaIntegradaPageSize: 20,
         estoqueSort: { key: 'valor', direction: 'desc' },
         activeLiTab: 'vendas',
         selectedYearFilter: new Date().getFullYear().toString(),
@@ -115,6 +117,50 @@ export const DashboardApp = (function() {
         } catch (e) {
             return dateStr;
         }
+    }
+
+    function _showLojaIntegradaOrderTooltip(event) {
+        const trigger = event.target.closest('.li-order-row-trigger');
+        if (!trigger || !_dom.customProductTooltip) return;
+
+        const itemsRaw = trigger.dataset.liItems || '';
+        const subtotal = parseFloat(trigger.dataset.liSubtotal) || 0;
+        const frete = parseFloat(trigger.dataset.liFreight) || 0;
+        const total = parseFloat(trigger.dataset.liTotal) || 0;
+        const numero = trigger.dataset.liNumber || '';
+
+        const items = itemsRaw.split(';').filter(s => s.trim() !== '').map(s => s.trim());
+        
+        let html = `<div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 max-w-md">`;
+        html += `<h4 class="font-bold text-sm mb-2 pb-1 border-b">Itens do Pedido #${numero}</h4>`;
+        
+        if (items.length > 0) {
+            html += `<ul class="space-y-1 text-xs mb-2">`;
+            items.forEach(item => {
+                const match = item.match(/^([\d.]+x)\s*(.*)$/);
+                if (match) {
+                    html += `<li class="flex justify-between gap-4"><span>${match[1]} ${match[2]}</span></li>`;
+                } else {
+                    html += `<li>${item}</li>`;
+                }
+            });
+            html += `</ul>`;
+        } else {
+            html += `<p class="text-xs text-gray-500 italic mb-2">Sem detalhes dos produtos</p>`;
+        }
+
+        html += `
+            <div class="mt-2 pt-2 border-t text-[11px] text-gray-600">
+                <div class="flex justify-between mb-0.5"><span>Subtotal:</span><span class="font-medium">${subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                <div class="flex justify-between mb-1"><span>Frete:</span><span class="font-medium">${frete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                <div class="flex justify-between font-bold border-t mt-1 pt-1 text-[13px] text-gray-900"><span>Total do Pedido:</span><span>${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+            </div>
+        </div>`;
+
+        _dom.customProductTooltip.innerHTML = html;
+        _dom.customProductTooltip.classList.remove('hidden');
+        _dom.customProductTooltip.style.opacity = '1';
+        if (_utils.positionTooltip) _utils.positionTooltip(event, _dom.customProductTooltip);
     }
 
     /**
@@ -737,19 +783,20 @@ export const DashboardApp = (function() {
             }
         });
 
-        if (_state.selectedChannel !== 'total') {
-            let chName = 'Loja Integrada';
-            if (_state.selectedChannel === 'bling') chName = 'Bling';
-            if (_state.selectedChannel === 'mercado_livre') chName = 'Mercado Livre';
-            
+        if (_state.selectedChannel === 'loja_integrada') {
             _dom.salesTableContainer.innerHTML = `
                 <div class="border-b border-gray-200 mt-6">
                     <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                        <a href="#" data-tab="vendas" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Vendas Faturadas (${chName})</a>
-                        <a href="#" data-tab="pedidos" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Todos os Pedidos (${chName})</a>
+                        <a href="#" data-tab="vendas" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200">Vendas Faturadas (Bling)</a>
+                        <a href="#" data-tab="pedidos" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200">Todos os Pedidos (Loja Integrada)</a>
                     </nav>
                 </div>
                 <div id="li-tab-content"></div>`;
+            _renderTabContent();
+        } else if (_state.selectedChannel !== 'total') {
+            // Para outros canais (Bling, Mercado Livre), mostramos apenas a aba de vendas faturadas sem opção de troca
+            _dom.salesTableContainer.innerHTML = `<div id="li-tab-content" class="mt-6"></div>`;
+            _state.activeLiTab = 'vendas';
             _renderTabContent();
         } else {
             _dom.salesTableContainer.innerHTML = _getSalesTableHTML(sortedKeys, salesByPeriod);
@@ -777,27 +824,76 @@ export const DashboardApp = (function() {
         if (_state.selectedChannel === 'bling') currentStoreName = 'Bling';
         if (_state.selectedChannel === 'mercado_livre') currentStoreName = 'Mercado Livre';
 
+        // [DEBUG] Discovery of property names
+        if (_allLojaIntegradaOrders.length > 0) {
+            console.log('[Dashboard DEBUG] Exemplo de objeto Pedido LI:', Object.keys(_allLojaIntegradaOrders[0]));
+        }
+
+        const parseDate = (dStr) => {
+            if (!dStr) return null;
+            // Tenta ISO primeiro para o caso da Loja Integrada
+            let d = new Date(dStr);
+            if (isNaN(d.getTime())) {
+                // Se falhar, tenta PT-BR
+                d = _utils.parsePtBrDate(dStr);
+            }
+            return (d && !isNaN(d.getTime())) ? d : null;
+        };
+
+        const yearLabel = isNaN(selectedYear) ? 'Tudo' : selectedYear;
+        console.log(`[Dashboard DEBUG] Iniciando filtragem para: Canais=${currentStoreName}, Ano=${yearLabel}, Tab=${_state.activeLiTab}`);
+
         if (selectedYear && !isNaN(selectedYear)) {
-            filteredNFe = _allNFeData.filter(nfe => _utils.parsePtBrDate(nfe.data_de_emissao)?.getFullYear() === selectedYear);
-            filteredOrders = _allPedidosBling.filter(p => {
-                const isTarget = _getNormalizedStoreName(p) === currentStoreName;
-                const d = _utils.parsePtBrDate(p.data || p.data_criacao || p.data_pedido || "");
-                return isTarget && d && d.getFullYear() === selectedYear;
-            });
+            filteredNFe = _allNFeData.filter(nfe => parseDate(nfe.data_de_emissao)?.getFullYear() === selectedYear);
+            
+            if (_state.activeLiTab === 'pedidos') {
+                filteredOrders = _allLojaIntegradaOrders.filter(p => {
+                    const dStr = p['Data Criação'] || p.data_criação || p.data_criacao || p.dataCriacao || p.data || "";
+                    const d = parseDate(dStr);
+                    return d && d.getFullYear() === selectedYear; // Se filtrou por ano, a data PRECISA ser válida
+                });
+            } else {
+                filteredOrders = _allPedidosBling.filter(p => {
+                    const isTarget = _getNormalizedStoreName(p) === currentStoreName;
+                    const d = parseDate(p.data || p.data_criacao || p.data_pedido || "");
+                    return isTarget && d && d.getFullYear() === selectedYear;
+                });
+            }
         } else {
-            const startDate = _state.startDate ? _utils.parsePtBrDate(_state.startDate) : null;
-            const endDate = _state.endDate ? _utils.parsePtBrDate(_state.endDate) : null;
+            // Ajuste robusto para startDate/endDate que podem vir em ISO (YYYY-MM-DD) do input ou PT-BR
+            const parseFilterDate = (str) => {
+                if (!str) return null;
+                let d = _utils.parsePtBrDate(str);
+                if (!d || isNaN(d.getTime())) d = new Date(str + 'T00:00:00'); // Garante início do dia
+                return (d && !isNaN(d.getTime())) ? d : null;
+            };
+
+            const startDate = parseFilterDate(_state.startDate);
+            const endDate = parseFilterDate(_state.endDate);
+            if (endDate) endDate.setHours(23, 59, 59, 999); // Garante fim do dia se houver filtro
             
             filteredNFe = _allNFeData.filter(nfe => {
-                const d = _utils.parsePtBrDate(nfe.data_de_emissao);
+                const d = parseDate(nfe.data_de_emissao);
+                if (!startDate && !endDate) return true; // Se não há filtro de data, inclui tudo
                 return d && (!startDate || d >= startDate) && (!endDate || d <= endDate);
             });
             
-            filteredOrders = _allPedidosBling.filter(p => {
-                const isTarget = _getNormalizedStoreName(p) === currentStoreName;
-                const d = _utils.parsePtBrDate(p.data || p.data_criacao || p.data_pedido || "");
-                return isTarget && d && (!startDate || d >= startDate) && (!endDate || d <= endDate);
-            });
+            if (_state.activeLiTab === 'pedidos') {
+                filteredOrders = _allLojaIntegradaOrders.filter(p => {
+                    const dStr = p['Data Criação'] || p.data_criação || p.data_criacao || p.dataCriacao || p.data || "";
+                    const d = parseDate(dStr);
+                    if (!startDate && !endDate) return true; // CORREÇÃO CRÍTICA: Se não há filtro, inclui o pedido.
+                    return d && (!startDate || d >= startDate) && (!endDate || d <= endDate);
+                });
+                console.log(`[Dashboard DEBUG] Pedidos LI filtrados: ${filteredOrders.length} de ${_allLojaIntegradaOrders.length}`);
+            } else {
+                filteredOrders = _allPedidosBling.filter(p => {
+                    const isTarget = _getNormalizedStoreName(p) === currentStoreName;
+                    const d = parseDate(p.data || p.data_criacao || p.data_pedido || "");
+                    if (!startDate && !endDate) return isTarget;
+                    return isTarget && d && (!startDate || d >= startDate) && (!endDate || d <= endDate);
+                });
+            }
         }
 
         if (_state.activeLiTab === 'vendas') {
@@ -807,19 +903,20 @@ export const DashboardApp = (function() {
                 const isConcluido = (sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad'));
                 if (!isConcluido) return false;
 
-                const d = _utils.parsePtBrDate(p.data || p.data_criacao || p.data_pedido || "");
+                const d = parseDate(p.data || p.data_criacao || p.data_pedido || "");
                 if (!d) return false;
                 if (selectedYear && !isNaN(selectedYear) && d.getFullYear() !== selectedYear) return false;
                 if (!selectedYear) {
-                    const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-                    const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+                    const startDate = parseFilterDate(_state.startDate);
+                    const endDate = parseFilterDate(_state.endDate);
+                    if (endDate) endDate.setHours(23, 59, 59, 999);
                     if ((startDate && d < startDate) || (endDate && d > endDate)) return false;
                 }
                 return true;
             });
 
             liPedidos.forEach(p => {
-                const d = _utils.parsePtBrDate(p.data || p.data_criacao || p.data_pedido || "");
+                const d = parseDate(p.data || p.data_criacao || p.data_pedido || "");
                 if (!d) return;
                 const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                 if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
@@ -828,18 +925,73 @@ export const DashboardApp = (function() {
             });
             tabContentContainer.innerHTML = _getSalesTableHTML(Object.keys(salesByPeriod).sort(), salesByPeriod);
         } else {
-            // Removemos o filtro estrito de allowedStatus para permitir novos status como "Atendido"
-            let orders = filteredOrders;
+            // --- Ordenação (Lógica de 3 Estados) ---
+            let orders = [...filteredOrders];
             const { key, direction } = _state.lojaIntegradaSort;
-            const dir = direction === 'asc' ? 1 : -1;
-            orders.sort((a, b) => {
-                const valA = a[key], valB = b[key];
-                if (key === 'valor_total' || key === 'numero_pedido') return (parseFloat(valA || 0) - parseFloat(valB || 0)) * dir;
-                if (key === 'data_criação' || key === 'data_criacao') return (new Date(valA) - new Date(valB)) * dir;
-                return String(valA || '').localeCompare(String(valB || '')) * dir;
+
+            if (direction) {
+                const dir = direction === 'asc' ? 1 : -1;
+                orders.sort((a, b) => {
+                    let valA, valB;
+                    
+                    if (key === 'numero_pedido') {
+                        valA = parseInt(a['Numero Pedido'] || a.numero_pedido || a.numeroPedido || a.numero || a.número || 0);
+                        valB = parseInt(b['Numero Pedido'] || b.numero_pedido || b.numeroPedido || b.numero || b.número || 0);
+                        return (valA - valB) * dir;
+                    } else if (key === 'data_criacao') {
+                        const d1 = parseDate(a['Data Criação'] || a.data_criação || a.data_criacao || a.dataCriacao || a.data || "");
+                        const d2 = parseDate(b['Data Criação'] || b.data_criação || b.data_criacao || b.dataCriacao || b.data || "");
+                        return ((d1?.getTime() || 0) - (d2?.getTime() || 0)) * dir;
+                    } else if (key === 'valor_total') {
+                        const v1 = _parseCurrencyBRL(a['Valor Total'] || a.valor_total || a.valorTotal || a.total_pedido || a.total || 0);
+                        const v2 = _parseCurrencyBRL(b['Valor Total'] || b.valor_total || b.valorTotal || b.total_pedido || b.total || 0);
+                        return (v1 - v2) * dir;
+                    } else if (key === 'cliente') {
+                        valA = String(a['Cliente'] || a.cliente || a.contato_nome || '').toLowerCase();
+                        valB = String(b['Cliente'] || b.cliente || b.contato_nome || '').toLowerCase();
+                    } else if (key === 'situacao') {
+                        valA = String(a['Situação'] || a.situacao || a.situao || a.situação || '').toLowerCase();
+                        valB = String(b['Situação'] || b.situacao || b.situao || b.situação || '').toLowerCase();
+                    } else if (key === 'cupom') {
+                        // Lógica agressiva para encontrar o cupom no objeto
+                        const findCupom = (p) => {
+                            const keywords = ['cupom', 'voucher', 'vale', 'promo', 'desconto', 'coupon'];
+                            const k = Object.keys(p).find(key => keywords.some(kw => key.toLowerCase().includes(kw)));
+                            let val = (k ? p[k] : null) || p.cupom || p.Cupom || '';
+                            if (val === 'N/A' || !val || String(val).trim() === '') val = '';
+                            return String(val).toLowerCase();
+                        };
+                        valA = findCupom(a);
+                        valB = findCupom(b);
+                    } else {
+                        valA = String(a[key] || '').toLowerCase();
+                        valB = String(b[key] || '').toLowerCase();
+                    }
+                    return valA.localeCompare(valB, 'pt-BR') * dir;
+                });
+            } else {
+                // Estado "Padrão": Ordena por número de pedido descendente por default se não houver ordenação ativa
+                orders.sort((a, b) => {
+                    const valA = parseInt(a['Numero Pedido'] || a.numero_pedido || a.numeroPedido || a.numero || a.número || 0);
+                    const valB = parseInt(b['Numero Pedido'] || b.numero_pedido || b.numeroPedido || b.numero || b.número || 0);
+                    return valB - valA;
+                });
+            }
+
+            // --- Paginação ---
+            const totalItems = orders.length;
+            const totalPages = Math.ceil(totalItems / _state.lojaIntegradaPageSize);
+            _state.lojaIntegradaCurrentPage = Math.min(_state.lojaIntegradaCurrentPage, totalPages) || 1;
+            const startIndex = (_state.lojaIntegradaCurrentPage - 1) * _state.lojaIntegradaPageSize;
+            const paginatedOrders = orders.slice(startIndex, startIndex + _state.lojaIntegradaPageSize);
+
+            tabContentContainer.innerHTML = _getLojaIntegradaOrdersTableHTML(paginatedOrders, {
+                totalItems,
+                totalPages,
+                currentPage: _state.lojaIntegradaCurrentPage
             });
-            tabContentContainer.innerHTML = _getLojaIntegradaOrdersTableHTML(orders);
         }
+
     }
 
     function _getSalesTableHTML(sortedMonths, salesData) {
@@ -862,52 +1014,146 @@ export const DashboardApp = (function() {
         return html;
     }
 
-    function _getLojaIntegradaOrdersTableHTML(orders) {
-        const formatCurrency = (v) => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    function _getLojaIntegradaOrdersTableHTML(orders, pagination = null) {
+        const formatCurrency = (v) => {
+            const val = _parseCurrencyBRL(v);
+            return (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        };
+        
+        const sortIcon = (col) => {
+            if (_state.lojaIntegradaSort.key !== col) return '<span class="ml-1 text-gray-300">↕</span>';
+            return _state.lojaIntegradaSort.direction === 'asc' ? '<span class="ml-1 text-blue-600">▲</span>' : '<span class="ml-1 text-blue-600">▼</span>';
+        };
         
         let html = `
-            <div class="bg-white p-4 rounded-lg shadow-md mt-8">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">Pedidos E-Commerce (Bling)</h3>
+            <div class="bg-white p-4 rounded-lg shadow-md mt-4">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">Pedidos E-Commerce (Loja Integrada)</h3>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pedido Nº</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Situação</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor Total</th>
+                                <th data-li-sort="numero_pedido" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                    <div class="flex items-center">Pedido Nº ${sortIcon('numero_pedido')}</div>
+                                </th>
+                                <th data-li-sort="data_criacao" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                    <div class="flex items-center">Data ${sortIcon('data_criacao')}</div>
+                                </th>
+                                <th data-li-sort="cliente" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                    <div class="flex items-center">Cliente ${sortIcon('cliente')}</div>
+                                </th>
+                                <th data-li-sort="situacao" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                    <div class="flex items-center">Situação ${sortIcon('situacao')}</div>
+                                </th>
+                                <th data-li-sort="cupom" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                    <div class="flex items-center">Cupom ${sortIcon('cupom')}</div>
+                                </th>
+                                <th data-li-sort="valor_total" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                    <div class="flex items-center justify-end">Valor Total ${sortIcon('valor_total')}</div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
         `;
 
         if (orders.length === 0) {
-            html += `<tr><td colspan="5" class="px-6 py-10 text-center text-gray-500 italic text-sm">Nenhum pedido encontrado para este período.</td></tr>`;
+            html += `<tr><td colspan="6" class="px-6 py-10 text-center text-gray-500 italic text-sm">Nenhum pedido encontrado para este período.</td></tr>`;
         } else {
             orders.forEach(p => {
-                const total = parseFloat(p.total_pedido || p['total pedido'] || p.valor_total || p.total_venda || p.total || p.valortotal || 0) || 0;
-                const dStr = p.data || p.data_criacao || p.data_pedido || "-";
-                
-                html += `
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">${p.numero || p.número || '-'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${_formatDate(dStr)}</td>
-                        <td class="px-6 py-4 text-sm text-gray-900 truncate max-w-[200px]" title="${p.contato_nome || p['contato nome'] || '-'}">${p.contato_nome || p['contato nome'] || '-'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-xs">
-                             <span class="px-2.5 py-1 font-bold uppercase rounded-full bg-gray-100 text-gray-800">${p.situação || p.situacao || p.situao || '-'}</span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">${formatCurrency(total)}</td>
-                    </tr>
-                `;
+                try {
+                    const numero = p['Numero Pedido'] || p.numero_pedido || p.numeroPedido || p.numero || p.número || '-';
+                    const dStr = p['Data Criação'] || p['data_criação'] || p.data_criação || p.data_criacao || p.dataCriacao || p.data || p.data_pedido || "-";
+                    const cliente = p['Cliente'] || p.cliente || p.contato_nome || p['contato nome'] || '-';
+                    const situacao = p['Situação'] || p.situacao || p.situao || p.situação || '-';
+                    
+                    // Busca cupom de forma extremamente agressiva (qualquer chave que remeta a cupom ou desconto)
+                    const cupomKeywords = ['cupom', 'voucher', 'vale', 'promo', 'desconto', 'coupon'];
+                    const cupomKey = Object.keys(p).find(k => {
+                        const lowK = k.toLowerCase();
+                        return cupomKeywords.some(kw => lowK.includes(kw));
+                    });
+                    
+                    let cupom = (cupomKey ? p[cupomKey] : null) || p.cupom || p.Cupom || '-';
+                    if (cupom === 'N/A' || !cupom || String(cupom).trim() === '') cupom = '-';
+                    
+                    const totalRaw = p['Valor Total'] || p.valor_total || p.valorTotal || p.total_pedido || p.total_venda || p.total || p.valortotal || 0;
+                    const freteRaw = p['Valor Frete'] || p.valor_frete || p.valorFrete || p.frete || 0;
+                    const subtotalRaw = p['Valor Produtos'] || p.valor_produtos || p.valorProdutos || p.subtotal || 0;
+                    
+                    // Limpa a string de itens para evitar quebra de atributos HTML
+                    let itensRaw = p.itens || p.Itens || '';
+                    itensRaw = String(itensRaw).replace(/"/g, '&quot;').replace(/[\r\n]+/g, ' ').trim();
+
+                    let badgeClass = 'bg-gray-100 text-gray-800';
+                    const sitLower = String(situacao).toLowerCase();
+                    if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badgeClass = 'bg-green-100 text-green-800';
+                    else if (sitLower.includes('cancel')) badgeClass = 'bg-red-100 text-red-800';
+                    else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento') || sitLower.includes('aguardando')) badgeClass = 'bg-yellow-100 text-yellow-800';
+                    else if (sitLower.includes('produ')) badgeClass = 'bg-blue-100 text-blue-800';
+                    else if (sitLower.includes('pago') || sitLower.includes('aprov')) badgeClass = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+                    
+                    html += `
+                        <tr class="hover:bg-gray-50 transition-colors li-order-row-trigger" 
+                            data-li-items="${itensRaw.replace(/"/g, '&quot;')}"
+                            data-li-subtotal="${subtotalRaw}"
+                            data-li-freight="${freteRaw}"
+                            data-li-total="${totalRaw}"
+                            data-li-number="${numero}">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">${numero}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${_formatDate(dStr)}</td>
+                            <td class="px-6 py-4 text-sm text-gray-900 truncate max-w-[250px]" title="${cliente}">${cliente}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${situacao}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${cupom}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-900">${formatCurrency(totalRaw)}</td>
+                        </tr>
+                    `;
+                } catch (err) {
+                    console.error('[Dashboard] Erro ao renderizar linha de pedido:', err, p);
+                }
             });
         }
 
-        html += `</tbody></table></div></div>`;
+        html += `</tbody></table></div>`;
+
+        // Footer de Paginação
+        if (pagination && pagination.totalPages > 1) {
+            html += `
+                <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                    <div class="flex-1 flex justify-between sm:hidden">
+                        <button data-li-page="prev" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Anterior</button>
+                        <button data-li-page="next" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Próxima</button>
+                    </div>
+                    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm text-gray-700">
+                                Mostrando <span class="font-medium">${((pagination.currentPage - 1) * _state.lojaIntegradaPageSize) + 1}</span> 
+                                até <span class="font-medium">${Math.min(pagination.currentPage * _state.lojaIntegradaPageSize, pagination.totalItems)}</span> 
+                                de <span class="font-medium">${pagination.totalItems}</span> resultados
+                            </p>
+                        </div>
+                        <div>
+                            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                <button data-li-page="prev" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${pagination.currentPage === 1 ? 'opacity-50 cursor-not-allowed' : ''}">
+                                    <span class="sr-only">Anterior</span>
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                    Página ${pagination.currentPage} / ${pagination.totalPages}
+                                </span>
+                                <button data-li-page="next" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${pagination.currentPage === pagination.totalPages ? 'opacity-50 cursor-not-allowed' : ''}">
+                                    <span class="sr-only">Próxima</span>
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        html += `</div>`;
         return html;
     }
-
-    // --- Modal, Tooltips & Export Functions ---
 
     function _showSalesDetailsModal(monthKey, channel) {
         let start, end, titleDate;
@@ -1205,27 +1451,50 @@ export const DashboardApp = (function() {
             return new Intl.NumberFormat('pt-BR', { 
                 style: 'currency', 
                 currency: 'BRL' 
-            }).format(val || 0);
+            }).format(val || 0).replace(/\u00A0/g, ' '); // Garante espaços normais
+        };
+
+        const getVendedor = (p, nfe) => {
+            let raw = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
+            for (const [id, name] of Object.entries(_vendedorMap)) {
+                if (raw.includes(id)) return name;
+            }
+            return raw;
         };
 
         let headers, rows;
         if (type === 'notes') {
             headers = ["Nº Nota", "Data", "Cliente", "Vendedor", "Valor", "Situação", "Origem"];
-            rows = _currentSalesDetails.map(n => [
-                n.numero_da_nota, 
-                _formatDate(n.data_de_emissao), 
-                n.nome_do_cliente, 
-                n.nome_do_vendedor, 
-                formatBRL(n.valor_da_nota), 
-                n.situacao, 
-                n.origem_loja
-            ]);
+            rows = _currentSalesDetails.map(p => {
+                const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
+                const nfeId = String(rawNfeId).split('.')[0].trim();
+                const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+                
+                const totalValue = parseFloat(p.total_pedido || p['total pedido'] || p.valor_total || p.total_venda || p.total || p.valortotal || 0) || 0;
+                
+                return [
+                    nfe ? nfe.numero_da_nota : (p.numero || p.número || '-'), 
+                    _formatDate(nfe ? nfe.data_de_emissao : (p.data || p.data_criacao || p.data_pedido)), 
+                    p.contato_nome || p['contato nome'] || (nfe ? nfe.nome_do_client : '-'), 
+                    getVendedor(p, nfe), 
+                    formatBRL(nfe ? nfe.valor_da_nota : totalValue), 
+                    p.situação || p.situacao || (nfe ? nfe.situacao : '-'), 
+                    _getNormalizedStoreName(p) || (nfe ? nfe.origem_loja : '-')
+                ];
+            });
         } else {
             headers = ["Nº Nota", "Data", "Cliente", "Código Item", "Quantidade", "Valor Unitario (Venda)", "Valor Unitario (Custo)", "Total (Venda)", "Total (Custo)"];
             rows = [];
-            _currentSalesDetails.forEach(n => {
-                _parseNfeItemsString(n.itens).forEach(i => {
-                    const product = _allProducts.find(p => String(p.codigo) === String(i.codigo));
+            _currentSalesDetails.forEach(p => {
+                const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
+                const nfeId = String(rawNfeId).split('.')[0].trim();
+                const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+                
+                const itensRaw = nfe ? nfe.itens : (p.itens || '');
+                const items = _parseNfeItemsString(itensRaw);
+
+                items.forEach(i => {
+                    const product = _allProducts.find(prod => String(prod.codigo) === String(i.codigo));
                     const custoUnitario = product ? (parseFloat(product.preco_de_custo) || 0) : 0;
                     const vendaUnitario = parseFloat(i.valor) || 0;
                     const quantidade = parseFloat(i.quantidade) || 0;
@@ -1234,9 +1503,9 @@ export const DashboardApp = (function() {
                     const totalCusto = quantidade * custoUnitario;
 
                     rows.push([
-                        n.numero_da_nota, 
-                        _formatDate(n.data_de_emissao), 
-                        n.nome_do_cliente, 
+                        nfe ? nfe.numero_da_nota : (p.numero || p.número || '-'), 
+                        _formatDate(nfe ? nfe.data_de_emissao : (p.data || p.data_criacao || p.data_pedido)), 
+                        p.contato_nome || p['contato nome'] || (nfe ? nfe.nome_do_client : '-'), 
                         i.codigo, 
                         quantidade, 
                         formatBRL(vendaUnitario),
@@ -1252,7 +1521,8 @@ export const DashboardApp = (function() {
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = `vendas_${type}.csv`;
+        const fileName = `vendas_${type}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`;
+        link.download = fileName;
         link.click();
     }
 
@@ -1344,13 +1614,66 @@ export const DashboardApp = (function() {
                 _renderTabContent();
                 return;
             }
-            const sort = e.target.closest('[data-sort-key]');
-            if (sort && _state.selectedChannel === 'loja_integrada' && _state.activeLiTab === 'pedidos') {
-                const key = sort.dataset.sortKey;
-                _state.lojaIntegradaSort = { key, direction: (_state.lojaIntegradaSort.key === key && _state.lojaIntegradaSort.direction === 'asc') ? 'desc' : 'asc' };
+
+            // --- Listeners para Loja Integrada (Ordenação e Paginação) ---
+            
+            // Ordenação (Nova Tabela - Lógica de 3 Estados)
+            const liSort = e.target.closest('[data-li-sort]');
+            if (liSort) {
+                const key = liSort.dataset.liSort;
+                if (_state.lojaIntegradaSort.key === key) {
+                    // Ciclo: Descendente -> Ascendente -> Padrão (null)
+                    if (_state.lojaIntegradaSort.direction === 'desc') {
+                        _state.lojaIntegradaSort.direction = 'asc';
+                    } else if (_state.lojaIntegradaSort.direction === 'asc') {
+                        _state.lojaIntegradaSort.direction = null;
+                    } else {
+                        _state.lojaIntegradaSort.direction = 'desc';
+                    }
+                } else {
+                    // Ao clicar em uma nova coluna, começa por Descendente (Maior para o menor)
+                    _state.lojaIntegradaSort = { key, direction: 'desc' };
+                }
                 _renderTabContent();
+                return;
+            }
+
+            // Paginação (Nova Tabela)
+            const liPage = e.target.closest('[data-li-page]');
+            if (liPage) {
+                const action = liPage.dataset.liPage;
+                if (action === 'prev') {
+                    if (_state.lojaIntegradaCurrentPage > 1) _state.lojaIntegradaCurrentPage--;
+                } else if (action === 'next') {
+                    _state.lojaIntegradaCurrentPage++;
+                } else if (!isNaN(parseInt(action))) {
+                    _state.lojaIntegradaCurrentPage = parseInt(action);
+                }
+                _renderTabContent();
+                return;
             }
         });
+
+        _dom.salesTableContainer?.addEventListener('mouseover', e => {
+            if (e.target.closest('.li-order-row-trigger')) {
+                _showLojaIntegradaOrderTooltip(e);
+            }
+        });
+
+        _dom.salesTableContainer?.addEventListener('mouseout', e => {
+            if (e.target.closest('.li-order-row-trigger')) {
+                if (_dom.customProductTooltip) {
+                    _dom.customProductTooltip.style.opacity = '0';
+                    setTimeout(() => { 
+                        if (_dom.customProductTooltip && _dom.customProductTooltip.style.opacity === '0') {
+                            _dom.customProductTooltip.classList.add('hidden');
+                        }
+                    }, 200);
+                }
+            }
+        });
+
+
 
         _dom.page?.addEventListener('click', e => {
             const cell = e.target.closest('.clickable-sales-cell');
