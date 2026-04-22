@@ -33,13 +33,13 @@ function extrairOrcamentoCRM(texto) {
 
 module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME, BLING_API_BASE_URL, COLUMNS, APPS_SCRIPT_TOKEN_URL) {
     const router = express.Router();
-    let webhookQueue = Promise.resolve();
 
     router.post('/', async (req, res, next) => {
         console.log('--- [WEBHOOK PEDIDO] RECEBIDO ---');
         
-        // Enfileira o processamento para evitar limites de taxa (Rate Limit)
-        webhookQueue = webhookQueue.then(async () => {
+        // Processamento paralelo para evitar Limites de Timeout (Múltiplas conexões por vez).
+        // A Fila foi removida.
+        {
             try {
                 const { event, data } = req.body;
                 const pedidoId = data ? data.id : null;
@@ -190,10 +190,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     });
                 }
             }
-        }).catch((fatalError) => {
-            console.error('[Bling Webhook] Erro FATAL:', fatalError);
-            if (!res.headersSent) res.status(200).send({ status: 'fatal_error_logged' });
-        });
+        }
     });
 
     return router;
