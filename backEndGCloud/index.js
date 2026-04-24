@@ -477,6 +477,92 @@ app.post('/update-order-status', async (req, res, next) => {
     }
 });
 
+// Rota para Editar a Descrição de um Item de Requisição
+app.post('/update-item-description', async (req, res, next) => {
+    console.log('[update-item-description] Recebido:', JSON.stringify(req.body));
+    try {
+        const { orderCode, codigoService, requisitionType, novaDescricao } = req.body;
+
+        if (!orderCode || !codigoService || !requisitionType || !novaDescricao) {
+            const error = new Error("Dados incompletos: 'orderCode', 'codigoService', 'requisitionType' e 'novaDescricao' são obrigatórios.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const sheets = await getInitializedSheetsClient();
+        let spreadsheetId, sheetName;
+
+        if (requisitionType === 'fabrica') {
+            spreadsheetId = SPREADSHEET_ID_REQUISICAO_FABRICA;
+            sheetName = SHEET_NAME_REQUISICAO_FABRICA;
+        } else if (requisitionType === 'terceiros') {
+            spreadsheetId = SPREADSHEET_ID_REQUISICAO_GERAL_TERCEIROS;
+            sheetName = SHEET_NAME_REQUISICAO_GERAL_TERCEIROS;
+        } else if (requisitionType === 'saidas-fabrica') {
+            spreadsheetId = SPREADSHEET_ID_SAIDA_FABRICA;
+            sheetName = SHEET_NAME_SAIDA_FABRICA;
+        } else if (requisitionType === 'saidas-garantia') {
+            spreadsheetId = SPREADSHEET_ID_SAIDA_GARANTIA;
+            sheetName = SHEET_NAME_SAIDA_GARANTIA;
+        } else {
+            const error = new Error(`Tipo de requisição desconhecido: ${requisitionType}`);
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: `${sheetName}!A:Z`
+        });
+
+        const rows = response.data.values;
+        if (!rows || rows.length === 0) {
+            const error = new Error('Nenhum dado encontrado na planilha.');
+            error.statusCode = 404;
+            throw error;
+        }
+
+        const headers = rows[0].map(h => h ? h.toLowerCase().trim() : '');
+        const requisicaoColIndex = headers.indexOf('requisição');
+        const codigoServiceColIndex = headers.indexOf('codigo service');
+        const descricaoColIndex = headers.indexOf('descrição');
+
+        if (requisicaoColIndex === -1 || codigoServiceColIndex === -1 || descricaoColIndex === -1) {
+            throw new Error('Colunas essenciais (requisição, codigo service, descrição) não encontradas na planilha.');
+        }
+
+        let rowIndexToUpdate = -1;
+        for (let i = 1; i < rows.length; i++) {
+            const rowReq = String(rows[i][requisicaoColIndex] || '').trim();
+            const rowCod = String(rows[i][codigoServiceColIndex] || '').trim();
+            if (rowReq === orderCode && rowCod === codigoService) {
+                rowIndexToUpdate = i + 1; // 1-indexed (cabeçalho é linha 1)
+                break;
+            }
+        }
+
+        if (rowIndexToUpdate === -1) {
+            const error = new Error(`Item não encontrado na planilha para a Requisição ${orderCode} / Código ${codigoService}.`);
+            error.statusCode = 404;
+            throw error;
+        }
+
+        const descricaoRange = `${sheetName}!${String.fromCharCode(65 + descricaoColIndex)}${rowIndexToUpdate}`;
+        await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: descricaoRange,
+            valueInputOption: 'RAW',
+            resource: { values: [[novaDescricao]] }
+        });
+
+        console.log(`[update-item-description] Descrição do item ${codigoService} atualizada na linha ${rowIndexToUpdate}.`);
+        res.status(200).send({ status: 'success', message: 'Descrição atualizada com sucesso!' });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
 // Rota para Adicionar Observação a um Item de Requisição (Geral/Terceiros)
 app.post('/add-requisition-observation', async (req, res, next) => {
     console.log('Requisição POST recebida para /add-requisition-observation:', JSON.stringify(req.body, null, 2));

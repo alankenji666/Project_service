@@ -1418,7 +1418,90 @@ const data = filteredProducts.map(product => {
                 }
             }
 
+            /**
+             * Abre o modal de edição de descrição de um item de requisição.
+             */
+            function _openEditDescriptionModal({ orderCode, codigoService, requisitionType, descricao }) {
+                const modal = document.getElementById('edit-description-modal');
+                const currentText = document.getElementById('edit-description-current-text');
+                const newInput = document.getElementById('edit-description-new-input');
+                const saveBtn = document.getElementById('save-edit-description-btn');
+                if (!modal || !currentText || !newInput) return;
 
+                currentText.textContent = descricao || 'N/A';
+                newInput.value = descricao || '';
+                modal.dataset.orderCode = orderCode;
+                modal.dataset.codigoService = codigoService;
+                modal.dataset.requisitionType = requisitionType;
+                modal.classList.remove('hidden');
+                // Seleciona o texto para facilitar a edição imediata
+                newInput.focus();
+                newInput.select();
+            }
+
+            /**
+             * Salva a nova descrição de um item de requisição via API e atualiza a memória.
+             */
+            async function _saveRequisitionItemDescription() {
+                const modal = document.getElementById('edit-description-modal');
+                const newInput = document.getElementById('edit-description-new-input');
+                const saveBtn = document.getElementById('save-edit-description-btn');
+                if (!modal || !newInput) return;
+
+                const { orderCode, codigoService, requisitionType } = modal.dataset;
+                const novaDescricao = newInput.value.trim();
+
+                if (!novaDescricao) {
+                    _showMessageModal("Campo Vazio", "Por favor, insira a nova descrição para o item.");
+                    return;
+                }
+                if (!orderCode || !codigoService || !requisitionType) {
+                    _showMessageModal("Erro", "Dados do item não encontrados. Tente novamente.");
+                    return;
+                }
+
+                if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Salvando...'; }
+
+                try {
+                    const response = await fetch(`${_API_BASE_URL}/update-item-description`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ orderCode, codigoService, requisitionType, novaDescricao })
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message || 'Erro ao salvar.');
+
+                    // Atualiza o item na memória local
+                    const lists = {
+                        'fabrica': _allOrdersFabrica,
+                        'terceiros': _allOrdersTerceiros,
+                        'saidas-fabrica': _allSaidasFabrica,
+                        'saidas-garantia': _allSaidasGarantia,
+                    };
+                    const listKey = Object.keys(lists).find(k => requisitionType.includes(k));
+                    if (listKey && lists[listKey]) {
+                        lists[listKey].forEach(order => {
+                            order.rawItems.forEach(item => {
+                                if (item.orderCode === orderCode && item.codigoService === codigoService) {
+                                    item.descricao = novaDescricao;
+                                }
+                            });
+                        });
+                    }
+
+                    modal.classList.add('hidden');
+                    _renderConsolidatedOrdersTable(); // Re-renderiza a tabela com a nova descrição
+                    _showMessageModal("Sucesso", `Descrição do item <b>${codigoService}</b> atualizada com sucesso!`);
+
+                } catch (error) {
+                    _showMessageModal("Erro ao Salvar", `Não foi possível salvar a descrição: ${error.message}`);
+                } finally {
+                    if (saveBtn) {
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Salvar`;
+                    }
+                }
+            }
 
             // NOVO: Abre o modal de ajuste de estoque
             function _openStockAdjustmentModal(productId) {
@@ -2300,7 +2383,14 @@ const data = filteredProducts.map(product => {
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.orderCode}</td>
                             <td class="px-6 py-4 text-sm text-gray-900 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap product-description-cell" data-full-description="${item.descricao || 'N/A'}" data-image-url="${imageUrl}">
-                                <strong>${truncatedDescription}</strong><br><span class="text-xs text-gray-500">${item.codigoService || 'N/A'}</span>
+                                <div class="flex items-start gap-1">
+                                    <div>
+                                        <strong>${truncatedDescription}</strong><br><span class="text-xs text-gray-500">${item.codigoService || 'N/A'}</span>
+                                    </div>
+                                    <button class="edit-description-btn flex-shrink-0 text-gray-300 hover:text-blue-500 p-0.5 rounded transition-colors" title="Editar Descrição" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-requisition-type="${item.requisitionType}" data-descricao="${(item.descricao || '').replace(/"/g, '&quot;')}">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                    </button>
+                                </div>
                             </td>
                             ${showResponsavelColumn ? `<td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.responsavel || ''}</td>` : ''}
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.localizacao}</td>
@@ -2344,12 +2434,17 @@ const data = filteredProducts.map(product => {
                             }
                         });
 
-                        // NOVO: Listeners para observações de requisição
+                        // NOVO: Listeners para observações de requisição e edição descrição
                         tableBody.addEventListener('click', (event) => {
                             const viewBtn = event.target.closest('.view-requisition-observation-btn');
                             if (viewBtn) {
                                 const { orderCode, codigoService } = viewBtn.dataset;
                                 _openRequisitionObservationModal(orderCode, codigoService);
+                            }
+                            const editDescBtn = event.target.closest('.edit-description-btn');
+                            if (editDescBtn) {
+                                event.stopPropagation();
+                                _openEditDescriptionModal(editDescBtn.dataset);
                             }
                         });
 
@@ -4037,6 +4132,15 @@ if (_generateProductReportBtn) {
                     _saveRequisitionObservationBtn.addEventListener('click', _saveRequisitionObservation);
                 }
 
+                // Event listeners para o modal de edição de descrição
+                const _editDescModal = document.getElementById('edit-description-modal');
+                const _closeEditDescBtn = document.getElementById('close-edit-description-modal-btn');
+                const _cancelEditDescBtn = document.getElementById('cancel-edit-description-btn');
+                const _saveEditDescBtn = document.getElementById('save-edit-description-btn');
+
+                if (_closeEditDescBtn) _closeEditDescBtn.addEventListener('click', () => _editDescModal && _editDescModal.classList.add('hidden'));
+                if (_cancelEditDescBtn) _cancelEditDescBtn.addEventListener('click', () => _editDescModal && _editDescModal.classList.add('hidden'));
+                if (_saveEditDescBtn) _saveEditDescBtn.addEventListener('click', _saveRequisitionItemDescription);
 
 
             }
