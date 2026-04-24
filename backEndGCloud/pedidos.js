@@ -228,6 +228,79 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 }
             }
 
+            res.status(200).send({ status: 'success', data: results });
+        } catch (error) {
+            next(error);
+        }
+    });
+
+    // Rota para Editar a Descrição de um Item de Requisição (Dentro de /pedidos)
+    router.post('/update-item-description', async (req, res, next) => {
+        try {
+            const { orderCode, codigoService, requisitionType, novaDescricao } = req.body;
+            if (!orderCode || !codigoService || !requisitionType || !novaDescricao) {
+                const error = new Error("Dados incompletos.");
+                error.statusCode = 400;
+                throw error;
+            }
+
+            const sheets = await getSheetsClient();
+            
+            // Mapeamento de Planilhas (Usando as mesmas variáveis globais que o index.js passa se necessário, 
+            // mas aqui vamos usar o padrão de IDs fixos para garantir)
+            const spreadsheets = {
+                'fabrica': '1_A9C_XuUyhC0X1C-PMy7_55jx-mH7LkslBz-CjdVuXc',
+                'terceiros': '1m5HuPv5RLam7vSQ7n1ml9MHy9WO_dbGN5gF2Bet39Ss',
+                'saidas-fabrica': '1ygLHkMzQcpMbXssdlF8iPFUXTXVFDsDud286Z8ihma4',
+                'saidas-garantia': '1JygTrWFYFXioVJMqmnR-KNs6vaUApYoAJZNWIK5R8PQ'
+            };
+            const sheetNames = {
+                'fabrica': 'Requisição fabrica lote 1',
+                'terceiros': 'Requisição geral lote 1',
+                'saidas-fabrica': 'Dados Sistemas - Fabrica 1',
+                'saidas-garantia': 'Dados Sistemas - Garantia 1'
+            };
+
+            const spreadsheetId = spreadsheets[requisitionType];
+            const sheetName = sheetNames[requisitionType];
+
+            if (!spreadsheetId) throw new Error(`Tipo de requisição desconhecido: ${requisitionType}`);
+
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A:Z`
+            });
+
+            const rows = response.data.values || [];
+            const headers = rows[0]?.map(h => h?.toLowerCase().trim()) || [];
+            const requisicaoColIndex = headers.indexOf('requisição');
+            const codigoServiceColIndex = headers.indexOf('codigo service');
+            const descricaoColIndex = headers.indexOf('descrição');
+
+            let rowIndexToUpdate = -1;
+            for (let i = 1; i < rows.length; i++) {
+                if (String(rows[i][requisicaoColIndex]).trim() === orderCode && String(rows[i][codigoServiceColIndex]).trim() === codigoService) {
+                    rowIndexToUpdate = i + 1;
+                    break;
+                }
+            }
+
+            if (rowIndexToUpdate === -1) throw new Error('Item não encontrado na planilha.');
+
+            const range = `${sheetName}!${String.fromCharCode(65 + descricaoColIndex)}${rowIndexToUpdate}`;
+            await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range,
+                valueInputOption: 'RAW',
+                resource: { values: [[novaDescricao]] }
+            });
+
+            res.status(200).send({ status: 'success', message: 'Descrição atualizada!' });
+        } catch (error) {
+            next(error);
+        }
+    });
+
     router.post('/vendas/:id/gerar-nfe', async (req, res, next) => {
         try {
             const { id } = req.params;
