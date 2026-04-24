@@ -2382,14 +2382,14 @@ const data = filteredProducts.map(product => {
                                 </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.orderCode}</td>
-                            <td class="px-6 py-4 text-sm text-gray-900 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap product-description-cell" data-full-description="${item.descricao || 'N/A'}" data-image-url="${imageUrl}">
-                                <div class="flex items-start gap-1">
-                                    <div>
+                            <td class="px-6 py-4 text-sm text-gray-900 max-w-xs product-description-cell" data-full-description="${item.descricao || 'N/A'}" data-image-url="${imageUrl}">
+                                <div class="flex items-center gap-1.5">
+                                    <div class="overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
                                         <strong>${truncatedDescription}</strong><br><span class="text-xs text-gray-500">${item.codigoService || 'N/A'}</span>
                                     </div>
-                                    <button class="edit-description-btn flex-shrink-0 text-gray-300 hover:text-blue-500 p-0.5 rounded transition-colors" title="Editar Descrição" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-requisition-type="${item.requisitionType}" data-descricao="${(item.descricao || '').replace(/"/g, '&quot;')}">
+                                    ${item.requisitionType === 'fabrica' ? `<button class="edit-description-btn flex-shrink-0 text-gray-300 hover:text-blue-500 p-0.5 rounded transition-colors" title="Editar Descrição" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-requisition-type="${item.requisitionType}" data-descricao="${(item.descricao || '').replace(/"/g, '&quot;')}">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                                    </button>
+                                    </button>` : ''}
                                 </div>
                             </td>
                             ${showResponsavelColumn ? `<td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">${item.responsavel || ''}</td>` : ''}
