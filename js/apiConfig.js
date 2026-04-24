@@ -44,5 +44,7 @@
 
           // Árvore de Peças por Equipamento
           PECAS_EQUIPAMENTO: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pecas-equipamento",
+
+          // Edição de Descrição de Item de Requisição
+          UPDATE_ITEM_DESCRIPTION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/update-item-description",
       };
-      

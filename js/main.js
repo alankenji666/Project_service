@@ -1463,7 +1463,7 @@ const data = filteredProducts.map(product => {
                 if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Salvando...'; }
 
                 try {
-                    const response = await fetch(`${_API_BASE_URL}/update-item-description`, {
+                    const response = await fetch(API_URLS.UPDATE_ITEM_DESCRIPTION, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ orderCode, codigoService, requisitionType, novaDescricao })
