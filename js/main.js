@@ -1465,9 +1465,14 @@ const data = filteredProducts.map(product => {
                 try {
                     const response = await fetch(API_URLS.UPDATE_ITEM_DESCRIPTION, {
                         method: 'POST',
+                        mode: 'cors',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ orderCode, codigoService, requisitionType, novaDescricao })
                     });
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) {
+                        throw new Error(`O servidor retornou uma resposta inesperada (HTTP ${response.status}). Verifique se o deploy do backend foi feito.`);
+                    }
                     const result = await response.json();
                     if (!response.ok) throw new Error(result.message || 'Erro ao salvar.');
 
