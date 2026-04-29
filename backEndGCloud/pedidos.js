@@ -350,6 +350,120 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
         }
     });
 
+    router.post('/update-item-status', async (req, res, next) => {
+        try {
+            const { pedidoId, itemCodigo, newStatus, itemIndex } = req.body;
+
+            if (!pedidoId || !itemCodigo || !newStatus) {
+                const error = new Error("Dados incompletos: 'pedidoId', 'itemCodigo' e 'newStatus' são obrigatórios.");
+                error.statusCode = 400;
+                throw error;
+            }
+
+            const sheets = await getSheetsClient();
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId: spreadsheetIdNFE,
+                range: `${sheetNamePedidosBling}!A:Z`,
+            });
+
+            const rows = response.data.values || [];
+            if (rows.length === 0) {
+                const error = new Error('Nenhum dado encontrado na planilha de Pedidos Bling.');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            const headers = rows[0].map(h => (h || '').toLowerCase().trim());
+            const idColIndex = headers.indexOf('id pedido') !== -1 ? headers.indexOf('id pedido') : headers.indexOf('id');
+            const numColIndex = headers.indexOf('numero') !== -1 ? headers.indexOf('numero') : headers.indexOf('número');
+            const numLojaColIndex = headers.indexOf('numero loja') !== -1 ? headers.indexOf('numero loja') : headers.indexOf('número loja');
+            const itensColIndex = headers.indexOf('itens') !== -1 ? headers.indexOf('itens') : 15; // Coluna P (índice 15)
+
+            let rowIndexToUpdate = -1;
+            let rawItens = '';
+
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const idVal = idColIndex !== -1 ? (row[idColIndex] || '').toString().trim() : '';
+                const numVal = numColIndex !== -1 ? (row[numColIndex] || '').toString().trim() : '';
+                const numLojaVal = numLojaColIndex !== -1 ? (row[numLojaColIndex] || '').toString().trim() : '';
+
+                if (idVal === String(pedidoId) || numVal === String(pedidoId) || numLojaVal === String(pedidoId)) {
+                    rowIndexToUpdate = i;
+                    rawItens = row[itensColIndex] || '';
+                    break;
+                }
+            }
+
+            if (rowIndexToUpdate === -1) {
+                const error = new Error(`Pedido com ID/Número ${pedidoId} não encontrado.`);
+                error.statusCode = 404;
+                throw error;
+            }
+
+            // Parse e Update dos Itens
+            const regex = /\(([^)]+)\)/g;
+            const items = [];
+            let match;
+            let matchCount = 0;
+            let updated = false;
+
+            while ((match = regex.exec(rawItens)) !== null) {
+                const parts = match[1].split(',').map(s => s.trim());
+                const currentSku = parts[0];
+                const currentQty = parts[1];
+                let currentVal = parts[2] || '0';
+                let currentStatus = 'OK';
+
+                if (currentVal.includes('|')) {
+                    const subParts = currentVal.split('|');
+                    currentVal = subParts[0];
+                    currentStatus = subParts[1];
+                } else if (parts.length >= 4) {
+                    currentStatus = parts[3];
+                }
+
+                if (currentSku === String(itemCodigo)) {
+                    if (itemIndex === undefined || itemIndex === matchCount) {
+                        currentStatus = newStatus;
+                        updated = true;
+                    }
+                }
+                
+                items.push(`(${currentSku}, ${currentQty}, ${currentVal}|${currentStatus})`);
+                matchCount++;
+            }
+
+            if (!updated) {
+                throw new Error(`Item ${itemCodigo} não encontrado no pedido.`);
+            }
+
+            const finalItensString = items.join(' ');
+            const range = `${sheetNamePedidosBling}!${String.fromCharCode(65 + itensColIndex)}${rowIndexToUpdate + 1}`;
+            
+            await sheets.spreadsheets.values.update({
+                spreadsheetId: spreadsheetIdNFE,
+                range: range,
+                valueInputOption: 'RAW',
+                resource: { values: [[finalItensString]] },
+            });
+
+            if (typeof notifySync === 'function') {
+                notifySync('orderItemStatusUpdated', {
+                    pedidoId: String(pedidoId),
+                    itemCodigo: itemCodigo,
+                    newStatus: newStatus,
+                    itemIndex: itemIndex
+                });
+            }
+
+            res.status(200).send({ status: 'success', message: 'Status do item atualizado!', data: { itens: finalItensString } });
+
+        } catch (error) {
+            next(error);
+        }
+    });
+
     return router;
 };
 

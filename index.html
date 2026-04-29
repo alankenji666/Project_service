@@ -339,6 +339,43 @@
         </div>
     </div>
 
+    <!-- MODAL DE RELATÓRIO CUSTOMIZADO DO RANKING -->
+    <div id="ranking-report-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            <!-- Header -->
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+                <div>
+                    <h2 class="text-xl font-black text-gray-800">Relatório de Itens Selecionados</h2>
+                    <p class="text-sm text-gray-500">Listagem de vendas detalhada por produto</p>
+                </div>
+                <button id="close-ranking-report-modal-btn" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Content Area -->
+            <div id="ranking-report-modal-content" class="flex-1 overflow-y-auto p-6 bg-gray-50">
+                <!-- Conteúdo gerado via JS -->
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white">
+                <button id="clear-ranking-selection-btn" class="px-6 py-2 text-red-600 font-bold hover:bg-red-50 rounded-lg transition-colors">
+                    Limpar Seleção
+                </button>
+                <div class="flex gap-3">
+                    <button id="ranking-report-cancel-btn" class="px-6 py-2 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-gray-200 transition-colors">
+                        Cancelar
+                    </button>
+                    <button id="print-ranking-report-btn" class="px-8 py-2 bg-blue-600 text-white font-black rounded-lg hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all transform active:scale-95 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                        IMPRIMIR RELATÓRIO
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- BARRA DE AÇÕES DO RELATÓRIO -->
     <div id="report-action-bar" class="report-action-bar-style hidden">
         <div class="left-buttons">
@@ -599,7 +636,7 @@
                     <p class="text-lg text-gray-600">Selecione o dashboard que deseja visualizar.</p>
                 </div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
                     <!-- Card Dashboard de Vendas -->
                     <div id="select-vendas-dashboard" class="bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all cursor-pointer border-2 border-transparent hover:border-blue-500 group">
                         <div class="flex flex-col items-center text-center">
@@ -609,7 +646,7 @@
                                 </svg>
                             </div>
                             <h2 class="text-2xl font-bold text-gray-800 mb-3">Dashboard de Vendas</h2>
-                            <p class="text-gray-600">Visualize a evolução de vendas por canal, ticket médio e performance de vendedores.</p>
+                            <p class="text-gray-600">Visualize a evolução de vendas por canal, ticket médio e performance.</p>
                         </div>
                     </div>
 
@@ -623,6 +660,19 @@
                             </div>
                             <h2 class="text-2xl font-bold text-gray-800 mb-3">Dashboard de Estoque</h2>
                             <p class="text-gray-600">Acompanhe níveis de estoque, reposição de produtos e análise de giro.</p>
+                        </div>
+                    </div>
+
+                    <!-- Card Ranking de Produtos (MAIS VENDIDOS) -->
+                    <div id="select-ranking-dashboard" class="bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all cursor-pointer border-2 border-transparent hover:border-orange-500 group">
+                        <div class="flex flex-col items-center text-center">
+                            <div class="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-orange-500 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-orange-600 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                </svg>
+                            </div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-3">Ranking de Saídas</h2>
+                            <p class="text-gray-600">Descubra quais produtos são os mais vendidos e quais geram maior fluxo.</p>
                         </div>
                     </div>
                 </div>
@@ -716,6 +766,56 @@
                                 <!-- Preenchido via JS -->
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard de Ranking de Produtos (Mais Vendidos) -->
+            <div id="dashboard-ranking-container" class="hidden">
+                <div class="flex items-center mb-6">
+                    <button id="back-to-selector-from-ranking-btn" class="mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                    </button>
+                    <div>
+                        <h1 class="text-4xl font-bold text-gray-800 mb-1">Ranking de Mais Vendidos</h1>
+                        <p class="text-lg text-gray-600">Top produtos por volume de saída</p>
+                    </div>
+                </div>
+
+                <!-- Cards de Resumo e Filtro por Categoria -->
+                <div id="ranking-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                    <!-- Preenchido via JS -->
+                </div>
+
+                <!-- Campo de Busca -->
+                <div class="mb-6 max-w-md">
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </span>
+                        <input type="text" id="ranking-search-input" 
+                            class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-orange-500 focus:border-orange-500 sm:text-sm transition-all" 
+                            placeholder="Buscar por descrição ou código do produto...">
+                    </div>
+                </div>
+
+                <div id="ranking-dashboard-content" class="w-full">
+                    <!-- Gráfico de Ranking -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 overflow-hidden h-[500px]">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                            Top 15 Produtos mais Vendidos (Qtd.)
+                        </h3>
+                        <div class="relative h-full pb-10">
+                            <canvas id="ranking-sales-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Ranking Completa -->
+                    <div id="ranking-table-container" class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <!-- Gerado via JS -->
                     </div>
                 </div>
             </div>
@@ -1431,6 +1531,37 @@
                 <button id="confirm-product-location-edit-btn"
                     class="read-only-disable px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar Localização</button>
             </div>
+        </div>
+    </div>
+
+    <!-- NOVO: Modal para Detalhes de Vendas por Produto (Ranking) -->
+    <div id="ranking-product-details-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gray-50 px-6 py-4 border-b flex justify-between items-center shrink-0">
+                <div>
+                    <h3 id="ranking-product-modal-title" class="text-xl font-bold text-gray-800">Vendas do Produto</h3>
+                    <p id="ranking-product-modal-subtitle" class="text-sm text-gray-500 font-medium"></p>
+                </div>
+                <button id="close-ranking-product-modal-btn" class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <!-- Conteúdo -->
+            <div class="flex-grow overflow-y-auto p-6 bg-gray-50">
+                <div id="ranking-product-modal-content" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <!-- Tabela Gerada via JS -->
+                </div>
+                <div id="ranking-product-modal-empty" class="hidden py-12 text-center text-gray-500 font-medium">
+                    Nenhum pedido encontrado para este período.
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <button id="ranking-product-modal-ok-btn" class="bg-blue-600 text-white font-bold py-3 px-6 hover:bg-blue-700 transition w-full shrink-0 uppercase tracking-wider text-sm">
+                Concluído
+            </button>
         </div>
     </div>
 

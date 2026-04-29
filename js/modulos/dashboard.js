@@ -16,6 +16,26 @@ export const DashboardApp = (function() {
         '15596443455': 'Reginaldo Araujo de Souza',
         '15596442848': 'Rodrigo Carbone'
     };
+
+    /**
+     * Resolve o nome do vendedor a partir do objeto de pedido ou NFe.
+     * Retorna apenas o primeiro nome para economizar espaço.
+     */
+    function _getVendedorInfo(p, nfe = null) {
+        let raw = p.vendedor || p.nome_vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
+        if (typeof raw !== 'string') return 'N/A';
+        
+        let fullName = raw;
+        for (const [id, name] of Object.entries(_vendedorMap)) {
+            if (raw.includes(id)) {
+                fullName = name;
+                break;
+            }
+        }
+        
+        if (fullName === 'N/A') return 'N/A';
+        return fullName.trim().split(' ')[0];
+    }
     let _salesChartInstance = null;
 
     let _state = {
@@ -40,7 +60,15 @@ export const DashboardApp = (function() {
         salesSort: {
             key: 'data',
             direction: 'desc'
-        }
+        },
+        activeRankingFilter: 'all',
+        rankingSearchQuery: '',
+        rankingCurrentPage: 1,
+        rankingPageSize: 100,
+        rankingSort: { key: 'quantidade', direction: 'desc' },
+        rankingProductSort: { key: 'data', direction: 'desc' },
+        rankingProductContext: { codigo: '', descricao: '' },
+        selectedRankingItems: [] // Novo: Itens selecionados no ranking para o relatório
     };
 
     let _dom = {}; // Cache for DOM elements
@@ -99,15 +127,23 @@ export const DashboardApp = (function() {
         }
 
         try {
-            const date = new Date(dateStr);
-            if (isNaN(date.getTime())) return dateStr;
+            let date;
+            if (dateStr instanceof Date) {
+                date = dateStr;
+            } else {
+                date = (_utils && _utils.parsePtBrDate) ? _utils.parsePtBrDate(dateStr) : new Date(dateStr);
+            }
+
+            if (!date || isNaN(date.getTime())) return dateStr;
 
             const day = String(date.getDate()).padStart(2, '0');
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const year = date.getFullYear();
             
-            // Verifica se a string original contém T (ISO) ou : (hora) para incluir o horário
-            if (dateStr.includes('T') || dateStr.includes(':')) {
+            // Verifica se a entrada era uma string e continha T ou : para incluir o horário
+            const shouldIncludeTime = typeof dateStr === 'string' && (dateStr.includes('T') || dateStr.includes(':'));
+            
+            if (shouldIncludeTime) {
                 const hours = String(date.getHours()).padStart(2, '0');
                 const minutes = String(date.getMinutes()).padStart(2, '0');
                 return `${day}/${month}/${year} ${hours}:${minutes}`;
@@ -169,12 +205,37 @@ export const DashboardApp = (function() {
      * @returns {Array} Um array de objetos, cada um com {codigo, quantidade, valor}.
      */
     function _parseNfeItemsString(itemsString) {
-        if (!itemsString || typeof itemsString !== 'string') {
-            return [];
+        if (!itemsString) return [];
+        
+        // Se já for um array (comum em pedidos do Bling), mapeia para o formato padrão
+        if (Array.isArray(itemsString)) {
+            return itemsString.map(item => ({
+                codigo: String(item.codigo || item.código || item.codigo_service || "").trim(),
+                quantidade: parseFloat(item.quantidade || 0),
+                valor: parseFloat(item.valor || item.valor_unitario || item.preco || 0)
+            }));
         }
+
+        if (typeof itemsString !== 'string') return [];
+
         try {
+            // Usa regex para extrair cada grupo (COD, QTD, VAL) independente do separador
+            // Suporta tanto "(A, 1, 2) (B, 3, 4)" (espaço) quanto "(A, 1, 2);(B, 3, 4)" (ponto e vírgula)
+            const matches = itemsString.match(/\(([^)]+)\)/g);
+            if (matches && matches.length > 0) {
+                return matches.map(match => {
+                    const inner = match.slice(1, -1); // Remove parênteses
+                    const parts = inner.split(',').map(s => s.trim());
+                    return {
+                        codigo: parts[0] || '',
+                        quantidade: parseFloat(parts[1] || 0),
+                        valor: parseFloat(parts[2] || 0)
+                    };
+                }).filter(item => item.codigo);
+            }
+
+            // Fallback: tenta separar por ponto e vírgula sem parênteses
             return itemsString
-                .replace(/[()]/g, '')
                 .split(';')
                 .filter(s => s.trim() !== '')
                 .map(itemStr => {
@@ -184,9 +245,9 @@ export const DashboardApp = (function() {
                         quantidade: parseFloat(parts[1]?.trim() || 0),
                         valor: parseFloat(parts[2]?.trim() || 0)
                     };
-                });
+                }).filter(item => item.codigo);
         } catch (e) {
-            console.error("Erro ao processar string de itens da NFe:", itemsString, e);
+            console.error("Erro ao processar string de itens:", itemsString, e);
             return [];
         }
     }
@@ -230,6 +291,31 @@ export const DashboardApp = (function() {
         _dom.backToSelectorFromEstoqueBtn = document.getElementById('back-to-selector-from-estoque-btn');
         _dom.estoqueTypeToggle = document.getElementById('estoque-type-toggle');
         _dom.estoqueTopLimitSelect = document.getElementById('estoque-top-limit-select');
+
+        _dom.rankingContainer = document.getElementById('dashboard-ranking-container');
+        _dom.selectRankingBtn = document.getElementById('select-ranking-dashboard');
+        _dom.backToSelectorFromRankingBtn = document.getElementById('back-to-selector-from-ranking-btn');
+        _dom.rankingSalesChartCanvas = document.getElementById('ranking-sales-chart');
+        _dom.rankingTableContainer = document.getElementById('ranking-table-container');
+        _dom.rankingSummaryCards = document.getElementById('ranking-summary-cards');
+        _dom.rankingSearchInput = document.getElementById('ranking-search-input');
+
+        _dom.rankingProductModal = document.getElementById('ranking-product-details-modal');
+        _dom.rankingProductModalTitle = document.getElementById('ranking-product-modal-title');
+        _dom.rankingProductModalSubtitle = document.getElementById('ranking-product-modal-subtitle');
+        _dom.rankingProductModalContent = document.getElementById('ranking-product-modal-content');
+        _dom.rankingProductModalEmpty = document.getElementById('ranking-product-modal-empty');
+        _dom.closeRankingProductModalBtn = document.getElementById('close-ranking-product-modal-btn');
+        _dom.rankingProductModalOkBtn = document.getElementById('ranking-product-modal-ok-btn');
+
+        // NOVO: Cache dos elementos do modal de relatório de ranking
+        _dom.rankingReportModal = document.getElementById('ranking-report-modal');
+        _dom.closeRankingReportModalBtn = document.getElementById('close-ranking-report-modal-btn');
+        _dom.rankingReportCancelBtn = document.getElementById('ranking-report-cancel-btn');
+        _dom.printRankingReportBtn = document.getElementById('print-ranking-report-btn');
+        _dom.rankingReportModalContent = document.getElementById('ranking-report-modal-content');
+        _dom.clearRankingSelectionBtn = document.getElementById('clear-ranking-selection-btn');
+        _dom.reportBtn = document.getElementById('open-product-report-modal-btn');
     }
 
     // --- Navigation Functions ---
@@ -242,20 +328,36 @@ export const DashboardApp = (function() {
         _setDateRange('all');
     }
 
+    function _refreshActiveDashboard() {
+        if (!_dom.vendasContainer.classList.contains('hidden')) _renderSalesView();
+        if (!_dom.rankingContainer.classList.contains('hidden')) _renderRankingDashboard();
+    }
+
     function _showEstoqueDashboard() {
         if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
         if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.remove('hidden');
+        if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
         _state.activeEstoqueFilter = 'all';
         _state.estoqueCurrentPage = 1; // Reseta para a primeira página
         _renderEstoqueDashboard();
     }
 
+    function _showRankingDashboard() {
+        if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
+        if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
+        if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
+        if (_dom.rankingContainer) _dom.rankingContainer.classList.remove('hidden');
+        if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
+        _renderRankingDashboard();
+    }
+
     function _showSelector() {
         if (_dom.selectorContainer) _dom.selectorContainer.classList.remove('hidden');
         if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
+        if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
     }
 
@@ -526,6 +628,666 @@ export const DashboardApp = (function() {
 
     // --- Sales Dashboard Logic ---
 
+    // --- Ranking Dashboard Logic ---
+    function _calculateRankingData() {
+        const ranking = {};
+        const activeFilter = _state.activeRankingFilter;
+        const searchQuery = (_state.rankingSearchQuery || '').toLowerCase().trim();
+
+        const categoryTotals = {
+            'all': { id: 'all', label: 'Geral', total: 0, count: 0, color: '#2563eb' },
+            'Estoque - Terceiros': { id: 'Estoque - Terceiros', label: 'Terceiros', total: 0, count: 0, color: '#8b5cf6' },
+            'Estoque - Fábrica': { id: 'Estoque - Fábrica', label: 'Fábrica', total: 0, count: 0, color: '#10b981' },
+            'Sob Demanda - Fábrica': { id: 'Sob Demanda - Fábrica', label: 'Sob Demanda', total: 0, count: 0, color: '#f59e0b' },
+            'Estoque - Consumo': { id: 'Estoque - Consumo', label: 'Consumo', total: 0, count: 0, color: '#64748b' }
+        };
+
+        // Filtro de status e Unificação de Fontes (Deduplicado por número do pedido)
+        const allSources = [..._allPedidosBling, ..._allNFeData];
+        const uniqueOrdersMap = new Map();
+        
+        allSources.forEach(p => {
+            const num = String(p.numero || p.número || p.id || p.id_pedido || '');
+            if (!num) return;
+            // Se já temos esse pedido, prioriza o que tem itens populados
+            if (!uniqueOrdersMap.has(num) || (!uniqueOrdersMap.get(num).itens && p.itens)) {
+                uniqueOrdersMap.set(num, p);
+            }
+        });
+
+        const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
+            const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
+            // Aceita variações de atendido, concluído, faturado, entregue ou pago
+            return sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
+        });
+
+        // FILTRAGEM DE DATA (CORREÇÃO): Prioriza intervalo específico se existir
+        let filteredPedidos;
+        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+        const selectedYear = parseInt(_state.selectedYearFilter, 10);
+
+        filteredPedidos = pedidosBase.filter(p => {
+            // Busca data em múltiplos campos possíveis para garantir captura
+            const rawDate = p.data || p.data_saida || p.data_faturamento || p.data_emissao || p.data_criacao || p.data_pedido || p['data pedido'] || "";
+            let pDate = null;
+
+            if (rawDate) {
+                // Tenta parsing flexível (yyyy-mm-dd ou dd/mm/yyyy)
+                if (String(rawDate).includes('-')) {
+                    pDate = new Date(rawDate + 'T00:00:00');
+                } else {
+                    pDate = _utils.parsePtBrDate(rawDate);
+                }
+            }
+
+            if (!pDate || isNaN(pDate.getTime())) return false;
+
+            // Se houver um intervalo de datas (30 dias, 90 dias, customizado)
+            if (startDate || endDate) {
+                const afterStart = !startDate || pDate >= startDate;
+                const beforeEnd = !endDate || pDate <= endDate;
+                return afterStart && beforeEnd;
+            }
+
+            // Se não houver intervalo, mas houver filtro de ano
+            if (selectedYear && !isNaN(selectedYear)) {
+                return pDate.getFullYear() === selectedYear;
+            }
+
+            return true; // Se nenhum filtro, retorna todos
+        });
+
+        filteredPedidos.forEach(p => {
+            // Suporta 'itens' ou 'Itens'
+            const itemsRaw = p.itens || p.Itens || p.items || [];
+            const items = _parseNfeItemsString(itemsRaw);
+
+            items.forEach(item => {
+                const cod = item.codigo;
+                if (!cod) return;
+
+                const productInfo = _allProducts.find(prod => prod.codigo === cod);
+                const tags = productInfo ? (productInfo.grupo_de_tags_tags || []) : [];
+                
+                // Extração da Imagem (Padrão do sistema usa url_imagens_externas[0])
+                const imgUrl = productInfo ? (
+                    (productInfo.url_imagens_externas && productInfo.url_imagens_externas[0]) || 
+                    productInfo.link_da_imagem || 
+                    productInfo.imagem_url || 
+                    productInfo.imagem || 
+                    ""
+                ) : "";
+
+                // Somar totais por categoria nos cards (Ignora o filtro ativo para mostrar o total de cada card)
+                const valorTotalItem = (item.quantidade * item.valor);
+                categoryTotals['all'].total += valorTotalItem;
+                categoryTotals['all'].count += item.quantidade;
+
+                Object.keys(categoryTotals).forEach(catId => {
+                    if (catId !== 'all' && tags.includes(catId)) {
+                        categoryTotals[catId].total += valorTotalItem;
+                        categoryTotals[catId].count += item.quantidade;
+                    }
+                });
+
+                // Verifica se passa no filtro de busca (Descrição ou Código)
+                const fallbackDesc = `item ${cod}`.toLowerCase();
+                const desc = (productInfo?.descricao || fallbackDesc).toLowerCase();
+                const codigo = (cod || "").toLowerCase().trim();
+
+                if (searchQuery && !desc.includes(searchQuery) && !codigo.includes(searchQuery)) return;
+
+                // Verifica se passa no filtro de categoria atual para a tabela/gráfico
+                if (activeFilter !== 'all' && !tags.includes(activeFilter)) return;
+
+                if (!ranking[cod]) {
+                    ranking[cod] = {
+                        codigo: cod,
+                        descricao: productInfo ? productInfo.descricao : `Item ${cod}`,
+                        imagem: imgUrl,
+                        quantidade: 0,
+                        valorTotal: 0,
+                        numPedidos: 0,
+                        pedidosIds: new Set(), // Para contar pedidos únicos
+                        clientes: new Set(), // Novo: Para o relatório
+                        vendedores: {} // Novo: Rastrear vendas por vendedor
+                    };
+                }
+                ranking[cod].quantidade += item.quantidade;
+                ranking[cod].valorTotal += valorTotalItem;
+                
+                const pedidoNum = p.numero || p.número || p.id || p.id_pedido || "";
+                if (pedidoNum) ranking[cod].pedidosIds.add(pedidoNum);
+
+                const cliente = p.cliente || p.nome_cliente || p.contato || "Consumidor Final";
+                ranking[cod].clientes.add(cliente);
+
+                // Rastrear Vendedor
+                const vendedor = _getVendedorInfo(p);
+                ranking[cod].vendedores[vendedor] = (ranking[cod].vendedores[vendedor] || 0) + item.quantidade;
+            });
+        });
+
+        // Converte Sets para arrays e limpa dados
+        Object.values(ranking).forEach(item => {
+            item.numPedidos = item.pedidosIds.size;
+            item.clientes = Array.from(item.clientes);
+            
+            // Calcula vendedor principal
+            let maxSales = -1;
+            let topVendedor = 'N/A';
+            for (const [v, qty] of Object.entries(item.vendedores)) {
+                if (qty > maxSales) {
+                    maxSales = qty;
+                    topVendedor = v;
+                }
+            }
+            item.vendedorPrincipal = topVendedor;
+
+            delete item.pedidosIds; // Não precisamos mais do Set
+        });
+
+        const sortedRanking = Object.values(ranking).sort((a, b) => b.quantidade - a.quantidade);
+
+        // Se houver busca, incluir também itens que NÃO tiveram vendas no período para mostrar o status zerado
+        if (searchQuery) {
+            _allProducts.forEach(p => {
+                const cod = (p.codigo || '').toLowerCase().trim();
+                const desc = (p.descricao || '').toLowerCase();
+                const tags = p.grupo_de_tags_tags || [];
+
+                // Verifica se o produto bate com a busca e não está no ranking (já vendido)
+                const matchesSearch = desc.includes(searchQuery) || cod.includes(searchQuery);
+                const matchesCategory = activeFilter === 'all' || tags.includes(activeFilter);
+                
+                if (matchesSearch && matchesCategory && !ranking[p.codigo]) {
+                    sortedRanking.push({
+                        codigo: p.codigo,
+                        descricao: p.descricao,
+                        imagem: (p.url_imagens_externas && p.url_imagens_externas[0]) || p.link_da_imagem || p.imagem_url || p.imagem || "",
+                        quantidade: 0,
+                        valorTotal: 0,
+                        numPedidos: 0
+                    });
+                }
+            });
+        }
+
+        // --- ORDENAÇÃO DO RANKING ---
+        const sortKey = _state.rankingSort.key;
+        const sortDir = _state.rankingSort.direction === 'asc' ? 1 : -1;
+
+        sortedRanking.sort((a, b) => {
+            let valA = a[sortKey];
+            let valB = b[sortKey];
+
+            if (typeof valA === 'string') {
+                return valA.localeCompare(valB) * sortDir;
+            }
+            return (valA - valB) * sortDir;
+        });
+
+        return {
+            ranking: sortedRanking,
+            categories: Object.values(categoryTotals)
+        };
+    }
+
+    function _renderRankingDashboard() {
+        const data = _calculateRankingData();
+        const rankingData = data.ranking;
+        const top15 = rankingData.slice(0, 15);
+        const activeFilter = _state.activeRankingFilter;
+
+        // Renderizar Cards de Categoria
+        if (_dom.rankingSummaryCards) {
+            let cardsHtml = '';
+            data.categories.forEach(cat => {
+                const isActive = activeFilter === cat.id;
+                const isMainCard = cat.id === 'all';
+                
+                cardsHtml += `
+                    <div data-ranking-filter="${cat.id}" class="cursor-pointer transition-all duration-200 transform hover:scale-105 ${isActive ? 'ring-4 shadow-lg' : ''} ${isMainCard ? (isActive ? 'bg-blue-700' : 'bg-blue-600') : 'bg-white border-t-4'} p-4 rounded-xl shadow-md" ${!isMainCard ? `style="border-color: ${cat.color}; ${isActive ? 'box-shadow: 0 0 0 4px ' + cat.color + '44' : ''}"` : ''}>
+                        <p class="text-xs font-bold uppercase ${isMainCard ? 'text-white opacity-80' : 'text-gray-500'}">${cat.label} (Saídas)</p>
+                        <p class="text-xl font-black ${isMainCard ? 'text-white' : 'text-gray-800'}">${cat.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        <p class="text-[10px] ${isMainCard ? 'text-blue-100' : 'text-gray-400'} font-medium">${cat.count} unidades vendidas</p>
+                    </div>
+                `;
+            });
+            _dom.rankingSummaryCards.innerHTML = cardsHtml;
+        }
+
+        // Gráfico de Ranking
+        if (_dom.rankingSalesChartCanvas) {
+            const ctx = _dom.rankingSalesChartCanvas.getContext('2d');
+            if (_state.charts.ranking) _state.charts.ranking.destroy();
+
+            _state.charts.ranking = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    // Aumentado para 60 caracteres para dar prioridade à descrição
+                    labels: top15.map(d => d.descricao.length > 60 ? d.descricao.substring(0, 60) + '...' : d.descricao),
+                    datasets: [{
+                        label: 'Qtd. Vendida',
+                        data: top15.map(d => d.quantidade),
+                        backgroundColor: 'rgba(249, 115, 22, 0.7)',
+                        borderColor: 'rgb(249, 115, 22)',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        barThickness: 20 // Deixa as barras mais elegantes
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            left: 20,
+                            right: 40,
+                            top: 10,
+                            bottom: 10
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    const item = top15[ctx.dataIndex];
+                                    return [
+                                        ` Descrição: ${item.descricao}`,
+                                        ` Quantidade: ${item.quantidade}`,
+                                        ` Valor Total: ${item.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+                                        ` Pedidos: ${item.numPedidos}`
+                                    ];
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: true,
+                            anchor: 'end',
+                            align: 'right',
+                            color: '#4b5563',
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (val) => val
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            beginAtZero: true, 
+                            grid: { display: false },
+                            ticks: { display: false } // Remove números do eixo X para limpar o visual
+                        },
+                        y: { 
+                            grid: { display: false },
+                            ticks: {
+                                font: {
+                                    weight: 'bold',
+                                    size: 11
+                                },
+                                color: '#374151'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Tabela de Ranking com Paginação Inteligente
+        if (_dom.rankingTableContainer) {
+            const pageSize = _state.rankingPageSize;
+            const totalItems = rankingData.length;
+            const totalPages = Math.ceil(totalItems / pageSize);
+            
+            // Só pagina se passar de 100 itens
+            const isPagingActive = totalItems > pageSize;
+            const currentPage = _state.rankingCurrentPage;
+            
+            // Reseta página se ela ficou "fora" do range após um filtro
+            if (currentPage > totalPages && totalPages > 0) {
+                _state.rankingCurrentPage = 1;
+            }
+
+            const startIdx = (currentPage - 1) * pageSize;
+            const pagedData = isPagingActive ? rankingData.slice(startIdx, startIdx + pageSize) : rankingData;
+
+            let paginationHtml = '';
+            if (isPagingActive) {
+                paginationHtml = `
+                    <div class="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
+                        <div class="text-sm text-gray-700">
+                            Mostrando <span class="font-bold">${startIdx + 1}</span> a <span class="font-bold">${Math.min(startIdx + pageSize, totalItems)}</span> de <span class="font-bold">${totalItems}</span> produtos
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="ranking-prev-page" ${currentPage === 1 ? 'disabled opacity-50 cursor-not-allowed' : ''} class="px-4 py-2 border rounded-lg bg-white text-gray-600 hover:bg-gray-50 transition-colors font-medium text-sm flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg> Anterior
+                            </button>
+                            <div class="flex items-center px-4 font-bold text-gray-700 text-sm">
+                                Página ${currentPage} de ${totalPages}
+                            </div>
+                            <button id="ranking-next-page" ${currentPage === totalPages ? 'disabled opacity-50 cursor-not-allowed' : ''} class="px-4 py-2 border rounded-lg bg-white text-gray-600 hover:bg-gray-50 transition-colors font-medium text-sm flex items-center">
+                                Próximo <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            let tableHtml = `
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left w-10">
+                                    <input type="checkbox" id="ranking-select-all" class="rounded text-orange-600 focus:ring-orange-500 h-4 w-4 cursor-pointer" ${pagedData.every(item => _state.selectedRankingItems.includes(item.codigo)) ? 'checked' : ''}>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Posição</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100 transition-colors" data-ranking-sort="descricao">
+                                    <div class="flex items-center">Produto ${_getSortIcon('descricao', _state.rankingSort)}</div>
+                                 </th>
+                                 <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100 transition-colors" data-ranking-sort="quantidade">
+                                     <div class="flex items-center justify-center">Quantidade ${_getSortIcon('quantidade', _state.rankingSort)}</div>
+                                 </th>
+                                 <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100 transition-colors" data-ranking-sort="valorTotal">
+                                     <div class="flex items-center justify-end">Total (R$) ${_getSortIcon('valorTotal', _state.rankingSort)}</div>
+                                 </th>
+                                 <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100 transition-colors" data-ranking-sort="numPedidos">
+                                     <div class="flex items-center justify-center">Nº Pedidos ${_getSortIcon('numPedidos', _state.rankingSort)}</div>
+                                 </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-100">
+                            ${pagedData.map((item, index) => {
+                                const globalIndex = startIdx + index;
+                                const isSelected = _state.selectedRankingItems.includes(item.codigo);
+                                return `
+                                    <tr class="hover:bg-orange-50 transition-colors cursor-pointer group ${isSelected ? 'bg-orange-50' : ''}" data-ranking-row="${item.codigo}" data-ranking-desc="${item.descricao.replace(/"/g, '&quot;')}">
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                            <input type="checkbox" class="ranking-item-checkbox rounded text-orange-600 focus:ring-orange-500 h-4 w-4 cursor-pointer" data-codigo="${item.codigo}" ${isSelected ? 'checked' : ''}>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-bold ${globalIndex < 3 ? 'bg-orange-100 text-orange-700' : 'text-gray-400'}">
+                                                ${globalIndex + 1}
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="flex items-center">
+                                                <div class="flex-shrink-0 h-12 w-12 mr-3 flex items-center justify-center rounded-lg overflow-hidden ${item.imagem ? '' : 'bg-gray-200 border border-gray-300 shadow-sm'}">
+                                                    ${item.imagem ? 
+                                                        `<img class="h-full w-full object-contain" src="${item.imagem}" alt="" onerror="this.parentNode.classList.add('bg-gray-200', 'border', 'border-gray-300', 'shadow-sm'); this.parentNode.innerHTML='<span class=\'text-gray-500 font-bold text-lg\'>?</span>'; this.onerror=null;">` : 
+                                                        `<span class="text-gray-500 font-bold text-lg">?</span>`
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <div class="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors">${item.descricao}</div>
+                                                    <div class="text-[10px] text-gray-400 font-mono uppercase">${item.codigo}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-center text-sm font-bold text-gray-700">${item.quantidade}</td>
+                                        <td class="px-6 py-4 text-right text-sm text-gray-600">${item.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                        <td class="px-6 py-4 text-center text-sm text-gray-500">${item.numPedidos}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${paginationHtml}
+            `;
+            _dom.rankingTableContainer.innerHTML = tableHtml;
+        }
+    }
+
+    function _getProductSalesDetails(codigo) {
+        // Filtra e deduplica fontes
+        const allSources = [..._allPedidosBling, ..._allNFeData];
+        const uniqueOrdersMap = new Map();
+        allSources.forEach(p => {
+            const num = String(p.numero || p.número || p.id || p.id_pedido || '');
+            if (num && (!uniqueOrdersMap.has(num) || (!uniqueOrdersMap.get(num).itens && p.itens))) uniqueOrdersMap.set(num, p);
+        });
+
+        const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
+            const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
+            return sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
+        });
+
+        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+        const selectedYear = parseInt(_state.selectedYearFilter, 10);
+
+        const filteredPedidos = pedidosBase.filter(p => {
+            const rawDate = p.data || p.data_saida || p.data_faturamento || p.data_emissao || p.data_criacao || p.data_pedido || p['data pedido'] || "";
+            let pDate = null;
+            if (rawDate) {
+                if (String(rawDate).includes('-')) pDate = new Date(rawDate + 'T00:00:00');
+                else pDate = _utils.parsePtBrDate(rawDate);
+            }
+            if (!pDate || isNaN(pDate.getTime())) return false;
+
+            if (startDate || endDate) {
+                return (!startDate || pDate >= startDate) && (!endDate || pDate <= endDate);
+            }
+            if (selectedYear && !isNaN(selectedYear)) {
+                return pDate.getFullYear() === selectedYear;
+            }
+            return true;
+        });
+
+        const salesDetails = [];
+        filteredPedidos.forEach(p => {
+            const items = _parseNfeItemsString(p.itens || p.Itens || '');
+            const matchingItems = items.filter(it => it.codigo === codigo);
+            
+            matchingItems.forEach(item => {
+                const nfeIdRaw = p.id_nota_fiscal || p['id nota fiscal'] || "";
+                const nfeId = String(nfeIdRaw).split('.')[0].trim();
+                const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+
+                salesDetails.push({
+                    pedido: p.numero_pedido || p.numero || p.número || 'N/A',
+                    data: p.data || p.data_pedido || p['data pedido'] || p.data_emissao || '',
+                    cliente: p.contato_nome || p.cliente_nome || p['contato nome'] || p['cliente nome'] || p.cliente || p.contato || 'Desconhecido',
+                    vendedor: _getVendedorInfo(p, nfe), // Novo: Vendedor
+                    quantidade: item.quantidade,
+                    valorUnit: item.valor,
+                    valorTotal: item.quantidade * item.valor
+                });
+            });
+        });
+
+        return salesDetails;
+    }
+
+    /**
+     * Mostra os detalhes de pedidos de um produto específico do ranking.
+     */
+    function _showProductSalesDetailsModal(codigo, descricao) {
+        // Salva o contexto para permitir re-ordenação
+        _state.rankingProductContext = { codigo, descricao };
+
+        const salesDetails = _getProductSalesDetails(codigo);
+
+        // --- ORDENAÇÃO DOS DETALHES NO MODAL ---
+        const sort = _state.rankingProductSort;
+        const sortDir = sort.direction === 'asc' ? 1 : -1;
+
+        salesDetails.sort((a, b) => {
+            let valA = a[sort.key];
+            let valB = b[sort.key];
+
+            if (sort.key === 'data') {
+                const dateA = _utils.parsePtBrDate(valA) || new Date(0);
+                const dateB = _utils.parsePtBrDate(valB) || new Date(0);
+                return (dateA - dateB) * sortDir;
+            }
+
+            if (typeof valA === 'string') {
+                return valA.localeCompare(valB) * sortDir;
+            }
+            return (valA - valB) * sortDir;
+        });
+
+        // Configura UI do modal
+        if (_dom.rankingProductModalTitle) _dom.rankingProductModalTitle.textContent = descricao;
+        if (_dom.rankingProductModalSubtitle) _dom.rankingProductModalSubtitle.textContent = `Código: ${codigo} - ${salesDetails.length} aparições em pedidos no período.`;
+
+        if (salesDetails.length === 0) {
+            if (_dom.rankingProductModalContent) _dom.rankingProductModalContent.innerHTML = '';
+            if (_dom.rankingProductModalEmpty) _dom.rankingProductModalEmpty.classList.remove('hidden');
+        } else {
+            if (_dom.rankingProductModalEmpty) _dom.rankingProductModalEmpty.classList.add('hidden');
+            
+            let html = `
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-200 transition-colors" data-ranking-prod-sort="pedido">
+                                <div class="flex items-center">Pedido ${_getSortIcon('pedido', _state.rankingProductSort)}</div>
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-200 transition-colors" data-ranking-prod-sort="data">
+                                <div class="flex items-center">Data ${_getSortIcon('data', _state.rankingProductSort)}</div>
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-200 transition-colors" data-ranking-prod-sort="cliente">
+                                <div class="flex items-center">Cliente ${_getSortIcon('cliente', _state.rankingProductSort)}</div>
+                            </th>
+                            <th class="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-200 transition-colors" data-ranking-prod-sort="quantidade">
+                                <div class="flex items-center justify-center">Qtd. ${_getSortIcon('quantidade', _state.rankingProductSort)}</div>
+                            </th>
+                            <th class="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-200 transition-colors" data-ranking-prod-sort="valorTotal">
+                                <div class="flex items-center justify-end">Total ${_getSortIcon('valorTotal', _state.rankingProductSort)}</div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-100">
+                        ${salesDetails.map(d => `
+                            <tr>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="text-sm font-bold text-blue-600">#${d.pedido}</div>
+                                    <div class="text-[9px] text-gray-400 italic">${d.vendedor}</div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${d.data}</td>
+                                <td class="px-4 py-3 text-sm text-gray-900 font-medium">${d.cliente}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-center font-bold text-orange-600">${d.quantidade}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-700">${d.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            if (_dom.rankingProductModalContent) _dom.rankingProductModalContent.innerHTML = html;
+        }
+
+        if (_dom.rankingProductModal) _dom.rankingProductModal.classList.remove('hidden');
+    }
+
+    /**
+     * Gera e exibe o relatório customizado dos itens selecionados no ranking.
+     */
+    function _generateCustomRankingReport() {
+        const selectedCodes = _state.selectedRankingItems;
+        if (selectedCodes.length === 0) return;
+
+        // Recupera todos os dados do ranking para obter as descrições/imagens
+        const allData = _calculateRankingData();
+        const rankingMap = {};
+        allData.ranking.forEach(item => { rankingMap[item.codigo] = item; });
+
+        let reportHtml = `
+            <div class="space-y-12 print:space-y-8">
+        `;
+
+        selectedCodes.forEach(codigo => {
+            const itemBase = rankingMap[codigo];
+            if (!itemBase) return;
+
+            const sales = _getProductSalesDetails(codigo);
+            if (sales.length === 0) return;
+
+            reportHtml += `
+                <div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm page-break-avoid">
+                    <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                        <div class="flex items-center gap-4">
+                            <div class="h-16 w-16 bg-white border border-gray-200 rounded flex items-center justify-center overflow-hidden">
+                                <img src="${itemBase.imagem || ''}" class="h-full w-full object-contain" onerror="this.src='https://via.placeholder.com/64?text=?';">
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-black text-gray-900">${itemBase.descricao}</h3>
+                                <p class="text-xs text-gray-400 font-mono">CÓDIGO: ${codigo} - ${sales.length} PEDIDOS NO PERÍODO</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-100">
+                            <thead class="bg-white">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase">Pedido</th>
+                                    <th class="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase">Data</th>
+                                    <th class="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase">Cliente / Item</th>
+                                    <th class="px-6 py-3 text-center text-[10px] font-black text-gray-500 uppercase">Qtd</th>
+                                    <th class="px-6 py-3 text-right text-[10px] font-black text-gray-500 uppercase">Total Item</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-50">
+                                ${sales.map(s => `
+                                    <tr class="hover:bg-gray-50 transition-colors">
+                                        <td class="px-6 py-3 whitespace-nowrap">
+                                            <div class="text-sm font-bold text-blue-600">#${s.pedido}</div>
+                                            <div class="text-[9px] text-gray-400 italic">${s.vendedor}</div>
+                                        </td>
+                                        <td class="px-6 py-3 text-xs text-gray-500">${s.data}</td>
+                                        <td class="px-6 py-3">
+                                            <div class="text-sm font-bold text-gray-800 leading-tight">${itemBase.descricao}</div>
+                                            <div class="text-[10px] text-orange-600 italic font-medium">Cliente: ${s.cliente}</div>
+                                        </td>
+                                        <td class="px-6 py-3 text-center text-sm font-bold text-orange-600">${s.quantidade}</td>
+                                        <td class="px-6 py-3 text-right text-sm text-gray-700">${s.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot class="bg-gray-50 font-bold border-t border-gray-100">
+                                <tr>
+                                    <td colspan="3" class="px-6 py-3 text-right text-xs uppercase text-gray-500">Subtotal do Produto:</td>
+                                    <td class="px-6 py-3 text-center text-sm text-orange-600">${itemBase.quantidade}</td>
+                                    <td class="px-6 py-3 text-right text-sm text-gray-800">${itemBase.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+
+        const totalGeral = selectedCodes.reduce((sum, cod) => sum + (rankingMap[cod]?.valorTotal || 0), 0);
+        const totalItens = selectedCodes.reduce((sum, cod) => sum + (rankingMap[cod]?.quantidade || 0), 0);
+
+        reportHtml += `
+            <div class="bg-blue-600 text-white rounded-xl p-8 shadow-xl flex flex-col md:flex-row justify-between items-center gap-6 mt-8">
+                <div>
+                    <h4 class="text-blue-100 text-xs font-bold uppercase tracking-wider">Resumo do Relatório</h4>
+                    <p class="text-lg font-medium">${selectedCodes.length} produtos diferentes selecionados</p>
+                </div>
+                <div class="flex gap-12 text-center">
+                    <div>
+                        <span class="block text-blue-100 text-[10px] font-bold uppercase">Volume Total</span>
+                        <span class="text-2xl font-black">${totalItens} unidades</span>
+                    </div>
+                    <div>
+                        <span class="block text-blue-100 text-[10px] font-bold uppercase">Valor Total</span>
+                        <span class="text-3xl font-black">${totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
+
+        if (_dom.rankingReportModalContent) _dom.rankingReportModalContent.innerHTML = reportHtml;
+        if (_dom.rankingReportModal) _dom.rankingReportModal.classList.remove('hidden');
+    }
+
     function _populateYearFilter() {
         if (!_dom.yearFilter) return;
 
@@ -607,7 +1369,8 @@ export const DashboardApp = (function() {
         if (_dom.startDateInput) _dom.startDateInput.value = _state.startDate;
         if (_dom.endDateInput) _dom.endDateInput.value = _state.endDate;
 
-        _renderSalesView();
+        _state.rankingCurrentPage = 1;
+        _refreshActiveDashboard();
     }
 
     function _createSummaryCard(id, title, countLabel, count, totalValue, color) {
@@ -658,6 +1421,36 @@ export const DashboardApp = (function() {
         return loja;
     }
 
+    /**
+     * Helper centralizado para obter a data de um pedido/NFe de forma consistente.
+     */
+    function _getOrderDate(p) {
+        if (!p) return null;
+        // Ordem de prioridade exaustiva (incluindo campos de NFe, Pedido Bling e Pedido Loja Integrada)
+        const rawDate = p['Data Criação'] || p['Data criação'] || p.data_criação || p.data_criacao || p.dataCriacao || p.data_de_emissao || p.data_emissao || p.data_saida || p.data_faturamento || p.data || p.data_pedido || p['data pedido'] || p.data_venda || p.Data || "";
+        if (!rawDate) return null;
+
+        // Tenta ISO primeiro (como na versão original que funcionava para Loja Integrada)
+        let d = new Date(rawDate);
+        if (isNaN(d.getTime())) {
+            // Se falhar (ex: DD/MM/AAAA), usa o utilitário manual para fuso local
+            d = _utils.parsePtBrDate(String(rawDate));
+        }
+        return (d && !isNaN(d.getTime())) ? d : null;
+    }
+
+    /**
+     * Helper centralizado para obter o valor total de um pedido de forma consistente.
+     */
+    function _getOrderValue(p) {
+        if (!p) return 0;
+        // Ordem de prioridade exaustiva (incluindo campos de NFe, Pedido Bling e Pedido Loja Integrada)
+        const val = p.total_pedido || p['total pedido'] || p.valor_da_nota || p.valor_total || p.total_venda || p.total || p.valortotal || p.valor || p['Valor Total'] || p['Valor total'] || p.valor_total_venda || p.valorTotal || 0;
+        // Limpa a string de valor (remove R$, pontos de milhar, espaços e converte vírgula em ponto)
+        const cleanVal = String(val).replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+        return parseFloat(cleanVal) || 0;
+    }
+
     function _renderSalesView() {
         if (!_dom.salesChartCanvas || !_allPedidosBling) return;
 
@@ -667,34 +1460,38 @@ export const DashboardApp = (function() {
         let filteredPedidos;
         const selectedYear = parseInt(_state.selectedYearFilter, 10);
 
-        // Somente pedidos "Atendido", "Concluído" ou "Faturado" são considerados vendas concluídas
-        const pedidosBase = _allPedidosBling.filter(p => {
-            const sit = (p.situação || p.situacao || p.situao || "").toLowerCase().trim();
-            // Filtro inclusivo: Atendido, Concluído, Entregue, Faturado (sub-strings para maior robustez)
-            return sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad');
+        // Filtra e deduplica fontes para o ranking de vendedores/gráficos
+        // IMPORTANTE: Inclui _allLojaIntegradaOrders para que pedidos não faturados também apareçam no balanço geral
+        const allSources = [..._allPedidosBling, ..._allNFeData, ..._allLojaIntegradaOrders];
+        const uniqueOrdersMap = new Map();
+        allSources.forEach(p => {
+            const num = String(p.numero || p.número || p.id || p.id_pedido || '');
+            if (num && (!uniqueOrdersMap.has(num) || (!uniqueOrdersMap.get(num).itens && p.itens))) uniqueOrdersMap.set(num, p);
+        });
+
+        const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
+            const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
+            return sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
         });
 
         if (selectedYear && !isNaN(selectedYear)) {
             filteredPedidos = pedidosBase.filter(p => {
-                const pDate = _utils.parsePtBrDate(p.data || p.data_criacao || p.data_pedido || "");
-                return pDate && pDate.getFullYear() === selectedYear;
+                const pDate = _getOrderDate(p);
+                return pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() === selectedYear;
             });
         } else {
             const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
             const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
             filteredPedidos = pedidosBase.filter(p => {
-                const pDate = _utils.parsePtBrDate(p.data || p.data_criacao || p.data_pedido || "");
-                return pDate && (!startDate || pDate >= startDate) && (!endDate || pDate <= endDate);
+                const pDate = _getOrderDate(p);
+                return pDate && !isNaN(pDate.getTime()) && (!startDate || pDate >= startDate) && (!endDate || pDate <= endDate);
             });
         }
 
         const stores = ['Bling', 'Mercado Livre', 'Loja Integrada'];
         const storeData = stores.map(store => {
             const currentPedidos = filteredPedidos.filter(p => _getNormalizedStoreName(p) === store);
-            const total = currentPedidos.reduce((sum, p) => {
-                const val = parseFloat(p.total_pedido || p['total pedido'] || p.valor_total || p.total_venda || p.total || p.valortotal || 0) || 0;
-                return sum + val;
-            }, 0);
+            const total = currentPedidos.reduce((sum, p) => sum + _getOrderValue(p), 0);
             return { name: `Vendas ${store}`, id: store.toLowerCase().replace(/ /g, '_'), count: currentPedidos.length, total: total };
         });
 
@@ -711,12 +1508,12 @@ export const DashboardApp = (function() {
         const salesByPeriod = {};
         
         filteredPedidos.forEach(p => {
-            const date = _utils.parsePtBrDate(p.data || p.data_criacao || p.data_pedido || "");
+            const date = _getOrderDate(p);
             if (!date) return;
             const key = aggregationLevel === 'day' ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
             const store = _getNormalizedStoreName(p);
-            let value = parseFloat(p.total_pedido || p['total pedido'] || p.valor_total || p.total_venda || p.total || p.valortotal || 0) || 0;
+            let value = _getOrderValue(p);
             
             // Se modo líquido ativado, tentamos subtrair o custo
             if (_state.chartDisplayMode === 'liquida') {
@@ -829,33 +1626,23 @@ export const DashboardApp = (function() {
             console.log('[Dashboard DEBUG] Exemplo de objeto Pedido LI:', Object.keys(_allLojaIntegradaOrders[0]));
         }
 
-        const parseDate = (dStr) => {
-            if (!dStr) return null;
-            // Tenta ISO primeiro para o caso da Loja Integrada
-            let d = new Date(dStr);
-            if (isNaN(d.getTime())) {
-                // Se falhar, tenta PT-BR
-                d = _utils.parsePtBrDate(dStr);
-            }
-            return (d && !isNaN(d.getTime())) ? d : null;
-        };
+        // Removido parseDate local para usar _getOrderDate centralizado
 
         const yearLabel = isNaN(selectedYear) ? 'Tudo' : selectedYear;
         console.log(`[Dashboard DEBUG] Iniciando filtragem para: Canais=${currentStoreName}, Ano=${yearLabel}, Tab=${_state.activeLiTab}`);
 
         if (selectedYear && !isNaN(selectedYear)) {
-            filteredNFe = _allNFeData.filter(nfe => parseDate(nfe.data_de_emissao)?.getFullYear() === selectedYear);
+            filteredNFe = _allNFeData.filter(nfe => _getOrderDate(nfe)?.getFullYear() === selectedYear);
             
             if (_state.activeLiTab === 'pedidos') {
                 filteredOrders = _allLojaIntegradaOrders.filter(p => {
-                    const dStr = p['Data Criação'] || p.data_criação || p.data_criacao || p.dataCriacao || p.data || "";
-                    const d = parseDate(dStr);
-                    return d && d.getFullYear() === selectedYear; // Se filtrou por ano, a data PRECISA ser válida
+                    const d = _getOrderDate(p);
+                    return d && d.getFullYear() === selectedYear;
                 });
             } else {
                 filteredOrders = _allPedidosBling.filter(p => {
                     const isTarget = _getNormalizedStoreName(p) === currentStoreName;
-                    const d = parseDate(p.data || p.data_criacao || p.data_pedido || "");
+                    const d = _getOrderDate(p);
                     return isTarget && d && d.getFullYear() === selectedYear;
                 });
             }
@@ -873,15 +1660,14 @@ export const DashboardApp = (function() {
             if (endDate) endDate.setHours(23, 59, 59, 999); // Garante fim do dia se houver filtro
             
             filteredNFe = _allNFeData.filter(nfe => {
-                const d = parseDate(nfe.data_de_emissao);
-                if (!startDate && !endDate) return true; // Se não há filtro de data, inclui tudo
+                const d = _getOrderDate(nfe);
+                if (!startDate && !endDate) return true;
                 return d && (!startDate || d >= startDate) && (!endDate || d <= endDate);
             });
             
             if (_state.activeLiTab === 'pedidos') {
                 filteredOrders = _allLojaIntegradaOrders.filter(p => {
-                    const dStr = p['Data Criação'] || p.data_criação || p.data_criacao || p.dataCriacao || p.data || "";
-                    const d = parseDate(dStr);
+                    const d = _getOrderDate(p);
                     if (!startDate && !endDate) return true; // CORREÇÃO CRÍTICA: Se não há filtro, inclui o pedido.
                     return d && (!startDate || d >= startDate) && (!endDate || d <= endDate);
                 });
@@ -889,8 +1675,8 @@ export const DashboardApp = (function() {
             } else {
                 filteredOrders = _allPedidosBling.filter(p => {
                     const isTarget = _getNormalizedStoreName(p) === currentStoreName;
-                    const d = parseDate(p.data || p.data_criacao || p.data_pedido || "");
-                    if (!startDate && !endDate) return isTarget;
+                    const d = _getOrderDate(p);
+                    if (!startDate && !endDate) return true;
                     return isTarget && d && (!startDate || d >= startDate) && (!endDate || d <= endDate);
                 });
             }
@@ -903,10 +1689,16 @@ export const DashboardApp = (function() {
                 const isConcluido = (sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad'));
                 if (!isConcluido) return false;
 
-                const d = parseDate(p.data || p.data_criacao || p.data_pedido || "");
+                const d = _getOrderDate(p);
                 if (!d) return false;
                 if (selectedYear && !isNaN(selectedYear) && d.getFullYear() !== selectedYear) return false;
                 if (!selectedYear) {
+                    const parseFilterDate = (str) => {
+                        if (!str) return null;
+                        let dt = _utils.parsePtBrDate(str);
+                        if (!dt || isNaN(dt.getTime())) dt = new Date(str + 'T00:00:00');
+                        return (dt && !isNaN(dt.getTime())) ? dt : null;
+                    };
                     const startDate = parseFilterDate(_state.startDate);
                     const endDate = parseFilterDate(_state.endDate);
                     if (endDate) endDate.setHours(23, 59, 59, 999);
@@ -916,12 +1708,12 @@ export const DashboardApp = (function() {
             });
 
             liPedidos.forEach(p => {
-                const d = parseDate(p.data || p.data_criacao || p.data_pedido || "");
+                const d = _getOrderDate(p);
                 if (!d) return;
                 const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                 if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
                 const store = _getNormalizedStoreName(p);
-                if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += parseFloat(p.total_pedido || p['total pedido'] || 0) || 0;
+                if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += _getOrderValue(p);
             });
             tabContentContainer.innerHTML = _getSalesTableHTML(Object.keys(salesByPeriod).sort(), salesByPeriod);
         } else {
@@ -939,8 +1731,8 @@ export const DashboardApp = (function() {
                         valB = parseInt(b['Numero Pedido'] || b.numero_pedido || b.numeroPedido || b.numero || b.número || 0);
                         return (valA - valB) * dir;
                     } else if (key === 'data_criacao') {
-                        const d1 = parseDate(a['Data Criação'] || a.data_criação || a.data_criacao || a.dataCriacao || a.data || "");
-                        const d2 = parseDate(b['Data Criação'] || b.data_criação || b.data_criacao || b.dataCriacao || b.data || "");
+                        const d1 = _getOrderDate(a);
+                        const d2 = _getOrderDate(b);
                         return ((d1?.getTime() || 0) - (d2?.getTime() || 0)) * dir;
                     } else if (key === 'valor_total') {
                         const v1 = _parseCurrencyBRL(a['Valor Total'] || a.valor_total || a.valorTotal || a.total_pedido || a.total || 0);
@@ -1163,17 +1955,18 @@ export const DashboardApp = (function() {
             titleDate = (start && end) ? `de ${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')}` : "em todo o período";
         } else {
             const [y, m] = monthKey.split('-');
-            start = new Date(parseInt(y), parseInt(m) - 1, 1);
-            end = new Date(parseInt(y), parseInt(m), 0);
+            start = new Date(parseInt(y), parseInt(m) - 1, 1, 0, 0, 0);
+            end = new Date(parseInt(y), parseInt(m), 0, 23, 59, 59, 999);
             titleDate = `de ${new Date(y, m - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}`;
         }
     
         _currentSalesDetails = _allPedidosBling.filter(p => {
-            const sit = (p.situação || p.situacao || p.situao || "").toLowerCase().trim();
-            if (!(sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad'))) return false;
+            const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
+            if (!(sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago'))) return false;
 
-            const d = _utils.parsePtBrDate(p.data || p.data_criacao || p.data_pedido || "");
-            if (!d) return false;
+            // Usa o helper centralizado para consistência
+            const d = _getOrderDate(p);
+            if (!d || isNaN(d.getTime())) return false;
 
             const selectedYear = parseInt(_state.selectedYearFilter, 10);
             if (monthKey === 'period-total' && selectedYear && !isNaN(selectedYear)) {
@@ -1184,7 +1977,7 @@ export const DashboardApp = (function() {
             return channelMatch && (!start || d >= start) && (!end || d <= end);
         });
         
-        const total = _currentSalesDetails.reduce((sum, p) => sum + (parseFloat(p.total_pedido || p['total pedido'] || 0) || 0), 0);
+        const total = _currentSalesDetails.reduce((sum, p) => sum + _getOrderValue(p), 0);
         _dom.salesDetailsModalTitle.textContent = `Vendas Detalhadas (${channel}) ${titleDate} - Total: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
         
         // Reseta ordenação ao abrir um novo modal de período/canal
@@ -1201,38 +1994,44 @@ export const DashboardApp = (function() {
     }
 
     /**
+     * Gera o HTML de ícone de ordenação baseado na chave e estado atual.
+     */
+    function _getSortIcon(key, sortState) {
+        if (sortState.key !== key) {
+            return '<svg class="w-3 h-3 ml-1 opacity-20" fill="currentColor" viewBox="0 0 20 20"><path d="M5 10l5-5 5 5H5zM15 10l-5 5-5-5h10z"/></svg>';
+        }
+        return sortState.direction === 'asc' 
+            ? '<svg class="w-3 h-3 ml-1 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M5 10l5-5 5 5H5z"/></svg>'
+            : '<svg class="w-3 h-3 ml-1 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M15 10l-5 5-5-5h10z"/></svg>';
+    }
+
+    /**
      * Renderiza a estrutura da tabela de detalhes de vendas com cabeçalhos clicáveis para ordenação.
      */
     function _renderSalesDetailsTable() {
         const sort = _state.salesSort;
-        const getIcon = (key) => {
-            if (sort.key !== key) return '<svg class="w-3 h-3 ml-1 opacity-20" fill="currentColor" viewBox="0 0 20 20"><path d="M5 10l5-5 5 5H5zM15 10l-5 5-5-5h10z"/></svg>';
-            return sort.direction === 'asc' 
-                ? '<svg class="w-3 h-3 ml-1 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M5 10l5-5 5 5H5z"/></svg>'
-                : '<svg class="w-3 h-3 ml-1 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M15 10l-5 5-5-5h10z"/></svg>';
-        };
 
         const html = `
             <table class="min-w-full divide-y divide-gray-200" id="sales-details-table">
                 <thead class="bg-gray-50 sticky top-0 z-10">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="pedido">
-                            <div class="flex items-center">Pedido ${getIcon('pedido')}</div>
+                            <div class="flex items-center">Pedido ${_getSortIcon('pedido', sort)}</div>
                         </th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="nota">
-                            <div class="flex items-center">Nota ${getIcon('nota')}</div>
+                            <div class="flex items-center">Nota ${_getSortIcon('nota', sort)}</div>
                         </th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="cliente">
-                            <div class="flex items-center">Cliente ${getIcon('cliente')}</div>
+                            <div class="flex items-center">Cliente ${_getSortIcon('cliente', sort)}</div>
                         </th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="data">
-                            <div class="flex items-center">Data ${getIcon('data')}</div>
+                            <div class="flex items-center">Data ${_getSortIcon('data', sort)}</div>
                         </th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="vendedor">
-                            <div class="flex items-center">Vendedor ${getIcon('vendedor')}</div>
+                            <div class="flex items-center">Vendedor ${_getSortIcon('vendedor', sort)}</div>
                         </th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="valor">
-                            <div class="flex items-center justify-end">Valor ${getIcon('valor')}</div>
+                            <div class="flex items-center justify-end">Valor ${_getSortIcon('valor', sort)}</div>
                         </th>
                         <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                     </tr>
@@ -1288,13 +2087,13 @@ export const DashboardApp = (function() {
                     valB = getVendedor(b).toLowerCase();
                     break;
                 case 'valor':
-                    valA = parseFloat(a.total_pedido || a['total pedido'] || 0);
-                    valB = parseFloat(b.total_pedido || b['total pedido'] || 0);
+                    valA = _getOrderValue(a);
+                    valB = _getOrderValue(b);
                     break;
                 case 'data':
                 default:
-                    valA = _utils.parsePtBrDate(a.data) || 0;
-                    valB = _utils.parsePtBrDate(b.data) || 0;
+                    valA = _getOrderDate(a) || 0;
+                    valB = _getOrderDate(b) || 0;
                     break;
             }
 
@@ -1303,8 +2102,8 @@ export const DashboardApp = (function() {
             
             // Critério de desempate: sempre Data desc se não for a chave primária
             if (sort.key !== 'data') {
-                const dateA = _utils.parsePtBrDate(a.data) || 0;
-                const dateB = _utils.parsePtBrDate(b.data) || 0;
+                const dateA = _getOrderDate(a) || 0;
+                const dateB = _getOrderDate(b) || 0;
                 return dateB - dateA;
             }
             return 0;
@@ -1342,7 +2141,7 @@ export const DashboardApp = (function() {
             }
             
             const itensRaw = nfe ? nfe.itens : (p.itens || '');
-            const totalValue = parseFloat(p.total_pedido || p['total pedido'] || p.valor_total || p.total_venda || p.total || p.valortotal || 0) || 0;
+            const totalValue = _getOrderValue(p);
 
             html += `
             <tr id="sales-detail-row-${p.id || p.id_pedido}" class="hover:bg-gray-50 transition-colors">
@@ -1359,7 +2158,7 @@ export const DashboardApp = (function() {
                     <div class="text-sm font-medium text-gray-900 truncate max-w-[200px]" title="${p.contato_nome || p['contato nome'] || '-'}">${p.contato_nome || p['contato nome'] || '-'}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
-                    ${_formatDate(p.data || p.data_criacao || p.data_pedido)}
+                    ${_formatDate(_getOrderDate(p))}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     ${vendedor}
@@ -1531,8 +2330,180 @@ export const DashboardApp = (function() {
     function _bindEvents() {
         _dom.selectVendasBtn?.addEventListener('click', _showSalesDashboard);
         _dom.selectEstoqueBtn?.addEventListener('click', _showEstoqueDashboard);
+        _dom.selectRankingBtn?.addEventListener('click', _showRankingDashboard);
         _dom.backToSelectorBtn?.addEventListener('click', _showSelector);
         _dom.backToSelectorFromEstoqueBtn?.addEventListener('click', _showSelector);
+        _dom.backToSelectorFromRankingBtn?.addEventListener('click', _showSelector);
+
+        _dom.rankingSummaryCards?.addEventListener('click', e => {
+            const card = e.target.closest('[data-ranking-filter]');
+            if (card) { 
+                _state.activeRankingFilter = card.dataset.rankingFilter; 
+                _state.rankingCurrentPage = 1; // Reseta página
+                _renderRankingDashboard(); 
+            }
+        });
+
+        _dom.rankingSearchInput?.addEventListener('input', e => {
+            _state.rankingSearchQuery = e.target.value;
+            _state.rankingCurrentPage = 1; // Reseta página
+            _renderRankingDashboard();
+        });
+
+        _dom.rankingTableContainer?.addEventListener('click', e => {
+            // Se clicou no checkbox, não abre o modal de detalhes
+            if (e.target.classList.contains('ranking-item-checkbox') || e.target.id === 'ranking-select-all') {
+                return;
+            }
+
+            // Detalhes do Produto
+            const row = e.target.closest('[data-ranking-row]');
+            if (row) {
+                const codigo = row.dataset.rankingRow;
+                const desc = row.dataset.rankingDesc;
+                _showProductSalesDetailsModal(codigo, desc);
+                return;
+            }
+
+            // Ordenação do Ranking
+            const sortHeader = e.target.closest('[data-ranking-sort]');
+            if (sortHeader) {
+                const key = sortHeader.dataset.rankingSort;
+                if (_state.rankingSort.key === key) {
+                    _state.rankingSort.direction = _state.rankingSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    _state.rankingSort.key = key;
+                    _state.rankingSort.direction = 'desc';
+                }
+                _state.rankingCurrentPage = 1;
+                _renderRankingDashboard();
+                return;
+            }
+
+            // Paginação do Ranking
+            if (e.target.closest('#ranking-prev-page')) {
+                if (_state.rankingCurrentPage > 1) {
+                    _state.rankingCurrentPage--;
+                    _renderRankingDashboard();
+                    _dom.rankingTableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+            if (e.target.closest('#ranking-next-page')) {
+                const totalItems = _calculateRankingData().ranking.length;
+                const totalPages = Math.ceil(totalItems / _state.rankingPageSize);
+                if (_state.rankingCurrentPage < totalPages) {
+                    _state.rankingCurrentPage++;
+                    _renderRankingDashboard();
+                    _dom.rankingTableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+        });
+
+        // NOVO: Registro de Checkboxes no Ranking
+        _dom.rankingTableContainer?.addEventListener('change', e => {
+            if (e.target.id === 'ranking-select-all') {
+                const checkboxes = _dom.rankingTableContainer.querySelectorAll('.ranking-item-checkbox');
+                checkboxes.forEach(cb => {
+                    cb.checked = e.target.checked;
+                    const codigo = cb.dataset.codigo;
+                    if (e.target.checked) {
+                        if (!_state.selectedRankingItems.includes(codigo)) _state.selectedRankingItems.push(codigo);
+                    } else {
+                        _state.selectedRankingItems = _state.selectedRankingItems.filter(id => id !== codigo);
+                    }
+                });
+                _renderRankingDashboard(); // Para atualizar cores das linhas
+                return;
+            }
+
+            if (e.target.classList.contains('ranking-item-checkbox')) {
+                const codigo = e.target.dataset.codigo;
+                if (e.target.checked) {
+                    if (!_state.selectedRankingItems.includes(codigo)) _state.selectedRankingItems.push(codigo);
+                } else {
+                    _state.selectedRankingItems = _state.selectedRankingItems.filter(id => id !== codigo);
+                }
+                _renderRankingDashboard(); // Para atualizar o "select all" e cores
+            }
+        });
+
+        // NOVO: Evento de Relatório no Ranking
+        _dom.reportBtn?.addEventListener('click', e => {
+            // Se estivermos no Ranking, assumimos o controle TOTAL do botão e impedimos outros listeners (main.js)
+            if (!_dom.rankingContainer.classList.contains('hidden')) {
+                e.preventDefault();
+                e.stopImmediatePropagation(); // Impede o listener do main.js de abrir o modal padrão
+                e.stopPropagation();
+
+                if (_state.selectedRankingItems.length > 0) {
+                    _generateCustomRankingReport();
+                } else {
+                    _utils.showMessageModal?.("Erro", "Selecione ao menos um item da tabela (marcando o checkbox) para gerar o relatório do ranking.");
+                }
+            }
+        }, true); // Usando capture para garantir prioridade se necessário
+
+        const closeRankingReportModal = () => _dom.rankingReportModal.classList.add('hidden');
+        _dom.closeRankingReportModalBtn?.addEventListener('click', closeRankingReportModal);
+        _dom.rankingReportCancelBtn?.addEventListener('click', closeRankingReportModal);
+        _dom.printRankingReportBtn?.addEventListener('click', () => {
+            const printContent = _dom.rankingReportModalContent.innerHTML;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Relatório de Ranking de Saídas</title>
+                        <script src="https://cdn.tailwindcss.com"></script>
+                        <style>
+                            @media print {
+                                .page-break-avoid { page-break-inside: avoid; }
+                                body { padding: 0; margin: 0; }
+                                .no-print { display: none; }
+                            }
+                        </style>
+                    </head>
+                    <body class="p-8 bg-white">
+                        <div class="mb-8 border-b-2 border-blue-600 pb-4">
+                            <h1 class="text-3xl font-black">MKS SERVICE</h1>
+                            <p class="text-sm text-gray-500 uppercase font-bold">Relatório de Ranking de Saídas - ${new Date().toLocaleDateString('pt-BR')}</p>
+                        </div>
+                        ${printContent}
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            // Espera carregar tailwind
+            setTimeout(() => {
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            }, 1000);
+        });
+
+        _dom.clearRankingSelectionBtn?.addEventListener('click', () => {
+            _state.selectedRankingItems = [];
+            _renderRankingDashboard();
+            closeRankingReportModal();
+        });
+
+        const closeRankingProductModal = () => _dom.rankingProductModal.classList.add('hidden');
+        _dom.closeRankingProductModalBtn?.addEventListener('click', closeRankingProductModal);
+        _dom.rankingProductModalOkBtn?.addEventListener('click', closeRankingProductModal);
+
+        _dom.rankingProductModalContent?.addEventListener('click', e => {
+            const sortHeader = e.target.closest('[data-ranking-prod-sort]');
+            if (sortHeader) {
+                const key = sortHeader.dataset.rankingProdSort;
+                if (_state.rankingProductSort.key === key) {
+                    _state.rankingProductSort.direction = _state.rankingProductSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    _state.rankingProductSort.key = key;
+                    _state.rankingProductSort.direction = 'desc';
+                }
+                const { codigo, descricao } = _state.rankingProductContext;
+                if (codigo) _showProductSalesDetailsModal(codigo, descricao);
+            }
+        });
 
         _dom.estoqueTypeToggle?.addEventListener('change', () => { _state.estoqueCurrentPage = 1; _renderEstoqueDashboard(); });
         _dom.estoqueTopLimitSelect?.addEventListener('change', e => { _state.estoqueTopLimit = e.target.value; _state.estoqueCurrentPage = 1; _renderEstoqueDashboard(); });
@@ -1585,14 +2556,18 @@ export const DashboardApp = (function() {
             _renderSalesView();
         });
 
-        _dom.startDateInput?.addEventListener('change', () => { _state.currentDateFilterValue = 'custom'; _renderSalesView(); });
-        _dom.endDateInput?.addEventListener('change', () => { _state.currentDateFilterValue = 'custom'; _renderSalesView(); });
+        _dom.startDateInput?.addEventListener('change', () => { _state.currentDateFilterValue = 'custom'; _refreshActiveDashboard(); });
+        _dom.endDateInput?.addEventListener('change', () => { _state.currentDateFilterValue = 'custom'; _refreshActiveDashboard(); });
         _dom.clearFiltersBtn?.addEventListener('click', () => {
             _state.selectedYearFilter = new Date().getFullYear().toString();
             if (_dom.yearFilter) _dom.yearFilter.value = _state.selectedYearFilter;
             
             const rAll = document.querySelector('[name="date-range"][value="all"]');
             if (rAll) rAll.checked = true;
+
+            _state.rankingSearchQuery = '';
+            _state.rankingCurrentPage = 1; // Reseta página
+            if (_dom.rankingSearchInput) _dom.rankingSearchInput.value = '';
 
             _setDateRange('all');
         });
@@ -1823,6 +2798,13 @@ export const DashboardApp = (function() {
                     _renderEstoqueDashboard();
                 }
             }
+        },
+        
+        /**
+         * NOVO: Reseta a visualização do dashboard para o seletor de cards.
+         */
+        resetToSelector: function() {
+            _showSelector();
         }
     };
 })();

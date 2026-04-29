@@ -135,8 +135,43 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     rowValues[COLUMNS.OBSERVACAO] = dadosManuais.observacao;
                     rowValues[COLUMNS.ORCAMENTO] = extrairOrcamentoCRM(p.observacoesInternas); // Col R
 
+                    // Processamento de Itens com Preservação de Status Manual
                     if (p.itens && Array.isArray(p.itens)) {
-                        rowValues[COLUMNS.ITENS] = p.itens.map(i => `(${i.codigo}, ${parseFloat(i.quantidade).toFixed(2)}, ${parseFloat(i.valor).toFixed(2)})`).join(' ');
+                        // 1. Extrair os status atuais da planilha para preservá-los
+                        const rawItensExistentes = rowIndexToUpdate !== -1 ? (existingRows[rowIndexToUpdate - 2][COLUMNS.ITENS] || "") : "";
+                        const statusMap = {}; // SKU -> Array de Statuses (para lidar com duplicatas)
+
+                        const regex = /\(([^)]+)\)/g;
+                        let match;
+                        while ((match = regex.exec(rawItensExistentes)) !== null) {
+                            const content = match[1];
+                            const parts = content.split(',').map(s => s.trim());
+                            if (parts.length >= 3) {
+                                const sku = parts[0];
+                                let status = 'OK';
+                                // Tenta pegar status do 4º campo ou via pipe no 3º
+                                if (parts.length >= 4) {
+                                    status = parts[3];
+                                } else if (parts[2].includes('|')) {
+                                    status = parts[2].split('|')[1];
+                                }
+                                
+                                if (!statusMap[sku]) statusMap[sku] = [];
+                                statusMap[sku].push(status);
+                            }
+                        }
+
+                        // 2. Mapear os novos itens do Bling, injetando o status preservado se existir
+                        rowValues[COLUMNS.ITENS] = p.itens.map(i => {
+                            const sku = String(i.codigo || "").trim();
+                            let status = "OK"; // Default
+
+                            if (statusMap[sku] && statusMap[sku].length > 0) {
+                                status = statusMap[sku].shift(); // Consome o status na ordem de aparição
+                            }
+
+                            return `(${sku}, ${parseFloat(i.quantidade).toFixed(2)}, ${parseFloat(i.valor).toFixed(2)}|${status})`;
+                        }).join(' ');
                     } else {
                         rowValues[COLUMNS.ITENS] = "";
                     }

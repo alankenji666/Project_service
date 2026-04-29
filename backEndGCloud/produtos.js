@@ -145,7 +145,15 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                             productObject[key] = (String(value || '').toLowerCase().trim() === 'sim');
                             break;
                         case 'url_imagens_externas':
-                            productObject[key] = String(value || '').split('|').map(item => item.trim()).filter(item => item);
+                        case 'imagem':
+                        case 'imagens':
+                        case 'url_imagem':
+                        case 'url_imagens':
+                        case 'url_do_produto_imagens':
+                            const rawValue = String(value || '').trim();
+                            // Suporta tanto pipe (|) quanto vírgula (,) como delimitadores
+                            const urls = rawValue.split(/[|,]/).map(item => item.trim()).filter(item => item && item.startsWith('http'));
+                            productObject['url_imagens_externas'] = urls;
                             break;
                         case 'grupo_de_tags_tags':
                             const rawTags = String(value || '').trim();

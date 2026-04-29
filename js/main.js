@@ -26,6 +26,7 @@
             let _allSaidasGarantia = [];
             let _allSaidasFabrica = [];
             let _allNFeData = [];
+    window._allNFeData = _allNFeData; // Torna global para outros módulos
             let _allLojaIntegradaOrders = [];
             let _selectedSaidaItems = new Set();
             let _selectedStockItems = new Set();
@@ -152,6 +153,20 @@
                         }
                         break;
 
+                    case 'pedidoBlingReceived':
+                        console.log(`[Firestore Sync] Pedido Bling recebido/atualizado: ${data.numero || data.id}`);
+                        if (typeof GerenciarPedidosApp !== 'undefined' && typeof GerenciarPedidosApp.updateOrderSingleRow === 'function') {
+                            GerenciarPedidosApp.updateOrderSingleRow(data);
+                        }
+                        break;
+
+                    case 'orderItemStatusUpdated':
+                        console.log(`[Firestore Sync] Status do item de pedido atualizado:`, data);
+                        if (typeof GerenciarPedidosApp !== 'undefined' && typeof GerenciarPedidosApp.updateOrderItemStatusRealTime === 'function') {
+                            GerenciarPedidosApp.updateOrderItemStatusRealTime(data);
+                        }
+                        break;
+
                     case 'orderUpdated':
                         console.log(`[Firestore Sync] Pedido Loja Integrada ${data.numeroPedido} atualizado.`);
                         _showOrderUpdateNotification({ ...data, numero: data.numeroPedido }); // Reaproveita notificação
@@ -208,7 +223,20 @@
 
                     case 'nfeReceived':
                         console.log(`[Firestore Sync] Nova NF-e ${data.numero} recebida do cliente ${data.cliente}.`);
-                        // ATUALIZADO: Em vez de recarregar todos os dados de forma intrusiva, apenas mostra uma notificação.
+                        
+                        // 1. Atualizar cache local global
+                        if (window._allNFeData) {
+                            // Evita duplicatas se o polling também trouxer a mesma nota
+                            const exists = window._allNFeData.some(n => String(n.id) === String(data.id) || String(n.numero) === String(data.numero));
+                            if (!exists) window._allNFeData.push(data);
+                        }
+
+                        // 2. Notificar GerenciarPedidosApp para atualizar UI (linha da tabela e modal se aberto)
+                        if (typeof GerenciarPedidosApp !== 'undefined' && typeof GerenciarPedidosApp.updateOrderNfeInfoRealTime === 'function') {
+                            GerenciarPedidosApp.updateOrderNfeInfoRealTime(data);
+                        }
+
+                        // 3. Mostrar notificação visual
                         _showNewNFeNotification(data);
                         break;
 
@@ -854,8 +882,9 @@ const data = filteredProducts.map(product => {
                 }
 
                 // Se não for o formato acima, tenta analisar o formato yyyy-mm-dd (ISO) manualmente
-                // Isso é essencial para evitar que o JS interprete como UTC (que causa erro de fuso-horário)
-                if (dateString.includes('-')) {
+                // Isso é essencial para evitar que o JS interprete YYYY-MM-DD puro como UTC (que causa erro de fuso-horário)
+                // Se contiver 'T', deixamos o construtor padrão tratar (para respeitar o fuso se houver Z ou offset)
+                if (dateString.includes('-') && !dateString.includes('T')) {
                     const parts = dateString.split(' ')[0].split('-');
                     if (parts.length === 3) {
                         const year = parseInt(parts[0], 10);
@@ -1597,7 +1626,13 @@ const data = filteredProducts.map(product => {
 
             // --- FUNÇÕES DE LÓGICA PRINCIPAL PRIVADAS ---
             function _showPage(pageId) {
-                if (_activePageId === pageId) return; // Otimização: Não faz nada se já estiver na página
+                if (_activePageId === pageId) {
+                    // Se já estiver na página de Dashboards e clicar novamente, volta para o seletor
+                    if (pageId === 'dashboards' && typeof DashboardApp !== 'undefined') {
+                        DashboardApp.resetToSelector();
+                    }
+                    return;
+                }
                 _activePageId = pageId;
 
                 if (_navPesquisar) _navPesquisar.classList.remove('active');
@@ -1866,102 +1901,110 @@ const data = filteredProducts.map(product => {
                 
                 _loadingOverlay.classList.remove('hidden');
                 try {
-                    const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasFabricaRes, saidasGarantiaRes, lojaIntegradaData, pedidosBlingData] = await Promise.all([
+                    // Executa todas as buscas em paralelo, mas trata cada uma individualmente para evitar que uma falha trave tudo
+                    const results = await Promise.allSettled([
                         fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         fetch(`${API_URLS.ORDERS_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }),
-                        fetch(`${API_URLS.ORDERS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
+                        fetch(API_URLS.ORDERS_FABRICA, { mode: 'cors' }),
                         fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         fetch(`${API_URLS.SAIDAS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
                         fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }),
-                        LojaIntegradaApp.fetchOrders(), // NOVO: Busca os pedidos da Loja Integrada
+                        LojaIntegradaApp.fetchOrders(),
                         (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.fetchPedidos(true) : Promise.resolve()
                     ]);
 
+                    const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasFabricaRes, saidasGarantiaRes, lojaIntegradaData] = results;
 
                     console.log('[DEBUG] Respostas das APIs recebidas.');
 
-                    if (!productsRes.ok) throw new Error(`Erro na API de Produtos: ${productsRes.statusText}`);
-                    const productsData = await productsRes.json();
-                    console.log('[DEBUG] Dados de Produtos (bruto):', productsData);
-
-
-                    if (productsData.error || !productsData.data) throw new Error(`Erro nos dados de Produtos: ${productsData.message || 'Formato inválido'}`);
-                    _allProducts.length = 0;
-                    Array.prototype.push.apply(_allProducts, productsData.data);
-                    console.log('[DEBUG] _allProducts processado:', _allProducts);
-
-                    if (!ordersTerceirosRes.ok) throw new Error(`Erro na API de Pedidos Terceiros: ${ordersTerceirosRes.statusText}`);
-                    const ordersTerceirosData = await ordersTerceirosRes.json();
-                    console.log('[DEBUG] Dados de Pedidos Terceiros (bruto):', ordersTerceirosData);
-
-                    // --- INÍCIO DO CÓDIGO DE DEPURAÇÃO (CORRIGIDO) ---
-                    try {
-                        if (ordersTerceirosData && ordersTerceirosData.data && Array.isArray(ordersTerceirosData.data)) {
-                            const pendingItems = ordersTerceirosData.data.filter(item => {
-                                return String(item.situacao || '').toLowerCase() === 'pendente';
-                            });
-
-                            console.log("--- [ANÁLISE] Itens 'Pendente' de TERCEIROS (bruto) ---");
-                            if (pendingItems.length > 0) {
-                                console.table(pendingItems);
-                            } else {
-                                console.log("Nenhum item com status 'Pendente' foi encontrado nos dados brutos de Terceiros.");
-                            }
+                    // --- 1. Processa Produtos (Essencial) ---
+                    if (productsRes.status === 'fulfilled' && productsRes.value.ok) {
+                        const productsData = await productsRes.value.json();
+                        const dataArray = productsData.data || productsData; // Aceita data: [] ou o array direto
+                        if (Array.isArray(dataArray)) {
+                            _allProducts.length = 0;
+                            Array.prototype.push.apply(_allProducts, dataArray);
+                            console.log(`[DEBUG] ${_allProducts.length} produtos carregados.`);
                         }
-                    } catch (e) {
-                        console.error("[ANÁLISE] Erro ao depurar itens pendentes:", e);
+                    } else {
+                        console.error("Falha crítica: Não foi possível carregar os produtos.");
                     }
-                    // --- FIM DO CÓDIGO DE DEPURAÇÃO (CORRIGIDO) ---
 
+                    // --- 2. Processa Pedidos Terceiros ---
+                    if (ordersTerceirosRes.status === 'fulfilled' && ordersTerceirosRes.value.ok) {
+                        const ordersTerceirosData = await ordersTerceirosRes.value.json();
+                        const dataArray = ordersTerceirosData.data || ordersTerceirosData;
+                        if (Array.isArray(dataArray)) {
+                            const freshTerceirosOrders = _processRawOrdersData(dataArray, 'terceiros');
+                            _allOrdersTerceiros.length = 0;
+                            Array.prototype.push.apply(_allOrdersTerceiros, freshTerceirosOrders);
+                        }
+                    } else {
+                        console.warn("Aviso: Falha ao carregar Pedidos Terceiros.");
+                    }
 
+                    // --- 3. Processa Pedidos Fábrica ---
+                    if (ordersFabricaRes.status === 'fulfilled' && ordersFabricaRes.value.ok) {
+                        const ordersFabricaData = await ordersFabricaRes.value.json();
+                        const dataArray = ordersFabricaData.data || ordersFabricaData;
+                        if (Array.isArray(dataArray)) {
+                            const freshFabricaOrders = _processRawOrdersData(dataArray, 'fabrica');
+                            _allOrdersFabrica.length = 0;
+                            Array.prototype.push.apply(_allOrdersFabrica, freshFabricaOrders);
+                        }
+                    } else {
+                        console.warn("Aviso: API de Pedidos Fábrica está offline ou com erro.");
+                    }
 
-                    if (ordersTerceirosData.error || !ordersTerceirosData.data) throw new Error(`Erro nos dados de Pedidos Terceiros: ${ordersTerceirosData.message || 'Formato inválido'}`);
-                    const freshTerceirosOrders = _processRawOrdersData(ordersTerceirosData.data, 'terceiros');
-                    _allOrdersTerceiros.length = 0; // Limpa a lista existente
-                    Array.prototype.push.apply(_allOrdersTerceiros, freshTerceirosOrders); // Adiciona os novos itens
-                    console.log('[DEBUG] _allOrdersTerceiros processado:', _allOrdersTerceiros);
+                    // --- 4. Processa NF-e ---
+                    if (nfeRes.status === 'fulfilled' && nfeRes.value.ok) {
+                        const nfeData = await nfeRes.value.json();
+                        const dataArray = nfeData.data || nfeData;
+                        if (Array.isArray(dataArray)) {
+                            _allNFeData.length = 0;
+                            Array.prototype.push.apply(_allNFeData, dataArray);
+                        }
+                    } else {
+                        console.warn("Aviso: Falha ao carregar dados de NF-e.");
+                    }
 
-                    if (!ordersFabricaRes.ok) throw new Error(`Erro na API de Pedidos Fábrica: ${ordersFabricaRes.statusText}`);
-                    const ordersFabricaData = await ordersFabricaRes.json();
-                    console.log('[DEBUG] Dados de Pedidos Fábrica (bruto):', ordersFabricaData);
-                    if (ordersFabricaData.error || !ordersFabricaData.data) throw new Error(`Erro nos dados de Pedidos Fábrica: ${ordersFabricaData.message || 'Formato inválido'}`);
-                    const freshFabricaOrders = _processRawOrdersData(ordersFabricaData.data, 'fabrica');
-                    _allOrdersFabrica.length = 0; // Limpa a lista existente
-                    Array.prototype.push.apply(_allOrdersFabrica, freshFabricaOrders); // Adiciona os novos itens
-                    console.log('[DEBUG] _allOrdersFabrica processado:', _allOrdersFabrica);
+                    // --- 5. Processa Saídas Fábrica ---
+                    if (saidasFabricaRes.status === 'fulfilled' && saidasFabricaRes.value.ok) {
+                        const saidasFabricaData = await saidasFabricaRes.value.json();
+                        const dataArray = saidasFabricaData.data || saidasFabricaData;
+                        if (Array.isArray(dataArray)) {
+                            const freshSaidasFabrica = _processRawSaidasData(dataArray, 'saidas-fabrica');
+                            _allSaidasFabrica.length = 0;
+                            Array.prototype.push.apply(_allSaidasFabrica, freshSaidasFabrica);
+                        }
+                    } else {
+                        console.warn("Aviso: Falha ao carregar Saídas Fábrica.");
+                    }
 
-                    if (!nfeRes.ok) throw new Error(`Erro na API de NFe: ${nfeRes.statusText}`);
-                    const nfeData = await nfeRes.json();
-                    console.log('[DEBUG] Dados de NFe (bruto):', nfeData);
-                    if (nfeData.error || !nfeData.data) throw new Error(`Erro nos dados de NFe: ${nfeData.message || 'Formato inválido'}`);
-                    _allNFeData.length = 0;
-                    if (nfeData.data) Array.prototype.push.apply(_allNFeData, nfeData.data);
+                    // --- 6. Processa Saídas Garantia ---
+                    if (saidasGarantiaRes.status === 'fulfilled' && saidasGarantiaRes.value.ok) {
+                        const saidasGarantiaData = await saidasGarantiaRes.value.json();
+                        const dataArray = saidasGarantiaData.data || saidasGarantiaData;
+                        if (Array.isArray(dataArray)) {
+                            const freshSaidasGarantia = _processRawSaidasData(dataArray, 'saidas-garantia');
+                            _allSaidasGarantia.length = 0;
+                            Array.prototype.push.apply(_allSaidasGarantia, freshSaidasGarantia);
+                        }
+                    } else {
+                        console.warn("Aviso: Falha ao carregar Saídas Garantia.");
+                    }
 
-                    console.log('[DEBUG] _allNFeData processado:', _allNFeData);
+                    // Loja Integrada: Processa e atribui os dados (corrigido para usar .value)
+                    if (lojaIntegradaData.status === 'fulfilled') {
+                        _allLojaIntegradaOrders.length = 0;
+                        const liOrders = lojaIntegradaData.value || [];
+                        Array.prototype.push.apply(_allLojaIntegradaOrders, liOrders);
+                        console.log(`[DEBUG] ${_allLojaIntegradaOrders.length} pedidos da Loja Integrada carregados.`);
+                    } else {
+                        console.warn("Aviso: Falha ao carregar pedidos da Loja Integrada.");
+                    }
 
-                    if (!saidasFabricaRes.ok) throw new Error(`Erro na API de Saídas Fábrica: ${saidasFabricaRes.statusText}`);
-                    const saidasFabricaData = await saidasFabricaRes.json();
-                    console.log('[DEBUG] Dados de Saídas Fábrica (bruto):', saidasFabricaData);
-                    if (saidasFabricaData.error || !saidasFabricaData.data) throw new Error(`Erro nos dados de Saídas Fábrica: ${saidasFabricaData.message || 'Formato inválido'}`);
-                    const freshSaidasFabrica = _processRawSaidasData(saidasFabricaData.data, 'saidas-fabrica');
-                    _allSaidasFabrica.length = 0;
-                    Array.prototype.push.apply(_allSaidasFabrica, freshSaidasFabrica);
-                    console.log('[DEBUG] _allSaidasFabrica processado:', _allSaidasFabrica);
-
-                    if (!saidasGarantiaRes.ok) throw new Error(`Erro na API de Saídas Garantia: ${saidasGarantiaRes.statusText}`);
-                    const saidasGarantiaData = await saidasGarantiaRes.json();
-                    console.log('[DEBUG] Dados de Saídas Garantia (bruto):', saidasGarantiaData);
-                    if (saidasGarantiaData.error || !saidasGarantiaData.data) throw new Error(`Erro nos dados de Saídas Garantia: ${saidasGarantiaData.message || 'Formato inválido'}`);
-                    const freshSaidasGarantia = _processRawSaidasData(saidasGarantiaData.data, 'saidas-garantia');
-                    _allSaidasGarantia.length = 0;
-                    Array.prototype.push.apply(_allSaidasGarantia, freshSaidasGarantia);
-                    console.log('[DEBUG] _allSaidasGarantia processado:', _allSaidasGarantia);
-
-
-                    // NOVO: Atribui os dados da Loja Integrada
-                    _allLojaIntegradaOrders.length = 0;
-                    Array.prototype.push.apply(_allLojaIntegradaOrders, lojaIntegradaData);
-                    console.log('[DEBUG] _allLojaIntegradaOrders processado:', _allLojaIntegradaOrders);
+                    console.log('[DEBUG] Todos os dados processados (resiliente e corrigido).');
 
 
                     console.log('[DEBUG] Todos os dados foram buscados e processados. Renderizando a UI...');

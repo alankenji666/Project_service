@@ -34,6 +34,27 @@ export const GerenciarPedidosApp = (function () {
         return vendedor;
     }
 
+    /**
+     * Converte IDs numéricos de situação para labels legíveis.
+     */
+    function _getStatusLabel(situacao) {
+        if (!situacao) return '-';
+        let s = String(situacao).trim();
+        
+        // Remove prefixo "ID: " se existir
+        if (s.includes('ID:')) {
+            s = s.replace('ID:', '').trim();
+        }
+
+        if (s === '447331') return 'Em Produção';
+        if (s === '6') return 'Em Aberto';
+        if (s === '9') return 'Atendido';
+        if (s === '15') return 'Em Andamento';
+        if (s === '12') return 'Cancelado';
+        
+        return situacao;
+    }
+
     function _fmtData(str) {
         if (!str) return '-';
         // Aceita yyyy-mm-dd ou yyyy/mm/dd e converte para dd/mm/aaaa
@@ -333,7 +354,8 @@ export const GerenciarPedidosApp = (function () {
         modal.dataset.currentOrderNumber = orderNumber;
 
         // Gerenciar valor e texto do dropdown customizado
-        const situacaoRaw = (pedido.situação || pedido.situacao || '').toLowerCase();
+        const situacao = _getStatusLabel(pedido.situação || pedido.situacao || '-');
+        const situacaoRaw = situacao.toLowerCase();
         let currentStatusVal = "6";
         let currentStatusLabel = "Em Aberto";
  
@@ -357,7 +379,15 @@ export const GerenciarPedidosApp = (function () {
         _updateModalStatusButtonStyle(currentStatusVal);
  
         // Gerenciar visibilidade do botão de Emitir NF-e
-        const idNota = pedido.id_nota || pedido['id nota'] || pedido.idnotafiscal || '';
+        // Tenta encontrar a nota no cache global primeiro (mais atualizado em tempo real)
+        const nfeVinculada = (window._allNFeData || []).find(n => 
+            String(n.id_pedido || n.idPedido || '') === String(pedidoId) ||
+            String(n.numero_pedido || '') === String(orderNumber)
+        );
+        
+        const idNota = nfeVinculada?.id || nfeVinculada?.id_nota || nfeVinculada?.numero || 
+                       pedido.id_nota || pedido['id nota'] || pedido.idnotafiscal || 
+                       pedido.id_nota_fiscal || pedido['id nota fiscal'] || '';
         if (_state.modalEmitirNfeBtn) {
             const btn = _state.modalEmitirNfeBtn;
             if (idNota) {
@@ -388,12 +418,13 @@ export const GerenciarPedidosApp = (function () {
 
         // --- Mapeamento de campos a ignorar ou tratar especialmente ---
         const ignoreKeys = ['id', 'id_pedido', 'id pedido', 'updatedAt'];
-        const situacao = pedido.situação || pedido.situacao || '-';
+        // situacao já foi normalizada acima com _getStatusLabel
         const sitLower = situacao.toLowerCase();
         let badge = 'bg-gray-100 text-gray-700';
         if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badge = 'bg-green-100 text-green-700';
         else if (sitLower.includes('cancel')) badge = 'bg-red-100 text-red-700';
-        else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento')) badge = 'bg-yellow-100 text-yellow-700';
+        else if (sitLower.includes('pendent') || sitLower.includes('abert')) badge = 'bg-yellow-100 text-yellow-700';
+        else if (sitLower.includes('produção') || sitLower.includes('producao') || sitLower.includes('andamento')) badge = 'bg-blue-100 text-blue-700';
 
         // --- Cabeçalho resumido do pedido ---
         const cliente = pedido.contato_nome || pedido['contato nome'] || pedido.cliente || '-';
@@ -406,7 +437,8 @@ export const GerenciarPedidosApp = (function () {
 
         // --- Info grid (campos gerais, excluindo ID e itens) ---
         const skipInGrid = [...ignoreKeys, 'numero', 'número', 'itens', 'situação', 'situacao', 'vendedor',
-            'contato_nome', 'contato nome', 'cpf_cnpj', 'cpf cnpj', 'cpf/cnpj', 'data', 'total', 'total_pedido', 'total pedido'];
+            'contato_nome', 'contato nome', 'cpf_cnpj', 'cpf cnpj', 'cpf/cnpj', 'data', 'total', 'total_pedido', 'total pedido',
+            'id_nota', 'id nota', 'idnotafiscal', 'id_nota_fiscal', 'id nota fiscal'];
 
         let gridHtml = '';
         Object.entries(pedido).forEach(([key, value]) => {
@@ -436,6 +468,35 @@ export const GerenciarPedidosApp = (function () {
             }
         });
 
+        // --- NF-e: Buscar dados vinculados ---
+        const nfe = (window._allNFeData || []).find(n => 
+            String(n.id_pedido || n.idPedido || '') === String(pedidoId) ||
+            String(n.numero_pedido || '') === String(orderNumber) ||
+            String(n.id_nota || '') === String(idNota)
+        );
+        if (nfe) {
+            const numeroNota = nfe.numero || nfe.numero_da_nota || '-';
+            const serieNota = nfe.serie || '-';
+            const linkDanfe = nfe['Link DANFE'] || nfe.link_danfe || nfe.linkDanfe || nfe.link || '#';
+            
+            gridHtml += `
+                <div class="bg-green-50 p-3 rounded-lg border border-green-100 md:col-span-2">
+                    <div class="flex items-center gap-2 mb-1">
+                        <svg class="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clip-rule="evenodd"></path></svg>
+                        <span class="block text-[10px] font-bold text-green-500 uppercase tracking-wider">Nota Fiscal Eletrônica (Emitida)</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="block text-sm text-green-800 font-bold">Nº ${numeroNota} (Série ${serieNota})</span>
+                        ${linkDanfe !== '#' ? `
+                            <a href="${linkDanfe}" target="_blank" class="flex items-center gap-1.5 text-[10px] bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors font-bold uppercase shadow-sm">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2-2H7a2 2 0 00-2 2v4m14 4h.01"></path></svg>
+                                Imprimir DANFE
+                            </a>
+                        ` : ''}
+                    </div>
+                </div>`;
+        }
+
         // --- Itens: parse da string "(codigo, qtd, valor)" ---
         const itensRaw = pedido.itens || pedido.Itens || '';
         let itensHtml = '';
@@ -452,34 +513,45 @@ export const GerenciarPedidosApp = (function () {
                                     <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Produto</th>
                                     <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase">Qtd</th>
                                     <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase">Estoque</th>
+                                    <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase">Situação</th>
                                     <th class="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase">Valor</th>
                                 </tr>
                             </thead>
                             <tbody id="pedido-modal-itens-body" class="bg-white divide-y divide-gray-100">
-                                ${itensList.map(item => {
+                                ${itensList.map((item, index) => {
                                     const isService = String(item.codigo).trim().startsWith('7');
                                     const initialStockHtml = isService 
-                                        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">Serviço</span>`
-                                        : `<span class="text-xs text-gray-400 italic">carregando...</span>`;
+                                        ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-orange-100 text-orange-700 border border-orange-200">Serviço</span>`
+                                        : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-gray-100 text-gray-400 border border-gray-200 animate-pulse">...</span>`;
 
                                     return `
-                                    <tr data-item-codigo="${item.codigo}" class="cursor-pointer hover:bg-gray-50 transition-colors item-row">
-                                        <td class="px-4 py-3" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">
+                                    <tr data-item-codigo="${item.codigo}" data-item-index="${index}" class="cursor-pointer hover:bg-gray-50 transition-colors item-row" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">
+                                        <td class="px-4 py-3">
                                             <div class="flex items-center gap-3">
                                                 <img id="img-${item.codigo}" src="https://placehold.co/48x48/e2e8f0/64748b?text=..." 
                                                      alt="" class="w-12 h-12 rounded-lg object-cover bg-gray-100 flex-shrink-0"
                                                      onerror="this.src='https://placehold.co/48x48/e2e8f0/64748b?text=?'">
                                                 <div>
-                                                    <p class="font-medium text-gray-800" id="desc-${item.codigo}">${item.codigo}</p>
+                                                    <div class="flex items-center gap-2">
+                                                        <p class="font-medium text-gray-800" id="desc-${item.codigo}">${item.codigo}</p>
+                                                        <button onclick="GerenciarPedidosApp.handleSearchProduct('${item.codigo}', event)" 
+                                                                class="p-1 hover:bg-blue-50 text-blue-500 rounded transition-colors" 
+                                                                title="Pesquisar detalhes do produto">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                                        </button>
+                                                    </div>
                                                     <p class="text-xs text-gray-400">${item.codigo}</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="px-4 py-3 text-center text-gray-700" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">${item.quantidade}</td>
-                                        <td class="px-4 py-3 text-center" id="stock-col-${item.codigo}" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">
+                                        <td class="px-4 py-3 text-center text-gray-700">${item.quantidade}</td>
+                                        <td class="px-4 py-3 text-center" id="stock-col-${item.codigo}">
                                             ${initialStockHtml}
                                         </td>
-                                        <td class="px-4 py-3 text-right font-semibold text-gray-800" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(_parseNumber(item.valor))}</td>
+                                        <td class="px-4 py-3 text-center">
+                                            ${_createItemStatusBadge(item.status, pedidoId, item.codigo, index)}
+                                        </td>
+                                        <td class="px-4 py-3 text-right font-semibold text-gray-800">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(_parseNumber(item.valor))}</td>
                                     </tr>
                                     `;
                                 }).join('')}
@@ -530,34 +602,82 @@ export const GerenciarPedidosApp = (function () {
     }
 
     function _parseItens(raw) {
-        // Formato esperado: "(503070587, 1.00, 609.17)" ou múltiplos separados por "; " ou newline
+        // Formato esperado: "(503070587, 1.00, 609.17|STATUS)" ou "(503070587, 1.00, 609.17, STATUS)"
         const results = [];
         const cleaned = String(raw).trim();
-        // Cada item pode ser "(cod, qtd, val)"
         const regex = /\(([^)]+)\)/g;
         let match;
         while ((match = regex.exec(cleaned)) !== null) {
-            const parts = match[1].split(',').map(s => s.trim());
+            const content = match[1];
+            const parts = content.split(',').map(s => s.trim());
+            
             if (parts.length >= 3) {
+                let valorPart = parts[2];
+                let status = 'OK';
+                
+                // Tenta extrair status do pipe no 3º elemento ou do 4º elemento
+                if (valorPart.includes('|')) {
+                    const subParts = valorPart.split('|');
+                    valorPart = subParts[0];
+                    status = subParts[1] || 'OK';
+                } else if (parts.length >= 4) {
+                    status = parts[3];
+                }
+
                 results.push({
                     codigo: parts[0],
                     quantidade: parseFloat(parts[1]) || 1,
-                    valor: _parseNumber(parts[2]) || 0
+                    valor: _parseNumber(valorPart) || 0,
+                    status: status.trim()
                 });
             } else if (parts.length === 2) {
-                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: 0 });
+                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: 0, status: 'OK' });
             }
         }
         // Fallback: se não tiver parênteses, tenta vírgula simples
         if (results.length === 0 && cleaned) {
             const parts = cleaned.replace(/[()]/g, '').split(',').map(s => s.trim());
             if (parts.length >= 3) {
-                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: _parseNumber(parts[2]) || 0 });
+                let valorPart = parts[2];
+                let status = 'OK';
+                if (valorPart.includes('|')) {
+                    const subParts = valorPart.split('|');
+                    valorPart = subParts[0];
+                    status = subParts[1] || 'OK';
+                }
+                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: _parseNumber(valorPart) || 0, status: status.trim() });
             } else if (parts.length > 0 && parts[0]) {
-                results.push({ codigo: parts[0], quantidade: 1, valor: 0 });
+                results.push({ codigo: parts[0], quantidade: 1, valor: 0, status: 'OK' });
             }
         }
         return results;
+    }
+
+    /**
+     * Cria o HTML do badge de status do item (OK / Em Produção).
+     */
+    function _createItemStatusBadge(status, pedidoId, itemCodigo, index) {
+        const s = String(status || 'OK').toUpperCase().trim();
+        const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
+        
+        const badgeClass = isProducao 
+            ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' 
+            : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200';
+        
+        const label = isProducao ? 'Em Produção' : 'OK';
+        const icon = isProducao 
+            ? '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>'
+            : '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+
+        return `
+            <button onclick="GerenciarPedidosApp.handleToggleItemStatus('${pedidoId}', '${itemCodigo}', '${s}', ${index}, event)"
+                    id="status-badge-${pedidoId}-${index}"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border transition-all cursor-pointer shadow-sm active:scale-95 ${badgeClass}"
+                    title="Clique para alternar status do item">
+                ${icon}
+                <span>${label}</span>
+            </button>
+        `;
     }
 
     async function _enrichItensWithProductData(itensList) {
@@ -605,11 +725,17 @@ export const GerenciarPedidosApp = (function () {
                     const disponivel = parseFloat(prod.estoque) || 0;
                     const pedidoQty = parseFloat(item.quantidade) || 0;
                     if (isService) {
-                        stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200" title="Serviço">Serviço</span>`;
+                        stockCol.innerHTML = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-orange-100 text-orange-700 border border-orange-200" title="Serviço">Serviço</span>`;
                     } else if (disponivel >= pedidoQty) {
-                        stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800" title="Disponível: ${disponivel}">OK</span>`;
+                        stockCol.innerHTML = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-green-100 text-green-700 border border-green-200 shadow-sm" title="Disponível: ${disponivel}">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            OK
+                        </span>`;
                     } else {
-                        stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title="Disponível: ${disponivel}">Sem Estoque</span>`;
+                        stockCol.innerHTML = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-red-100 text-red-700 border border-red-200 shadow-sm" title="Disponível: ${disponivel}">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            Esgotado
+                        </span>`;
                     }
                 }
             });
@@ -728,10 +854,9 @@ export const GerenciarPedidosApp = (function () {
             }
 
             // Atualizar o modal de detalhes do pedido para refletir as mudanças (badges etc)
-            const modal = document.getElementById('order-details-modal');
-            if (orderNumber) {
+            if (_currentModalPedidoId) {
                 // Pequeno delay para garantir que o cache da API de produtos limpou ou refletiu a mudança
-                setTimeout(() => _openOrderDetailsModal(orderNumber), 500);
+                setTimeout(() => _openOrderDetailsModal(_currentModalPedidoId), 500);
             }
 
         } catch (error) {
@@ -836,7 +961,13 @@ export const GerenciarPedidosApp = (function () {
 
         // Verificar se já tem nota
         const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
-        const idNotaExistente = pedido?.id_nota || pedido?.['id nota'] || pedido?.idnotafiscal;
+        const nfeVinculada = (window._allNFeData || []).find(n => 
+            String(n.id_pedido || n.idPedido || '') === String(pedido?.id || pedido?.id_pedido || idPedido) ||
+            String(n.numero_pedido || '') === String(pedido?.numero || pedido?.número)
+        );
+        const idNotaExistente = nfeVinculada?.id || nfeVinculada?.id_nota || nfeVinculada?.numero || 
+                               pedido?.id_nota || pedido?.['id nota'] || pedido?.idnotafiscal || 
+                               pedido?.id_nota_fiscal || pedido?.['id nota fiscal'];
         
         if (idNotaExistente) {
             if (confirm("Este pedido já possui uma nota fiscal emitida. Deseja imprimir a nota ao invés de emitir uma nova?")) {
@@ -911,7 +1042,14 @@ export const GerenciarPedidosApp = (function () {
     function _handlePrintNfe() {
         const idPedido = _currentModalPedidoId;
         const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
-        const idNota = pedido?.id_nota || pedido?.['id nota'] || pedido?.idnotafiscal;
+        
+        const nfeVinculada = (window._allNFeData || []).find(n => 
+            String(n.id_pedido || n.idPedido || '') === String(pedido?.id || pedido?.id_pedido || idPedido) ||
+            String(n.numero_pedido || '') === String(pedido?.numero || pedido?.número)
+        );
+        const idNota = nfeVinculada?.id || nfeVinculada?.id_nota || nfeVinculada?.numero || 
+                       pedido?.id_nota || pedido?.['id nota'] || pedido?.idnotafiscal || 
+                       pedido?.id_nota_fiscal || pedido?.['id nota fiscal'];
 
         if (!idNota) {
             if (confirm("Este pedido ainda não possui Nota Fiscal emitida. Deseja emitir agora?")) {
@@ -920,11 +1058,14 @@ export const GerenciarPedidosApp = (function () {
             return;
         }
 
-        // URL para DANFE do Bling (usando ID da nota) - Isso geralmente requer autenticação ou um link público
-        // Como o sistema está no Cloud Run e tem o token, poderíamos gerar um link.
-        // O padrão mais comum para o usuário é abrir no próprio Bling ou baixar o PDF.
-        // Aqui, vamos redirecionar para uma busca no Bling ou abrir um modal de ajuda.
+        // Tenta usar o link da DANFE se estiver no cache
+        const linkDanfe = nfeVinculada?.['Link DANFE'] || nfeVinculada?.link_danfe || nfeVinculada?.linkDanfe || nfeVinculada?.link;
         
+        if (linkDanfe && linkDanfe !== '#') {
+            window.open(linkDanfe, '_blank');
+            return;
+        }
+
         const win = window.open(`https://www.bling.com.br/notas.fiscais.php#edit/${idNota}`, '_blank');
         if (win) {
             win.focus();
@@ -1588,16 +1729,16 @@ export const GerenciarPedidosApp = (function () {
             let statusMatch = true;
             if (_statusSelect && _statusSelect.value !== 'all') {
                 const sel = _statusSelect.value;
-                const sitLower = (p.situação || p.situacao || p.situao || '').toLowerCase();
+                const sitNormalized = _getStatusLabel(p.situação || p.situacao || p.situao || '').toLowerCase();
                 
                 if (sel === 'atendido') {
-                    statusMatch = (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu'));
+                    statusMatch = (sitNormalized.includes('atendid') || sitNormalized.includes('entregue') || sitNormalized.includes('conclu'));
                 } else if (sel === 'aberto') {
-                    statusMatch = (sitLower.includes('abert') || sitLower.includes('pendent') || sitLower.includes('andamento'));
+                    statusMatch = (sitNormalized.includes('abert') || sitNormalized.includes('pendent') || sitNormalized.includes('andamento'));
                 } else if (sel === 'producao') {
-                    statusMatch = sitLower.includes('produ');
+                    statusMatch = sitNormalized.includes('produ');
                 } else if (sel === 'cancelado') {
-                    statusMatch = sitLower.includes('cancel');
+                    statusMatch = sitNormalized.includes('cancel');
                 }
             }
 
@@ -1682,7 +1823,7 @@ export const GerenciarPedidosApp = (function () {
                 const numero = p.número || p.numero || '-';
                 const cliente = p.contato_nome || p['contato nome'] || p.cliente || '-';
                 const vendedor = _getVendedorName(p.vendedor);
-                const situacao = p.situação || p.situacao || p.situao || '-';
+                const situacao = _getStatusLabel(p.situação || p.situacao || p.situao || '-');
                 const totalVal = _parseNumber(p.total_pedido || p['total pedido'] || p.valortotal || p.total || p.valor_total || p.total_venda || 0);
                 const totalFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVal);
                 
@@ -1867,7 +2008,8 @@ export const GerenciarPedidosApp = (function () {
                         const sitLower = data.situacao.toLowerCase();
                         if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badgeClass = 'bg-green-100 text-green-800';
                         else if (sitLower.includes('cancel')) badgeClass = 'bg-red-100 text-red-800';
-                        else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento') || sitLower.includes('em andamento')) badgeClass = 'bg-yellow-100 text-yellow-800';
+                        else if (sitLower.includes('pendent') || sitLower.includes('abert')) badgeClass = 'bg-yellow-100 text-yellow-800';
+                        else if (sitLower.includes('produção') || sitLower.includes('producao') || sitLower.includes('andamento') || sitLower.includes('em andamento')) badgeClass = 'bg-blue-100 text-blue-800';
                         else if (sitLower.includes('prepar') || sitLower.includes('impress') || sitLower.includes('verificad')) badgeClass = 'bg-blue-100 text-blue-800';
                         
                         statusCell.innerHTML = `<span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${data.situacao}</span>`;
@@ -1915,6 +2057,165 @@ export const GerenciarPedidosApp = (function () {
                 _openOrderDetailsModal(pedido);
             } else {
                 console.warn(`[GerenciarPedidos] Pedido ${orderNumber} não encontrado localmente.`);
+            }
+        },
+        handleItemClick: function(codigo) {
+            handleItemClick(codigo);
+        },
+        handleSearchProduct: function(codigo, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            console.log(`[GerenciarPedidos] Pesquisando produto ${codigo}...`);
+            
+            // Se houver integração com o PesquisarProduto, abre lá
+            const navPesquisar = document.getElementById('nav-pesquisar');
+            if (navPesquisar && typeof window.PesquisarProduto !== 'undefined') {
+                navPesquisar.click();
+
+                // Garante que a barra de filtro global esteja visível
+                const globalFilterBar = document.getElementById('global-filter-bar');
+                if (globalFilterBar) globalFilterBar.classList.remove('hidden');
+
+                // Dá um tempo para a página mudar antes de pesquisar
+                setTimeout(() => {
+                    const searchInput = document.getElementById('global-search-input');
+                    if (searchInput) {
+                        searchInput.value = codigo;
+                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        searchInput.focus();
+                    }
+                }, 150);
+            }
+        },
+        handleToggleItemStatus: async function(pedidoId, itemCodigo, currentStatus, index, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            const newStatus = (currentStatus === 'OK') ? 'EM PRODUÇÃO' : 'OK';
+            const btn = document.getElementById(`status-badge-${pedidoId}-${index}`);
+            
+            // Optimistic UI Update
+            if (btn) {
+                btn.classList.add('opacity-50', 'pointer-events-none');
+                const span = btn.querySelector('span');
+                if (span) span.innerText = 'Salvando...';
+            }
+
+            try {
+                const url = API_URLS.UPDATE_ITEM_STATUS;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pedidoId,
+                        itemCodigo,
+                        newStatus,
+                        itemIndex: index
+                    })
+                });
+
+                if (!response.ok) throw new Error('Erro ao atualizar status do item');
+
+                // AUTO-UPDATE: Se o novo status do item for EM PRODUÇÃO, e o pedido estiver "Em Aberto", 
+                // muda o pedido automaticamente para "Em Produção".
+                if (newStatus === 'EM PRODUÇÃO') {
+                    const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+                    if (pedido) {
+                        const currentSit = _getStatusLabel(pedido.situacao || pedido.situação || '').toLowerCase();
+                        if (currentSit.includes('abert') || currentSit.includes('pendent')) {
+                            console.log(`[Auto-Status] Item em produção detectado. Alterando pedido ${pedidoId} para Em Produção...`);
+                            // Chama a função interna de troca de status (silenciosamente ou com o confirm se preferir)
+                            // Aqui chamamos direto a API para evitar múltiplos popups
+                            fetch(`${API_URLS.ORDERS_BLING}/update-status`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ ids: [pedidoId], idSituacao: "447331" })
+                            }).catch(err => console.error("Erro no auto-update de status:", err));
+                        }
+                    }
+                }
+
+                // O sync via Firestore cuidará de atualizar a UI em todos os clientes.
+
+            } catch (error) {
+                console.error("Erro ao alternar status do item:", error);
+                alert("Erro ao salvar status do item: " + error.message);
+                // Revert UI if error
+                if (btn) {
+                    btn.classList.remove('opacity-50', 'pointer-events-none');
+                    const span = btn.querySelector('span');
+                    if (span) span.innerText = currentStatus === 'OK' ? 'OK' : 'Em Produção';
+                }
+            }
+        },
+        updateOrderItemStatusRealTime: function(data) {
+            const { pedidoId, itemCodigo, newStatus, itemIndex } = data;
+            console.log(`[GerenciarPedidos] Sincronizando status do item ${itemCodigo} para ${newStatus} no pedido ${pedidoId}`);
+
+            // 1. Atualizar no cache local
+            const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+            if (pedido) {
+                const itens = _parseItens(pedido.itens);
+                if (itens[itemIndex] && String(itens[itemIndex].codigo) === String(itemCodigo)) {
+                    itens[itemIndex].status = newStatus;
+                    // Reconstrói a string de itens: (SKU, QTD, VALOR, STATUS)
+                    pedido.itens = itens.map(i => `(${i.codigo}, ${parseFloat(i.quantidade).toFixed(2)}, ${parseFloat(i.valor).toFixed(2)}, ${i.status || 'OK'})`).join(' ');
+                }
+            }
+
+            // 2. Atualizar a UI se o modal estiver aberto para este pedido
+            if (_currentModalPedidoId && String(_currentModalPedidoId) === String(pedidoId)) {
+                const btn = document.getElementById(`status-badge-${pedidoId}-${itemIndex}`);
+                if (btn) {
+                    const isProducao = newStatus === 'EM PRODUÇÃO' || newStatus === 'PRODUCAO' || newStatus === 'EM PRODUCAO';
+                    const badgeClass = isProducao 
+                        ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' 
+                        : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200';
+                    
+                    btn.className = `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border transition-all cursor-pointer shadow-sm active:scale-95 ${badgeClass}`;
+                    btn.classList.remove('opacity-50', 'pointer-events-none');
+                    
+                    const label = isProducao ? 'Em Produção' : 'OK';
+                    const icon = isProducao 
+                        ? '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>'
+                        : '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+                    
+                    btn.innerHTML = `${icon}<span>${label}</span>`;
+                    // Atualiza o onclick para refletir o novo status atual
+                    btn.setAttribute('onclick', `GerenciarPedidosApp.handleToggleItemStatus('${pedidoId}', '${itemCodigo}', '${newStatus}', ${itemIndex}, event)`);
+                }
+            }
+        },
+        updateOrderNfeInfoRealTime: function(nfeData) {
+            const pedidoId = nfeData.id_pedido || nfeData.idPedido;
+            if (!pedidoId) return;
+
+            console.log(`[GerenciarPedidos] Sincronizando NF-e ${nfeData.numero} para o pedido ${pedidoId}`);
+
+            // 1. Atualizar no cache local
+            const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+            if (pedido) {
+                pedido.id_nota = nfeData.id || nfeData.id_nota || nfeData.numero;
+            }
+
+            // 2. Atualizar a UI se o modal estiver aberto para este pedido
+            if (_currentModalPedidoId && String(_currentModalPedidoId) === String(pedidoId)) {
+                // Força o re-render do modal para mostrar o bloco de NF-e
+                _openOrderDetailsModal(pedidoId);
+                
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({
+                        text: `NF-e ${nfeData.numero} vinculada ao pedido!`,
+                        duration: 3000,
+                        gravity: "top",
+                        position: "center",
+                        style: { background: "#10b981" }
+                    }).showToast();
+                }
             }
         }
     };
