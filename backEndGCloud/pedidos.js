@@ -1,466 +1,398 @@
 const express = require('express');
-
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function getTokenWithRetry(axios, url, retries = 3) {
-    for (let i = 0; i < retries; i++) {
-        try {
-            const tokenResponse = await axios.get(url);
-            const accessToken = tokenResponse.data.access_token;
-            if (accessToken) return accessToken;
-        } catch (error) {
-            if (error.response && error.response.status >= 500 && i < retries - 1) {
-                await delay(2000);
-            } else {
-                throw error;
-            }
-        }
-    }
-    throw new Error(`Não foi possível obter o token do Bling após ${retries} tentativas.`);
-}
+const axiosModule = require('axios'); // Usaremos o nome axiosModule para não conflitar com o parâmetro
 
 const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidosBling, axios, APPS_SCRIPT_TOKEN_URL, BLING_API_BASE_URL, notifySync) => {
     const router = express.Router();
+    const sheetNameLinhaProducao = 'LinhaProducao';
+
+    function colToA1(index) {
+        let temp, letter = '';
+        while (index > 0) {
+            temp = (index - 1) % 26;
+            letter = String.fromCharCode(65 + temp) + letter;
+            index = (index - temp - 1) / 26;
+        }
+        return letter || 'A';
+    }
+
+    async function getToken() {
+        try {
+            // Usa o axios injetado se disponível, caso contrário usa o módulo
+            const httpClient = axios || axiosModule;
+            const response = await httpClient.get(APPS_SCRIPT_TOKEN_URL);
+            return response.data.access_token || response.data.accessToken;
+        } catch (err) {
+            console.error("Erro ao obter token do Apps Script:", err.message);
+            throw new Error("Falha ao obter token de acesso.");
+        }
+    }
 
     router.get('/', async (req, res, next) => {
         try {
             const sheets = await getSheetsClient();
-            
-            const response = await sheets.spreadsheets.values.get({
+            const response = await sheets.spreadsheets.values.batchGet({
                 spreadsheetId: spreadsheetIdNFE,
-                range: `${sheetNamePedidosBling}!A:Z`, 
+                ranges: [`${sheetNamePedidosBling}!A:Z`, `${sheetNameLinhaProducao}!A:Z`],
             });
+            const rows = response.data.valueRanges[0].values || [];
+            const producaoRows = response.data.valueRanges[1].values || [];
+            if (rows.length === 0) return res.status(200).send({ status: 'success', data: [] });
 
-            const rows = response.data.values || [];
-            if (rows.length === 0) {
-                return res.status(200).send({ status: 'success', data: [] });
+            const headersNorm = rows[0].map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[\/\(\)]/g, '_'));
+
+            const producaoMap = {};
+            if (producaoRows && producaoRows.length > 1) {
+                const pHeaders = producaoRows[0].map(h => (h || '').toLowerCase().trim());
+                const hId = pHeaders.indexOf('pedidoid');
+                const hIdx = pHeaders.indexOf('itemindex');
+                const hSt = pHeaders.indexOf('status');
+                const hDesc = pHeaders.indexOf('descricaocomplementar');
+                const hQty = pHeaders.indexOf('quantidade');
+                const hDate = pHeaders.indexOf('data');
+
+                producaoRows.slice(1).forEach(row => {
+                    const pid = String(row[hId] || '').trim();
+                    const pidx = String(row[hIdx] || '').trim();
+                    if (pid && pidx !== '') {
+                        producaoMap[`${pid}-${pidx}`] = {
+                            status: hSt !== -1 ? (row[hSt] || 'OK') : 'OK',
+                            descricao: hDesc !== -1 ? (row[hDesc] || '') : '',
+                            quantidade: hQty !== -1 ? (row[hQty] || '') : '',
+                            data: hDate !== -1 ? (row[hDate] || '') : ''
+                        };
+                    }
+                });
             }
-
-            const headersRow = rows[0];
-            const headersNorm = headersRow.map(h => 
-                h.toLowerCase().trim()
-                 .normalize('NFD').replace(/[\u0300-\u036f]/g, "") // Remove acentos
-                 .replace(/\s+/g, '_')
-                 .replace(/[\/\(\)]/g, '_')
-            );
 
             const pedidos = rows.slice(1).map(row => {
                 const obj = {};
-                headersNorm.forEach((h, i) => { 
-                    if (h) {
-                        const val = row[i] || '';
-                        obj[h] = val;
+                headersNorm.forEach((h, i) => { if (h) obj[h] = row[i] || ''; });
+                if (row.length > 16) obj['observacao'] = row[16] || '';
+                if (obj.id_pedido) obj.id = obj.id_pedido;
+                const pid = String(obj.id_pedido || obj.id || '').trim();
+                const pnum = String(obj.numero_pedido || obj.numero || '').trim();
+                obj.detalhesProducao = {};
+                Object.keys(producaoMap).forEach(key => {
+                    const [keyPid, keyIdx] = key.split('-');
+                    if (keyPid === pid || keyPid === pnum) {
+                        obj.detalhesProducao[key] = producaoMap[key];
+                        obj.detalhesProducao[`${pid}-${keyIdx}`] = producaoMap[key];
+                        obj.detalhesProducao[`${pnum}-${keyIdx}`] = producaoMap[key];
                     }
                 });
-
-                // Forçar a observação a vir da Coluna Q (índice 16)
-                // Caso existam múltiplas colunas de observação, garantimos a correta aqui.
-                if (row.length > 16) {
-                    obj['observacao'] = row[16] || '';
-                }
-
-                // Compatibilidade com o frontend (mapia id_pedido para id)
-                if (obj.id_pedido) obj.id = obj.id_pedido;
                 return obj;
             });
-
             res.status(200).send({ status: 'success', data: pedidos });
-        } catch (error) {
-            next(error);
+        } catch (error) { next(error); }
+    });
+
+    router.post('/update-item-status', async (req, res, next) => {
+        try {
+            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, numeroPedido, quantidade } = req.body;
+            const idParaPlanilha = numeroPedido || pedidoId;
+            if (!idParaPlanilha) throw new Error("Identificação do pedido é obrigatória.");
+
+            const sheets = await getSheetsClient();
+            const pResp = await sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A:Z` });
+            let pRows = pResp.data.values || [];
+            
+            let pHeaders = [];
+            if (pRows.length > 0) {
+                pHeaders = pRows[0].map(h => (h || '').toLowerCase().trim());
+                let changed = false;
+                if (pHeaders.indexOf('quantidade') === -1) {
+                    pHeaders.push('quantidade');
+                    changed = true;
+                }
+                if (pHeaders.indexOf('data') === -1) {
+                    pHeaders.push('data');
+                    changed = true;
+                }
+                if (changed) {
+                    await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeaders] } });
+                }
+            } else {
+                pHeaders = ['pedidoid', 'sku', 'itemindex', 'status', 'quantidade', 'data', 'descricaocomplementar'];
+                await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeaders] } });
+                pRows = [pHeaders];
+            }
+
+            const hId = pHeaders.indexOf('pedidoid');
+            const hIdx = pHeaders.indexOf('itemindex');
+            const hDesc = pHeaders.indexOf('descricaocomplementar');
+            const hSt = pHeaders.indexOf('status');
+            const hSku = pHeaders.indexOf('sku');
+            const hQty = pHeaders.indexOf('quantidade');
+            const hDate = pHeaders.indexOf('data');
+
+            let foundIdx = -1;
+            for (let i = 1; i < pRows.length; i++) {
+                const rowPid = String(pRows[i][hId]).trim();
+                if ((rowPid === String(pedidoId).trim() || rowPid === String(numeroPedido).trim()) && String(pRows[i][hIdx]).trim() === String(itemIndex).trim()) {
+                    foundIdx = i; break;
+                }
+            }
+
+            const { dataPedido } = req.body;
+            let finalStatus = newStatus;
+            let finalDesc = newDescription;
+            let finalQty = quantidade;
+            let finalDate = dataPedido;
+
+            if (foundIdx !== -1) {
+                if (finalStatus === undefined && hSt !== -1) finalStatus = pRows[foundIdx][hSt];
+                if (finalDesc === undefined && hDesc !== -1) finalDesc = pRows[foundIdx][hDesc];
+                if (finalQty === undefined && hQty !== -1) finalQty = pRows[foundIdx][hQty];
+                if (finalDate === undefined && hDate !== -1) finalDate = pRows[foundIdx][hDate];
+            }
+
+            const rowData = new Array(pHeaders.length).fill('');
+            if (hId !== -1) rowData[hId] = idParaPlanilha;
+            if (hSku !== -1) rowData[hSku] = itemCodigo;
+            if (hIdx !== -1) rowData[hIdx] = itemIndex;
+            if (hSt !== -1) rowData[hSt] = finalStatus || 'OK';
+            if (hQty !== -1) rowData[hQty] = finalQty || '';
+            if (hDate !== -1) rowData[hDate] = finalDate || '';
+            if (hDesc !== -1) rowData[hDesc] = finalDesc || '';
+
+            if (foundIdx !== -1) {
+                await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A${foundIdx + 1}`, valueInputOption: 'RAW', resource: { values: [rowData] } });
+            } else {
+                await sheets.spreadsheets.values.append({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [rowData] } });
+            }
+
+            if (finalStatus !== undefined) {
+                const mResp = await sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNamePedidosBling}!A:Z` });
+                const mRows = mResp.data.values || [];
+                if (mRows.length > 0) {
+                    const mHeaders = mRows[0].map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_'));
+                    const iCol = mHeaders.indexOf('itens');
+                    const idCol = mHeaders.indexOf('id_pedido') !== -1 ? mHeaders.indexOf('id_pedido') : mHeaders.indexOf('id');
+                    const numCol = mHeaders.indexOf('numero');
+                    let mIdx = -1;
+                    for (let i = 1; i < mRows.length; i++) {
+                        if (String(mRows[i][idCol]).trim() === String(pedidoId).trim() || String(mRows[i][numCol]).trim() === String(numeroPedido || pedidoId).trim()) {
+                            mIdx = i; break;
+                        }
+                    }
+                    if (mIdx !== -1 && iCol !== -1) {
+                        const raw = mRows[mIdx][iCol] || '';
+                        const items = [];
+                        const itemStrings = String(raw).split(/(?=\([^,]+,\s*\d+)/).filter(Boolean);
+                        itemStrings.forEach((s, i) => {
+                            let c = s.trim();
+                            if (c.startsWith('(')) c = c.substring(1);
+                            if (c.endsWith(')')) { if (((c.match(/\(/g) || []).length < (c.match(/\)/g) || []).length)) c = c.substring(0, c.length - 1); }
+                            const p = c.split(',').map(x => x.trim());
+                            if (p.length >= 3) {
+                                let v = p[2]; let st = 'OK';
+                                if (v.includes('|')) { const sp = v.split('|'); v = sp[0]; st = sp[1] || 'OK'; }
+                                if (String(i) === String(itemIndex)) st = finalStatus;
+                                items.push(`(${p[0]}, ${p[1]}, ${v}|${st})`);
+                            }
+                        });
+                        await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${colToA1(iCol + 1)}${mIdx + 1}`, valueInputOption: 'RAW', resource: { values: [[items.join(' ')]] } });
+                    }
+                }
+            }
+            if (typeof notifySync === 'function') notifySync('orderItemStatusUpdated', { pedidoId, itemCodigo, newStatus: finalStatus, newDescription: finalDesc, itemIndex, quantidade: finalQty, dataPedido: finalDate });
+            res.status(200).send({ status: 'success' });
+        } catch (error) { next(error); }
+    });
+
+    router.post('/update-status', async (req, res, next) => {
+        try {
+            const { ids, idSituacao } = req.body;
+            if (!ids || !Array.isArray(ids)) throw new Error("Lista de IDs inválida.");
+            
+            const accessToken = await getToken();
+            const httpClient = axios || axiosModule;
+            const results = { sucessos: [], erros: [] };
+            
+            for (const id of ids) {
+                try {
+                    console.log(`[Bling] Tentando atualizar pedido ${id} para situação ${idSituacao}`);
+                    await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${id}/situacoes/${idSituacao}`, {}, { 
+                        headers: { 'Authorization': `Bearer ${accessToken}` } 
+                    });
+                    results.sucessos.push(id);
+                } catch (err) {
+                    const errMsg = err.response?.data?.error?.message || err.response?.data?.message || err.message;
+                    console.error(`[Bling Error] Pedido ${id}:`, errMsg);
+                    results.erros.push({ id, erro: errMsg });
+                }
+            }
+            res.status(200).send({ status: results.erros.length > 0 ? 'partial_success' : 'success', data: results });
+        } catch (error) { 
+            console.error("[Backend Error] update-status:", error.message);
+            res.status(500).send({ status: 'error', message: error.message });
         }
     });
 
     router.post('/observacao', async (req, res, next) => {
         try {
             const { numero_do_pedido, observacao, senderId } = req.body;
-
-            if (!numero_do_pedido || !observacao) {
-                const error = new Error("Dados incompletos: 'numero_do_pedido' e 'observacao' são obrigatórios.");
-                error.statusCode = 400;
-                throw error;
-            }
-
             const sheets = await getSheetsClient();
-            const response = await sheets.spreadsheets.values.get({
-                spreadsheetId: spreadsheetIdNFE,
-                range: `${sheetNamePedidosBling}!A:Z`,
-            });
-
+            const response = await sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNamePedidosBling}!A:Z` });
             const rows = response.data.values || [];
-            if (rows.length === 0) {
-                const error = new Error('Nenhum dado encontrado na planilha de Pedidos Bling.');
-                error.statusCode = 404;
-                throw error;
-            }
-
             const headers = rows[0].map(h => (h || '').toLowerCase().trim());
-            
-            const idColIndex = headers.indexOf('id pedido') !== -1 ? headers.indexOf('id pedido') : headers.indexOf('id');
-            const numColIndex = headers.indexOf('numero') !== -1 ? headers.indexOf('numero') : headers.indexOf('número');
-            const numLojaColIndex = headers.indexOf('numero loja') !== -1 ? headers.indexOf('numero loja') : headers.indexOf('número loja');
-            
-            // A planilha tem DUAS colunas chamadas "Observação".
-            // A que o sistema desktop usa é a Coluna Q (índice fixo 16).
-            // Não podemos usar headers.indexOf() pois retorna a primeira (errada).
-            const observacaoColIndex = 16; // Coluna Q — Observação usada pelo sistema principal
-
-            if (rows[0].length <= observacaoColIndex) {
-                throw new Error('Coluna Q (Observação) não encontrada na planilha de Pedidos Bling.');
-            }
-
-            let rowIndexToUpdate = -1;
-            let observacaoAtual = '';
-
+            const obsCol = 16;
+            let rIdx = -1;
             for (let i = 1; i < rows.length; i++) {
-                const row = rows[i];
-                const idVal = idColIndex !== -1 ? (row[idColIndex] || '').toString().trim() : '';
-                const numVal = numColIndex !== -1 ? (row[numColIndex] || '').toString().trim() : '';
-                const numLojaVal = numLojaColIndex !== -1 ? (row[numLojaColIndex] || '').toString().trim() : '';
-
-                if (idVal === String(numero_do_pedido) || numVal === String(numero_do_pedido) || numLojaVal === String(numero_do_pedido)) {
-                    rowIndexToUpdate = i;
-                    observacaoAtual = row[observacaoColIndex] || '';
-                    break;
-                }
+                const idVal = String(rows[i][headers.indexOf('id pedido')] || rows[i][headers.indexOf('id')] || '').trim();
+                const numVal = String(rows[i][headers.indexOf('numero')] || '').trim();
+                if (idVal === String(numero_do_pedido) || numVal === String(numero_do_pedido)) { rIdx = i; break; }
             }
-
-            if (rowIndexToUpdate === -1) {
-                const error = new Error(`Pedido com ID/Número ${numero_do_pedido} não encontrado na planilha de Pedidos Bling.`);
-                error.statusCode = 404;
-                throw error;
-            }
-
-            const timestamp = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-            const novaEntrada = `${timestamp} - ${observacao}`;
-            const observacaoFinal = observacaoAtual ? `${observacaoAtual}\\n${novaEntrada}` : novaEntrada;
-
-            const range = `${sheetNamePedidosBling}!${String.fromCharCode(65 + observacaoColIndex)}${rowIndexToUpdate + 1}`;
-            
-            await sheets.spreadsheets.values.update({
-                spreadsheetId: spreadsheetIdNFE,
-                range: range,
-                valueInputOption: 'RAW',
-                resource: {
-                    values: [[observacaoFinal]],
-                },
-            });
-
-            console.log(`Observação do Pedido ${numero_do_pedido} atualizada na linha ${rowIndexToUpdate + 1}.`);
-
-            // Notificar todos os clientes via Firestore Sync
-            if (typeof notifySync === 'function') {
-                notifySync('orderObservationUpdated', {
-                    numeroPedido: String(numero_do_pedido),
-                    novaObservacao: observacaoFinal,
-                    senderId: senderId || null
-                });
-            }
-
-            res.status(200).send({ status: 'success', message: 'Observação adicionada com sucesso!', data: { newObservation: observacaoFinal } });
-
-        } catch (error) {
-            next(error);
-        }
+            if (rIdx === -1) throw new Error("Pedido não encontrado.");
+            const obsAt = rows[rIdx][obsCol] || '';
+            const obsFin = obsAt ? `${obsAt}\\n${new Date().toLocaleString('pt-BR')} - ${observacao}` : `${new Date().toLocaleString('pt-BR')} - ${observacao}`;
+            await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNamePedidosBling}!${colToA1(obsCol + 1)}${rIdx + 1}`, valueInputOption: 'RAW', resource: { values: [[obsFin]] } });
+            if (typeof notifySync === 'function') notifySync('orderObservationUpdated', { numeroPedido: String(numero_do_pedido), novaObservacao: obsFin, senderId });
+            res.status(200).send({ status: 'success' });
+        } catch (error) { next(error); }
     });
 
-    router.post('/update-status', async (req, res, next) => {
-        try {
-            const { ids, idSituacao } = req.body;
-            if (!ids || !Array.isArray(ids) || ids.length === 0 || !idSituacao) {
-                const error = new Error("Dados incompletos: 'ids' (array) e 'idSituacao' são obrigatórios.");
-                error.statusCode = 400;
-                throw error;
-            }
-
-            const sheets = await getSheetsClient();
-            const accessToken = await getTokenWithRetry(axios, APPS_SCRIPT_TOKEN_URL);
-            
-            const results = { sucessos: [], erros: [] };
-
-            // Puxar a planilha de uma vez para atualizar os sucessos depois
-            const response = await sheets.spreadsheets.values.get({
-                spreadsheetId: spreadsheetIdNFE,
-                range: `${sheetNamePedidosBling}!A:Z`,
-            });
-            const rows = response.data.values || [];
-            const headers = rows.length > 0 ? rows[0].map(h => (h || '').toLowerCase().trim()) : [];
-            const idColIndex = headers.indexOf('id pedido') !== -1 ? headers.indexOf('id pedido') : headers.indexOf('id');
-            const numColIndex = headers.indexOf('numero') !== -1 ? headers.indexOf('numero') : headers.indexOf('número');
-            const numLojaColIndex = headers.indexOf('numero loja') !== -1 ? headers.indexOf('numero loja') : headers.indexOf('número loja');
-            const situacaoColIndex = headers.indexOf('situação') !== -1 ? headers.indexOf('situação') : headers.indexOf('situacao');
-
-            for (const id of ids) {
-                try {
-                    // Update no Bling
-                    const blingUrl = `${BLING_API_BASE_URL}/pedidos/vendas/${id}/situacoes/${idSituacao}`;
-                    const blingResponse = await axios.patch(blingUrl, {}, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    
-                    // Update sucesso na Sheet se tiver sucesso no Bling
-                    let atualizouPlanilha = false;
-                    if (rows.length > 0 && situacaoColIndex !== -1) {
-                        for (let i = 1; i < rows.length; i++) {
-                            const row = rows[i];
-                            const idVal = idColIndex !== -1 ? (row[idColIndex] || '').toString().trim() : '';
-                            const numVal = numColIndex !== -1 ? (row[numColIndex] || '').toString().trim() : '';
-                            const numLojaVal = numLojaColIndex !== -1 ? (row[numLojaColIndex] || '').toString().trim() : '';
-                            
-                            if (idVal === String(id) || numVal === String(id) || numLojaVal === String(id)) {
-                                const range = `${sheetNamePedidosBling}!${String.fromCharCode(65 + situacaoColIndex)}${i + 1}`;
-                                const statusName = String(idSituacao) === "9" ? "Atendido" : `ID ${idSituacao}`;
-                                await sheets.spreadsheets.values.update({
-                                    spreadsheetId: spreadsheetIdNFE,
-                                    range: range,
-                                    valueInputOption: 'RAW',
-                                    resource: { values: [[statusName]] },
-                                });
-                                atualizouPlanilha = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    results.sucessos.push({ id, atualizouPlanilha });
-                } catch (err) {
-                    console.error(`Erro ao atualizar pedido ${id}:`, err.response?.data || err.message);
-                    results.erros.push({ id, erro: err.response?.data?.error?.message || err.message });
-                }
-            }
-
-            res.status(200).send({ status: 'success', data: results });
-        } catch (error) {
-            next(error);
-        }
-    });
-
-    // Rota para Editar a Descrição de um Item de Requisição (Dentro de /pedidos)
-    router.post('/update-item-description', async (req, res, next) => {
-        try {
-            const { orderCode, codigoService, requisitionType, novaDescricao } = req.body;
-            if (!orderCode || !codigoService || !requisitionType || !novaDescricao) {
-                const error = new Error("Dados incompletos.");
-                error.statusCode = 400;
-                throw error;
-            }
-
-            const sheets = await getSheetsClient();
-            
-            // Mapeamento de Planilhas (Usando as mesmas variáveis globais que o index.js passa se necessário, 
-            // mas aqui vamos usar o padrão de IDs fixos para garantir)
-            const spreadsheets = {
-                'fabrica': '1_A9C_XuUyhC0X1C-PMy7_55jx-mH7LkslBz-CjdVuXc',
-                'terceiros': '1m5HuPv5RLam7vSQ7n1ml9MHy9WO_dbGN5gF2Bet39Ss',
-                'saidas-fabrica': '1ygLHkMzQcpMbXssdlF8iPFUXTXVFDsDud286Z8ihma4',
-                'saidas-garantia': '1JygTrWFYFXioVJMqmnR-KNs6vaUApYoAJZNWIK5R8PQ'
-            };
-            const sheetNames = {
-                'fabrica': 'Requisição fabrica lote 1',
-                'terceiros': 'Requisição geral lote 1',
-                'saidas-fabrica': 'Dados Sistemas - Fabrica 1',
-                'saidas-garantia': 'Dados Sistemas - Garantia 1'
-            };
-
-            const spreadsheetId = spreadsheets[requisitionType];
-            const sheetName = sheetNames[requisitionType];
-
-            if (!spreadsheetId) throw new Error(`Tipo de requisição desconhecido: ${requisitionType}`);
-
-            const response = await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `${sheetName}!A:Z`
-            });
-
-            const rows = response.data.values || [];
-            const headers = rows[0]?.map(h => h?.toLowerCase().trim()) || [];
-            const requisicaoColIndex = headers.indexOf('requisição');
-            const codigoServiceColIndex = headers.indexOf('codigo service');
-            const descricaoColIndex = headers.indexOf('descrição');
-
-            let rowIndexToUpdate = -1;
-            for (let i = 1; i < rows.length; i++) {
-                if (String(rows[i][requisicaoColIndex]).trim() === orderCode && String(rows[i][codigoServiceColIndex]).trim() === codigoService) {
-                    rowIndexToUpdate = i + 1;
-                    break;
-                }
-            }
-
-            if (rowIndexToUpdate === -1) throw new Error('Item não encontrado na planilha.');
-
-            const range = `${sheetName}!${String.fromCharCode(65 + descricaoColIndex)}${rowIndexToUpdate}`;
-            await sheets.spreadsheets.values.update({
-                spreadsheetId,
-                range,
-                valueInputOption: 'RAW',
-                resource: { values: [[novaDescricao]] }
-            });
-
-            res.status(200).send({ status: 'success', message: 'Descrição atualizada!' });
-        } catch (error) {
-            next(error);
-        }
-    });
-
+    /**
+     * NOVO: Rota para gerar uma NF-e a partir de um pedido de venda no Bling.
+     * Segue o fluxo da API V3: criar a nota referenciando o pedido e depois enviar.
+     */
     router.post('/vendas/:id/gerar-nfe', async (req, res, next) => {
         try {
-            const { id } = req.params;
-            if (!id) throw new Error("ID do pedido é obrigatório.");
+            const idPedido = req.params.id;
+            if (!idPedido) throw new Error("ID do pedido é obrigatório.");
 
-            const accessToken = await getTokenWithRetry(axios, APPS_SCRIPT_TOKEN_URL);
-            
-            console.log(`[Bling API] Gerando NF-e para o pedido ${id}...`);
-            const blingUrl = `${BLING_API_BASE_URL}/pedidos/vendas/${id}/gerar-nfe`;
-            
-            const blingResponse = await axios.post(blingUrl, {}, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            
-            console.log(`[Bling API] NF-e gerada com sucesso para o pedido ${id}. ID da Nota: ${blingResponse.data.idNotaFiscal}`);
-            
-            // Notificar via Firestore Sync que o pedido foi atualizado (para atualizar o id_nota na planilha/UI)
-            if (typeof notifySync === 'function') {
-                notifySync('pedidoBlingReceived', {
-                    id: id,
-                    id_nota: blingResponse.data.idNotaFiscal,
-                    situacao: 'Atendido' // O Bling geralmente muda para atendido ao gerar nota
+            const accessToken = await getToken();
+            const httpClient = axios || axiosModule;
+
+            console.log(`[Bling] Iniciando processo de NF-e para pedido ${idPedido}...`);
+
+            // 1. Buscar o pedido original para obter dados básicos (contato, natureza, etc.)
+            console.log(`[Bling] Buscando detalhes do pedido ${idPedido}...`);
+            let pedidoBling;
+            try {
+                const resPedido = await httpClient.get(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
+                pedidoBling = resPedido.data.data;
+            } catch (err) {
+                console.warn(`[Bling] Não foi possível obter detalhes do pedido ${idPedido}. Tentando criar nota apenas com o ID.`);
             }
 
-            res.status(201).send({
-                status: 'success',
-                message: 'Nota Fiscal gerada com sucesso!',
-                data: blingResponse.data
-            });
-        } catch (err) {
-            console.error(`[Bling API] Erro ao gerar NF-e para pedido ${req.params.id}:`, err.response?.data || err.message);
-            
-            // Extrair mensagem de erro amigável do Bling
-            let errorMsg = 'Erro ao gerar nota fiscal.';
-            if (err.response?.data?.error?.description) {
-                errorMsg = err.response.data.error.description;
-            } else if (err.response?.data?.error?.message) {
-                errorMsg = err.response.data.error.message;
-            } else {
-                errorMsg = err.message;
-            }
+            // 2. Criar a Nota Fiscal referenciando o Pedido de Venda
+            // Incluímos referências explícitas ao contato e natureza para evitar erros de "Não foi possível salvar"
+            const payloadCriacao = {
+                tipo: 1, // 1 = Saída
+                pedido: { id: parseInt(idPedido) }
+            };
 
-            const error = new Error(errorMsg);
-            error.statusCode = err.response?.status || 500;
-            next(error);
-        }
-    });
-
-    router.post('/update-item-status', async (req, res, next) => {
-        try {
-            const { pedidoId, itemCodigo, newStatus, itemIndex } = req.body;
-
-            if (!pedidoId || !itemCodigo || !newStatus) {
-                const error = new Error("Dados incompletos: 'pedidoId', 'itemCodigo' e 'newStatus' são obrigatórios.");
-                error.statusCode = 400;
-                throw error;
-            }
-
-            const sheets = await getSheetsClient();
-            const response = await sheets.spreadsheets.values.get({
-                spreadsheetId: spreadsheetIdNFE,
-                range: `${sheetNamePedidosBling}!A:Z`,
-            });
-
-            const rows = response.data.values || [];
-            if (rows.length === 0) {
-                const error = new Error('Nenhum dado encontrado na planilha de Pedidos Bling.');
-                error.statusCode = 404;
-                throw error;
-            }
-
-            const headers = rows[0].map(h => (h || '').toLowerCase().trim());
-            const idColIndex = headers.indexOf('id pedido') !== -1 ? headers.indexOf('id pedido') : headers.indexOf('id');
-            const numColIndex = headers.indexOf('numero') !== -1 ? headers.indexOf('numero') : headers.indexOf('número');
-            const numLojaColIndex = headers.indexOf('numero loja') !== -1 ? headers.indexOf('numero loja') : headers.indexOf('número loja');
-            const itensColIndex = headers.indexOf('itens') !== -1 ? headers.indexOf('itens') : 15; // Coluna P (índice 15)
-
-            let rowIndexToUpdate = -1;
-            let rawItens = '';
-
-            for (let i = 1; i < rows.length; i++) {
-                const row = rows[i];
-                const idVal = idColIndex !== -1 ? (row[idColIndex] || '').toString().trim() : '';
-                const numVal = numColIndex !== -1 ? (row[numColIndex] || '').toString().trim() : '';
-                const numLojaVal = numLojaColIndex !== -1 ? (row[numLojaColIndex] || '').toString().trim() : '';
-
-                if (idVal === String(pedidoId) || numVal === String(pedidoId) || numLojaVal === String(pedidoId)) {
-                    rowIndexToUpdate = i;
-                    rawItens = row[itensColIndex] || '';
-                    break;
+            if (pedidoBling) {
+                if (pedidoBling.contato && pedidoBling.contato.id) {
+                    payloadCriacao.contato = { id: pedidoBling.contato.id };
                 }
-            }
+                if (pedidoBling.naturezaOperacao && pedidoBling.naturezaOperacao.id) {
+                    payloadCriacao.naturezaOperacao = { id: pedidoBling.naturezaOperacao.id };
+                }
+                if (pedidoBling.data) {
+                    payloadCriacao.dataOperacao = pedidoBling.data; // Formato YYYY-MM-DD
+                }
+                // Finalidade 1 = NF-e normal
+                payloadCriacao.finalidade = 1;
 
-            if (rowIndexToUpdate === -1) {
-                const error = new Error(`Pedido com ID/Número ${pedidoId} não encontrado.`);
-                error.statusCode = 404;
-                throw error;
-            }
-
-            // Parse e Update dos Itens
-            const regex = /\(([^)]+)\)/g;
-            const items = [];
-            let match;
-            let matchCount = 0;
-            let updated = false;
-
-            while ((match = regex.exec(rawItens)) !== null) {
-                const parts = match[1].split(',').map(s => s.trim());
-                const currentSku = parts[0];
-                const currentQty = parts[1];
-                let currentVal = parts[2] || '0';
-                let currentStatus = 'OK';
-
-                if (currentVal.includes('|')) {
-                    const subParts = currentVal.split('|');
-                    currentVal = subParts[0];
-                    currentStatus = subParts[1];
-                } else if (parts.length >= 4) {
-                    currentStatus = parts[3];
+                // Bling V3 exige que os itens da nota sejam passados
+                if (pedidoBling.itens && Array.isArray(pedidoBling.itens)) {
+                    payloadCriacao.itens = pedidoBling.itens.map(item => ({
+                        codigo: item.codigo || "",
+                        descricao: item.descricao || "",
+                        quantidade: item.quantidade || 1,
+                        valor: item.valor || 0
+                    }));
                 }
 
-                if (currentSku === String(itemCodigo)) {
-                    if (itemIndex === undefined || itemIndex === matchCount) {
-                        currentStatus = newStatus;
-                        updated = true;
+                // Repassar o frete e informações de volume para a nota fiscal
+                if (pedidoBling.transporte) {
+                    payloadCriacao.transporte = {
+                        fretePorConta: pedidoBling.transporte.fretePorConta !== undefined ? pedidoBling.transporte.fretePorConta : 0,
+                        frete: pedidoBling.transporte.frete || 0,
+                        quantidadeVolumes: pedidoBling.transporte.quantidadeVolumes || 0,
+                        pesoBruto: pedidoBling.transporte.pesoBruto || 0,
+                        pesoLiquido: pedidoBling.transporte.pesoBruto || 0
+                    };
+                    if (pedidoBling.transporte.contato && pedidoBling.transporte.contato.id) {
+                        payloadCriacao.transporte.contato = { id: pedidoBling.transporte.contato.id };
                     }
                 }
+
+                // Repassar parcelas (pagamento)
+                if (pedidoBling.parcelas && Array.isArray(pedidoBling.parcelas) && pedidoBling.parcelas.length > 0) {
+                    payloadCriacao.parcelas = pedidoBling.parcelas.map(p => {
+                        const parcelaObj = {
+                            data: p.dataVencimento || payloadCriacao.dataOperacao,
+                            valor: p.valor || 0,
+                            observacoes: p.observacoes || ""
+                        };
+                        if (p.formaPagamento && p.formaPagamento.id) {
+                            parcelaObj.formaPagamento = { id: p.formaPagamento.id };
+                        }
+                        return parcelaObj;
+                    });
+                }
+
+                // Repassar o desconto para a nota fiscal
+                if (pedidoBling.desconto && pedidoBling.desconto.valor > 0) {
+                    payloadCriacao.desconto = {
+                        valor: pedidoBling.desconto.valor,
+                        unidade: pedidoBling.desconto.unidade || 'REAL'
+                    };
+                }
+            }
+
+            console.log(`[Bling] Enviando payload para criação de NF-e: ${JSON.stringify(payloadCriacao)}`);
+
+            let idNota;
+            try {
+                const resCriacao = await httpClient.post(`${BLING_API_BASE_URL}/nfe`, payloadCriacao, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                idNota = resCriacao.data.data.id;
+                console.log(`[Bling] NF-e criada com sucesso: ID ${idNota}`);
+            } catch (err) {
+                const errMsg = err.response?.data?.error?.message || err.response?.data?.message || err.message;
+                const errData = err.response?.data;
+                console.error(`[Bling Error] Erro na criação da NF-e:`, errMsg, JSON.stringify(errData));
                 
-                items.push(`(${currentSku}, ${currentQty}, ${currentVal}|${currentStatus})`);
-                matchCount++;
-            }
-
-            if (!updated) {
-                throw new Error(`Item ${itemCodigo} não encontrado no pedido.`);
-            }
-
-            const finalItensString = items.join(' ');
-            const range = `${sheetNamePedidosBling}!${String.fromCharCode(65 + itensColIndex)}${rowIndexToUpdate + 1}`;
-            
-            await sheets.spreadsheets.values.update({
-                spreadsheetId: spreadsheetIdNFE,
-                range: range,
-                valueInputOption: 'RAW',
-                resource: { values: [[finalItensString]] },
-            });
-
-            if (typeof notifySync === 'function') {
-                notifySync('orderItemStatusUpdated', {
-                    pedidoId: String(pedidoId),
-                    itemCodigo: itemCodigo,
-                    newStatus: newStatus,
-                    itemIndex: itemIndex
+                return res.status(400).send({ 
+                    status: 'error', 
+                    message: `Erro ao criar nota no Bling: ${errMsg}`,
+                    details: errData
                 });
             }
 
-            res.status(200).send({ status: 'success', message: 'Status do item atualizado!', data: { itens: finalItensString } });
+            // 2. Enviar a Nota Fiscal para a SEFAZ
+            try {
+                console.log(`[Bling] Enviando NF-e ${idNota} para a SEFAZ...`);
+                const resEnvio = await httpClient.post(`${BLING_API_BASE_URL}/nfe/${idNota}/enviar`, {}, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                console.log(`[Bling] NF-e ${idNota} enviada para processamento.`);
+                return res.status(200).send({ 
+                    status: 'success', 
+                    message: "NF-e gerada e enviada com sucesso!",
+                    data: { idNota, response: resEnvio.data } 
+                });
+            } catch (err) {
+                const errMsg = err.response?.data?.error?.message || err.response?.data?.message || err.message;
+                console.warn(`[Bling Warning] Nota criada (${idNota}) mas falhou ao enviar: ${errMsg}`);
+                return res.status(200).send({ 
+                    status: 'partial_success', 
+                    message: `Nota criada com ID ${idNota}, mas o envio automático falhou: ${errMsg}. Você pode tentar enviar manualmente no Bling.`,
+                    data: { idNota } 
+                });
+            }
 
         } catch (error) {
-            next(error);
+            console.error("[Backend Error] gerar-nfe:", error.message);
+            res.status(500).send({ status: 'error', message: error.message });
         }
     });
 

@@ -544,31 +544,38 @@
         <main id="page-gerenciar-pedidos" class="hidden p-4 sm:p-8 h-full overflow-y-auto bg-gray-50 flex flex-col">
             <div class="max-w-7xl mx-auto w-full">
                 <!-- Cabeçalho -->
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                        <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                        </svg>
-                        Gerenciar Pedidos (Bling)
-                    </h2>
+                <div class="flex items-center w-full mb-6">
+                    <!-- Esquerda: Título -->
+                    <div class="flex-shrink-0">
+                        <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                            <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                            </svg>
+                            Gerenciar Pedidos (Bling)
+                        </h2>
+                    </div>
+
+                    <!-- Espaçador central que empurra tudo para a direita -->
+                    <div class="flex-grow"></div>
                     
-                    <div id="pedidos-batch-actions" class="hidden flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
-                        <span class="text-sm text-blue-800 font-medium whitespace-nowrap"><span id="pedidos-selected-count">0</span> selecionado(s)</span>
-                        <div class="h-4 w-px bg-blue-200"></div>
-                        <div class="flex items-center gap-2">
-                            <button id="pedidos-batch-open-btn" class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded border border-yellow-200 font-bold transition-colors">
-                                Aberto
-                            </button>
-                            <button id="pedidos-batch-prod-btn" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded border border-blue-200 font-bold transition-colors">
-                                Produção
-                            </button>
-                            <button id="pedidos-batch-attend-btn" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-bold shadow-sm transition-colors">
-                                Atendido
-                            </button>
+                    <!-- Direita: Ações e Botão -->
+                    <div class="flex items-center gap-3">
+                        <button id="pedidos-linha-producao-btn" class="hidden px-5 py-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform active:scale-95 flex items-center gap-2 font-black text-xs uppercase tracking-widest border-2 border-blue-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                            Linha de Produção
+                        </button>
+
+                        <div id="pedidos-batch-actions" class="hidden flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
+                            <span class="text-sm text-blue-800 font-medium whitespace-nowrap"><span id="pedidos-selected-count">0</span> selecionado(s)</span>
+                            <div class="h-4 w-px bg-blue-200"></div>
+                            <div class="flex items-center gap-2">
+                                <button id="pedidos-batch-open-btn" class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded border border-yellow-200 font-bold transition-colors">Aberto</button>
+                                <button id="pedidos-batch-prod-btn" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded border border-blue-200 font-bold transition-colors">Produção</button>
+                                <button id="pedidos-batch-attend-btn" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-bold shadow-sm transition-colors">Atendido</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
                 <!-- Card Consolidado: Busca, Paginação e Tabela -->
                 <div class="bg-white shadow-sm rounded-xl border border-gray-100 overflow-hidden mt-2">
                     
@@ -1651,7 +1658,7 @@
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                 </svg>
-                <span>Preço de custo alterado com sucesso!</span>
+                <span>Preço alterado com sucesso!</span>
             </div>
 
             <div class="flex justify-end space-x-4 mt-8">
@@ -1659,6 +1666,89 @@
                     class="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">Cancelar</button>
                 <button id="confirm-product-cost-price-edit-btn"
                     class="read-only-disable px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar Preço</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOVO: Modal para Editar Grupo de Tags do Produto -->
+    <div id="product-tag-group-edit-modal"
+        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[65] p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full relative">
+            <button id="close-product-tag-group-edit-modal-btn"
+                class="absolute top-3 right-3 text-gray-500 hover:text-gray-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Editar Grupo de Tags</h3>
+            <p id="product-tag-group-edit-info" class="text-gray-700 mb-6 text-left text-sm"></p>
+            <div class="space-y-4 text-left">
+                <div>
+                    <label for="product-tag-group-edit-select" class="block text-sm font-bold text-gray-700 mb-2">Selecione o Grupo de Tags:</label>
+                    <select id="product-tag-group-edit-select"
+                        class="mt-1 block w-full pl-3 pr-10 py-3 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-lg bg-white">
+                        <option value="">— Sem grupo —</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Feedback de Carregamento -->
+            <div id="product-tag-group-edit-loading" class="hidden mt-4 flex items-center justify-center space-x-2 text-blue-600">
+                <svg class="w-6 h-6 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="font-medium">Atualizando...</span>
+            </div>
+
+            <!-- Mensagem de Sucesso -->
+            <div id="product-tag-group-edit-success" class="hidden mt-4 p-3 bg-green-100 text-green-700 rounded-lg flex items-center space-x-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                <span>Grupo de tags atualizado com sucesso!</span>
+            </div>
+
+            <div class="flex justify-end space-x-4 mt-8">
+                <button id="cancel-product-tag-group-edit-btn"
+                    class="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">Cancelar</button>
+                <button id="confirm-product-tag-group-edit-btn"
+                    class="read-only-disable px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar Grupo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Descrição do Item (Linha de Produção) - TEMPLATE PADRONIZADO -->
+    <div id="edit-item-desc-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-gray-800">Editar Descrição do Item</h3>
+                <button id="close-edit-item-desc-modal-btn" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p class="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Descrição Atual (Produto)</p>
+                <p id="edit-item-desc-current" class="text-sm text-gray-700 font-medium"></p>
+            </div>
+            
+            <div id="edit-item-desc-complement-container" class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100 hidden">
+                <p class="text-xs text-blue-500 uppercase tracking-wide font-semibold mb-1">Descrição Complementar Para Produção</p>
+                <p id="edit-item-desc-complement-text" class="text-sm text-blue-700 font-medium italic"></p>
+            </div>
+
+            <div class="mb-5">
+                <label for="edit-item-desc-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Nova Descrição / Variação</label>
+                <textarea id="edit-item-desc-input" rows="3"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    placeholder="Digite a variação para a fabricação..."></textarea>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="cancel-edit-item-desc-btn" class="px-5 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors">Cancelar</button>
+                <button id="save-edit-item-desc-btn" class="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Salvar
+                </button>
             </div>
         </div>
     </div>
@@ -1965,6 +2055,33 @@
     <script type="module" src="js/auth.js"></script>
 
     <script type="module" src="js/main.js"></script>
+    <!-- MODAL LINHA DE PRODUÇÃO -->
+    <div id="production-line-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b bg-gray-50">
+                <div>
+                    <h2 class="text-2xl font-black text-gray-800">Linha de Produção</h2>
+                    <p class="text-sm text-gray-500">Itens agregados de todos os pedidos "Em Produção"</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="print-production-line-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-all shadow-md">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                        Imprimir
+                    </button>
+                    <button id="close-production-line-modal-btn" class="text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-200 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="production-line-modal-content" class="p-6 overflow-y-auto flex-1 bg-white">
+                <div class="animate-pulse flex flex-col space-y-4">
+                    <div class="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div class="h-24 bg-gray-100 rounded w-full"></div>
+                    <div class="h-24 bg-gray-100 rounded w-full"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

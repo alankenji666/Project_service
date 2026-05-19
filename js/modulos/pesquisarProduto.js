@@ -5,15 +5,12 @@ export const PesquisarProduto = (function() {
     let _allProducts = [];
     let _dom = {};
     let _utils = {};
-    let _config = {}; // Adicionado: Armazena configurações como API_BASE_URL
+    let _config = {};
     let _activeProductId = null;
     let _onProductSelectCallback = null;
     let _currentPage = 1;
     let _pageSize = 50;
 
-    /**
-     * Renderiza os detalhes de um produto específico no painel direito.
-     */
     function _renderProductDetails(product) {
         if (!_dom.product_details || !_utils.createDetailItem) return;
     
@@ -34,7 +31,6 @@ export const PesquisarProduto = (function() {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                 ${_utils.createDetailItem('Preço', (product.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))}
                 
-                <!-- CORREÇÃO FINAL COM O NOME CORRETO DO CAMPO -->
                 <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
                     <div>
                         <p class="text-sm font-medium text-gray-500">Preço de Custo</p>
@@ -49,7 +45,7 @@ export const PesquisarProduto = (function() {
                 <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
                     <div>
                         <p class="text-sm font-medium text-gray-500">Estoque Atual</p>
-                        <p class="text-lg text-gray-800 font-bold">${product.estoque || 0}</p>
+                        <p class="text-lg text-gray-800 font-bold product-detail-stock">${product.estoque || 0}</p>
                     </div>
                     <button class="read-only-disable open-stock-adjustment-modal-btn p-2 rounded-full hover:bg-gray-200" data-product-id="${product.id}" title="Ajustar Estoque">
                         <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
@@ -68,7 +64,16 @@ export const PesquisarProduto = (function() {
                     </button>
                 </div>
 
-                ${_utils.createDetailItem('Grupo de Tags', product.grupo_de_tags_tags?.join(', ') || 'N/A')}
+                <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Grupo de Tags</p>
+                        <p class="text-lg text-gray-800 font-semibold product-detail-tag-group">${product.grupo_de_tags_tags?.join(', ') || 'N/A'}</p>
+                    </div>
+                    <button class="read-only-disable edit-product-tag-group-btn p-2 rounded-full hover:bg-gray-200 text-blue-600" data-product-id="${product.id}" title="Editar Grupo de Tags">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
+                    </button>
+                </div>
+
                 ${_utils.createDetailItem('Vendas (90d)', product.vendas_ultimos_90_dias || '0')}
             </div>
             
@@ -92,18 +97,12 @@ export const PesquisarProduto = (function() {
     }
     
 
-    /**
-     * Limpa o painel de detalhes e mostra o placeholder.
-     */
     function _clearDetails() {
         if (!_dom.product_details || !_dom.details_placeholder) return;
         _dom.product_details.classList.add('hidden');
         _dom.details_placeholder.classList.remove('hidden');
     }
     
-    /**
-     * Manipula o clique em um item da lista de produtos.
-     */
     function _handleProductClick(event) {
         const productItem = event.target.closest('.product-item');
         if (!productItem) return;
@@ -123,24 +122,14 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    /**
-     * Retorna o ID do produto que está sendo exibido nos detalhes no momento.
-     */
     function getSelectedProductId() {
         return _activeProductId;
     }
 
-    /**
-     * Atualiza o nome do produto exibido na tela sem re-renderizar tudo.
-     * @param {string|number} productId 
-     * @param {string} novoNome 
-     */
     function updateProductNameDisplay(productId, novoNome) {
-        // 0. Atualiza na memória local interna para que a paginação/filtro não reverta o nome
         const product = _allProducts.find(p => String(p.id) === String(productId));
         if (product) product.descricao = novoNome;
 
-        // 1. Atualiza no painel de detalhes se for o produto ativo
         if (String(_activeProductId) === String(productId) && _dom.product_details) {
             const nameElement = _dom.product_details.querySelector('.product-detail-name');
             if (nameElement) {
@@ -150,7 +139,6 @@ export const PesquisarProduto = (function() {
             }
         }
 
-        // 2. Atualiza na lista lateral (sempre, se o item estiver lá)
         if (_dom.product_list_container) {
             const listItem = _dom.product_list_container.querySelector(`.product-item[data-product-id="${productId}"]`);
             if (listItem) {
@@ -163,13 +151,7 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    /**
-     * Atualiza a localização do produto exibida na tela sem re-renderizar tudo.
-     * @param {string|number} productId 
-     * @param {string} novaLocalizacao 
-     */
     function updateProductLocationDisplay(productId, novaLocalizacao) {
-        // 0. Atualiza na memória local interna
         const product = _allProducts.find(p => String(p.id) === String(productId));
         if (product) product.localizacao = novaLocalizacao;
 
@@ -183,17 +165,10 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    /**
-     * Atualiza o código do produto exibido na tela sem re-renderizar tudo.
-     * @param {string|number} productId 
-     * @param {string} novoCodigo 
-     */
     function updateProductCodeDisplay(productId, novoCodigo) {
-        // 0. Atualiza na memória local interna
         const product = _allProducts.find(p => String(p.id) === String(productId));
         if (product) product.codigo = novoCodigo;
 
-        // 1. Atualiza no painel de detalhes se for o produto ativo
         if (String(_activeProductId) === String(productId) && _dom.product_details) {
             const codeElement = _dom.product_details.querySelector('.product-detail-code');
             if (codeElement) {
@@ -203,7 +178,6 @@ export const PesquisarProduto = (function() {
             }
         }
 
-        // 2. Atualiza na lista lateral (sempre, se o item estiver lá)
         if (_dom.product_list_container) {
             const listItem = _dom.product_list_container.querySelector(`.product-item[data-product-id="${productId}"]`);
             if (listItem) {
@@ -215,9 +189,6 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    /**
-     * Manipula a edição do nome do produto abrindo o modal configurado no App principal.
-     */
     async function _handleEditName(productId, codigo) {
         if (typeof _config.openProductNameEditModal === 'function') {
             _config.openProductNameEditModal(productId);
@@ -227,9 +198,6 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    /**
-     * Manipula a edição da localização do produto abrindo o modal configurado no App principal.
-     */
     async function _handleEditLocation(productId, codigo) {
         if (typeof _config.openProductLocationEditModal === 'function') {
             _config.openProductLocationEditModal(productId);
@@ -239,9 +207,6 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    /**
-     * Manipula a edição do código do produto abrindo o modal configurado no App principal.
-     */
     async function _handleEditCode(productId) {
         if (typeof _config.openProductCodeEditModal === 'function') {
             _config.openProductCodeEditModal(productId);
@@ -251,11 +216,6 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    // --- Funções Públicas ---
-    
-    /**
-     * Gera o HTML dos controles de paginação.
-     */
     function _renderPaginationControls(totalItems) {
         const totalPages = Math.ceil(totalItems / _pageSize);
         if (totalPages <= 1) return '';
@@ -273,12 +233,9 @@ export const PesquisarProduto = (function() {
         `;
     }
 
-    /**
-     * Renderiza a lista de produtos no painel esquerdo com paginação.
-     */
     function render(products, resetPagination = false) {
         if (resetPagination) _currentPage = 1;
-        _allProducts = products; // Atualiza a lista interna de produtos
+        _allProducts = products;
         if (!_dom.product_list_container) return;
 
         if (!products || products.length === 0) {
@@ -290,7 +247,6 @@ export const PesquisarProduto = (function() {
         const totalItems = products.length;
         const totalPages = Math.ceil(totalItems / _pageSize);
         
-        // Garante que a página atual seja válida
         if (_currentPage > totalPages) _currentPage = totalPages;
         if (_currentPage < 1) _currentPage = 1;
 
@@ -322,7 +278,6 @@ export const PesquisarProduto = (function() {
             `;
         }).join('');
 
-        // Monta o HTML final com paginação no topo e no rodapé (opcional se quiser no rodapé também)
         const footerPaginationHtml = paginationHtml.replace('sticky top-0 z-10', 'mt-auto border-t');
         _dom.product_list_container.innerHTML = `
             <div class="flex flex-col h-full overflow-y-auto">
@@ -335,9 +290,6 @@ export const PesquisarProduto = (function() {
         `;
     }
 
-    /**
-     * Inicializa o módulo.
-     */
     function init(config) {
         _config = config;
         _dom = config.domElements;
@@ -346,7 +298,6 @@ export const PesquisarProduto = (function() {
 
         if (_dom.product_list_container) {
             _dom.product_list_container.addEventListener('click', (event) => {
-                // Paginação: Prev
                 const prevBtn = event.target.closest('.prev-page-btn');
                 if (prevBtn && !prevBtn.disabled) {
                     _currentPage--;
@@ -354,7 +305,6 @@ export const PesquisarProduto = (function() {
                     _dom.product_list_container.scrollTop = 0;
                     return;
                 }
-                // Paginação: Next
                 const nextBtn = event.target.closest('.next-page-btn');
                 if (nextBtn && !nextBtn.disabled) {
                     _currentPage++;
@@ -400,6 +350,11 @@ export const PesquisarProduto = (function() {
                     _handleEditCode(editCodeBtn.dataset.productId);
                 }
 
+                const editTagGroupBtn = event.target.closest('.edit-product-tag-group-btn');
+                if (editTagGroupBtn && typeof config.openProductTagGroupEditModal === 'function') {
+                    config.openProductTagGroupEditModal(editTagGroupBtn.dataset.productId);
+                }
+
                 const editCostPriceBtn = event.target.closest('.edit-product-cost-price-btn');
                 if (editCostPriceBtn && typeof config.openProductCostPriceEditModal === 'function') {
                     config.openProductCostPriceEditModal(editCostPriceBtn.dataset.productId);
@@ -410,21 +365,13 @@ export const PesquisarProduto = (function() {
 
 
 
-    /**
-     * Retorna o código do produto que está sendo exibido nos detalhes no momento.
-     */
     function getSelectedProductCodigo() {
         if (!_activeProductId) return null;
         const product = _allProducts.find(p => String(p.id) === String(_activeProductId));
         return product ? product.codigo : null;
     }
 
-    /**
-     * Atualiza o valor do estoque exibido na tela de detalhes sem re-renderizar tudo.
-     * @param {number} novoEstoque 
-     */
     function updateStockDisplay(novoEstoque) {
-        // 0. Atualiza na memória local interna
         if (_activeProductId) {
             const product = _allProducts.find(p => String(p.id) === String(_activeProductId));
             if (product) product.estoque = novoEstoque;
@@ -432,10 +379,8 @@ export const PesquisarProduto = (function() {
 
         if (!_dom.product_details) return;
         
-        // Procura o elemento que contém o texto "Estoque Atual" e seu valor
-        const estoqueContainer = _dom.product_details.querySelector('div.bg-gray-50 p.text-lg.font-bold');
+        const estoqueContainer = _dom.product_details.querySelector('.product-detail-stock');
         if (estoqueContainer) {
-            // Adiciona uma animação suave de brilho para indicar a mudança
             estoqueContainer.textContent = novoEstoque;
             estoqueContainer.classList.add('text-green-600', 'scale-110', 'transition-all', 'duration-300');
             setTimeout(() => {
@@ -444,13 +389,7 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    /**
-     * Atualiza o preço de custo do produto na tela de detalhes sem re-renderizar tudo.
-     * @param {string|number} productId 
-     * @param {number} novoPreco 
-     */
     function updateProductCostPriceDisplay(productId, novoPreco) {
-        // 0. Atualiza na memória local interna
         const product = _allProducts.find(p => String(p.id) === String(productId));
         if (product) product.preco_de_custo = novoPreco;
 
@@ -465,23 +404,30 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    /**
-     * Abre o modal de equipamentos.
-     */
+    function updateProductTagGroupDisplay(productId, novoGrupo) {
+        const product = _allProducts.find(p => String(p.id) === String(productId));
+        if (product) product.grupo_de_tags_tags = novoGrupo && novoGrupo !== 'N/A' ? [novoGrupo] : [];
+
+        if (String(_activeProductId) === String(productId) && _dom.product_details) {
+            const el = _dom.product_details.querySelector('.product-detail-tag-group');
+            if (el) {
+                el.textContent = novoGrupo || 'N/A';
+                el.classList.add('text-green-600', 'scale-105', 'transition-all', 'duration-300');
+                setTimeout(() => el.classList.remove('text-green-600', 'scale-105'), 2000);
+            }
+        }
+    }
+
     function generateCatalog() {
         const virtualModal = document.getElementById('virtual-catalog-modal');
         if (virtualModal) {
             virtualModal.classList.remove('hidden');
-            // Inicializa o app de equipamentos
             if (typeof PecasEquipamentoApp !== 'undefined') {
                 PecasEquipamentoApp.init();
             }
         }
     }
 
-    /**
-     * NOVO: Permite injetar os produtos externamente (ex: do main.js) para sincronização.
-     */
     function setAllProducts(products) {
         if (Array.isArray(products)) {
             _allProducts = products;
@@ -489,7 +435,6 @@ export const PesquisarProduto = (function() {
         }
     }
 
-    // Expõe as funções públicas
     return {
         init,
         render,
@@ -501,6 +446,7 @@ export const PesquisarProduto = (function() {
         updateProductLocationDisplay,
         updateProductCodeDisplay,
         updateProductCostPriceDisplay,
+        updateProductTagGroupDisplay,
         generateCatalog,
         setAllProducts,
         getAllProducts: () => _allProducts

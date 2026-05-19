@@ -125,6 +125,7 @@
                             if (data.novaLocalizacao !== undefined) pIdx.localizacao = data.novaLocalizacao;
                             if (data.codigo) pIdx.codigo = data.codigo;
                             if (data.novoPrecoCusto !== undefined) pIdx.preco_de_custo = data.novoPrecoCusto;
+                            if (data.novoGrupoTags !== undefined) pIdx.grupo_de_tags_tags = data.novoGrupoTags ? [data.novoGrupoTags] : [];
 
                             // Atualiza exibições
                             if (typeof PesquisarProduto !== 'undefined') {
@@ -132,6 +133,7 @@
                                 if (data.novaLocalizacao !== undefined) PesquisarProduto.updateProductLocationDisplay(data.id, data.novaLocalizacao);
                                 if (data.codigo) PesquisarProduto.updateProductCodeDisplay(data.id, data.codigo);
                                 if (data.novoPrecoCusto !== undefined) PesquisarProduto.updateProductCostPriceDisplay(data.id, data.novoPrecoCusto);
+                                if (data.novoGrupoTags !== undefined) PesquisarProduto.updateProductTagGroupDisplay(data.id, data.novoGrupoTags || 'N/A');
                             }
                             
                             if (data.novoNome) {
@@ -141,6 +143,12 @@
                                 if (typeof SaidaItens !== 'undefined' && typeof SaidaItens.updateProductNameInTable === 'function') {
                                     SaidaItens.updateProductNameInTable(data.codigo, data.novoNome);
                                 }
+                            }
+
+                            // Re-renderiza contadores de categorias e re-aplica os filtros globais se o grupo de tags foi alterado
+                            if (data.novoGrupoTags !== undefined) {
+                                _renderCategoryFilters();
+                                _applyGlobalFilters();
                             }
                         }
                         break;
@@ -730,6 +738,7 @@
             let _productLocationEditModal, _closeProductLocationEditModalBtn, _productLocationEditInfo, _productLocationEditInput, _productLocationEditLoading, _productLocationEditSuccess, _cancelProductLocationEditBtn, _confirmProductLocationEditBtn;
             let _productCodeEditModal, _closeProductCodeEditModalBtn, _productCodeEditInfo, _productCodeEditInput, _productCodeEditLoading, _productCodeEditSuccess, _cancelProductCodeEditBtn, _confirmProductCodeEditBtn;
             let _productCostPriceEditModal, _closeProductCostPriceEditModalBtn, _productCostPriceEditInfo, _productCostPriceEditInput, _productCostPriceEditLoading, _productCostPriceEditSuccess, _cancelProductCostPriceEditBtn, _confirmProductCostPriceEditBtn;
+            let _productTagGroupEditModal, _closeProductTagGroupEditModalBtn, _productTagGroupEditInfo, _productTagGroupEditSelect, _productTagGroupEditLoading, _productTagGroupEditSuccess, _cancelProductTagGroupEditBtn, _confirmProductTagGroupEditBtn;
 
             // --- FUNÇÕES DE UTILIDADE PRIVADAS ---
 /**
@@ -2057,7 +2066,7 @@ const data = filteredProducts.map(product => {
                             case 'fabrica': return product.grupo_de_tags_tags?.includes('Estoque - Fábrica');
                             case 'terceiros': return product.grupo_de_tags_tags?.includes('Estoque - Terceiros');
                             case 'demanda': return product.grupo_de_tags_tags?.includes('Sob Demanda - Fábrica');
-                            case 'servicos': return product.codigo?.startsWith('7');
+                            case 'servicos': return product.codigo?.startsWith('7') || product.grupo_de_tags_tags?.includes('Serviço');
                             case 'em_branco': return !product.grupo_de_tags_tags || product.grupo_de_tags_tags.length === 0 || (product.grupo_de_tags_tags.length === 1 && product.grupo_de_tags_tags[0] === '');
                             default: return false;
                         }
@@ -2098,18 +2107,25 @@ const data = filteredProducts.map(product => {
             function _renderCategoryFilters() {
                 const container = _globalCategoryCheckboxesContainer;
                 if (!container) return;
+                
+                // Salva os estados atuais dos checkboxes antes de recriar os elementos
+                const checkedValues = new Set(
+                    [...container.querySelectorAll('.category-checkbox:checked')].map(cb => cb.value)
+                );
+
                 const categories = {
                     consumo: { label: 'Estoque - Consumo', check: p => p.grupo_de_tags_tags?.includes('Estoque - Consumo') },
                     fabrica: { label: 'Estoque - Fábrica', check: p => p.grupo_de_tags_tags?.includes('Estoque - Fábrica') },
                     terceiros: { label: 'Estoque - Terceiros', check: p => p.grupo_de_tags_tags?.includes('Estoque - Terceiros') },
                     demanda: { label: 'Sob Demanda - Fábrica', check: p => p.grupo_de_tags_tags?.includes('Sob Demanda - Fábrica') },
-                    servicos: { label: 'Serviços', check: p => p.codigo?.startsWith('7') },
+                    servicos: { label: 'Serviço', check: p => p.codigo?.startsWith('7') || p.grupo_de_tags_tags?.includes('Serviço') },
                     em_branco: { label: 'Grupo de Tags em Branco', check: p => !p.grupo_de_tags_tags || p.grupo_de_tags_tags.length === 0 || (p.grupo_de_tags_tags.length === 1 && p.grupo_de_tags_tags[0] === '') }
                 };
                 const counts = Object.keys(categories).reduce((acc, key) => { acc[key] = _allProducts.filter(categories[key].check).length; return acc; }, {});
                 container.innerHTML = Object.keys(categories).map(key => {
                     if (counts[key] === 0) return '';
-                    return `<label class="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-100 cursor-pointer"><input type="checkbox" class="category-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="${key}"><span class="flex-grow text-gray-700">${categories[key].label}</span><span class="text-gray-500 text-xs font-mono">(${counts[key]})</span></label>`;
+                    const isChecked = checkedValues.has(key) ? 'checked' : '';
+                    return `<label class="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-100 cursor-pointer"><input type="checkbox" class="category-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="${key}" ${isChecked}><span class="flex-grow text-gray-700">${categories[key].label}</span><span class="text-gray-500 text-xs font-mono">(${counts[key]})</span></label>`;
                 }).join('');
             }
 
@@ -4401,6 +4417,16 @@ _productCostPriceEditLoading = document.getElementById('product-cost-price-edit-
 _productCostPriceEditSuccess = document.getElementById('product-cost-price-edit-success');
 _cancelProductCostPriceEditBtn = document.getElementById('cancel-product-cost-price-edit-btn');
 _confirmProductCostPriceEditBtn = document.getElementById('confirm-product-cost-price-edit-btn');
+
+// NOVO: Cache dos elementos do modal de edição de grupo de tags
+_productTagGroupEditModal = document.getElementById('product-tag-group-edit-modal');
+_closeProductTagGroupEditModalBtn = document.getElementById('close-product-tag-group-edit-modal-btn');
+_productTagGroupEditInfo = document.getElementById('product-tag-group-edit-info');
+_productTagGroupEditSelect = document.getElementById('product-tag-group-edit-select');
+_productTagGroupEditLoading = document.getElementById('product-tag-group-edit-loading');
+_productTagGroupEditSuccess = document.getElementById('product-tag-group-edit-success');
+_cancelProductTagGroupEditBtn = document.getElementById('cancel-product-tag-group-edit-btn');
+_confirmProductTagGroupEditBtn = document.getElementById('confirm-product-tag-group-edit-btn');
 }
 
 /**
@@ -4716,6 +4742,129 @@ try {
 
 
 
+// Mapa fixo dos IDs reais dos campos customizados do Bling e do Sheets
+const _TAG_GROUP_OPTIONS = [
+    { id: 296703145, descricao: 'Estoque - Consumo' },
+    { id: 295570389, descricao: 'Estoque - Fábrica' },
+    { id: 295570388, descricao: 'Estoque - Terceiros' },
+    { id: 295570391, descricao: 'Serviço' },
+    { id: 295570390, descricao: 'Sob Demanda - Fábrica' },
+];
+
+function _bindProductTagGroupEditModalEvents() {
+    if (_closeProductTagGroupEditModalBtn) {
+        _closeProductTagGroupEditModalBtn.addEventListener('click', () => _productTagGroupEditModal.classList.add('hidden'));
+    }
+    if (_cancelProductTagGroupEditBtn) {
+        _cancelProductTagGroupEditBtn.addEventListener('click', () => _productTagGroupEditModal.classList.add('hidden'));
+    }
+    if (_confirmProductTagGroupEditBtn) {
+        _confirmProductTagGroupEditBtn.addEventListener('click', _saveProductTagGroupEdit);
+    }
+}
+
+function _openProductTagGroupEditModal(productId) {
+    const product = _allProducts.find(p => String(p.id) === String(productId));
+    if (!product) {
+        _showMessageModal('Erro', 'Produto não encontrado para editar o grupo de tags.');
+        return;
+    }
+
+    if (!_productTagGroupEditModal) return;
+
+    _productTagGroupEditModal.dataset.productId = product.id;
+
+    if (_productTagGroupEditInfo) {
+        _productTagGroupEditInfo.innerHTML = `Editando grupo de tags do produto: <b>${product.descricao}</b>`;
+    }
+
+    // Popular o select com as opções disponíveis
+    if (_productTagGroupEditSelect) {
+        const currentTag = (product.grupo_de_tags_tags || [])[0] || '';
+        _productTagGroupEditSelect.innerHTML = `<option value="">— Sem grupo —</option>` +
+            _TAG_GROUP_OPTIONS.map(opt => {
+                const selected = opt.descricao.toLowerCase() === currentTag.toLowerCase() ? 'selected' : '';
+                return `<option value="${opt.id}" ${selected}>${opt.descricao}</option>`;
+            }).join('');
+    }
+
+    // Reseta estados de feedback
+    if (_productTagGroupEditLoading) _productTagGroupEditLoading.classList.add('hidden');
+    if (_productTagGroupEditSuccess) _productTagGroupEditSuccess.classList.add('hidden');
+    if (_confirmProductTagGroupEditBtn) _confirmProductTagGroupEditBtn.disabled = false;
+
+    _productTagGroupEditModal.classList.remove('hidden');
+    if (_productTagGroupEditSelect) _productTagGroupEditSelect.focus();
+}
+
+async function _saveProductTagGroupEdit() {
+    const productId = _productTagGroupEditModal.dataset.productId;
+    const selectedId = _productTagGroupEditSelect.value;
+    const selectedLabel = selectedId
+        ? (_TAG_GROUP_OPTIONS.find(o => String(o.id) === String(selectedId))?.descricao || '')
+        : '';
+
+    const product = _allProducts.find(p => String(p.id) === String(productId));
+    const currentTag = (product?.grupo_de_tags_tags || [])[0] || '';
+
+    // Verifica se mudou algo
+    if (selectedLabel.toLowerCase() === currentTag.toLowerCase()) {
+        _productTagGroupEditModal.classList.add('hidden');
+        return;
+    }
+
+    // UI Feedback
+    _confirmProductTagGroupEditBtn.disabled = true;
+    _productTagGroupEditLoading.classList.remove('hidden');
+
+    try {
+        const payload = {
+            grupo_tag_id: selectedId ? parseInt(selectedId) : null,
+            codigo: product.codigo
+        };
+
+        const API_BASE_URL = "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
+        const response = await fetch(`${API_BASE_URL}/produtos/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Erro ao atualizar grupo de tags.');
+        }
+
+        // Atualiza localmente
+        if (product) {
+            product.grupo_de_tags_tags = selectedLabel ? [selectedLabel] : [];
+        }
+
+        // Atualiza o display no módulo PesquisarProduto
+        if (typeof PesquisarProduto !== 'undefined' && PesquisarProduto.updateProductTagGroupDisplay) {
+            PesquisarProduto.updateProductTagGroupDisplay(productId, selectedLabel || 'N/A');
+        }
+
+        // Re-renderiza contadores de categorias e re-aplica os filtros globais imediatamente
+        _renderCategoryFilters();
+        _applyGlobalFilters();
+
+        // Feedback de Sucesso
+        _productTagGroupEditLoading.classList.add('hidden');
+        _productTagGroupEditSuccess.classList.remove('hidden');
+
+        setTimeout(() => {
+            _productTagGroupEditModal.classList.add('hidden');
+        }, 1500);
+
+    } catch (error) {
+        console.error('[App] Erro ao editar grupo de tags:', error);
+        _productTagGroupEditLoading.classList.add('hidden');
+        _confirmProductTagGroupEditBtn.disabled = false;
+        _showMessageModal('Erro na Atualização', `Falha ao atualizar grupo de tags: ${error.message}`);
+    }
+}
+
             return {
                 /**
                  * Inicializa a aplicação.
@@ -4729,6 +4878,7 @@ try {
                     _initFirestoreSync(); // NOVO: Inicia a sincronização via Firestore Sync
                     _initNotifications(); // NOVO: Inicializa sino de notificações
                     _cacheDomElements();
+                    _setupClearableInputs();
                     _bindEvents();
                     _isInitialized = true;
                     // NOVO: Inicializa o módulo de Atendimento com as configurações necessárias
@@ -4753,6 +4903,7 @@ try {
                     _bindProductLocationEditModalEvents(); // NOVO
                     _bindProductCodeEditModalEvents(); // NOVO
                     _bindProductCostPriceEditModalEvents(); // NOVO
+                    _bindProductTagGroupEditModalEvents(); // NOVO
                     if (typeof SaidaItens !== 'undefined') {
                         SaidaItens.init({
                             allProducts: _allProducts,
@@ -4826,7 +4977,8 @@ try {
                             openProductNameEditModal: _openProductNameEditModal,
                             openProductLocationEditModal: _openProductLocationEditModal,
                             openProductCodeEditModal: _openProductCodeEditModal,
-                            openProductCostPriceEditModal: _openProductCostPriceEditModal
+                            openProductCostPriceEditModal: _openProductCostPriceEditModal,
+                            openProductTagGroupEditModal: _openProductTagGroupEditModal
                         });
                     }
                     else {

@@ -213,14 +213,25 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
      */
     router.put('/:id', async (req, res, next) => {
         const idProduto = req.params.id;
-        const { nome, localizacao, codigo, preco_de_custo } = req.body;
+        const { nome, localizacao, codigo, preco_de_custo, grupo_tag_id } = req.body;
+
+    // Mapa fixo dos IDs de tags para labels legíveis
+    // Mapa fixo dos IDs reais de camposCustomizados para labels legíveis (com acentuação correspondente à planilha)
+    const TAG_LABELS = {
+        296703145: 'Estoque - Consumo',
+        295570389: 'Estoque - Fábrica',
+        295570388: 'Estoque - Terceiros',
+        295570391: 'Serviço',
+        295570390: 'Sob Demanda - Fábrica',
+    };
+    const novoGrupoLabel = grupo_tag_id ? (TAG_LABELS[parseInt(grupo_tag_id)] || '') : null;
 
         console.log(`--- ATUALIZANDO PRODUTO: ID ${idProduto} ---`);
         if (nome) console.log(` > Novo Nome: ${nome}`);
         if (localizacao !== undefined) console.log(` > Nova Localização: ${localizacao}`);
 
-        if (!nome && localizacao === undefined && !codigo && preco_de_custo === undefined) {
-            return res.status(400).json({ error: "Nome, localização, código ou preço de custo do produto deve ser informado." });
+        if (!nome && localizacao === undefined && !codigo && preco_de_custo === undefined && grupo_tag_id === undefined) {
+            return res.status(400).json({ error: "Nome, localização, código, preço de custo ou grupo de tags do produto deve ser informado." });
         }
 
         try {
@@ -256,6 +267,30 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 codigo: codigo || currentProduct.codigo,
                 precoCusto: preco_de_custo !== undefined ? parseFloat(preco_de_custo) : currentProduct.precoCusto
             };
+
+            const productCode = codigo || currentProduct.codigo || '';
+            const isService = String(productCode).startsWith('7');
+
+            // NOVO: Se grupo de tag foi informado, inclui no payload via camposCustomizados (ID do campo: 3221745)
+            // Apenas para produtos normais (código não inicia com '7'), pois serviços não possuem esse campo customizado no Bling.
+            if (grupo_tag_id !== undefined && !isService) {
+                const customFields = productData.camposCustomizados || [];
+                const fieldIndex = customFields.findIndex(cf => cf.idCampoCustomizado === 3221745);
+                const newFieldValue = grupo_tag_id ? String(grupo_tag_id) : "0";
+                
+                if (fieldIndex !== -1) {
+                    customFields[fieldIndex].valor = newFieldValue;
+                } else {
+                    customFields.push({
+                        idCampoCustomizado: 3221745,
+                        valor: newFieldValue
+                    });
+                }
+                blingPayload.camposCustomizados = customFields;
+            } else if (isService) {
+                // Remove campos customizados para evitar problemas na atualização do Bling
+                delete blingPayload.camposCustomizados;
+            }
 
             // NOVO: Passo 3.1 - Obter o vínculo do fornecedor
             // Em Bling V3, o fornecedor principal costuma vir no campo singular 'fornecedor'
@@ -323,14 +358,28 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             const descricaoColIndex = normalizedHeaders.indexOf('descricao');
             const localizacaoColIndex = normalizedHeaders.indexOf('localizacao');
             const codigoColIndex = normalizedHeaders.indexOf('codigo');
-            const precoCustoColIndex = normalizedHeaders.indexOf('preco_de_custo'); // NOVO: Mapeia a coluna de código
+            const precoCustoColIndex = normalizedHeaders.indexOf('preco_de_custo');
+            const grupoTagsColIndex = normalizedHeaders.indexOf('grupo_de_tags_tags');
 
             if (idColIndex === -1) {
                 throw new Error("Coluna 'ID' não encontrada na planilha.");
             }
 
+            // Converte índice do array (base-0, partindo da coluna B) para letra A1 do Sheets
+            // String.fromCharCode só funciona até Z; esta função suporta AA, AB, AI, etc.
+            const colToA1 = (i) => {
+                let num = i + 2; // +2 porque o array começa na coluna B (coluna 2)
+                let letter = '';
+                while (num > 0) {
+                    const rem = (num - 1) % 26;
+                    letter = String.fromCharCode(65 + rem) + letter;
+                    num = Math.floor((num - 1) / 26);
+                }
+                return letter;
+            };
+
             // Lê a coluna de IDs para encontrar a linha
-            const rangeIds = `'${sheetNameProdutos}'!${String.fromCharCode(66 + idColIndex)}5:${String.fromCharCode(66 + idColIndex)}`;
+            const rangeIds = `'${sheetNameProdutos}'!${colToA1(idColIndex)}5:${colToA1(idColIndex)}`;
             const idsRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: rangeIds });
             const ids = idsRes.data.values || [];
             
@@ -345,7 +394,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             if (rowIndex !== -1) {
                 // Atualiza Descrição se houver
                 if (nome && descricaoColIndex !== -1) {
-                    const updateDescRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + descricaoColIndex)}${rowIndex}`;
+                    const updateDescRange = `'${sheetNameProdutos}'!${colToA1(descricaoColIndex)}${rowIndex}`;
                     console.log(`[Sheets] Atualizando descrição na linha ${rowIndex}`);
                     await sheets.spreadsheets.values.update({
                         spreadsheetId, range: updateDescRange, valueInputOption: 'RAW', resource: { values: [[nome]] }
@@ -354,7 +403,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
 
                 // Atualiza Localização se houver
                 if (localizacao !== undefined && localizacaoColIndex !== -1) {
-                    const updateLocRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + localizacaoColIndex)}${rowIndex}`;
+                    const updateLocRange = `'${sheetNameProdutos}'!${colToA1(localizacaoColIndex)}${rowIndex}`;
                     console.log(`[Sheets] Atualizando localização na linha ${rowIndex}`);
                     await sheets.spreadsheets.values.update({
                         spreadsheetId, range: updateLocRange, valueInputOption: 'RAW', resource: { values: [[localizacao]] }
@@ -363,7 +412,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
 
                 // NOVO: Atualiza Código se houver
                 if (codigo && codigoColIndex !== -1) {
-                    const updateCodeRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + codigoColIndex)}${rowIndex}`;
+                    const updateCodeRange = `'${sheetNameProdutos}'!${colToA1(codigoColIndex)}${rowIndex}`;
                     console.log(`[Sheets] Atualizando código na linha ${rowIndex}`);
                     await sheets.spreadsheets.values.update({
                         spreadsheetId, range: updateCodeRange, valueInputOption: 'RAW', resource: { values: [[codigo]] }
@@ -372,11 +421,19 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
 
                 // NOVO: Atualiza Preço de Custo se houver
                 if (preco_de_custo !== undefined && precoCustoColIndex !== -1) {
-                    const updatePriceRange = `'${sheetNameProdutos}'!${String.fromCharCode(66 + precoCustoColIndex)}${rowIndex}`;
+                    const updatePriceRange = `'${sheetNameProdutos}'!${colToA1(precoCustoColIndex)}${rowIndex}`;
                     console.log(`[Sheets] Atualizando preço de custo na linha ${rowIndex}`);
                     // Formata como número para que a planilha possa aplicar formatação de moeda
                     await sheets.spreadsheets.values.update({
                         spreadsheetId, range: updatePriceRange, valueInputOption: 'USER_ENTERED', resource: { values: [[preco_de_custo]] }
+                    });
+                }
+                // NOVO: Atualiza Grupo de Tags se houver
+                if (grupo_tag_id !== undefined && grupoTagsColIndex !== -1) {
+                    const updateTagRange = `'${sheetNameProdutos}'!${colToA1(grupoTagsColIndex)}${rowIndex}`;
+                    console.log(`[Sheets] Atualizando grupo de tags na linha ${rowIndex}: ${novoGrupoLabel}`);
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId, range: updateTagRange, valueInputOption: 'RAW', resource: { values: [[novoGrupoLabel || '']] }
                     });
                 }
             } else {
@@ -388,10 +445,11 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 console.log(`[Firestore Sync] Notificando atualização de produto: ${codigo || idProduto}`);
                 await notifySync('productUpdated', {
                     id: idProduto,
-                    codigo: codigo || currentProduct.codigo,
-                    novoNome: nome || currentProduct.nome,
-                    novaLocalizacao: localizacao !== undefined ? localizacao : currentProduct.estoque?.localizacao,
-                    novoPrecoCusto: preco_de_custo !== undefined ? preco_de_custo : currentProduct.precoCusto
+                    codigo: codigo || currentProduct.codigo || null,
+                    novoNome: nome || currentProduct.nome || null,
+                    novaLocalizacao: localizacao !== undefined ? localizacao : (currentProduct.estoque?.localizacao ?? null),
+                    novoPrecoCusto: preco_de_custo !== undefined ? preco_de_custo : (currentProduct.precoCusto ?? currentProduct.fornecedor?.precoCusto ?? null),
+                    novoGrupoTags: novoGrupoLabel ?? null
                 });
             }
 

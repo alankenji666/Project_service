@@ -1212,7 +1212,7 @@ export const DashboardApp = (function() {
                     <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
                         <div class="flex items-center gap-4">
                             <div class="h-16 w-16 bg-white border border-gray-200 rounded flex items-center justify-center overflow-hidden">
-                                <img src="${itemBase.imagem || ''}" class="h-full w-full object-contain" onerror="this.src='https://via.placeholder.com/64?text=?';">
+                                <img src="${itemBase.imagem || ''}" class="h-full w-full object-contain" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIzIiB5PSIzIiB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHJ4PSIyIiByeT0iMiI+PC9yZWN0PjxjaXJjbGUgY3g9IjguNSIgY3k9IjguNSIgcj0iMS41Ij48L2NpcmNsZT48cG9seWxpbmUgcG9pbnRzPSIyMSAxNSAxNiAxMCA1IDIxIj48L3BvbHlsaW5lPjwvc3ZnPg==';">
                             </div>
                             <div>
                                 <h3 class="text-lg font-black text-gray-900">${itemBase.descricao}</h3>

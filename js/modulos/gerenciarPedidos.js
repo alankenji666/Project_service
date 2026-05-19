@@ -57,10 +57,29 @@ export const GerenciarPedidosApp = (function () {
 
     function _fmtData(str) {
         if (!str) return '-';
+        // Se já estiver no formato dd/mm/aaaa, retorna
+        if (/^\d{2}\/\d{2}\/\d{4}/.test(String(str))) return String(str).substring(0, 10);
+        
         // Aceita yyyy-mm-dd ou yyyy/mm/dd e converte para dd/mm/aaaa
         const m = String(str).match(/^(\d{4})[\-\/](\d{2})[\-\/](\d{2})/);
         if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-        return str; // Devolve original se não reconhece
+        return str; 
+    }
+
+    function _parseDate(str) {
+        if (!str) return null;
+        const s = String(str).trim();
+        
+        // Tenta yyyy-mm-dd
+        let m = s.match(/^(\d{4})[\-\/](\d{2})[\-\/](\d{2})/);
+        if (m) return new Date(m[1], m[2] - 1, m[3]);
+        
+        // Tenta dd/mm/yyyy
+        m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) return new Date(m[3], m[2] - 1, m[1]);
+        
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? null : d;
     }
 
     function _parseNumber(val) {
@@ -103,6 +122,13 @@ export const GerenciarPedidosApp = (function () {
         _selectedCountSpan = document.getElementById('pedidos-selected-count');
         _batchAttendBtn = document.getElementById('pedidos-batch-attend-btn');
 
+        // Elementos da Linha de Produção
+        _state.linhaProducaoBtn = document.getElementById('pedidos-linha-producao-btn');
+        _state.linhaProducaoModal = document.getElementById('production-line-modal');
+        _state.linhaProducaoContent = document.getElementById('production-line-modal-content');
+        _state.linhaProducaoCloseBtn = document.getElementById('close-production-line-modal-btn');
+        _state.linhaProducaoPrintBtn = document.getElementById('print-production-line-btn');
+
         // Elementos do Modal de Detalhes do Pedido
         _state.modalStatusCurrentText = document.getElementById('modal-status-current-text');
         _state.modalStatusDropdownBtn = document.getElementById('modal-status-dropdown-btn');
@@ -130,7 +156,10 @@ export const GerenciarPedidosApp = (function () {
         }
         if (_startDateInput) _startDateInput.addEventListener('change', () => { _clearDateRadios(); _filterPedidos(); });
         if (_endDateInput) _endDateInput.addEventListener('change', () => { _clearDateRadios(); _filterPedidos(); });
-        if (_statusSelect) _statusSelect.addEventListener('change', _filterPedidos);
+        if (_statusSelect) _statusSelect.addEventListener('change', () => {
+            _filterPedidos();
+            _updateLinhaProducaoBtnVisibility();
+        });
         if (_yearFilter) _yearFilter.addEventListener('change', _filterPedidos);
         if (_dateRadios) {
             _dateRadios.forEach(radio => radio.addEventListener('change', _handleDatePresetChange));
@@ -291,6 +320,11 @@ export const GerenciarPedidosApp = (function () {
         if (_state.quickEditCancelBtn) _state.quickEditCancelBtn.addEventListener('click', _closeQuickEditModal);
         if (_state.quickEditCloseBtn) _state.quickEditCloseBtn.addEventListener('click', _closeQuickEditModal);
         if (_state.quickEditSaveBtn) _state.quickEditSaveBtn.addEventListener('click', _saveItemQuickEdit);
+
+        // Eventos da Linha de Produção
+        if (_state.linhaProducaoBtn) _state.linhaProducaoBtn.addEventListener('click', _showProductionLine);
+        if (_state.linhaProducaoCloseBtn) _state.linhaProducaoCloseBtn.addEventListener('click', () => _state.linhaProducaoModal.classList.add('hidden'));
+        if (_state.linhaProducaoPrintBtn) _state.linhaProducaoPrintBtn.addEventListener('click', _printProductionLine);
     }
 
     function _handleSelectAllToggle(e) {
@@ -438,7 +472,7 @@ export const GerenciarPedidosApp = (function () {
         // --- Info grid (campos gerais, excluindo ID e itens) ---
         const skipInGrid = [...ignoreKeys, 'numero', 'número', 'itens', 'situação', 'situacao', 'vendedor',
             'contato_nome', 'contato nome', 'cpf_cnpj', 'cpf cnpj', 'cpf/cnpj', 'data', 'total', 'total_pedido', 'total pedido',
-            'id_nota', 'id nota', 'idnotafiscal', 'id_nota_fiscal', 'id nota fiscal'];
+            'id_nota', 'id nota', 'idnotafiscal', 'id_nota_fiscal', 'id nota fiscal', 'detalhes_producao', 'detalhesproducao'];
 
         let gridHtml = '';
         Object.entries(pedido).forEach(([key, value]) => {
@@ -501,7 +535,8 @@ export const GerenciarPedidosApp = (function () {
         const itensRaw = pedido.itens || pedido.Itens || '';
         let itensHtml = '';
         if (itensRaw) {
-            const itensList = _parseItens(itensRaw);
+            const pedidoId = pedido.id_pedido || pedido.id || pedido.numero_pedido || pedido.numero;
+            const itensList = _parseItens(itensRaw, pedido.detalhesProducao || {}, pedidoId);
             if (itensList.length > 0) {
                 itensHtml = `
                 <div class="mt-6">
@@ -528,24 +563,31 @@ export const GerenciarPedidosApp = (function () {
                                     <tr data-item-codigo="${item.codigo}" data-item-index="${index}" class="cursor-pointer hover:bg-gray-50 transition-colors item-row" onclick="GerenciarPedidosApp.handleItemClick('${item.codigo}')">
                                         <td class="px-4 py-3">
                                             <div class="flex items-center gap-3">
-                                                <img id="img-${item.codigo}" src="https://placehold.co/48x48/e2e8f0/64748b?text=..." 
+                                                <img id="img-${item.codigo}-${index}" src="https://placehold.co/48x48/e2e8f0/64748b?text=..." 
                                                      alt="" class="w-12 h-12 rounded-lg object-cover bg-gray-100 flex-shrink-0"
                                                      onerror="this.src='https://placehold.co/48x48/e2e8f0/64748b?text=?'">
                                                 <div>
                                                     <div class="flex items-center gap-2">
-                                                        <p class="font-medium text-gray-800" id="desc-${item.codigo}">${item.codigo}</p>
-                                                        <button onclick="GerenciarPedidosApp.handleSearchProduct('${item.codigo}', event)" 
-                                                                class="p-1 hover:bg-blue-50 text-blue-500 rounded transition-colors" 
-                                                                title="Pesquisar detalhes do produto">
-                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                                        </button>
+                                                        <p class="font-medium text-gray-800" id="desc-${item.codigo}-${index}">${item.descricaoPersonalizada || item.codigo}</p>
+                                                        <div class="flex items-center gap-1">
+                                                            <button onclick="GerenciarPedidosApp.handleSearchProduct('${item.codigo}', event)" 
+                                                                    class="p-1 hover:bg-blue-50 text-blue-500 rounded transition-colors" 
+                                                                    title="Pesquisar detalhes do produto">
+                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                                            </button>
+                                                            <button onclick="GerenciarPedidosApp.handleEditItemDescription('${pedidoId}', '${item.codigo}', ${index}, event)" 
+                                                                    class="p-1 hover:bg-orange-50 text-orange-500 rounded transition-colors" 
+                                                                    title="Editar nome/variação para produção">
+                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                     <p class="text-xs text-gray-400">${item.codigo}</p>
                                                 </div>
                                             </div>
                                         </td>
                                         <td class="px-4 py-3 text-center text-gray-700">${item.quantidade}</td>
-                                        <td class="px-4 py-3 text-center" id="stock-col-${item.codigo}">
+                                        <td class="px-4 py-3 text-center" id="stock-col-${item.codigo}-${index}">
                                             ${initialStockHtml}
                                         </td>
                                         <td class="px-4 py-3 text-center">
@@ -601,55 +643,54 @@ export const GerenciarPedidosApp = (function () {
         modal.classList.remove('hidden');
     }
 
-    function _parseItens(raw) {
-        // Formato esperado: "(503070587, 1.00, 609.17|STATUS)" ou "(503070587, 1.00, 609.17, STATUS)"
+    function _parseItens(raw, producaoData = {}, pedidoId = '') {
         const results = [];
-        const cleaned = String(raw).trim();
-        const regex = /\(([^)]+)\)/g;
-        let match;
-        while ((match = regex.exec(cleaned)) !== null) {
-            const content = match[1];
+        if (!raw) return results;
+
+        // Limpa a string e divide pelo padrão "(SKU, QTD"
+        const itemStrings = String(raw).split(/(?=\([^,]+,\s*\d+)/).filter(Boolean);
+
+        itemStrings.forEach((itemStr, index) => {
+            let content = itemStr.trim();
+            if (!content) return;
+
+            // Remove parênteses básicos
+            if (content.startsWith('(')) content = content.substring(1).trim();
+            if (content.endsWith(')')) {
+                const openCount = (content.match(/\(/g) || []).length;
+                const closeCount = (content.match(/\)/g) || []).length;
+                if (closeCount > openCount) content = content.substring(0, content.length - 1).trim();
+            }
+
             const parts = content.split(',').map(s => s.trim());
-            
             if (parts.length >= 3) {
-                let valorPart = parts[2];
+                const sku = parts[0];
+                const qty = parseFloat(parts[1]) || 1;
+                let valPart = parts[2];
                 let status = 'OK';
                 
-                // Tenta extrair status do pipe no 3º elemento ou do 4º elemento
-                if (valorPart.includes('|')) {
-                    const subParts = valorPart.split('|');
-                    valorPart = subParts[0];
-                    status = subParts[1] || 'OK';
-                } else if (parts.length >= 4) {
-                    status = parts[3];
+                if (valPart.includes('|')) {
+                    const sub = valPart.split('|');
+                    valPart = sub[0];
+                    status = sub[1] || 'OK';
                 }
 
+                // BUSCA NA ABA DE PRODUÇÃO (Prioridade Total)
+                const key = `${pedidoId}-${index}`;
+                const extra = producaoData[key];
+                
                 results.push({
-                    codigo: parts[0],
-                    quantidade: parseFloat(parts[1]) || 1,
-                    valor: _parseNumber(valorPart) || 0,
-                    status: status.trim()
+                    codigo: sku,
+                    quantidade: qty,
+                    valor: _parseNumber(valPart) || 0,
+                    status: (extra && extra.status) ? extra.status : status,
+                    descricaoPersonalizada: (extra && extra.descricao) ? extra.descricao : '',
+                    dataProducao: (extra && extra.data) ? extra.data : '', // Pegando a data da aba de produção
+                    index: index // Adicionando o índice original
                 });
-            } else if (parts.length === 2) {
-                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: 0, status: 'OK' });
             }
-        }
-        // Fallback: se não tiver parênteses, tenta vírgula simples
-        if (results.length === 0 && cleaned) {
-            const parts = cleaned.replace(/[()]/g, '').split(',').map(s => s.trim());
-            if (parts.length >= 3) {
-                let valorPart = parts[2];
-                let status = 'OK';
-                if (valorPart.includes('|')) {
-                    const subParts = valorPart.split('|');
-                    valorPart = subParts[0];
-                    status = subParts[1] || 'OK';
-                }
-                results.push({ codigo: parts[0], quantidade: parseFloat(parts[1]) || 1, valor: _parseNumber(valorPart) || 0, status: status.trim() });
-            } else if (parts.length > 0 && parts[0]) {
-                results.push({ codigo: parts[0], quantidade: 1, valor: 0, status: 'OK' });
-            }
-        }
+        });
+        
         return results;
     }
 
@@ -689,14 +730,14 @@ export const GerenciarPedidosApp = (function () {
 
             _enrichedProductsMap = {}; // Reset
 
-            itensList.forEach(item => {
+            itensList.forEach((item, idx) => {
                 const isService = String(item.codigo).trim().startsWith('7');
                 const prod = products.find(p =>
                     String(p.codigo || '').trim() === String(item.codigo).trim()
                 );
 
                 if (!prod) {
-                    const stockCol = document.getElementById(`stock-col-${item.codigo}`);
+                    const stockCol = document.getElementById(`stock-col-${item.codigo}-${idx}`);
                     if (stockCol) {
                         if (isService) {
                             stockCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200" title="Item de Serviço Livre">Serviço</span>`;
@@ -710,15 +751,19 @@ export const GerenciarPedidosApp = (function () {
                 // Salvar no mapa local para uso no Quick Edit
                 _enrichedProductsMap[item.codigo] = prod;
 
-                const imgEl = document.getElementById(`img-${item.codigo}`);
-                const descEl = document.getElementById(`desc-${item.codigo}`);
-                const stockCol = document.getElementById(`stock-col-${item.codigo}`);
+                const imgEl = document.getElementById(`img-${item.codigo}-${idx}`);
+                const descEl = document.getElementById(`desc-${item.codigo}-${idx}`);
+                const stockCol = document.getElementById(`stock-col-${item.codigo}-${idx}`);
 
                 if (imgEl && prod.url_imagens_externas && prod.url_imagens_externas[0]) {
                     imgEl.src = prod.url_imagens_externas[0];
                 }
+                
+                // Só sobrescreve se não tiver descrição personalizada E o conteúdo atual for o código
                 if (descEl && prod.descricao) {
-                    descEl.textContent = prod.descricao;
+                    if (!item.descricaoPersonalizada || descEl.textContent.trim() === item.codigo) {
+                        descEl.textContent = prod.descricao;
+                    }
                 }
 
                 if (stockCol) {
@@ -756,11 +801,26 @@ export const GerenciarPedidosApp = (function () {
         if (!_state.quickEditModal) return;
 
         _state.currentEditingProduct = prod;
+        
+        // NOVO: Armazena os valores originais para comparação posterior e detecção de mudanças
+        _state.originalQuickEditValues = {
+            cost: _parseNumber(prod.preco_de_custo),
+            stock: _parseNumber(prod.estoque),
+            location: (prod.localizacao || '').trim()
+        };
 
         if (_state.quickEditItemName) _state.quickEditItemName.textContent = `[${prod.codigo}] ${prod.descricao || ''}`;
-        if (_state.quickEditCostInput) _state.quickEditCostInput.value = _parseNumber(prod.preco_de_custo).toFixed(2);
-        if (_state.quickEditStockInput) _state.quickEditStockInput.value = _parseNumber(prod.estoque);
-        if (_state.quickEditLocInput) _state.quickEditLocInput.value = prod.localizacao || '';
+        
+        // Preenche os inputs com os valores originais formatados
+        if (_state.quickEditCostInput) {
+            _state.quickEditCostInput.value = _state.originalQuickEditValues.cost.toFixed(2);
+        }
+        if (_state.quickEditStockInput) {
+            _state.quickEditStockInput.value = _state.originalQuickEditValues.stock;
+        }
+        if (_state.quickEditLocInput) {
+            _state.quickEditLocInput.value = _state.originalQuickEditValues.location;
+        }
 
         _state.quickEditModal.classList.remove('hidden');
     }
@@ -773,8 +833,10 @@ export const GerenciarPedidosApp = (function () {
 
     async function _saveItemQuickEdit() {
         const prod = _state.currentEditingProduct;
-        if (!prod) return;
+        const originals = _state.originalQuickEditValues;
+        if (!prod || !originals) return;
 
+        // Captura valores atuais dos inputs
         const newCost = parseFloat(_state.quickEditCostInput.value);
         const newStock = parseFloat(_state.quickEditStockInput.value);
         const newLoc = _state.quickEditLocInput.value.trim();
@@ -784,43 +846,63 @@ export const GerenciarPedidosApp = (function () {
             return;
         }
 
+        // DETECÇÃO DE MUDANÇAS: Só enviaremos para a API o que realmente mudou
+        const costChanged = Math.abs(newCost - originals.cost) > 0.001;
+        const stockChanged = Math.abs(newStock - originals.stock) > 0.001;
+        const locChanged = newLoc !== originals.location;
+
+        // Se nada mudou, apenas fecha
+        if (!costChanged && !stockChanged && !locChanged) {
+            _closeQuickEditModal();
+            return;
+        }
+
+        console.log(`[QuickEdit] Iniciando salvamento para ${prod.codigo}. Mudanças: Custo=${costChanged}, Estoque=${stockChanged}, Local=${locChanged}`);
+        console.log(`[QuickEdit] Valores: Custo(${originals.cost} -> ${newCost}), Estoque(${originals.stock} -> ${newStock})`);
+
         _state.quickEditLoading.classList.remove('hidden');
         _state.quickEditSaveBtn.disabled = true;
 
         try {
-            // 1. Atualizar Detalhes (Custo e Localização)
-            console.log(`[QuickEdit] Atualizando detalhes do produto ${prod.id}...`);
-            const updateDetailsRes = await fetch(`${API_URLS.PRODUCTS}/${prod.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    preco_de_custo: newCost,
-                    localizacao: newLoc
-                })
-            });
+            // 1. Atualizar Detalhes (Custo e Localização) - Apenas se necessário
+            if (costChanged || locChanged) {
+                console.log(`[QuickEdit] Enviando PUT para atualizar detalhes (ID: ${prod.id})...`);
+                const updateDetailsRes = await fetch(`${API_URLS.PRODUCTS}/${prod.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        preco_de_custo: newCost,
+                        localizacao: newLoc
+                    })
+                });
 
-            if (!updateDetailsRes.ok) throw new Error('Falha ao atualizar detalhes do produto.');
+                if (!updateDetailsRes.ok) throw new Error('Falha ao atualizar detalhes do produto.');
+                console.log(`[QuickEdit] Detalhes atualizados com sucesso.`);
+            }
 
-            // 2. Atualizar Estoque (Balanço)
-            console.log(`[QuickEdit] Atualizando estoque (Balanço) do produto ${prod.codigo}...`);
-            const updateStockRes = await fetch(API_URLS.ORDERS_UPDATE, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    produto: { id: prod.id, codigo: prod.codigo },
-                    operacaoBling: 'B', // Balanço
-                    quantidadeFinal: newStock,
-                    tipoEntrada: 'Ajuste Rápido no Pedido',
-                    observacoes: 'Ajuste realizado durante a separação do pedido.'
-                })
-            });
+            // 2. Atualizar Estoque (Balanço) - Apenas se necessário
+            if (stockChanged) {
+                console.log(`[QuickEdit] Enviando POST para atualizar estoque (Código: ${prod.codigo}) para ${newStock}...`);
+                const updateStockRes = await fetch(API_URLS.ORDERS_UPDATE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        produto: { id: prod.id, codigo: prod.codigo },
+                        operacaoBling: 'B', // Balanço
+                        quantidadeFinal: newStock,
+                        tipoEntrada: 'Ajuste Rápido no Pedido',
+                        observacoes: 'Ajuste realizado durante a separação do pedido.'
+                    })
+                });
 
-            if (!updateStockRes.ok) throw new Error('Falha ao atualizar estoque.');
+                if (!updateStockRes.ok) throw new Error('Falha ao atualizar estoque.');
+                console.log(`[QuickEdit] Estoque atualizado com sucesso.`);
+            }
 
             // Sucesso!
             _closeQuickEditModal();
 
-            // Mensagem de sucesso amigável
+            // Mensagem de sucesso
             if (typeof Toastify !== 'undefined') {
                 Toastify({
                     text: "Produto atualizado com sucesso!",
@@ -831,25 +913,25 @@ export const GerenciarPedidosApp = (function () {
                 }).showToast();
             }
 
-            // Sincronizar o cache frontend global
+            // 3. Sincronizar o cache frontend global se existir
             if (window._allProducts) {
-                const globalProd = window._allProducts.find(p => p.id === prod.id || p.codigo === prod.codigo);
+                const globalProd = window._allProducts.find(p => String(p.id) === String(prod.id) || String(p.codigo) === String(prod.codigo));
                 if (globalProd) {
-                    globalProd.preco_de_custo = newCost;
-                    globalProd.localizacao = newLoc;
-                    globalProd.estoque = newStock;
+                    if (costChanged) globalProd.preco_de_custo = newCost;
+                    if (locChanged) globalProd.localizacao = newLoc;
+                    if (stockChanged) globalProd.estoque = newStock;
                 }
             }
 
-            // Propagar a atualização visual para outros módulos logados na memória
+            // 4. Propagar a atualização visual para outros módulos se estiverem ativos
             if (typeof PesquisarProduto !== 'undefined') {
                 if (PesquisarProduto.getSelectedProductCodigo && PesquisarProduto.getSelectedProductCodigo() === prod.codigo) {
-                    if (PesquisarProduto.updateStockDisplay) PesquisarProduto.updateStockDisplay(newStock);
+                    if (stockChanged && PesquisarProduto.updateStockDisplay) PesquisarProduto.updateStockDisplay(newStock);
                 }
-                if (PesquisarProduto.updateProductCostPriceDisplay) PesquisarProduto.updateProductCostPriceDisplay(prod.id, newCost);
-                if (PesquisarProduto.updateProductLocationDisplay) PesquisarProduto.updateProductLocationDisplay(prod.id, newLoc);
+                if (costChanged && PesquisarProduto.updateProductCostPriceDisplay) PesquisarProduto.updateProductCostPriceDisplay(prod.id, newCost);
+                if (locChanged && PesquisarProduto.updateProductLocationDisplay) PesquisarProduto.updateProductLocationDisplay(prod.id, newLoc);
             }
-            if (typeof SaidaItens !== 'undefined' && SaidaItens.updateProductStockInTable) {
+            if (stockChanged && typeof SaidaItens !== 'undefined' && SaidaItens.updateProductStockInTable) {
                 SaidaItens.updateProductStockInTable(prod.codigo, newStock);
             }
 
@@ -896,6 +978,24 @@ export const GerenciarPedidosApp = (function () {
     async function _handleModalStatusChange(idSituacao, label) {
         const idPedido = _currentModalPedidoId;
         if (!idPedido || !idSituacao) return;
+
+        // TRAVA DE SEGURANÇA: Se o status for Atendido (9), verifica itens em produção
+        if (idSituacao === "9" || idSituacao === 9) {
+            const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido) || String(p.número) === String(idPedido));
+            if (pedido) {
+                const finalId = pedido.id || pedido.id_pedido || idPedido;
+                const itens = _parseItens(pedido.itens || '', pedido.detalhesProducao || {}, finalId);
+                const temItemProducao = itens.some(item => {
+                    const s = String(item.status || 'OK').toUpperCase().trim();
+                    return s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
+                });
+
+                if (temItemProducao) {
+                    await _showCustomAlert('Bloqueado', 'Não é possível marcar como <strong>Atendido</strong> enquanto houver itens individuais <strong>Em Produção</strong> neste pedido.', false);
+                    return;
+                }
+            }
+        }
         
         if (!confirm(`Deseja alterar a situação do pedido para "${label}"?`)) {
             return;
@@ -918,7 +1018,17 @@ export const GerenciarPedidosApp = (function () {
                 body: JSON.stringify({ ids: [idPedido], idSituacao: idSituacao })
             });
 
-            if (!res.ok) throw new Error('Falha ao atualizar status.');
+            const result = await res.json();
+
+            if (!res.ok || result.status === 'error') {
+                throw new Error(result.message || 'Falha ao atualizar status.');
+            }
+
+            if (result.status === 'partial_success' && result.data.erros.length > 0) {
+                const erro = result.data.erros[0].erro;
+                console.error("Erro no Bling:", erro);
+                throw new Error(`Bling recusou a mudança: ${erro}`);
+            }
 
             // Atualizar localmente o pedido em memória para manter consistência no UI
             const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido) || String(p.número) === String(idPedido));
@@ -997,10 +1107,19 @@ export const GerenciarPedidosApp = (function () {
 
             if (!res.ok) {
                 // Se o erro for do Bling, ele virá formatado.
-                throw new Error(result.message || 'Falha ao gerar NF-e.');
+                const errorMsg = result.message || 'Falha ao gerar NF-e.';
+                const details = result.details ? ` (Detalhes: ${JSON.stringify(result.details)})` : '';
+                
+                if (details.includes('Ja existe uma nota fiscal')) {
+                     alert("Atenção: A Nota Fiscal para este pedido já foi criada no Bling anteriormente. Atualize a página e clique em 'Imprimir NF-e' ou verifique o painel do Bling para enviar/corrigir a nota.");
+                     return;
+                }
+                throw new Error(errorMsg + details);
             }
 
-            if (typeof Toastify !== 'undefined') {
+            if (result.status === 'partial_success') {
+                alert("Atenção: " + result.message);
+            } else if (typeof Toastify !== 'undefined') {
                 Toastify({
                     text: "🚀 NF-e Gerada com Sucesso!",
                     duration: 4000,
@@ -1115,7 +1234,8 @@ export const GerenciarPedidosApp = (function () {
 
         // Itens
         const itensRaw = pedido.itens || pedido.Itens || '';
-        const itensList = _parseItens(itensRaw);
+        const finalId = pedido.id || pedido.id_pedido || orderNumber;
+        const itensList = _parseItens(itensRaw, pedido.detalhesProducao || {}, finalId);
 
         // Montar linhas da tabela a partir das imagens já carregadas no modal
         const itensRows = itensList.map(item => {
@@ -1368,7 +1488,7 @@ export const GerenciarPedidosApp = (function () {
                 window.onafterprint = function(){ window.close(); } 
             }, 600);
         }
-    <\/script>
+    </script>
 </body>
 </html>`);
         printWindow.document.close();
@@ -1477,16 +1597,155 @@ export const GerenciarPedidosApp = (function () {
     }
 
 
+    function _showProgressModal(title, message, progressStr) {
+        let overlay = document.getElementById('batch-progress-modal');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'batch-progress-modal';
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200] transition-opacity';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full text-center transform scale-100 transition-transform">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <h3 id="batch-progress-title" class="text-xl font-bold text-gray-800 mb-2">${title}</h3>
+                    <div id="batch-progress-message" class="text-gray-600 mb-4 text-sm"></div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                        <div id="batch-progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <p id="batch-progress-str" class="text-sm font-semibold text-blue-600"></p>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+        
+        document.getElementById('batch-progress-title').innerHTML = title;
+        document.getElementById('batch-progress-message').innerHTML = message;
+        document.getElementById('batch-progress-str').innerHTML = progressStr;
+        
+        const match = progressStr.match(/(\d+) de (\d+)/);
+        if (match) {
+            const pct = (parseInt(match[1]) / parseInt(match[2])) * 100;
+            document.getElementById('batch-progress-bar').style.width = `${pct}%`;
+        }
+    }
+
+    function _hideProgressModal() {
+        const overlay = document.getElementById('batch-progress-modal');
+        if (overlay) overlay.remove();
+    }
+
+    async function _processBatchQueue(idsArray, newStatusId, label) {
+        let sucessos = [];
+        let erros = [];
+        const backendUrl = API_URLS.ORDERS_BLING ? API_URLS.ORDERS_BLING.replace('/pedidos', '/pedidos/update-status') : "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos/update-status";
+
+        for (let i = 0; i < idsArray.length; i++) {
+            const id = idsArray[i];
+            const p = _allPedidos.find(ped => String(ped.id) === String(id) || String(ped.numero) === String(id) || String(ped.número) === String(id));
+            const numeroDisplay = p ? (p.numero || p.número || id) : id;
+
+            _showProgressModal('Atualizando Pedidos', `Processando pedido <strong>${numeroDisplay}</strong>...`, `${i + 1} de ${idsArray.length}`);
+
+            try {
+                const response = await fetch(backendUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: [id], idSituacao: newStatusId })
+                });
+
+                const json = await response.json();
+                
+                let isSuccess = false;
+                let errMsg = '';
+                if (response.ok && json.status !== 'error') {
+                     if (json.data && json.data.erros && json.data.erros.length > 0) {
+                         errMsg = json.data.erros[0].erro || 'Erro no Bling';
+                         
+                         // Tratamento específico: Bling retorna esse erro genérico quando o pedido já está na situação desejada
+                         if (errMsg.toLowerCase().includes('não foi possível alterar') || errMsg.toLowerCase().includes('nao foi possivel alterar')) {
+                             isSuccess = true;
+                         } else {
+                             isSuccess = false;
+                         }
+                     } else {
+                         isSuccess = true;
+                     }
+                } else {
+                     errMsg = json.message || 'Erro de conexão/servidor';
+                }
+
+                if (isSuccess) {
+                    sucessos.push(id);
+                } else {
+                    erros.push({ id: id, numero: numeroDisplay, erro: errMsg });
+                }
+            } catch (error) {
+                erros.push({ id: id, numero: numeroDisplay, erro: error.message });
+            }
+            
+            // Pausa de 300ms entre as requisições para não sobrecarregar
+            await new Promise(r => setTimeout(r, 300));
+        }
+        
+        _hideProgressModal();
+        return { sucessos, erros };
+    }
+
+    async function _executeBatchWithRetry(idsArray, newStatusId, label) {
+        if (_loadingEl) _loadingEl.classList.remove('hidden');
+        if (_tableContent) _tableContent.innerHTML = '';
+        _batchActionsContainer.classList.add('hidden');
+
+        const results = await _processBatchQueue(idsArray, newStatusId, label);
+        
+        if (results.erros.length > 0) {
+            let errorListHtml = results.erros.map(e => `<strong>Pedido ${e.numero}:</strong> ${e.erro}`).join('<br>');
+            const wantRetry = await _showCustomConfirm('Alguns pedidos falharam', 
+                `Sucessos: <strong>${results.sucessos.length}</strong><br>Erros: <strong>${results.erros.length}</strong><br><br>
+                 <div class="text-left text-xs max-h-32 overflow-y-auto mb-2 text-red-600 bg-red-50 p-2 rounded border border-red-100">${errorListHtml}</div>
+                 Deseja tentar reenviar os que falharam?`);
+            
+            if (wantRetry) {
+                const failedIds = results.erros.map(e => e.id);
+                await _executeBatchWithRetry(failedIds, newStatusId, label);
+                return;
+            }
+        } else {
+            await _showCustomAlert('Concluído!', `Os pedidos foram atualizados para "${label}".<br>Total: <strong>${results.sucessos.length}</strong>`, true);
+        }
+        
+        await fetchPedidos(true);
+    }
+
     async function _handleBatchChangeStatus(newStatusId, label) {
         const checkedBoxes = _tableContent.querySelectorAll('.pedido-row-checkbox:checked');
         const allIds = Array.from(checkedBoxes).map(cb => cb.value);
         if (allIds.length === 0) return;
 
         // Filtrar pedidos que já possuem o status alvo para evitar erro no Bling
+        let skippedDueToProduction = 0;
         const idsToUpdate = allIds.filter(id => {
             const p = _allPedidos.find(p => String(p.id) === String(id) || String(p.numero) === String(id) || String(p.número) === String(id));
             if (!p) return true; 
             
+            // TRAVA DE SEGURANÇA: Se for Atendido (9), não permite se houver item em produção
+            if (newStatusId === 9 || String(newStatusId) === "9") {
+                const finalId = p.id || p.id_pedido || id;
+                const itens = _parseItens(p.itens || '', p.detalhesProducao || {}, finalId);
+                const temItemProducao = itens.some(item => {
+                    const s = String(item.status || 'OK').toUpperCase().trim();
+                    return s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
+                });
+                if (temItemProducao) {
+                    skippedDueToProduction++;
+                    return false;
+                }
+            }
+
             const situacaoAtual = (p.situação || p.situacao || '').toLowerCase();
             const labelLower = label.toLowerCase();
             
@@ -1499,41 +1758,25 @@ export const GerenciarPedidosApp = (function () {
         });
 
         if (idsToUpdate.length === 0) {
-            alert(`Todos os ${allIds.length} pedidos selecionados já estão com a situação "${label}".`);
+            if (skippedDueToProduction > 0) {
+                alert(`Ação cancelada. Os ${skippedDueToProduction} pedido(s) selecionado(s) possuem itens "Em Produção" e não podem ser finalizados.`);
+            } else {
+                alert(`Todos os ${allIds.length} pedidos selecionados já estão com a situação "${label}".`);
+            }
             return;
         }
 
-        const msg = idsToUpdate.length === allIds.length 
+        let msg = idsToUpdate.length === allIds.length 
             ? `Mudar ${idsToUpdate.length} pedido(s) para "${label}"?`
-            : `Mudar ${idsToUpdate.length} pedido(s) para "${label}"?\n(${allIds.length - idsToUpdate.length} pedidos já estão nessa situação e serão ignorados).`;
+            : `Mudar ${idsToUpdate.length} pedido(s) para "${label}"?\n(${allIds.length - idsToUpdate.length} pedidos serão ignorados).`;
+
+        if (skippedDueToProduction > 0) {
+            msg += `\n\nOBS: ${skippedDueToProduction} pedido(s) foram bloqueados por possuírem itens em produção.`;
+        }
 
         if (!confirm(msg)) return;
 
-        if (_loadingEl) _loadingEl.classList.remove('hidden');
-        if (_tableContent) _tableContent.innerHTML = '';
-        _batchActionsContainer.classList.add('hidden');
-
-        try {
-            const backendUrl = API_URLS.ORDERS_BLING ? API_URLS.ORDERS_BLING.replace('/pedidos', '/pedidos/update-status') : "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos/update-status";
-            const response = await fetch(backendUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: idsToUpdate, idSituacao: newStatusId })
-            });
-
-            const json = await response.json();
-            if (!response.ok) throw new Error(json.message || 'Erro ao atualizar pedidos');
-
-            alert(`Pedidos atualizados para "${label}". Sucessos: ${json.data?.sucessos?.length || 0}. Erros: ${json.data?.erros?.length || 0}.`);
-            
-            // Recarregar os dados para refletir mudanças
-            await fetchPedidos(true);
-
-        } catch (error) {
-            console.error("Erro ao atualizar lote de pedidos:", error);
-            alert("Erro ao tentar mudar situação dos pedidos. Detalhes: " + error.message);
-            await fetchPedidos(true); // Recarrega mesmo em caso de erro para manter integridade visual
-        }
+        await _executeBatchWithRetry(idsToUpdate, newStatusId, label);
     }
 
     function _handleSort(e) {
@@ -1957,8 +2200,406 @@ export const GerenciarPedidosApp = (function () {
         });
     }
 
+    function _updateLinhaProducaoBtnVisibility() {
+        if (!_statusSelect || !_state.linhaProducaoBtn) return;
+        if (_statusSelect.value === 'producao') {
+            _state.linhaProducaoBtn.classList.remove('hidden');
+        } else {
+            _state.linhaProducaoBtn.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Filtra e agrupa itens em produção para exibir no modal.
+     */
+    function _showProductionLine() {
+        if (!_state.linhaProducaoModal || !_state.linhaProducaoContent) return;
+
+        // 1. Filtrar pedidos em produção
+        const pedidosEmProducao = _allPedidos.filter(p => {
+            const sit = _getStatusLabel(p.situação || p.situacao || '').toLowerCase();
+            return sit.includes('produ');
+        });
+
+        // 2. Extrair e agrupar itens com status individual "Em Produção"
+        const aggregatedItems = {};
+
+        pedidosEmProducao.forEach(p => {
+            const numeroPedido = p.numero || p.número || 'N/A';
+            const finalId = p.id_pedido || p.id || '';
+            const itensRaw = p.itens || p.Itens || '';
+            const parsedItens = _parseItens(itensRaw, p.detalhesProducao || {}, finalId);
+            const empresa = p.contato_nome || p['contato nome'] || p.cliente || 'N/A';
+            const vendedorFull = _getVendedorName(p.vendedor || '');
+            const vendedor = vendedorFull.split(' ')[0];
+            const orcamento = p.orcamento || p.orçamento || '';
+            const dataPedido = p.data || p.data_criacao || '';
+
+            parsedItens.forEach(item => {
+                const s = String(item.status || 'OK').toUpperCase().trim();
+                const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
+
+                if (isProducao) {
+                    const codigo = String(item.codigo).trim();
+                    // Usamos uma chave composta para mostrar itens por pedido/empresa
+                    const key = `${codigo}_${numeroPedido}_${item.descricaoPersonalizada || ''}`; 
+                    
+                    if (!aggregatedItems[key]) {
+                        aggregatedItems[key] = {
+                            codigo: codigo,
+                            // PRIORIDADE: Descrição Personalizada -> Descrição do Produto (cache) -> Código
+                            descricao: item.descricaoPersonalizada || codigo, 
+                            quantidadeTotal: 0,
+                            data: item.dataProducao || dataPedido,
+                            vendedor: vendedor,
+                            empresa: empresa,
+                            orcamento: orcamento,
+                            numeroPedido: numeroPedido,
+                            pedidoId: finalId,
+                            itemIndex: item.index,
+                            descricaoPersonalizada: item.descricaoPersonalizada
+                        };
+                    }
+                    aggregatedItems[key].quantidadeTotal += (parseFloat(item.quantidade) || 0);
+                }
+            });
+        });
+
+        const itemsArray = Object.values(aggregatedItems);
+
+        // Ordenar por data (Mais antigos primeiro)
+        itemsArray.sort((a, b) => {
+            const dA = _parseDate(a.data) || new Date(8640000000000000); 
+            const dB = _parseDate(b.data) || new Date(8640000000000000);
+            return dA - dB;
+        });
+
+        if (itemsArray.length === 0) {
+            _state.linhaProducaoContent.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-20 text-gray-400">
+                    <svg class="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                    <p class="text-xl font-medium">Nenhum item marcado como "Em Produção"</p>
+                    <p class="text-sm">Marque itens individuais dentro dos pedidos para que apareçam aqui.</p>
+                </div>`;
+            _state.linhaProducaoModal.classList.remove('hidden');
+            return;
+        }
+
+        // 3. Renderizar a tabela
+        _renderProductionLineTable(itemsArray);
+        _state.linhaProducaoModal.classList.remove('hidden');
+
+        // 4. Enriquecer com dados de produto (imagem/descrição)
+        setTimeout(() => _enrichProductionLineWithProductData(itemsArray), 50);
+    }
+
+    function _renderProductionLineTable(items) {
+        _state.linhaProducaoContent.innerHTML = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 border border-gray-100 rounded-xl overflow-hidden">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Produto</th>
+                            <th class="px-6 py-4 text-center text-xs font-black text-gray-400 uppercase tracking-wider">Data</th>
+                            <th class="px-6 py-4 text-center text-xs font-black text-gray-400 uppercase tracking-wider">Qtd Total</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-100">
+                        ${items.map(item => {
+                            const pDate = _parseDate(item.data);
+                            const dateFormatted = (pDate && !isNaN(pDate)) 
+                                ? `${String(pDate.getDate()).padStart(2, '0')}/${String(pDate.getMonth() + 1).padStart(2, '0')}/${pDate.getFullYear()}`
+                                : item.data || '-';
+
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            let diffDays = 0;
+                            if (pDate && !isNaN(pDate)) {
+                                const prodDate = new Date(pDate);
+                                prodDate.setHours(0, 0, 0, 0);
+                                diffDays = Math.floor((today - prodDate) / (1000 * 60 * 60 * 24));
+                                if (diffDays < 0) diffDays = 0;
+                            }
+
+                            return `
+                            <tr class="hover:bg-blue-50/30 transition-colors">
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center gap-4">
+                                        <div class="flex flex-col items-center gap-1 flex-shrink-0">
+                                            ${item.orcamento && item.orcamento !== '0' ? `<span class="text-[9px] font-black text-blue-500 uppercase leading-none mb-1">Orç.: ${item.orcamento}</span>` : ''}
+                                            <div class="w-16 h-16 bg-white rounded-xl border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
+                                                <img id="lp-img-${item.codigo}-${item.numeroPedido}" src="https://placehold.co/60x60/f8fafc/cbd5e1?text=..." 
+                                                     class="max-w-full max-h-full object-contain"
+                                                     onerror="this.src='https://placehold.co/60x60/f8fafc/cbd5e1?text=?'">
+                                            </div>
+                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-tighter">SKU-${item.codigo}</span>
+                                        </div>
+                                        <div>
+                                            <p class="font-black text-gray-800 text-base" id="lp-desc-${item.codigo}-${item.numeroPedido}">${item.descricao || item.codigo}</p>
+                                            <p class="text-xs font-bold text-blue-500 uppercase tracking-widest">
+                                                <span class="text-blue-600 font-bold">${item.vendedor}</span> <span class="mx-1 text-gray-400">-</span> <span class="text-gray-500">${item.empresa}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 text-center">
+                                    <div class="flex flex-col items-center gap-2">
+                                        <div class="flex flex-col items-center">
+                                            <span class="text-[9px] font-black text-gray-400 uppercase leading-none mb-1">Solicitação</span>
+                                            <span onclick="GerenciarPedidosApp.handleEditProductionDate('${item.pedidoId}', '${item.codigo}', ${item.itemIndex}, '${item.data}', event, '${item.numeroPedido}')"
+                                                  class="text-sm font-bold text-gray-700 border-b border-dashed border-gray-300 cursor-pointer hover:text-blue-600 hover:border-blue-400 transition-all">
+                                                ${dateFormatted}
+                                            </span>
+                                        </div>
+                                        <div class="flex flex-col items-center pt-1.5 border-t border-gray-100 w-full">
+                                            <span class="text-[9px] font-black text-gray-400 uppercase leading-none mb-1">Dias Corridos</span>
+                                            <span class="text-xs font-black text-orange-600">${diffDays} ${diffDays === 1 ? 'Dia' : 'Dias'}</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 text-center">
+                                    <span class="inline-flex items-center justify-center min-w-[40px] h-10 px-3 bg-blue-100 text-blue-700 rounded-xl font-black text-lg">
+                                        ${item.quantidadeTotal}
+                                    </span>
+                                </td>
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    async function _enrichProductionLineWithProductData(items) {
+        try {
+            const res = await fetch(`${API_URLS.PRODUCTS}?t=${Date.now()}`, { mode: 'cors' });
+            if (!res.ok) return;
+            const json = await res.json();
+            const products = json.data || json || [];
+
+            items.forEach(item => {
+                const prod = products.find(p => String(p.codigo || '').trim() === String(item.codigo).trim());
+                if (prod) {
+                    const imgId = `lp-img-${item.codigo}-${item.numeroPedido}`;
+                    const descId = `lp-desc-${item.codigo}-${item.numeroPedido}`;
+                    const imgEl = document.getElementById(imgId);
+                    const descEl = document.getElementById(descId);
+                    
+                    if (imgEl && prod.url_imagens_externas && prod.url_imagens_externas[0]) imgEl.src = prod.url_imagens_externas[0];
+                    
+                    // Se NÃO tiver descrição personalizada, usa a do produto (padrão)
+                    if (descEl && !item.descricaoPersonalizada && prod.descricao) {
+                        descEl.textContent = prod.descricao;
+                    }
+                }
+            });
+        } catch (e) {
+            console.warn('[LinhaProducao] Erro ao enriquecer:', e);
+        }
+    }
+
+    function _printProductionLine() {
+        if (!_state.linhaProducaoContent) return;
+        
+        const content = _state.linhaProducaoContent.innerHTML;
+        const printWindow = window.open('', '_blank');
+        
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Linha de Produção - MKS Service</title>
+                    <script src="https://cdn.tailwindcss.com"></script>
+                    <style>
+                        @media print {
+                            body { padding: 20px; font-family: sans-serif; }
+                            table { width: 100%; border-collapse: collapse; }
+                            th, td { border-bottom: 1px solid #e2e8f0; padding: 12px 8px; text-align: left; }
+                            .no-print { display: none; }
+                            img { max-width: 70px; max-height: 70px; object-fit: contain; border-radius: 12px; }
+                        }
+                    </style>
+                </head>
+                <body class="p-8">
+                    <div class="mb-8 flex justify-between items-end border-b-2 border-blue-600 pb-4">
+                        <div>
+                            <h1 class="text-4xl font-black text-gray-800">LINHA DE PRODUÇÃO</h1>
+                            <p class="text-gray-500 font-bold uppercase tracking-widest text-sm">MKS SERVICE - Relatório de Itens Pendentes</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm font-bold text-gray-400 uppercase">Gerado em</p>
+                            <p class="text-lg font-black text-gray-800">${new Date().toLocaleString('pt-BR')}</p>
+                        </div>
+                    </div>
+                    <div class="production-line-print-container">
+                        ${content}
+                    </div>
+                    <div class="mt-12 pt-8 border-t border-gray-100 text-center text-gray-400 text-[10px] uppercase font-bold tracking-widest">
+                        Sistema de Gestão MKS Service - Documento Interno
+                    </div>
+                </body>
+            </html>
+        `);
+        
+        printWindow.document.close();
+        setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+            printWindow.close();
+        }, 1000);
+    }
+
+    function _initEditItemDescModal() {
+        const modal = document.getElementById('edit-item-desc-modal');
+        const closeBtn = document.getElementById('close-edit-item-desc-modal-btn');
+        const cancelBtn = document.getElementById('cancel-edit-item-desc-btn');
+
+        if (!modal) return;
+
+        const close = () => {
+            console.log('[GerenciarPedidos] Fechando modal de descrição...');
+            modal.classList.add('hidden');
+        };
+
+        // Remover listeners antigos para evitar duplicação (opcional mas seguro)
+        closeBtn?.replaceWith(closeBtn.cloneNode(true));
+        cancelBtn?.replaceWith(cancelBtn.cloneNode(true));
+
+        // Re-selecionar após clone
+        const newCloseBtn = document.getElementById('close-edit-item-desc-modal-btn');
+        const newCancelBtn = document.getElementById('cancel-edit-item-desc-btn');
+
+        newCloseBtn?.addEventListener('click', close);
+        newCancelBtn?.addEventListener('click', close);
+        
+        // Fechar ao clicar fora do conteúdo
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) close();
+        });
+    }
+
+
     return {
         handleItemClick: handleItemClick,
+        handleEditItemDescription: async function(pedidoId, itemCodigo, index, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+            if (!pedido) return;
+
+            const finalPedidoId = String(pedido.id || pedido.id_pedido || '');
+            const finalNumPedido = String(pedido.numero || pedido.numero_pedido || '');
+            const itens = _parseItens(pedido.itens, pedido.detalhesProducao || {}, finalPedidoId, finalNumPedido);
+            const item = itens[index];
+            if (!item) return;
+
+            // Elementos do layout
+            const modal = document.getElementById('edit-item-desc-modal');
+            const currentDescEl = document.getElementById('edit-item-desc-current');
+            const complementContainer = document.getElementById('edit-item-desc-complement-container');
+            const complementText = document.getElementById('edit-item-desc-complement-text');
+            const inputEl = document.getElementById('edit-item-desc-input');
+            const saveBtn = document.getElementById('save-edit-item-desc-btn');
+
+            if (!modal || !currentDescEl || !inputEl || !saveBtn) return;
+
+            // Busca o nome original real no cache de produtos
+            const prod = _enrichedProductsMap[item.codigo];
+            let baseName = prod ? prod.descricao : (item.descricaoPersonalizada ? item.codigo : item.codigo);
+            
+            const currentPersonalized = item.descricaoPersonalizada || '';
+
+            // Preencher campos no Modal
+            if (currentDescEl) currentDescEl.textContent = baseName;
+            
+            if (complementContainer && complementText) {
+                if (currentPersonalized) {
+                    complementText.textContent = currentPersonalized;
+                    complementContainer.classList.remove('hidden');
+                } else {
+                    complementContainer.classList.add('hidden');
+                }
+            }
+            
+            inputEl.value = currentPersonalized;
+            modal.classList.remove('hidden');
+            
+            setTimeout(() => {
+                inputEl.focus();
+                inputEl.select();
+            }, 100);
+
+            // Listeners de Fechar
+            const closeModal = () => modal.classList.add('hidden');
+            document.getElementById('close-edit-item-desc-modal-btn').onclick = closeModal;
+            document.getElementById('cancel-edit-item-desc-btn').onclick = closeModal;
+            modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+
+            // Salvar
+            saveBtn.onclick = async () => {
+                const novaDesc = inputEl.value.trim();
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<svg class="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Salvando...';
+
+                try {
+                    const response = await fetch(API_URLS.UPDATE_ITEM_STATUS, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            pedidoId: finalPedidoId,
+                            itemCodigo,
+                            newDescription: novaDesc,
+                            itemIndex: index,
+                            numeroPedido: finalNumPedido,
+                            newStatus: item.status || 'OK',
+                            quantidade: item.quantidade || 1,
+                            dataPedido: pedido ? (pedido.data || pedido.data_criacao || '') : ''
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(errorText || 'Erro no servidor');
+                    }
+                    
+                    // ATUALIZAÇÃO DO CACHE LOCAL: Crucial para ver a mudança na hora
+                    if (pedido) {
+                        // Atualiza os dados de produção no cache local
+                        if (!pedido.detalhesProducao) pedido.detalhesProducao = {};
+                        const key = `${pedidoId}-${index}`;
+                        pedido.detalhesProducao[key] = {
+                            status: pedido.detalhesProducao[key]?.status || 'OK',
+                            descricao: novaDesc
+                        };
+                        
+                        // Atualiza a visualização no modal sem fechar
+                        const descEl = document.getElementById(`desc-${itemCodigo}-${index}`);
+                        if (descEl) descEl.textContent = novaDesc || itemCodigo;
+                    }
+                    
+                    if (typeof Toastify !== 'undefined') {
+                        Toastify({ text: "Descrição atualizada!", duration: 2500, style: { background: "#10b981" } }).showToast();
+                    }
+                    
+                    // Atualiza a visualização da tabela ao fundo
+                    _filterPedidos();
+                    
+                    // Recarrega o modal de detalhes para mostrar o novo nome na lista
+                    _openOrderDetailsModal(pedidoId);
+
+                    closeModal();
+                } catch (error) {
+                    console.error("Erro ao editar descrição:", error);
+                    alert("Erro ao salvar: " + error.message);
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Salvar';
+                }
+            };
+        },
         init: function (config = {}) {
             if (config.openOrderObservationModal) {
                 _state.openOrderObservationModal = config.openOrderObservationModal;
@@ -2059,9 +2700,6 @@ export const GerenciarPedidosApp = (function () {
                 console.warn(`[GerenciarPedidos] Pedido ${orderNumber} não encontrado localmente.`);
             }
         },
-        handleItemClick: function(codigo) {
-            handleItemClick(codigo);
-        },
         handleSearchProduct: function(codigo, event) {
             if (event) {
                 event.preventDefault();
@@ -2106,6 +2744,22 @@ export const GerenciarPedidosApp = (function () {
             }
 
             try {
+                // Pega a descrição atual do cache para não perder ao salvar status
+                const pCache = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+                let currentDesc = '';
+                if (pCache && pCache.detalhesProducao) {
+                    const keyId = `${pedidoId}-${index}`;
+                    const keyNum = `${pCache.numero || pCache.numero_pedido}-${index}`;
+                    const extra = pCache.detalhesProducao[keyId] || pCache.detalhesProducao[keyNum];
+                    if (extra) currentDesc = extra.descricao || '';
+                }
+
+                // Se não houver descrição complementar, usa a descrição original do produto como fallback
+                if (!currentDesc) {
+                    const prod = _enrichedProductsMap[itemCodigo];
+                    if (prod && prod.descricao) currentDesc = prod.descricao;
+                }
+
                 const url = API_URLS.UPDATE_ITEM_STATUS;
                 const response = await fetch(url, {
                     method: 'POST',
@@ -2114,57 +2768,131 @@ export const GerenciarPedidosApp = (function () {
                         pedidoId,
                         itemCodigo,
                         newStatus,
-                        itemIndex: index
+                        itemIndex: index,
+                        newDescription: currentDesc,
+                        numeroPedido: pCache ? (pCache.numero || pCache.numero_pedido || '') : '',
+                        quantidade: index !== undefined ? (_parseItens(pCache.itens, pCache.detalhesProducao || {}, pedidoId)[index]?.quantidade || 1) : 1,
+                        dataPedido: pCache ? (pCache.data || pCache.data_criacao || '') : ''
                     })
                 });
 
-                if (!response.ok) throw new Error('Erro ao atualizar status do item');
-
-                // AUTO-UPDATE: Se o novo status do item for EM PRODUÇÃO, e o pedido estiver "Em Aberto", 
-                // muda o pedido automaticamente para "Em Produção".
-                if (newStatus === 'EM PRODUÇÃO') {
-                    const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
-                    if (pedido) {
-                        const currentSit = _getStatusLabel(pedido.situacao || pedido.situação || '').toLowerCase();
-                        if (currentSit.includes('abert') || currentSit.includes('pendent')) {
-                            console.log(`[Auto-Status] Item em produção detectado. Alterando pedido ${pedidoId} para Em Produção...`);
-                            // Chama a função interna de troca de status (silenciosamente ou com o confirm se preferir)
-                            // Aqui chamamos direto a API para evitar múltiplos popups
-                            fetch(`${API_URLS.ORDERS_BLING}/update-status`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ ids: [pedidoId], idSituacao: "447331" })
-                            }).catch(err => console.error("Erro no auto-update de status:", err));
-                        }
-                    }
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Erro ao atualizar status do item');
                 }
+
+                // Feedback imediato no badge...
+                if (btn) {
+                    btn.classList.remove('opacity-50', 'pointer-events-none');
+                    const span = btn.querySelector('span');
+                    if (span) span.innerText = (newStatus === 'OK') ? 'OK' : 'EM PRODUÇÃO';
+                    const isProducao = newStatus === 'EM PRODUÇÃO';
+                    const badgeClass = isProducao 
+                        ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' 
+                        : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200';
+                    btn.className = `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border transition-all cursor-pointer shadow-sm active:scale-95 ${badgeClass}`;
+                    btn.setAttribute('onclick', `GerenciarPedidosApp.handleToggleItemStatus('${pedidoId}', '${itemCodigo}', '${newStatus}', ${index}, event)`);
+                }
+
+                // Sincronização de Cache
+                if (pCache) {
+                    if (!pCache.detalhesProducao) pCache.detalhesProducao = {};
+                    pCache.detalhesProducao[`${pedidoId}-${index}`] = { status: newStatus, descricao: currentDesc };
+                }
+
+                // AUTO-UPDATE de Pedido Global desativado temporariamente para evitar erros de API no Bling
+                /*
+                if (newStatus === 'EM PRODUÇÃO') {
+                    // ... lógica de update global ...
+                }
+                */
 
                 // O sync via Firestore cuidará de atualizar a UI em todos os clientes.
 
             } catch (error) {
                 console.error("Erro ao alternar status do item:", error);
-                alert("Erro ao salvar status do item: " + error.message);
-                // Revert UI if error
-                if (btn) {
-                    btn.classList.remove('opacity-50', 'pointer-events-none');
-                    const span = btn.querySelector('span');
-                    if (span) span.innerText = currentStatus === 'OK' ? 'OK' : 'Em Produção';
+                alert("Erro ao salvar: " + error.message);
+                // Restaura o botão em caso de erro
+                _renderOrderDetailsModal(pedidoId);
+            }
+        },
+        handleEditProductionDate: async function(pedidoId, itemCodigo, itemIndex, currentDate, event, numeroPedido) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            // Garante que o valor inicial no prompt esteja no formato dd/mm/aaaa
+            const initialValue = _fmtData(currentDate);
+            const newDateStr = prompt("Informe a nova data (DD/MM/AAAA):", initialValue);
+            
+            if (newDateStr === null || newDateStr === initialValue || !newDateStr.trim()) return;
+
+            // Validação básica do formato dd/mm/aaaa
+            const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+            const match = newDateStr.match(dateRegex);
+            
+            let dateToSave = newDateStr;
+            if (match) {
+                // Converte para yyyy-mm-dd para consistência no banco de dados
+                dateToSave = `${match[3]}-${match[2]}-${match[1]}`;
+            }
+
+            try {
+                // Feedback visual de carregamento
+                const span = event.target;
+                span.innerText = '...';
+
+                const response = await fetch(API_URLS.UPDATE_ITEM_STATUS, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pedidoId,
+                        numeroPedido, // Importante para localizar a linha correta na planilha
+                        itemCodigo,
+                        itemIndex,
+                        dataPedido: dateToSave 
+                    })
+                });
+
+                if (!response.ok) throw new Error("Erro ao salvar data.");
+
+                // Atualiza o cache local para refletir na UI sem refresh
+                const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+                if (pedido) {
+                    if (!pedido.detalhesProducao) pedido.detalhesProducao = {};
+                    const key = `${pedidoId}-${itemIndex}`;
+                    if (!pedido.detalhesProducao[key]) pedido.detalhesProducao[key] = { status: 'OK', descricao: '' };
+                    pedido.detalhesProducao[key].data = dateToSave;
                 }
+
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({ text: "Data atualizada!", duration: 2000, style: { background: "#10b981" } }).showToast();
+                }
+
+                // Recarrega a linha de produção para refletir a mudança
+                _showProductionLine();
+
+            } catch (error) {
+                console.error("Erro ao editar data:", error);
+                alert("Erro ao salvar data: " + error.message);
+                _showProductionLine(); // Restaura o estado anterior
             }
         },
         updateOrderItemStatusRealTime: function(data) {
-            const { pedidoId, itemCodigo, newStatus, itemIndex } = data;
-            console.log(`[GerenciarPedidos] Sincronizando status do item ${itemCodigo} para ${newStatus} no pedido ${pedidoId}`);
+            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, dataPedido } = data;
+            console.log(`[GerenciarPedidos] Sincronizando status/data do item ${itemCodigo} no pedido ${pedidoId}`);
 
             // 1. Atualizar no cache local
             const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
             if (pedido) {
-                const itens = _parseItens(pedido.itens);
-                if (itens[itemIndex] && String(itens[itemIndex].codigo) === String(itemCodigo)) {
-                    itens[itemIndex].status = newStatus;
-                    // Reconstrói a string de itens: (SKU, QTD, VALOR, STATUS)
-                    pedido.itens = itens.map(i => `(${i.codigo}, ${parseFloat(i.quantidade).toFixed(2)}, ${parseFloat(i.valor).toFixed(2)}, ${i.status || 'OK'})`).join(' ');
-                }
+                if (!pedido.detalhesProducao) pedido.detalhesProducao = {};
+                const key = `${pedidoId}-${itemIndex}`;
+                pedido.detalhesProducao[key] = {
+                    status: newStatus || pedido.detalhesProducao[key]?.status || 'OK',
+                    descricao: newDescription !== undefined ? newDescription : (pedido.detalhesProducao[key]?.descricao || ''),
+                    data: dataPedido !== undefined ? dataPedido : (pedido.detalhesProducao[key]?.data || '')
+                };
             }
 
             // 2. Atualizar a UI se o modal estiver aberto para este pedido
@@ -2188,6 +2916,14 @@ export const GerenciarPedidosApp = (function () {
                     // Atualiza o onclick para refletir o novo status atual
                     btn.setAttribute('onclick', `GerenciarPedidosApp.handleToggleItemStatus('${pedidoId}', '${itemCodigo}', '${newStatus}', ${itemIndex}, event)`);
                 }
+            }
+
+            // 3. SE a Linha de Produção estiver aberta, atualizar em tempo real
+            const lpModal = document.getElementById('production-line-modal');
+            if (lpModal && !lpModal.classList.contains('hidden')) {
+                console.log('[LinhaProducao] Atualizando em tempo real...');
+                // Dispara o re-render da linha de produção
+                _showProductionLine();
             }
         },
         updateOrderNfeInfoRealTime: function(nfeData) {
