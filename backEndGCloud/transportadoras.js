@@ -34,6 +34,44 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
         FAZ_COLETA: 19
     };
 
+    const HEADERS = [
+        'Codigo', 'Nome', 'Fantasia', 'Endereco', 'Numero', 'Complemento',
+        'Bairro', 'Cidade', 'Estado', 'CEP', 'CNPJ', 'Inscricao_Estadual',
+        'Telefone', 'Email', 'Website', 'Contato', 'Tipo', 'Ativo',
+        'Data_Inclusao', 'Faz_Coleta'
+    ];
+
+    /**
+     * Verifica e cria headers se não existirem
+     */
+    async function ensureHeadersExist(sheetsClient) {
+        try {
+            const response = await sheetsClient.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A1:T1`
+            });
+
+            const existingHeaders = response.data.values?.[0] || [];
+            
+            // Se não tem headers ou está vazio, cria
+            if (existingHeaders.length === 0 || !existingHeaders[0]) {
+                console.log(`[Transportadoras] Criando headers na aba "${sheetName}"...`);
+                await sheetsClient.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!A1:T1`,
+                    valueInputOption: 'RAW',
+                    resource: { values: [HEADERS] }
+                });
+                console.log(`[Transportadoras] ✅ Headers criados com sucesso!`);
+                return true;
+            }
+            return false;
+        } catch (err) {
+            console.error('[Transportadoras] Erro ao verificar/criar headers:', err.message);
+            throw err;
+        }
+    }
+
     /**
      * GET /transportadoras
      * Lista todas as transportadoras
@@ -41,6 +79,10 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
     router.get('/', async (req, res) => {
         try {
             const sheetsClient = await getInitializedSheetsClient();
+            
+            // Garante que os headers existem
+            await ensureHeadersExist(sheetsClient);
+
             const response = await sheetsClient.spreadsheets.values.get({
                 spreadsheetId,
                 range: `${sheetName}!A:T`
@@ -91,6 +133,10 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
         try {
             const { codigo } = req.params;
             const sheetsClient = await getInitializedSheetsClient();
+            
+            // Garante que os headers existem
+            await ensureHeadersExist(sheetsClient);
+
             const response = await sheetsClient.spreadsheets.values.get({
                 spreadsheetId,
                 range: `${sheetName}!A:T`
@@ -149,7 +195,9 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
             }
 
             const sheetsClient = await getInitializedSheetsClient();
-            const data_inclusao = new Date().toLocaleDateString('pt-BR');
+            
+            // Garante que os headers existem (primeira vez que alguém cria)
+            await ensureHeadersExist(sheetsClient);
 
             const newRow = [
                 codigo,
