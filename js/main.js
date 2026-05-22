@@ -1,5 +1,7 @@
         // Importa as funções utilitárias do novo módulo
         import { debounce, addBusinessDays, getBusinessDaysDifference, formatCnpjCpf, createDetailItem, createStatusPill, positionTooltip } from './utils.js';
+        import { sendNFeByEmail } from './utils/sendNfeEmail.js';
+        window.sendNFeByEmail = sendNFeByEmail;
 
 
         // URLs das suas APIs do Google Apps Script
@@ -15,6 +17,8 @@
         import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js';
+        import { TransportadorasApp } from './modulos/transportadoras.js';
+        window.TransportadorasApp = TransportadorasApp;
 
         // Início do padrão Revealing Module para a aplicação principal
         const App = (function () {
@@ -706,7 +710,7 @@
             let _currentPrintModalType = '';
 
             // --- REFERÊNCIAS PRIVADAS A ELEMENTOS DO DOM ---
-            let _navPesquisar, _navEstoque, _navGerenciarSaida, _navGerenciarPedidos, _navDashboards, _navAtendimento;
+            let _navPesquisar, _navEstoque, _navGerenciarSaida, _navGerenciarPedidos, _navDashboards, _navAtendimento, _navTransportadoras;
             let _refreshButton, _loadingOverlay;
             let _globalFilterBar, _pedidosFilterBar, _dashboardFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer;
             let _product_list_container, _product_details_container, _details_placeholder, _product_details, _requisitionOverviewCardsContainer, _saidaOverviewCards, _ordersTableTitle, _ordersTableContent, _noOrdersMessage, _noOrdersMessageModal, _ordersSearchInput;
@@ -729,7 +733,7 @@
             let _requisitionActionBar, _requisitionBackBtn, _saidaActionBar, _saidaBackBtn, _saidaReportActionBar, _saidaReportBackBtn, _launchSaidaGarantiaBtn, _launchSaidaFabricaBtn, _pageSaidaReportContent;
             let _currentFilteredOrderItems = []; // NOVO: Armazena os itens filtrados e ordenados da tabela de pedidos
             let _clearSelectionBtn;
-            let _orderObservationModal, _orderObservationModalInfo, _orderObservationHistory, _orderObservationTextarea, _saveOrderObservationBtn, _cancelOrderObservationBtn, _orderObservationCharCount; // Modal de Observação de Pedido
+            let _orderObservationModal, _orderObservationModalInfo, _orderObservationHistory, _orderObservationTextarea, _saveOrderObservationBtn, _cancelOrderObservationBtn, _orderObservationCharCount, _sendNfeEmailBtn; // Modal de Observação de Pedido
             let _requisitionObservationModal, _requisitionObservationModalInfo, _requisitionObservationHistory, _requisitionObservationTextarea, _saveRequisitionObservationBtn, _cancelRequisitionObservationBtn, _requisitionObservationCharCount; // Modal de Observação Requisição
             let _stockAdjustmentModal, _closeStockAdjustmentModalBtn, _stockAdjustmentProductInfo, _stockAdjustmentCurrentStock, _stockAdjustmentNewQuantity, _stockAdjustmentReason, _confirmStockAdjustmentBtn, _cancelStockAdjustmentBtn; // NOVO: Modal de Ajuste de Estoque
             let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageSaidaReport, _pageReport, _pageGerenciarSaida, _pageGerenciarPedidos, _pageDashboards, _pageAtendimento;
@@ -1196,6 +1200,54 @@ const data = filteredProducts.map(product => {
                 }
             }
 
+            function _findNFByOrderNumber(orderNumber) {
+                // Busca NF-e pela número do pedido em _allNFeData
+                if (typeof _allNFeData === 'undefined' || !Array.isArray(_allNFeData)) {
+                    return null;
+                }
+                const nf = _allNFeData.find(n => 
+                    String(n.numero_da_nota) === String(orderNumber) || 
+                    (n.numero_pedido && String(n.numero_pedido) === String(orderNumber))
+                );
+                return nf || null;
+            }
+
+            async function _sendNFeEmailFromObservation() {
+                const orderId = _orderObservationModal?.dataset.orderId;
+                if (!orderId) {
+                    alert('Erro: Pedido não identificado.');
+                    return;
+                }
+
+                const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
+                const order = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+                
+                if (!order) {
+                    alert('Erro: Pedido não encontrado.');
+                    return;
+                }
+
+                // Busca a NF-e do pedido
+                const nf = _findNFByOrderNumber(order.numero || order.numeroLoja);
+                
+                if (!nf) {
+                    alert('Não há nota fiscal associada a este pedido.');
+                    return;
+                }
+
+                // Enviar email via Outlook
+                if (typeof sendNFeByEmail === 'function') {
+                    sendNFeByEmail(
+                        nf.email_do_cliente || '',
+                        nf.nome_do_cliente || 'Cliente',
+                        nf.numero_da_nota || '',
+                        nf.link_danfe || ''
+                    );
+                } else {
+                    alert('Função de envio de email não disponível.');
+                }
+            }
+
             async function _openOrderObservationModal(orderId) {
                 const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
                 const order = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
@@ -1206,6 +1258,12 @@ const data = filteredProducts.map(product => {
                 if (_orderObservationModal) {
                     _orderObservationModal.dataset.orderId = orderId;
                     _orderObservationModalInfo.innerHTML = `Editando observação para o Pedido Nº: <b>${order.numero || order.numeroLoja || 'N/A'}</b>`;
+                    
+                    // Verificar se há NF-e para este pedido
+                    const nf = _findNFByOrderNumber(order.numero || order.numeroLoja);
+                    if (_sendNfeEmailBtn) {
+                        _sendNfeEmailBtn.style.display = nf ? 'flex' : 'none';
+                    }
                     
                     // Mostrar modal imediatamente com os dados em cache
                     _renderObservationChat(order.observacao);
@@ -3777,7 +3835,8 @@ const data = filteredProducts.map(product => {
                     { label: 'CLIENTE', key: 'nome_do_cliente' },
                     { label: 'VENDEDOR', key: 'nome_do_vendedor' },
                     { label: 'VALOR', key: 'valor_da_nota' },
-                    { label: 'SITUAÇÃO', key: 'situacao' }
+                    { label: 'SITUAÇÃO', key: 'situacao' },
+                    { label: 'AÇÕES', key: 'acoes' }
                 ];
 
                 let tableHtml = `
@@ -3797,14 +3856,22 @@ const data = filteredProducts.map(product => {
                                 ${filteredNFe.map(nfe => {
                     const nfeDate = _parsePtBrDate(nfe.data_de_emissao);
                     const isConferido = nfe.conferido === 'Sim';
+                    const emailCliente = nfe.email_do_cliente || '';
+                    const nomeCliente = nfe.nome_do_cliente || 'Cliente';
+                    const numeroNFe = nfe.numero_da_nota || 'N/A';
+                    const linkDanfe = nfe.link_danfe || '#';
+                    const btnId = `send-nfe-email-${nfe.numero_da_nota}`;
                     return `
                                     <tr class="${isConferido ? 'row-conferido' : 'row-nao-conferido'}">
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600"><a href="${nfe.link_danfe || '#'}" target="_blank" rel="noopener noreferrer">${nfe.numero_da_nota || 'N/A'}</a></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600"><a href="${linkDanfe}" target="_blank" rel="noopener noreferrer">${numeroNFe}</a></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${nfeDate ? nfeDate.toLocaleDateString('pt-BR') : 'N/A'}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${nfe.nome_do_cliente || 'N/A'}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${nomeCliente}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${nfe.nome_do_vendedor || 'N/A'}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${(parseFloat(nfe.valor_da_nota) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${nfe.situacao || 'N/A'}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                            <button id="${btnId}" class="px-3 py-1.5 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded border border-green-200 font-semibold transition-colors cursor-pointer" title="Enviar NF-e por email">📧 Email</button>
+                                        </td>
                                     </tr>
                                 `}).join('')}
                             </tbody>
@@ -3833,6 +3900,21 @@ const data = filteredProducts.map(product => {
                             }
                             _renderNFeDiagnosticTable(storeFilter);
                         });
+                    });
+                    // Adiciona eventos aos botões "Enviar por Email"
+                    filteredNFe.forEach(nfe => {
+                        const btnId = `send-nfe-email-${nfe.numero_da_nota}`;
+                        const btn = _nfeDiagnosticTableContainer.querySelector(`#${btnId}`);
+                        if (btn) {
+                            btn.addEventListener('click', () => {
+                                sendNFeByEmail({
+                                    to: nfe.email_do_cliente || '',
+                                    clientName: nfe.nome_do_cliente || 'Cliente',
+                                    nfNumber: nfe.numero_da_nota || 'N/A',
+                                    nfLink: nfe.link_danfe || '#'
+                                });
+                            });
+                        }
                     });
                 }
             }
@@ -4030,6 +4112,22 @@ const data = filteredProducts.map(product => {
                         _showPage('atendimento'); // <--- Apenas mostre a "página"
                     });
                 }
+                if (_navTransportadoras) {
+                    _navTransportadoras.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (typeof TransportadorasApp !== 'undefined' && TransportadorasApp.openModal) {
+                            TransportadorasApp.openModal();
+                        }
+                    });
+                }
+                const transportadorasActionBtn = document.getElementById('transportadoras-action-btn');
+                if (transportadorasActionBtn) {
+                    transportadorasActionBtn.addEventListener('click', () => {
+                        if (typeof TransportadorasApp !== 'undefined' && TransportadorasApp.openModal) {
+                            TransportadorasApp.openModal();
+                        }
+                    });
+                }
                 if (_cancelOrderObservationBtn) {
                     _cancelOrderObservationBtn.addEventListener('click', () => {
                         if (_orderObservationModal) _orderObservationModal.classList.add('hidden');
@@ -4040,6 +4138,9 @@ const data = filteredProducts.map(product => {
                 }
                 if (_saveOrderObservationBtn) {
                     _saveOrderObservationBtn.addEventListener('click', _saveOrderObservation);
+                }
+                if (_sendNfeEmailBtn) {
+                    _sendNfeEmailBtn.addEventListener('click', _sendNFeEmailFromObservation);
                 }
                 
 // NOVO: Listeners para o modal de relatório de produtos
@@ -4228,6 +4329,7 @@ if (_generateProductReportBtn) {
                 _navGerenciarPedidos = document.getElementById('nav-gerenciar-pedidos');
                 _navDashboards = document.getElementById('nav-dashboards');
                 _navAtendimento = document.getElementById('nav-atendimento');
+                _navTransportadoras = document.getElementById('nav-transportadoras');
                 _refreshButton = document.getElementById('refresh-button');
                 _loadingOverlay = document.getElementById('loading-overlay');
                 _globalFilterBar = document.getElementById('global-filter-bar');
@@ -4338,6 +4440,7 @@ if (_generateProductReportBtn) {
                 _saveOrderObservationBtn = document.getElementById('save-order-observation-btn');
                 _cancelOrderObservationBtn = document.getElementById('cancel-order-observation-btn');
                 _orderObservationCharCount = document.getElementById('order-observation-char-count');
+                _sendNfeEmailBtn = document.getElementById('send-nfe-email-btn');
                 // NOVO: Cache dos elementos do modal de observação de requisição
                 _requisitionObservationModal = document.getElementById('requisition-observation-modal');
                 _requisitionObservationModalInfo = document.getElementById('requisition-observation-modal-info');
