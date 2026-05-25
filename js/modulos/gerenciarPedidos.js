@@ -14,6 +14,8 @@ export const GerenciarPedidosApp = (function () {
     let _startDateInput, _endDateInput, _dateRadios, _clearFiltersBtn, _statusSelect, _yearFilter;
     let _paginationContainer, _paginationTopContainer, _tableHeaders;
     let _selectAllCheckbox, _batchActionsContainer, _selectedCountSpan, _batchAttendBtn;
+    let _transportadorasBtn, _transportadorasModal, _closeTransportadorasModalBtn;
+    let _transportadorasListView, _transportadoraFormView, _addTransportadoraBtn;
     let _isInitialized = false;
     let _lastHoveredRowId = null;
     let _currentModalPedidoId = null; // ID do pedido aberto no modal
@@ -161,10 +163,19 @@ export const GerenciarPedidosApp = (function () {
     function _bindEvents() {
         // Eventos para Transportadoras
         if (_transportadorasBtn) _transportadorasBtn.addEventListener('click', _openTransportadorasModal);
-        if (_closeTransportadorasModalBtn) _closeTransportadorasModalBtn.addEventListener('click', () => {
+        if (_closeTransportadorasModalBtn) _closeTransportadorasModalBtn.addEventListener('click', function() {
             if (_transportadorasModal) _transportadorasModal.classList.add('hidden');
         });
-        if (_addTransportadoraBtn) _addTransportadoraBtn.addEventListener('click', _showTransportadoraForm);
+        if (_addTransportadoraBtn) _addTransportadoraBtn.addEventListener('click', function() { _showTransportadoraForm(); });
+
+        const cancelTranspBtn = document.getElementById('cancel-transportadora-btn');
+        if (cancelTranspBtn) cancelTranspBtn.addEventListener('click', function() {
+            if (_transportadorasListView) _transportadorasListView.classList.remove('hidden');
+            if (_transportadoraFormView) _transportadoraFormView.classList.add('hidden');
+        });
+
+        const saveTranspBtn = document.getElementById('transp-save-btn');
+        if (saveTranspBtn) saveTranspBtn.addEventListener('click', _saveTransportadora);
 
         if (_searchInput) {
             _searchInput.addEventListener('input', debounce(_filterPedidos, 300));
@@ -2970,4 +2981,198 @@ export const GerenciarPedidosApp = (function () {
             }
         }
     };
+    // ============================================================
+    // MÓDULO: GERENCIAR TRANSPORTADORAS
+    // ============================================================
+
+    function _openTransportadorasModal() {
+        if (!_transportadorasModal) return;
+        _transportadorasModal.classList.remove('hidden');
+        if (_transportadorasListView) _transportadorasListView.classList.remove('hidden');
+        if (_transportadoraFormView) _transportadoraFormView.classList.add('hidden');
+        _loadTransportadoras();
+    }
+
+    function _showTransportadoraForm(editData = null) {
+        if (!_transportadorasModal) return;
+        if (_transportadorasListView) _transportadorasListView.classList.add('hidden');
+        if (_transportadoraFormView) _transportadoraFormView.classList.remove('hidden');
+
+        const form = document.getElementById('transportadora-form');
+        if (form) form.reset();
+        const idInput = document.getElementById('transp-id');
+        if (idInput) idInput.value = '';
+
+        const title = document.getElementById('transportadora-form-title');
+
+        if (editData) {
+            if (idInput) idInput.value = editData.id || '';
+            const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+            setVal('transp-nome', editData.nome);
+            setVal('transp-cnpj', editData.cnpj);
+            setVal('transp-telefone', editData.telefone);
+            setVal('transp-placa', editData.placa);
+            setVal('transp-uf', editData.uf);
+            if (title) title.innerText = 'Editar Transportadora';
+        } else {
+            if (title) title.innerText = 'Cadastrar Transportadora';
+        }
+
+        const successMsg = document.getElementById('transp-form-success');
+        if (successMsg) successMsg.classList.add('hidden');
+        const errorMsg = document.getElementById('transp-form-error');
+        if (errorMsg) errorMsg.classList.add('hidden');
+    }
+
+    async function _loadTransportadoras() {
+        const tbody = document.getElementById('transportadoras-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500"><div class="flex flex-col items-center justify-center space-y-2"><svg class="w-8 h-8 animate-spin text-green-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-sm font-medium">Carregando transportadoras...</span></div></td></tr>';
+
+        try {
+            const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+            const resp = await fetch(API_URLS.TRANSPORTADORAS, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            _renderTransportadorasList(Array.isArray(data) ? data : (data.transportadoras || []));
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-red-500 font-medium">Erro ao carregar transportadoras. Tente novamente.</td></tr>';
+            console.error('[Transportadoras] Erro ao buscar:', e);
+        }
+    }
+
+    function _renderTransportadorasList(list) {
+        const tbody = document.getElementById('transportadoras-table-body');
+        if (!tbody) return;
+
+        if (!list || list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">Nenhuma transportadora cadastrada.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        list.forEach(function(item) {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-gray-50 transition-colors';
+            tr.dataset.id = item.id;
+            const placaUf = [item.placa, item.uf].filter(Boolean).join(' / ') || '-';
+            tr.innerHTML =
+                '<td class="px-6 py-3 text-sm text-gray-500 font-mono">' + (item.id || '') + '</td>' +
+                '<td class="px-6 py-3 text-sm font-semibold text-gray-800">' + (item.nome || '') + '</td>' +
+                '<td class="px-6 py-3 text-sm text-gray-600">' + (item.cnpj || '-') + '</td>' +
+                '<td class="px-6 py-3 text-sm text-gray-600">' + (item.telefone || '-') + '</td>' +
+                '<td class="px-6 py-3 text-sm text-gray-600">' + placaUf + '</td>' +
+                '<td class="px-6 py-3 text-right space-x-2">' +
+                    '<button class="transp-edit-btn px-3 py-1 bg-yellow-400 hover:bg-yellow-500 text-white rounded-lg text-xs font-bold transition-colors" data-id="' + item.id + '">Editar</button>' +
+                    '<button class="transp-del-btn px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition-colors" data-id="' + item.id + '">Excluir</button>' +
+                '</td>';
+            tbody.appendChild(tr);
+        });
+
+        const newTbody = tbody.cloneNode(true);
+        tbody.parentNode.replaceChild(newTbody, tbody);
+        newTbody.addEventListener('click', function(e) {
+            const editBtn = e.target.closest('.transp-edit-btn');
+            const delBtn  = e.target.closest('.transp-del-btn');
+            if (editBtn) {
+                const row = editBtn.closest('tr');
+                const cells = row.querySelectorAll('td');
+                const placaUfArr = cells[4].innerText.split('/');
+                _showTransportadoraForm({
+                    id:       row.dataset.id,
+                    nome:     cells[1].innerText.trim(),
+                    cnpj:     cells[2].innerText.trim() === '-' ? '' : cells[2].innerText.trim(),
+                    telefone: cells[3].innerText.trim() === '-' ? '' : cells[3].innerText.trim(),
+                    placa:    placaUfArr[0] ? placaUfArr[0].trim() : '',
+                    uf:       placaUfArr[1] ? placaUfArr[1].trim() : ''
+                });
+            }
+            if (delBtn) {
+                if (confirm('Deseja realmente excluir esta transportadora?')) {
+                    _deleteTransportadora(delBtn.dataset.id);
+                }
+            }
+        });
+    }
+
+    async function _deleteTransportadora(id) {
+        try {
+            const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+            const resp = await fetch(API_URLS.TRANSPORTADORAS + '/' + id, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            _loadTransportadoras();
+        } catch (e) {
+            alert('Erro ao excluir transportadora. Tente novamente.');
+            console.error('[Transportadoras] Erro ao excluir:', e);
+        }
+    }
+
+    async function _saveTransportadora() {
+        const id       = (document.getElementById('transp-id') || {}).value || '';
+        const nome     = ((document.getElementById('transp-nome') || {}).value || '').trim();
+        const cnpj     = ((document.getElementById('transp-cnpj') || {}).value || '').trim();
+        const telefone = ((document.getElementById('transp-telefone') || {}).value || '').trim();
+        const placa    = ((document.getElementById('transp-placa') || {}).value || '').trim();
+        const uf       = ((document.getElementById('transp-uf') || {}).value || '').trim();
+
+        const errorMsg   = document.getElementById('transp-form-error');
+        const successMsg = document.getElementById('transp-form-success');
+
+        if (errorMsg)   errorMsg.classList.add('hidden');
+        if (successMsg) successMsg.classList.add('hidden');
+
+        if (!nome) {
+            if (errorMsg) { errorMsg.innerText = 'O campo Nome e obrigatorio.'; errorMsg.classList.remove('hidden'); }
+            return;
+        }
+
+        if (cnpj) {
+            const cnpjRegex = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
+            if (!cnpjRegex.test(cnpj)) {
+                if (errorMsg) { errorMsg.innerText = 'CNPJ invalido. Use o formato 00.000.000/0000-00.'; errorMsg.classList.remove('hidden'); }
+                return;
+            }
+        }
+
+        const payload = { nome: nome, cnpj: cnpj, telefone: telefone, placa: placa, uf: uf };
+        const isEdit  = !!id.trim();
+        const url     = isEdit ? (API_URLS.TRANSPORTADORAS + '/' + id.trim()) : API_URLS.TRANSPORTADORAS;
+        const method  = isEdit ? 'PUT' : 'POST';
+        const token   = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+
+        const saveBtn = document.getElementById('transp-save-btn');
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.innerText = 'Salvando...'; }
+
+        try {
+            const resp = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify(payload)
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+            if (successMsg) {
+                successMsg.innerText = isEdit ? 'Transportadora atualizada com sucesso!' : 'Transportadora cadastrada com sucesso!';
+                successMsg.classList.remove('hidden');
+            }
+
+            const form = document.getElementById('transportadora-form');
+            if (form) form.reset();
+            const idEl = document.getElementById('transp-id');
+            if (idEl) idEl.value = '';
+            const title = document.getElementById('transportadora-form-title');
+            if (title) title.innerText = 'Cadastrar Transportadora';
+
+        } catch (e) {
+            if (errorMsg) { errorMsg.innerText = 'Erro ao salvar. Tente novamente.'; errorMsg.classList.remove('hidden'); }
+            console.error('[Transportadoras] Erro ao salvar:', e);
+        } finally {
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = 'Salvar'; }
+        }
+    }
 })();
