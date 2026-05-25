@@ -160,9 +160,9 @@ export const DashboardApp = (function() {
         if (!trigger || !_dom.customProductTooltip) return;
 
         const itemsRaw = trigger.dataset.liItems || '';
-        const subtotal = parseFloat(trigger.dataset.liSubtotal) || 0;
-        const frete = parseFloat(trigger.dataset.liFreight) || 0;
-        const total = parseFloat(trigger.dataset.liTotal) || 0;
+        const subtotal = _parseCurrencyBRL(trigger.dataset.liSubtotal) || 0;
+        const frete = _parseCurrencyBRL(trigger.dataset.liFreight) || 0;
+        const total = _parseCurrencyBRL(trigger.dataset.liTotal) || 0;
         const numero = trigger.dataset.liNumber || '';
 
         const items = itemsRaw.split(';').filter(s => s.trim() !== '').map(s => s.trim());
@@ -212,7 +212,7 @@ export const DashboardApp = (function() {
             return itemsString.map(item => ({
                 codigo: String(item.codigo || item.código || item.codigo_service || "").trim(),
                 quantidade: parseFloat(item.quantidade || 0),
-                valor: parseFloat(item.valor || item.valor_unitario || item.preco || 0)
+                valor: _parseCurrencyBRL(item.valor || item.valor_unitario || item.preco || 0)
             }));
         }
 
@@ -2153,7 +2153,7 @@ export const DashboardApp = (function() {
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" 
                     data-itens="${itensRaw}" 
-                    data-frete="${nfe ? (parseFloat(nfe.valor_do_frete) || 0) : 0}" 
+                    data-frete="${nfe ? (_parseCurrencyBRL(nfe.valor_do_frete) || 0) : 0}" 
                     data-valor-total="${totalValue}">
                     <div class="text-sm font-medium text-gray-900 truncate max-w-[200px]" title="${p.contato_nome || p['contato nome'] || '-'}">${p.contato_nome || p['contato nome'] || '-'}</div>
                 </td>
@@ -2195,8 +2195,8 @@ export const DashboardApp = (function() {
         const items = _parseNfeItemsString(trigger.dataset.itens);
         if (items.length === 0) return;
 
-        const frete = parseFloat(trigger.dataset.frete || 0);
-        const valorNotaReal = parseFloat(trigger.dataset.valorTotal || 0);
+        const frete = _parseCurrencyBRL(trigger.dataset.frete) || 0;
+        const valorNotaReal = _parseCurrencyBRL(trigger.dataset.valorTotal) || 0;
         const subtotal = items.reduce((s, i) => s + (i.valor * i.quantidade), 0);
 
         // Calcula o desconto pela diferença (Fórmula: Desconto = (Subtotal + Frete) - Valor Total Real)
@@ -2230,7 +2230,7 @@ export const DashboardApp = (function() {
 
         const name = trigger.dataset.sellerName;
         const sales = _currentSalesDetails.filter(n => n.nome_do_vendedor === name);
-        const total = sales.reduce((s, n) => s + (parseFloat(n.valor_da_nota) || 0), 0);
+        const total = sales.reduce((s, n) => s + (_parseCurrencyBRL(n.valor_da_nota) || 0), 0);
 
         _dom.customProductTooltip.innerHTML = `
             <div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 text-xs">
@@ -2269,7 +2269,7 @@ export const DashboardApp = (function() {
                 const nfeId = String(rawNfeId).split('.')[0].trim();
                 const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
                 
-                const totalValue = parseFloat(p.total_pedido || p['total pedido'] || p.valor_total || p.total_venda || p.total || p.valortotal || 0) || 0;
+                const totalValue = _parseCurrencyBRL(p.total_pedido || p['total pedido'] || p.valor_total || p.total_venda || p.total || p.valortotal || 0) || 0;
                 
                 return [
                     nfe ? nfe.numero_da_nota : (p.numero || p.número || '-'), 
@@ -2294,8 +2294,8 @@ export const DashboardApp = (function() {
 
                 items.forEach(i => {
                     const product = _allProducts.find(prod => String(prod.codigo) === String(i.codigo));
-                    const custoUnitario = product ? (parseFloat(product.preco_de_custo) || 0) : 0;
-                    const vendaUnitario = parseFloat(i.valor) || 0;
+                    const custoUnitario = _parseCurrencyBRL(product ? product.preco_de_custo : 0) || 0;
+                    const vendaUnitario = _parseCurrencyBRL(i.valor) || 0;
                     const quantidade = parseFloat(i.quantidade) || 0;
 
                     const totalVenda = quantidade * vendaUnitario;
