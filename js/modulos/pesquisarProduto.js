@@ -29,7 +29,15 @@ export const PesquisarProduto = (function() {
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                ${_utils.createDetailItem('Preço', (product.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))}
+                <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Preço</p>
+                        <p class="text-lg text-gray-800 font-bold product-detail-price">${(product.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                    <button class="read-only-disable edit-product-price-btn p-2 rounded-full hover:bg-gray-200 text-blue-600" data-product-id="${product.id}" title="Editar Preço">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
+                    </button>
+                </div>
                 
                 <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
                     <div>
@@ -359,6 +367,11 @@ export const PesquisarProduto = (function() {
                 if (editCostPriceBtn && typeof config.openProductCostPriceEditModal === 'function') {
                     config.openProductCostPriceEditModal(editCostPriceBtn.dataset.productId);
                 }
+
+                const editPriceBtn = event.target.closest('.edit-product-price-btn');
+                if (editPriceBtn && typeof config.openProductPriceEditModal === 'function') {
+                    config.openProductPriceEditModal(editPriceBtn.dataset.productId);
+                }
             });
         }
     }
@@ -395,6 +408,21 @@ export const PesquisarProduto = (function() {
 
         if (String(_activeProductId) === String(productId) && _dom.product_details) {
             const priceElement = _dom.product_details.querySelector('.product-detail-cost-price');
+            if (priceElement) {
+                const formattedPrice = novoPreco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                priceElement.textContent = formattedPrice;
+                priceElement.classList.add('text-green-600', 'scale-110', 'transition-all', 'duration-300');
+                setTimeout(() => priceElement.classList.remove('text-green-600', 'scale-110'), 2000);
+            }
+        }
+    }
+
+    function updateProductPriceDisplay(productId, novoPreco) {
+        const product = _allProducts.find(p => String(p.id) === String(productId));
+        if (product) product.preco = novoPreco;
+
+        if (String(_activeProductId) === String(productId) && _dom.product_details) {
+            const priceElement = _dom.product_details.querySelector('.product-detail-price');
             if (priceElement) {
                 const formattedPrice = novoPreco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 priceElement.textContent = formattedPrice;
@@ -446,6 +474,7 @@ export const PesquisarProduto = (function() {
         updateProductLocationDisplay,
         updateProductCodeDisplay,
         updateProductCostPriceDisplay,
+        updateProductPriceDisplay,
         updateProductTagGroupDisplay,
         generateCatalog,
         setAllProducts,

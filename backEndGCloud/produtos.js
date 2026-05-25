@@ -213,7 +213,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
      */
     router.put('/:id', async (req, res, next) => {
         const idProduto = req.params.id;
-        const { nome, localizacao, codigo, preco_de_custo, grupo_tag_id } = req.body;
+        const { nome, localizacao, codigo, preco_de_custo, preco, grupo_tag_id } = req.body;
 
     // Mapa fixo dos IDs de tags para labels legíveis
     // Mapa fixo dos IDs reais de camposCustomizados para labels legíveis (com acentuação correspondente à planilha)
@@ -230,8 +230,8 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
         if (nome) console.log(` > Novo Nome: ${nome}`);
         if (localizacao !== undefined) console.log(` > Nova Localização: ${localizacao}`);
 
-        if (!nome && localizacao === undefined && !codigo && preco_de_custo === undefined && grupo_tag_id === undefined) {
-            return res.status(400).json({ error: "Nome, localização, código, preço de custo ou grupo de tags do produto deve ser informado." });
+        if (!nome && localizacao === undefined && !codigo && preco_de_custo === undefined && preco === undefined && grupo_tag_id === undefined) {
+            return res.status(400).json({ error: "Nome, localização, código, preço de custo, preço ou grupo de tags do produto deve ser informado." });
         }
 
         try {
@@ -265,7 +265,8 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 ...productData,
                 nome: nome || currentProduct.nome,
                 codigo: codigo || currentProduct.codigo,
-                precoCusto: preco_de_custo !== undefined ? parseFloat(preco_de_custo) : currentProduct.precoCusto
+                precoCusto: preco_de_custo !== undefined ? parseFloat(preco_de_custo) : currentProduct.precoCusto,
+                preco: preco !== undefined ? parseFloat(preco) : currentProduct.preco
             };
 
             const productCode = codigo || currentProduct.codigo || '';
@@ -359,6 +360,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             const localizacaoColIndex = normalizedHeaders.indexOf('localizacao');
             const codigoColIndex = normalizedHeaders.indexOf('codigo');
             const precoCustoColIndex = normalizedHeaders.indexOf('preco_de_custo');
+            const precoColIndex = normalizedHeaders.indexOf('preco');
             const grupoTagsColIndex = normalizedHeaders.indexOf('grupo_de_tags_tags');
 
             if (idColIndex === -1) {
@@ -428,6 +430,15 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                         spreadsheetId, range: updatePriceRange, valueInputOption: 'USER_ENTERED', resource: { values: [[preco_de_custo]] }
                     });
                 }
+
+                // NOVO: Atualiza Preço de Venda se houver
+                if (preco !== undefined && precoColIndex !== -1) {
+                    const updatePriceSaleRange = `'${sheetNameProdutos}'!${colToA1(precoColIndex)}${rowIndex}`;
+                    console.log(`[Sheets] Atualizando preço na linha ${rowIndex}`);
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId, range: updatePriceSaleRange, valueInputOption: 'USER_ENTERED', resource: { values: [[preco]] }
+                    });
+                }
                 // NOVO: Atualiza Grupo de Tags se houver
                 if (grupo_tag_id !== undefined && grupoTagsColIndex !== -1) {
                     const updateTagRange = `'${sheetNameProdutos}'!${colToA1(grupoTagsColIndex)}${rowIndex}`;
@@ -449,6 +460,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                     novoNome: nome || currentProduct.nome || null,
                     novaLocalizacao: localizacao !== undefined ? localizacao : (currentProduct.estoque?.localizacao ?? null),
                     novoPrecoCusto: preco_de_custo !== undefined ? preco_de_custo : (currentProduct.precoCusto ?? currentProduct.fornecedor?.precoCusto ?? null),
+                    novoPreco: preco !== undefined ? preco : (currentProduct.preco ?? null),
                     novoGrupoTags: novoGrupoLabel ?? null
                 });
             }

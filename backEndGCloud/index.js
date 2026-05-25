@@ -87,6 +87,7 @@ const SHEET_NAME_LOJA_INTEGRADA_CONFIG = 'configuracaoLojaIntegrada'; // <-- ADI
 const SHEET_NAME_PEDIDOS_BLING = 'PedidosBling'; // NOVO
 const SHEET_NAME_PEDIDOS_COMPRAS = 'Pedidos Compras'; // ENTRADAS NF-e
 const SHEET_NAME_PECAS_EQUIPAMENTO = 'Pecas_Equipamento'; // Árvore de peças por equipamento
+const SHEET_NAME_TRANSPORTADORAS = 'Transportadoras'; // Cadastro de Transportadoras
 
 
 // URLs
@@ -868,6 +869,16 @@ const produtosRouter = createProdutosRouter(
     notifySync                    // Injetando Firestore Sync
 );
 app.use('/produtos', produtosRouter);
+
+// --- ROTEADOR DE TRANSPORTADORAS (NOVO) ---
+const createTransportadorasRouter = require('./transportadoras.js');
+const transportadorasRouter = createTransportadorasRouter(
+    getInitializedSheetsClient,
+    SPREADSHEET_ID_ESTOQUE,
+    SHEET_NAME_TRANSPORTADORAS,
+    notifySync
+);
+app.use('/transportadoras', transportadorasRouter);
 
 const createLojaIntegradaRouter = require('./loja_integrada.js');
 const lojaIntegradaRouter = createLojaIntegradaRouter(

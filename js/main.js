@@ -125,6 +125,7 @@
                             if (data.novaLocalizacao !== undefined) pIdx.localizacao = data.novaLocalizacao;
                             if (data.codigo) pIdx.codigo = data.codigo;
                             if (data.novoPrecoCusto !== undefined) pIdx.preco_de_custo = data.novoPrecoCusto;
+                            if (data.novoPreco !== undefined) pIdx.preco = data.novoPreco;
                             if (data.novoGrupoTags !== undefined) pIdx.grupo_de_tags_tags = data.novoGrupoTags ? [data.novoGrupoTags] : [];
 
                             // Atualiza exibições
@@ -133,6 +134,7 @@
                                 if (data.novaLocalizacao !== undefined) PesquisarProduto.updateProductLocationDisplay(data.id, data.novaLocalizacao);
                                 if (data.codigo) PesquisarProduto.updateProductCodeDisplay(data.id, data.codigo);
                                 if (data.novoPrecoCusto !== undefined) PesquisarProduto.updateProductCostPriceDisplay(data.id, data.novoPrecoCusto);
+                                if (data.novoPreco !== undefined) PesquisarProduto.updateProductPriceDisplay(data.id, data.novoPreco);
                                 if (data.novoGrupoTags !== undefined) PesquisarProduto.updateProductTagGroupDisplay(data.id, data.novoGrupoTags || 'N/A');
                             }
                             
@@ -738,6 +740,7 @@
             let _productLocationEditModal, _closeProductLocationEditModalBtn, _productLocationEditInfo, _productLocationEditInput, _productLocationEditLoading, _productLocationEditSuccess, _cancelProductLocationEditBtn, _confirmProductLocationEditBtn;
             let _productCodeEditModal, _closeProductCodeEditModalBtn, _productCodeEditInfo, _productCodeEditInput, _productCodeEditLoading, _productCodeEditSuccess, _cancelProductCodeEditBtn, _confirmProductCodeEditBtn;
             let _productCostPriceEditModal, _closeProductCostPriceEditModalBtn, _productCostPriceEditInfo, _productCostPriceEditInput, _productCostPriceEditLoading, _productCostPriceEditSuccess, _cancelProductCostPriceEditBtn, _confirmProductCostPriceEditBtn;
+            let _productPriceEditModal, _closeProductPriceEditModalBtn, _productPriceEditInfo, _productPriceEditInput, _productPriceEditLoading, _productPriceEditSuccess, _cancelProductPriceEditBtn, _confirmProductPriceEditBtn;
             let _productTagGroupEditModal, _closeProductTagGroupEditModalBtn, _productTagGroupEditInfo, _productTagGroupEditSelect, _productTagGroupEditLoading, _productTagGroupEditSuccess, _cancelProductTagGroupEditBtn, _confirmProductTagGroupEditBtn;
 
             // --- FUNÇÕES DE UTILIDADE PRIVADAS ---
@@ -4418,6 +4421,16 @@ _productCostPriceEditSuccess = document.getElementById('product-cost-price-edit-
 _cancelProductCostPriceEditBtn = document.getElementById('cancel-product-cost-price-edit-btn');
 _confirmProductCostPriceEditBtn = document.getElementById('confirm-product-cost-price-edit-btn');
 
+// NOVO: Cache dos elementos do modal de edição de preço de venda
+_productPriceEditModal = document.getElementById('product-price-edit-modal');
+_closeProductPriceEditModalBtn = document.getElementById('close-product-price-edit-modal-btn');
+_productPriceEditInfo = document.getElementById('product-price-edit-info');
+_productPriceEditInput = document.getElementById('product-price-edit-input');
+_productPriceEditLoading = document.getElementById('product-price-edit-loading');
+_productPriceEditSuccess = document.getElementById('product-price-edit-success');
+_cancelProductPriceEditBtn = document.getElementById('cancel-product-price-edit-btn');
+_confirmProductPriceEditBtn = document.getElementById('confirm-product-price-edit-btn');
+
 // NOVO: Cache dos elementos do modal de edição de grupo de tags
 _productTagGroupEditModal = document.getElementById('product-tag-group-edit-modal');
 _closeProductTagGroupEditModalBtn = document.getElementById('close-product-tag-group-edit-modal-btn');
@@ -4559,6 +4572,21 @@ if (_cancelProductCostPriceEditBtn) {
 }
 if (_confirmProductCostPriceEditBtn) {
     _confirmProductCostPriceEditBtn.addEventListener('click', _saveProductCostPriceEdit);
+}
+}
+
+/**
+* NOVO: Vincula os eventos dos botões do modal de edição de preço de venda do produto.
+*/
+function _bindProductPriceEditModalEvents() {
+if (_closeProductPriceEditModalBtn) {
+    _closeProductPriceEditModalBtn.addEventListener('click', () => _productPriceEditModal.classList.add('hidden'));
+}
+if (_cancelProductPriceEditBtn) {
+    _cancelProductPriceEditBtn.addEventListener('click', () => _productPriceEditModal.classList.add('hidden'));
+}
+if (_confirmProductPriceEditBtn) {
+    _confirmProductPriceEditBtn.addEventListener('click', _saveProductPriceEdit);
 }
 }
 
@@ -4740,6 +4768,95 @@ try {
 }
 }
 
+/**
+* NOVO: Abre o modal para editar o preço de venda do produto.
+*/
+function _openProductPriceEditModal(productId) {
+const product = _allProducts.find(p => String(p.id) === String(productId));
+if (!product) {
+    _showMessageModal("Erro", "Produto não encontrado para editar o preço de venda.");
+    return;
+}
+
+if (_productPriceEditModal) {
+    _productPriceEditModal.dataset.productId = product.id;
+    if (_productPriceEditInfo) _productPriceEditInfo.innerHTML = `Editando preço do produto: <b>${product.descricao}</b>`;
+    if (_productPriceEditInput) _productPriceEditInput.value = product.preco || 0;
+
+    // Reseta estados de feedback
+    if (_productPriceEditLoading) _productPriceEditLoading.classList.add('hidden');
+    if (_productPriceEditSuccess) _productPriceEditSuccess.classList.add('hidden');
+    if (_confirmProductPriceEditBtn) _confirmProductPriceEditBtn.disabled = false;
+
+    _productPriceEditModal.classList.remove('hidden');
+    if (_productPriceEditInput) _productPriceEditInput.focus();
+}
+}
+
+/**
+* NOVO: Salva a alteração do preço de venda do produto no backend.
+*/
+async function _saveProductPriceEdit() {
+const productId = _productPriceEditModal.dataset.productId;
+const novoPreco = parseFloat(_productPriceEditInput.value);
+
+if (isNaN(novoPreco)) {
+    _showMessageModal("Valor Inválido", "Por favor, digite um valor numérico válido para o preço.");
+    return;
+}
+
+const product = _allProducts.find(p => String(p.id) === String(productId));
+if (novoPreco === (product.preco || 0)) {
+    _productPriceEditModal.classList.add('hidden');
+    return;
+}
+
+// UI Feedback
+_confirmProductPriceEditBtn.disabled = true;
+_productPriceEditLoading.classList.remove('hidden');
+
+try {
+    const payload = {
+        preco: novoPreco,
+        codigo: product.codigo // Mantém o código atual para satisfazer a validação do backend antigo
+    };
+
+    const response = await fetch(`${API_BASE_URL}/produtos/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro ao atualizar preço do produto.");
+    }
+
+    // Atualiza localmente o objeto _allProducts
+    if (product) product.preco = novoPreco;
+
+    // Atualiza a interface se o módulo PesquisarProduto estiver ativo
+    if (typeof PesquisarProduto !== 'undefined') {
+        PesquisarProduto.updateProductPriceDisplay(productId, novoPreco);
+    }
+
+    // Feedback de Sucesso
+    _productPriceEditLoading.classList.add('hidden');
+    _productPriceEditSuccess.classList.remove('hidden');
+
+    // Fecha o modal após um pequeno delay
+    setTimeout(() => {
+        _productPriceEditModal.classList.add('hidden');
+    }, 1500);
+
+} catch (error) {
+    console.error("[App] Erro ao editar preço de venda:", error);
+    _productPriceEditLoading.classList.add('hidden');
+    _confirmProductPriceEditBtn.disabled = false;
+    _showMessageModal("Erro na Atualização", `Falha ao atualizar preço: ${error.message}`);
+}
+}
+
 
 
 // Mapa fixo dos IDs reais dos campos customizados do Bling e do Sheets
@@ -4903,6 +5020,7 @@ async function _saveProductTagGroupEdit() {
                     _bindProductLocationEditModalEvents(); // NOVO
                     _bindProductCodeEditModalEvents(); // NOVO
                     _bindProductCostPriceEditModalEvents(); // NOVO
+                    _bindProductPriceEditModalEvents(); // NOVO
                     _bindProductTagGroupEditModalEvents(); // NOVO
                     if (typeof SaidaItens !== 'undefined') {
                         SaidaItens.init({
@@ -4978,6 +5096,7 @@ async function _saveProductTagGroupEdit() {
                             openProductLocationEditModal: _openProductLocationEditModal,
                             openProductCodeEditModal: _openProductCodeEditModal,
                             openProductCostPriceEditModal: _openProductCostPriceEditModal,
+                            openProductPriceEditModal: _openProductPriceEditModal,
                             openProductTagGroupEditModal: _openProductTagGroupEditModal
                         });
                     }

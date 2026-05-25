@@ -50,4 +50,7 @@
     
           // Edição de Status de Item de Pedido
           UPDATE_ITEM_STATUS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos/update-item-status",
+
+          // Gestão de Transportadoras
+          TRANSPORTADORAS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/transportadoras",
       };

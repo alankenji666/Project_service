@@ -122,6 +122,14 @@ export const GerenciarPedidosApp = (function () {
         _selectedCountSpan = document.getElementById('pedidos-selected-count');
         _batchAttendBtn = document.getElementById('pedidos-batch-attend-btn');
 
+        // Novos elementos para transportadoras
+        _transportadorasBtn = document.getElementById('pedidos-transportadoras-btn');
+        _transportadorasModal = document.getElementById('transportadoras-modal');
+        _closeTransportadorasModalBtn = document.getElementById('close-transportadoras-modal-btn');
+        _transportadorasListView = document.getElementById('transportadoras-list-view');
+        _transportadoraFormView = document.getElementById('transportadora-form-view');
+        _addTransportadoraBtn = document.getElementById('add-transportadora-btn');
+
         // Elementos da Linha de Produção
         _state.linhaProducaoBtn = document.getElementById('pedidos-linha-producao-btn');
         _state.linhaProducaoModal = document.getElementById('production-line-modal');
@@ -151,6 +159,13 @@ export const GerenciarPedidosApp = (function () {
     }
 
     function _bindEvents() {
+        // Eventos para Transportadoras
+        if (_transportadorasBtn) _transportadorasBtn.addEventListener('click', _openTransportadorasModal);
+        if (_closeTransportadorasModalBtn) _closeTransportadorasModalBtn.addEventListener('click', () => {
+            if (_transportadorasModal) _transportadorasModal.classList.add('hidden');
+        });
+        if (_addTransportadoraBtn) _addTransportadoraBtn.addEventListener('click', _showTransportadoraForm);
+
         if (_searchInput) {
             _searchInput.addEventListener('input', debounce(_filterPedidos, 300));
         }
