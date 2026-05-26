@@ -1,0 +1,53 @@
+{
+  "headers": [
+    "Codigo",
+    "Nome",
+    "Fantasia",
+    "Endereco",
+    "Numero",
+    "Complemento",
+    "Bairro",
+    "Cidade",
+    "Estado",
+    "CEP",
+    "CNPJ",
+    "Inscricao_Estadual",
+    "Telefone",
+    "Email",
+    "Website",
+    "Contato",
+    "Tipo",
+    "Ativo",
+    "Data_Inclusao",
+    "Faz_Coleta"
+  ],
+  "exemplo": {
+    "Codigo": "001",
+    "Nome": "TRANSPEROLA TRANSPORTES RODOVIARIOS LTDA",
+    "Fantasia": "TRANSPEROLA",
+    "Endereco": "AVENIDA PAPA JOAO PAULO I",
+    "Numero": "1735",
+    "Complemento": "",
+    "Bairro": "VILA AEROPORTO",
+    "Cidade": "Guarulhos",
+    "Estado": "SP",
+    "CEP": "07170-350",
+    "CNPJ": "44.433.407/0001-88",
+    "Inscricao_Estadual": "",
+    "Telefone": "(11) 2431-5651",
+    "Email": "fabiano@transperola.com.br",
+    "Website": "www.transperola.com.br",
+    "Contato": "Fabiano",
+    "Tipo": "Transportadora",
+    "Ativo": "Sim",
+    "Data_Inclusao": "21/05/2026",
+    "Faz_Coleta": "Sim"
+  },
+  "instrucoes": {
+    "passo_1": "Abra a planilha: https://docs.google.com/spreadsheets/d/11EqlFOTNfCiCl-sVlTjNzAK7feWcMJH8VFfOAgUXRSo/edit",
+    "passo_2": "Acesse a aba 'Transportadoras'",
+    "passo_3": "Cole os headers na linha 1 (A1:T1)",
+    "passo_4": "Copie os dados do exemplo na linha 2 (A2:T2)",
+    "passo_5": "Pronto! Os endpoints já funcionarão"
+  }
+}

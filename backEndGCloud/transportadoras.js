@@ -1,328 +1,420 @@
+/**
+ * transportadoras.js
+ * 
+ * Módulo para gerenciar transportadoras.
+ * Operações: GET (listar), POST (criar), PATCH (editar), DELETE (excluir)
+ */
+
 const express = require('express');
 
-/**
- * Normaliza uma string de cabeçalho para ser uma chave JSON válida, limpa e padronizada.
- */
-const normalizeKey = (text) => {
-    if (!text) return '';
-    return text
-        .toString()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "") // Remove acentos
-        .toLowerCase()
-        .replace(/\(.*\)/g, '') // Remove texto entre parênteses
-        .replace(/[^a-z0-9]/g, '_') // Substitui caracteres não alfanuméricos por underscore
-        .replace(/_+/g, '_') // Substitui múltiplos underscores por um único
-        .replace(/^_+|_+$/g, ''); // Remove underscores do início e do fim
-};
-
-/**
- * Converte índice de coluna numérica (0-indexed) para letra A1 (ex: 0 -> A, 1 -> B, 27 -> AB).
- */
-const colToA1 = (index) => {
-    let temp = index;
-    let letter = '';
-    while (temp >= 0) {
-        letter = String.fromCharCode((temp % 26) + 65) + letter;
-        temp = Math.floor(temp / 26) - 1;
-    }
-    return letter;
-};
-
-/**
- * Cria o roteador Express para gerenciamento das Transportadoras.
- */
-const createTransportadorasRouter = (getSheetsClient, spreadsheetId, sheetName, notifySync) => {
+function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, sheetName) {
     const router = express.Router();
-    const DEFAULT_HEADERS = ['id', 'nome', 'cnpj', 'telefone', 'email', 'cidade_uf', 'endereco', 'status', 'observacao'];
+
+    // Mapeamento de colunas para índices
+    const COLUMNS = {
+        CODIGO: 0,
+        NOME: 1,
+        FANTASIA: 2,
+        ENDERECO: 3,
+        NUMERO: 4,
+        COMPLEMENTO: 5,
+        BAIRRO: 6,
+        CIDADE: 7,
+        ESTADO: 8,
+        CEP: 9,
+        CNPJ: 10,
+        INSCRICAO_ESTADUAL: 11,
+        TELEFONE: 12,
+        EMAIL: 13,
+        WEBSITE: 14,
+        CONTATO: 15,
+        TIPO: 16,
+        ATIVO: 17,
+        DATA_INCLUSAO: 18,
+        FAZ_COLETA: 19
+    };
+
+    const HEADERS = [
+        'Codigo', 'Nome', 'Fantasia', 'Endereco', 'Numero', 'Complemento',
+        'Bairro', 'Cidade', 'Estado', 'CEP', 'CNPJ', 'Inscricao_Estadual',
+        'Telefone', 'Email', 'Website', 'Contato', 'Tipo', 'Ativo',
+        'Data_Inclusao', 'Faz_Coleta'
+    ];
 
     /**
-     * Inicializa ou obtém os cabeçalhos da aba.
-     * Se a aba estiver vazia, grava os cabeçalhos padrão nela.
+     * Verifica e cria headers se não existirem
      */
-    async function getOrInitializeHeaders(sheets) {
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: `'${sheetName}'!A1:Z1`,
-        });
+    async function ensureHeadersExist(sheetsClient) {
+        try {
+            const response = await sheetsClient.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A1:T1`
+            });
 
-        const rows = response.data.values;
-        if (rows && rows.length > 0 && rows[0].some(cell => cell.trim() !== '')) {
-            return rows[0].map(h => h.trim());
-        }
-
-        // Se estiver vazia, grava os cabeçalhos padrão
-        console.log(`[Transportadoras] Aba vazia detectada. Inicializando cabeçalhos padrão na aba "${sheetName}"`);
-        await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: `'${sheetName}'!A1`,
-            valueInputOption: 'USER_ENTERED',
-            resource: {
-                values: [DEFAULT_HEADERS.map(h => h.toUpperCase())]
+            const existingHeaders = response.data.values?.[0] || [];
+            
+            // Se não tem headers ou está vazio, cria
+            if (existingHeaders.length === 0 || !existingHeaders[0]) {
+                console.log(`[Transportadoras] Criando headers na aba "${sheetName}"...`);
+                await sheetsClient.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!A1:T1`,
+                    valueInputOption: 'RAW',
+                    resource: { values: [HEADERS] }
+                });
+                console.log(`[Transportadoras] ✅ Headers criados com sucesso!`);
+                return true;
             }
-        });
-        return DEFAULT_HEADERS;
+            return false;
+        } catch (err) {
+            console.error('[Transportadoras] Erro ao verificar/criar headers:', err.message);
+            throw err;
+        }
     }
 
     /**
-     * GET /
-     * Retorna a lista de todas as transportadoras cadastradas.
+     * GET /transportadoras
+     * Lista todas as transportadoras
      */
-    router.get('/', async (req, res, next) => {
-        console.log('--- BUSCANDO TRANSPORTADORAS ---');
+    router.get('/', async (req, res) => {
         try {
-            const sheets = await getSheetsClient();
-            const rawHeaders = await getOrInitializeHeaders(sheets);
-            const normalizedHeaders = rawHeaders.map(normalizeKey);
+            const sheetsClient = await getInitializedSheetsClient();
+            
+            // Garante que os headers existem
+            await ensureHeadersExist(sheetsClient);
 
-            const dataResponse = await sheets.spreadsheets.values.get({
+            const response = await sheetsClient.spreadsheets.values.get({
                 spreadsheetId,
-                range: `'${sheetName}'!A2:Z`,
-                valueRenderOption: 'FORMATTED_VALUE',
+                range: `${sheetName}!A:T`
             });
 
-            const rows = dataResponse.data.values || [];
-            const transportadoras = rows.map((row, index) => {
-                const item = { rowIndex: index + 2 }; // +2 (1-based e pula cabeçalho)
-                normalizedHeaders.forEach((key, colIndex) => {
-                    item[key] = row[colIndex] !== undefined ? row[colIndex] : '';
-                });
-                return item;
-            });
+            const rows = response.data.values || [];
+            if (rows.length === 0) {
+                return res.json({ transportadoras: [] });
+            }
 
-            res.status(200).json(transportadoras);
-        } catch (error) {
-            console.error('[Transportadoras GET] Erro:', error.message);
-            next(error);
+            // Pula o header (primeira linha) e filtra linhas vazias
+            const transportadoras = rows.slice(1)
+                .filter(row => row && row[COLUMNS.CODIGO]) // Filtra linhas vazias
+                .map((row, index) => ({
+                codigo: row[COLUMNS.CODIGO] || '',
+                nome: row[COLUMNS.NOME] || '',
+                fantasia: row[COLUMNS.FANTASIA] || '',
+                endereco: row[COLUMNS.ENDERECO] || '',
+                numero: row[COLUMNS.NUMERO] || '',
+                complemento: row[COLUMNS.COMPLEMENTO] || '',
+                bairro: row[COLUMNS.BAIRRO] || '',
+                cidade: row[COLUMNS.CIDADE] || '',
+                estado: row[COLUMNS.ESTADO] || '',
+                cep: row[COLUMNS.CEP] || '',
+                cnpj: row[COLUMNS.CNPJ] || '',
+                inscricao_estadual: row[COLUMNS.INSCRICAO_ESTADUAL] || '',
+                telefone: row[COLUMNS.TELEFONE] || '',
+                email: row[COLUMNS.EMAIL] || '',
+                website: row[COLUMNS.WEBSITE] || '',
+                contato: row[COLUMNS.CONTATO] || '',
+                tipo: row[COLUMNS.TIPO] || '',
+                ativo: row[COLUMNS.ATIVO] || '',
+                data_inclusao: row[COLUMNS.DATA_INCLUSAO] || '',
+                faz_coleta: row[COLUMNS.FAZ_COLETA] || '',
+                row_index: index + 2 // +2 porque começa em 1 (header) e A1
+            }));
+
+            res.json({ transportadoras });
+        } catch (err) {
+            console.error('Erro ao listar transportadoras:', err);
+            res.status(500).json({ error: err.message });
         }
     });
 
     /**
-     * POST /
-     * Cadastra uma nova transportadora.
+     * GET /transportadoras/:codigo
+     * Obtém uma transportadora específica
      */
-    router.post('/', async (req, res, next) => {
-        console.log('--- CADASTRANDO NOVA TRANSPORTADORA ---', req.body);
-        const { nome, cnpj, telefone, email, cidade_uf, endereco, status, observacao } = req.body;
-
-        if (!nome || String(nome).trim() === '') {
-            return res.status(400).json({ error: "O campo 'nome' é obrigatório." });
-        }
-
+    router.get('/:codigo', async (req, res) => {
         try {
-            const sheets = await getSheetsClient();
-            const rawHeaders = await getOrInitializeHeaders(sheets);
-            const normalizedHeaders = rawHeaders.map(normalizeKey);
+            const { codigo } = req.params;
+            const sheetsClient = await getInitializedSheetsClient();
+            
+            // Garante que os headers existem
+            await ensureHeadersExist(sheetsClient);
 
-            // Gera um ID único simples
-            const uniqueId = `transp_${Date.now()}`;
-            const novaTransp = {
-                id: uniqueId,
-                nome: nome.trim(),
-                cnpj: cnpj ? cnpj.trim() : '',
-                telefone: telefone ? telefone.trim() : '',
-                email: email ? email.trim() : '',
-                cidade_uf: cidade_uf ? cidade_uf.trim() : '',
-                endereco: endereco ? endereco.trim() : '',
-                status: status ? status.trim() : 'Ativa',
-                observacao: observacao ? observacao.trim() : ''
-            };
-
-            // Monta a linha conforme a ordem dos cabeçalhos na planilha
-            const newRow = normalizedHeaders.map(key => novaTransp[key] !== undefined ? novaTransp[key] : '');
-
-            console.log('[Sheets] Gravando nova transportadora...');
-            const appendResponse = await sheets.spreadsheets.values.append({
+            const response = await sheetsClient.spreadsheets.values.get({
                 spreadsheetId,
-                range: `'${sheetName}'!A:A`,
-                valueInputOption: 'USER_ENTERED',
-                insertDataOption: 'INSERT_ROWS',
-                resource: {
-                    values: [newRow]
-                }
+                range: `${sheetName}!A:T`
             });
 
-            // Notifica tempo real
-            if (notifySync) {
-                console.log(`[Firestore Sync] Notificando criação da transportadora: ${novaTransp.nome}`);
-                notifySync('transportadoraCreated', novaTransp);
+            const rows = response.data.values || [];
+            const transportadora = rows.slice(1).find(row => row[COLUMNS.CODIGO] === codigo);
+
+            if (!transportadora) {
+                return res.status(404).json({ error: 'Transportadora não encontrada' });
+            }
+
+            res.json({
+                codigo: transportadora[COLUMNS.CODIGO] || '',
+                nome: transportadora[COLUMNS.NOME] || '',
+                fantasia: transportadora[COLUMNS.FANTASIA] || '',
+                endereco: transportadora[COLUMNS.ENDERECO] || '',
+                numero: transportadora[COLUMNS.NUMERO] || '',
+                complemento: transportadora[COLUMNS.COMPLEMENTO] || '',
+                bairro: transportadora[COLUMNS.BAIRRO] || '',
+                cidade: transportadora[COLUMNS.CIDADE] || '',
+                estado: transportadora[COLUMNS.ESTADO] || '',
+                cep: transportadora[COLUMNS.CEP] || '',
+                cnpj: transportadora[COLUMNS.CNPJ] || '',
+                inscricao_estadual: transportadora[COLUMNS.INSCRICAO_ESTADUAL] || '',
+                telefone: transportadora[COLUMNS.TELEFONE] || '',
+                email: transportadora[COLUMNS.EMAIL] || '',
+                website: transportadora[COLUMNS.WEBSITE] || '',
+                contato: transportadora[COLUMNS.CONTATO] || '',
+                tipo: transportadora[COLUMNS.TIPO] || '',
+                ativo: transportadora[COLUMNS.ATIVO] || '',
+                data_inclusao: transportadora[COLUMNS.DATA_INCLUSAO] || '',
+                faz_coleta: transportadora[COLUMNS.FAZ_COLETA] || ''
+            });
+        } catch (err) {
+            console.error('Erro ao obter transportadora:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    /**
+     * POST /transportadoras
+     * Cria uma nova transportadora
+     */
+    router.post('/', async (req, res) => {
+        try {
+            const {
+                codigo, nome, fantasia, endereco, numero, complemento, bairro,
+                cidade, estado, cep, cnpj, inscricao_estadual, telefone, email,
+                website, contato, tipo, ativo, faz_coleta
+            } = req.body;
+
+            // Validação básica
+            if (!codigo || !nome) {
+                return res.status(400).json({ error: 'Código e Nome são obrigatórios' });
+            }
+
+            const sheetsClient = await getInitializedSheetsClient();
+            
+            // Garante que os headers existem (primeira vez que alguém cria)
+            await ensureHeadersExist(sheetsClient);
+
+            // Verifica se código já existe
+            const response = await sheetsClient.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A:A`
+            });
+            const codigosExistentes = response.data.values?.slice(1).map(row => row[0]) || [];
+            if (codigosExistentes.includes(codigo)) {
+                return res.status(409).json({ error: `Já existe uma transportadora com o código "${codigo}"` });
+            }
+
+            const newRow = [
+                codigo,
+                nome,
+                fantasia || '',
+                endereco || '',
+                numero || '',
+                complemento || '',
+                bairro || '',
+                cidade || '',
+                estado || '',
+                cep || '',
+                cnpj || '',
+                inscricao_estadual || '',
+                telefone || '',
+                email || '',
+                website || '',
+                contato || '',
+                tipo || 'Transportadora',
+                ativo || 'Sim',
+                new Date().toLocaleDateString('pt-BR'),
+                faz_coleta || 'Não'
+            ];
+
+            await sheetsClient.spreadsheets.values.append({
+                spreadsheetId,
+                range: `${sheetName}!A:T`,
+                valueInputOption: 'RAW',
+                resource: { values: [newRow] }
+            });
+
+            // Notificar frontend via Firestore
+            if (req.notifySync) {
+                await req.notifySync('transportadorasUpdated', {
+                    action: 'created',
+                    codigo,
+                    timestamp: new Date()
+                });
             }
 
             res.status(201).json({
-                message: "Transportadora cadastrada com sucesso!",
-                data: novaTransp,
-                sheetsResponse: appendResponse.data
+                message: 'Transportadora criada com sucesso',
+                transportadora: {
+                    codigo, nome, fantasia, endereco, numero, complemento, bairro,
+                    cidade, estado, cep, cnpj, inscricao_estadual, telefone, email,
+                    website, contato, tipo, ativo, faz_coleta,
+                    data_inclusao: new Date().toLocaleDateString('pt-BR')
+                }
             });
-        } catch (error) {
-            console.error('[Transportadoras POST] Erro:', error.message);
-            next(error);
+        } catch (err) {
+            console.error('Erro ao criar transportadora:', err);
+            res.status(500).json({ error: err.message });
         }
     });
 
     /**
-     * PUT /:id
-     * Edita os dados de uma transportadora existente pelo ID.
+     * PATCH /transportadoras/:codigo
+     * Atualiza uma transportadora existente
      */
-    router.put('/:id', async (req, res, next) => {
-        const idTransportadora = req.params.id;
-        console.log(`--- EDITANDO TRANSPORTADORA ID: ${idTransportadora} ---`, req.body);
-
+    router.patch('/:codigo', async (req, res) => {
         try {
-            const sheets = await getSheetsClient();
-            const rawHeaders = await getOrInitializeHeaders(sheets);
-            const normalizedHeaders = rawHeaders.map(normalizeKey);
+            const { codigo } = req.params;
+            const updates = req.body;
 
-            const idColIndex = normalizedHeaders.indexOf('id');
-            if (idColIndex === -1) {
-                return res.status(500).json({ error: "Coluna 'ID' não encontrada na planilha de transportadoras." });
-            }
-
-            // Lê as linhas existentes para encontrar o registro correspondente
-            const dataResponse = await sheets.spreadsheets.values.get({
+            const sheetsClient = await getInitializedSheetsClient();
+            const response = await sheetsClient.spreadsheets.values.get({
                 spreadsheetId,
-                range: `'${sheetName}'!A2:Z`,
+                range: `${sheetName}!A:T`
             });
 
-            const rows = dataResponse.data.values || [];
-            let rowIndex = -1;
-
-            for (let i = 0; i < rows.length; i++) {
-                if (String(rows[i][idColIndex] || '').trim() === String(idTransportadora).trim()) {
-                    rowIndex = i + 2; // +2 porque pula cabeçalho e Sheets é 1-indexed
-                    break;
-                }
-            }
+            const rows = response.data.values || [];
+            const rowIndex = rows.findIndex(row => row[COLUMNS.CODIGO] === codigo);
 
             if (rowIndex === -1) {
-                return res.status(404).json({ error: `Transportadora com ID "${idTransportadora}" não encontrada.` });
+                return res.status(404).json({ error: 'Transportadora não encontrada' });
             }
 
-            // Atualiza apenas os campos enviados no body
-            const updatePromises = [];
-            const fieldsToUpdate = ['nome', 'cnpj', 'telefone', 'email', 'cidade_uf', 'endereco', 'status', 'observacao'];
+            // Se está mudando o código, verifica se o novo código já existe
+            if (updates.codigo && updates.codigo !== codigo) {
+                const codigosExistentes = rows.slice(1).map(row => row[COLUMNS.CODIGO]).filter(c => c && c !== codigo);
+                if (codigosExistentes.includes(updates.codigo)) {
+                    return res.status(409).json({ error: `Já existe uma transportadora com o código "${updates.codigo}"` });
+                }
+            }
 
-            fieldsToUpdate.forEach(field => {
-                const val = req.body[field];
-                if (val !== undefined) {
-                    const colIndex = normalizedHeaders.indexOf(field);
-                    if (colIndex !== -1) {
-                        const cellAddress = `'${sheetName}'!${colToA1(colIndex)}${rowIndex}`;
-                        updatePromises.push(
-                            sheets.spreadsheets.values.update({
-                                spreadsheetId,
-                                range: cellAddress,
-                                valueInputOption: 'USER_ENTERED',
-                                resource: { values: [[val]] }
-                            })
-                        );
-                    }
+            // Pega a linha atual
+            const currentRow = rows[rowIndex];
+            const updatedRow = [
+                updates.codigo !== undefined ? updates.codigo : currentRow[COLUMNS.CODIGO] || '',
+                updates.nome !== undefined ? updates.nome : currentRow[COLUMNS.NOME] || '',
+                updates.fantasia !== undefined ? updates.fantasia : currentRow[COLUMNS.FANTASIA] || '',
+                updates.endereco !== undefined ? updates.endereco : currentRow[COLUMNS.ENDERECO] || '',
+                updates.numero !== undefined ? updates.numero : currentRow[COLUMNS.NUMERO] || '',
+                updates.complemento !== undefined ? updates.complemento : currentRow[COLUMNS.COMPLEMENTO] || '',
+                updates.bairro !== undefined ? updates.bairro : currentRow[COLUMNS.BAIRRO] || '',
+                updates.cidade !== undefined ? updates.cidade : currentRow[COLUMNS.CIDADE] || '',
+                updates.estado !== undefined ? updates.estado : currentRow[COLUMNS.ESTADO] || '',
+                updates.cep !== undefined ? updates.cep : currentRow[COLUMNS.CEP] || '',
+                updates.cnpj !== undefined ? updates.cnpj : currentRow[COLUMNS.CNPJ] || '',
+                updates.inscricao_estadual !== undefined ? updates.inscricao_estadual : currentRow[COLUMNS.INSCRICAO_ESTADUAL] || '',
+                updates.telefone !== undefined ? updates.telefone : currentRow[COLUMNS.TELEFONE] || '',
+                updates.email !== undefined ? updates.email : currentRow[COLUMNS.EMAIL] || '',
+                updates.website !== undefined ? updates.website : currentRow[COLUMNS.WEBSITE] || '',
+                updates.contato !== undefined ? updates.contato : currentRow[COLUMNS.CONTATO] || '',
+                updates.tipo !== undefined ? updates.tipo : currentRow[COLUMNS.TIPO] || '',
+                updates.ativo !== undefined ? updates.ativo : currentRow[COLUMNS.ATIVO] || '',
+                currentRow[COLUMNS.DATA_INCLUSAO] || '', // Data de inclusão não muda
+                updates.faz_coleta !== undefined ? updates.faz_coleta : currentRow[COLUMNS.FAZ_COLETA] || ''
+            ];
+
+            const rangeToUpdate = `${sheetName}!A${rowIndex + 1}:T${rowIndex + 1}`;
+            await sheetsClient.spreadsheets.values.update({
+                spreadsheetId,
+                range: rangeToUpdate,
+                valueInputOption: 'RAW',
+                resource: { values: [updatedRow] }
+            });
+
+            // Notificar frontend via Firestore
+            if (req.notifySync) {
+                await req.notifySync('transportadorasUpdated', {
+                    action: 'updated',
+                    codigo,
+                    timestamp: new Date()
+                });
+            }
+
+            res.json({
+                message: 'Transportadora atualizada com sucesso',
+                transportadora: {
+                    codigo: updatedRow[COLUMNS.CODIGO],
+                    nome: updatedRow[COLUMNS.NOME],
+                    fantasia: updatedRow[COLUMNS.FANTASIA],
+                    endereco: updatedRow[COLUMNS.ENDERECO],
+                    numero: updatedRow[COLUMNS.NUMERO],
+                    complemento: updatedRow[COLUMNS.COMPLEMENTO],
+                    bairro: updatedRow[COLUMNS.BAIRRO],
+                    cidade: updatedRow[COLUMNS.CIDADE],
+                    estado: updatedRow[COLUMNS.ESTADO],
+                    cep: updatedRow[COLUMNS.CEP],
+                    cnpj: updatedRow[COLUMNS.CNPJ],
+                    inscricao_estadual: updatedRow[COLUMNS.INSCRICAO_ESTADUAL],
+                    telefone: updatedRow[COLUMNS.TELEFONE],
+                    email: updatedRow[COLUMNS.EMAIL],
+                    website: updatedRow[COLUMNS.WEBSITE],
+                    contato: updatedRow[COLUMNS.CONTATO],
+                    tipo: updatedRow[COLUMNS.TIPO],
+                    ativo: updatedRow[COLUMNS.ATIVO],
+                    data_inclusao: updatedRow[COLUMNS.DATA_INCLUSAO],
+                    faz_coleta: updatedRow[COLUMNS.FAZ_COLETA]
                 }
             });
-
-            if (updatePromises.length > 0) {
-                await Promise.all(updatePromises);
-            }
-
-            const updatedObj = {
-                id: idTransportadora,
-                ...req.body
-            };
-
-            // Notifica tempo real
-            if (notifySync) {
-                console.log(`[Firestore Sync] Notificando atualização da transportadora: ${idTransportadora}`);
-                notifySync('transportadoraUpdated', updatedObj);
-            }
-
-            res.status(200).json({
-                message: "Transportadora atualizada com sucesso!",
-                data: updatedObj
-            });
-
-        } catch (error) {
-            console.error('[Transportadoras PUT] Erro:', error.message);
-            next(error);
+        } catch (err) {
+            console.error('Erro ao atualizar transportadora:', err);
+            res.status(500).json({ error: err.message });
         }
     });
 
     /**
-     * DELETE /:id
-     * Exclui fisicamente a linha de uma transportadora existente pelo ID.
+     * DELETE /transportadoras/:codigo
+     * Deleta uma transportadora (limpa a linha)
      */
-    router.delete('/:id', async (req, res, next) => {
-        const idTransportadora = req.params.id;
-        console.log(`--- EXCLUINDO TRANSPORTADORA ID: ${idTransportadora} ---`);
-
+    router.delete('/:codigo', async (req, res) => {
         try {
-            const sheets = await getSheetsClient();
-            const rawHeaders = await getOrInitializeHeaders(sheets);
-            const normalizedHeaders = rawHeaders.map(normalizeKey);
-
-            const idColIndex = normalizedHeaders.indexOf('id');
-            if (idColIndex === -1) {
-                return res.status(500).json({ error: "Coluna 'ID' não encontrada na planilha de transportadoras." });
-            }
-
-            // Lê as linhas existentes para encontrar o registro correspondente
-            const dataResponse = await sheets.spreadsheets.values.get({
+            const { codigo } = req.params;
+            const sheetsClient = await getInitializedSheetsClient();
+            const response = await sheetsClient.spreadsheets.values.get({
                 spreadsheetId,
-                range: `'${sheetName}'!A2:Z`,
+                range: `${sheetName}!A:T`
             });
 
-            const rows = dataResponse.data.values || [];
-            let rowIndex = -1;
-
-            for (let i = 0; i < rows.length; i++) {
-                if (String(rows[i][idColIndex] || '').trim() === String(idTransportadora).trim()) {
-                    rowIndex = i + 2; // +2 porque pula cabeçalho e Sheets é 1-indexed
-                    break;
-                }
-            }
+            const rows = response.data.values || [];
+            const rowIndex = rows.findIndex(row => row[COLUMNS.CODIGO] === codigo);
 
             if (rowIndex === -1) {
-                return res.status(404).json({ error: `Transportadora com ID "${idTransportadora}" não encontrada.` });
+                return res.status(404).json({ error: 'Transportadora não encontrada' });
             }
 
-            // Obtém o sheetId da aba 'Transportadoras' para a exclusão física da linha
-            const spreadsheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
-            const sheet = spreadsheetInfo.data.sheets.find(s => s.properties.title === sheetName);
-            const sheetId = sheet.properties.sheetId;
-
-            console.log(`[Sheets] Deletando a linha ${rowIndex} fisicamente da aba...`);
-            await sheets.spreadsheets.batchUpdate({
+            // Limpa a linha (substitui por array vazio)
+            const emptyRow = Array(20).fill('');
+            const rangeToDelete = `${sheetName}!A${rowIndex + 1}:T${rowIndex + 1}`;
+            await sheetsClient.spreadsheets.values.update({
                 spreadsheetId,
-                resource: {
-                    requests: [{
-                        deleteDimension: {
-                            range: {
-                                sheetId: sheetId,
-                                dimension: 'ROWS',
-                                startIndex: rowIndex - 1, // 0-based index inclusivo para start
-                                endIndex: rowIndex        // exclusivo para end
-                            }
-                        }
-                    }]
-                }
+                range: rangeToDelete,
+                valueInputOption: 'RAW',
+                resource: { values: [emptyRow] }
             });
 
-            // Notifica tempo real
-            if (notifySync) {
-                console.log(`[Firestore Sync] Notificando exclusão da transportadora: ${idTransportadora}`);
-                notifySync('transportadoraDeleted', { id: idTransportadora });
+            // Notificar frontend via Firestore
+            if (req.notifySync) {
+                await req.notifySync('transportadorasUpdated', {
+                    action: 'deleted',
+                    codigo,
+                    timestamp: new Date()
+                });
             }
 
-            res.status(200).json({
-                message: "Transportadora excluída com sucesso!",
-                id: idTransportadora
-            });
-
-        } catch (error) {
-            console.error('[Transportadoras DELETE] Erro:', error.message);
-            next(error);
+            res.json({ message: 'Transportadora deletada com sucesso', codigo });
+        } catch (err) {
+            console.error('Erro ao deletar transportadora:', err);
+            res.status(500).json({ error: err.message });
         }
     });
 
     return router;
-};
+}
 
 module.exports = createTransportadorasRouter;
