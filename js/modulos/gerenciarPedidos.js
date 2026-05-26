@@ -534,11 +534,21 @@ export const GerenciarPedidosApp = (function () {
             String(n.numero_pedido || '') === String(orderNumber) ||
             String(n.id_nota || '') === String(idNota)
         );
+        const safeClientName = (pedido.nome || pedido.cliente || 'Cliente').replace(/'/g, "\\'");
+
         if (nfe) {
             const numeroNota = nfe.numero || nfe.numero_da_nota || '-';
             const serieNota = nfe.serie || '-';
             const linkDanfe = nfe['Link DANFE'] || nfe.link_danfe || nfe.linkDanfe || nfe.link || '#';
+            const emailCliente = nfe.email_do_cliente || nfe.email || pedido.email || '';
             
+            const emailBtnHtml = `
+                <button type="button" onclick="if(window.sendNFeByEmail) window.sendNFeByEmail({to:'${emailCliente}', clientName:'${safeClientName}', nfNumber:'${numeroNota}', nfLink:'${linkDanfe}'}); else alert('Função não disponível.');" class="flex items-center gap-1.5 text-[10px] bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors font-bold uppercase shadow-sm">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    E-mail
+                </button>
+            `;
+
             gridHtml += `
                 <div class="bg-green-50 p-3 rounded-lg border border-green-100 md:col-span-2">
                     <div class="flex items-center gap-2 mb-1">
@@ -547,12 +557,37 @@ export const GerenciarPedidosApp = (function () {
                     </div>
                     <div class="flex items-center justify-between">
                         <span class="block text-sm text-green-800 font-bold">Nº ${numeroNota} (Série ${serieNota})</span>
-                        ${linkDanfe !== '#' ? `
-                            <a href="${linkDanfe}" target="_blank" class="flex items-center gap-1.5 text-[10px] bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors font-bold uppercase shadow-sm">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2-2H7a2 2 0 00-2 2v4m14 4h.01"></path></svg>
-                                Imprimir DANFE
-                            </a>
-                        ` : ''}
+                        <div class="flex items-center gap-2">
+                            ${emailBtnHtml}
+                            ${linkDanfe !== '#' ? `
+                                <a href="${linkDanfe}" target="_blank" class="flex items-center gap-1.5 text-[10px] bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors font-bold uppercase shadow-sm">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2-2H7a2 2 0 00-2 2v4m14 4h.01"></path></svg>
+                                    Imprimir DANFE
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>`;
+        } else {
+            const emailCliente = pedido.email || '';
+            const emailBtnHtml = `
+                <button type="button" onclick="if(window.sendNFeByEmail) window.sendNFeByEmail({to:'${emailCliente}', clientName:'${safeClientName}', nfNumber:'Pendente', nfLink:'Nota Fiscal ainda não emitida'}); else alert('Função não disponível.');" class="flex items-center gap-1.5 text-[10px] bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors font-bold uppercase shadow-sm">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    E-mail
+                </button>
+            `;
+
+            gridHtml += `
+                <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 md:col-span-2">
+                    <div class="flex items-center gap-2 mb-1">
+                        <svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clip-rule="evenodd"></path></svg>
+                        <span class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Nota Fiscal Eletrônica</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="block text-sm text-gray-500 font-bold italic">Aguardando emissão...</span>
+                        <div class="flex items-center gap-2">
+                            ${emailBtnHtml}
+                        </div>
                     </div>
                 </div>`;
         }
