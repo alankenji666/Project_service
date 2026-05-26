@@ -1097,13 +1097,17 @@ export const GerenciarPedidosApp = (function () {
 
         // Verificar se já tem nota
         const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
+        const idNotaFromPedido = pedido?.id_nota || pedido?.idNota || pedido?.['id nota'] || pedido?.idnotafiscal || pedido?.id_nota_fiscal || pedido?.['id nota fiscal'] || '';
+        const orderNumber = pedido?.numero || pedido?.número || '';
+
         const nfeVinculada = (window._allNFeData || []).find(n => 
-            String(n.id_pedido || n.idPedido || '') === String(pedido?.id || pedido?.id_pedido || idPedido) ||
-            String(n.numero_pedido || '') === String(pedido?.numero || pedido?.número)
+            (n.id_pedido && String(n.id_pedido) === String(idPedido)) || 
+            (n.idPedido && String(n.idPedido) === String(idPedido)) ||
+            (n.numero_pedido && String(n.numero_pedido) === String(orderNumber)) ||
+            (n.id_nota && idNotaFromPedido && String(n.id_nota) === String(idNotaFromPedido))
         );
-        const idNotaExistente = nfeVinculada?.id || nfeVinculada?.id_nota || nfeVinculada?.numero || 
-                               pedido?.id_nota || pedido?.['id nota'] || pedido?.idnotafiscal || 
-                               pedido?.id_nota_fiscal || pedido?.['id nota fiscal'];
+        
+        const idNotaExistente = nfeVinculada?.id || nfeVinculada?.id_nota || nfeVinculada?.numero || idNotaFromPedido;
         
         if (idNotaExistente) {
             if (confirm("Este pedido já possui uma nota fiscal emitida. Deseja imprimir a nota ao invés de emitir uma nova?")) {
@@ -1187,14 +1191,17 @@ export const GerenciarPedidosApp = (function () {
     function _handlePrintNfe() {
         const idPedido = _currentModalPedidoId;
         const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
+        const idNotaFromPedido = pedido?.id_nota || pedido?.idNota || pedido?.['id nota'] || pedido?.idnotafiscal || pedido?.id_nota_fiscal || pedido?.['id nota fiscal'] || '';
+        const orderNumber = pedido?.numero || pedido?.número || '';
         
         const nfeVinculada = (window._allNFeData || []).find(n => 
-            String(n.id_pedido || n.idPedido || '') === String(pedido?.id || pedido?.id_pedido || idPedido) ||
-            String(n.numero_pedido || '') === String(pedido?.numero || pedido?.número)
+            (n.id_pedido && String(n.id_pedido) === String(idPedido)) || 
+            (n.idPedido && String(n.idPedido) === String(idPedido)) ||
+            (n.numero_pedido && String(n.numero_pedido) === String(orderNumber)) ||
+            (n.id_nota && idNotaFromPedido && String(n.id_nota) === String(idNotaFromPedido)) ||
+            (n.idNota && idNotaFromPedido && String(n.idNota) === String(idNotaFromPedido))
         );
-        const idNota = nfeVinculada?.id || nfeVinculada?.id_nota || nfeVinculada?.numero || 
-                       pedido?.id_nota || pedido?.['id nota'] || pedido?.idnotafiscal || 
-                       pedido?.id_nota_fiscal || pedido?.['id nota fiscal'];
+        const idNota = nfeVinculada?.id || nfeVinculada?.id_nota || nfeVinculada?.idNota || nfeVinculada?.numero || idNotaFromPedido;
 
         if (!idNota) {
             if (confirm("Este pedido ainda não possui Nota Fiscal emitida. Deseja emitir agora?")) {
