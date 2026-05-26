@@ -93,8 +93,10 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
                 return res.json({ transportadoras: [] });
             }
 
-            // Pula o header (primeira linha)
-            const transportadoras = rows.slice(1).map((row, index) => ({
+            // Pula o header (primeira linha) e filtra linhas vazias
+            const transportadoras = rows.slice(1)
+                .filter(row => row && row[COLUMNS.CODIGO]) // Filtra linhas vazias
+                .map((row, index) => ({
                 codigo: row[COLUMNS.CODIGO] || '',
                 nome: row[COLUMNS.NOME] || '',
                 fantasia: row[COLUMNS.FANTASIA] || '',
@@ -199,6 +201,16 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
             // Garante que os headers existem (primeira vez que alguém cria)
             await ensureHeadersExist(sheetsClient);
 
+            // Verifica se código já existe
+            const response = await sheetsClient.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A:A`
+            });
+            const codigosExistentes = response.data.values?.slice(1).map(row => row[0]) || [];
+            if (codigosExistentes.includes(codigo)) {
+                return res.status(409).json({ error: `Já existe uma transportadora com o código "${codigo}"` });
+            }
+
             const newRow = [
                 codigo,
                 nome,
@@ -218,7 +230,7 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
                 contato || '',
                 tipo || 'Transportadora',
                 ativo || 'Sim',
-                data_inclusao,
+                new Date().toLocaleDateString('pt-BR'),
                 faz_coleta || 'Não'
             ];
 
@@ -243,7 +255,8 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
                 transportadora: {
                     codigo, nome, fantasia, endereco, numero, complemento, bairro,
                     cidade, estado, cep, cnpj, inscricao_estadual, telefone, email,
-                    website, contato, tipo, ativo, data_inclusao, faz_coleta
+                    website, contato, tipo, ativo, faz_coleta,
+                    data_inclusao: new Date().toLocaleDateString('pt-BR')
                 }
             });
         } catch (err) {
@@ -272,6 +285,14 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
 
             if (rowIndex === -1) {
                 return res.status(404).json({ error: 'Transportadora não encontrada' });
+            }
+
+            // Se está mudando o código, verifica se o novo código já existe
+            if (updates.codigo && updates.codigo !== codigo) {
+                const codigosExistentes = rows.slice(1).map(row => row[COLUMNS.CODIGO]).filter(c => c && c !== codigo);
+                if (codigosExistentes.includes(updates.codigo)) {
+                    return res.status(409).json({ error: `Já existe uma transportadora com o código "${updates.codigo}"` });
+                }
             }
 
             // Pega a linha atual
