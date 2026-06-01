@@ -2094,7 +2094,7 @@ export const DashboardApp = (function() {
             totalFrete += frete;
 
             // 4. Itens (Peças vs Serviços)
-            const itensRaw = nfe ? nfe.itens : (p.itens || '');
+            const itensRaw = p.itens || (nfe ? nfe.itens : '');
             const items = _parseNfeItemsString(itensRaw);
 
             let orderPecas = 0;
@@ -2409,7 +2409,7 @@ export const DashboardApp = (function() {
             }
             vendedor = vendedor !== 'N/A' && vendedor ? vendedor.trim().split(' ')[0] : 'N/A';
             
-            const itensRaw = nfe ? nfe.itens : (p.itens || '');
+            const itensRaw = p.itens || (nfe ? nfe.itens : '');
             const totalValue = _getOrderValue(p);
             
             const checkService = (str) => typeof str === 'string' && (str.includes('(7') || str.includes('( 7'));
@@ -2559,7 +2559,7 @@ export const DashboardApp = (function() {
                 const totalValue = _getOrderValue(p);
                 
                 // Calcula divisão entre Peças e Serviços
-                const itensRaw = nfe ? nfe.itens : (p.itens || '');
+                const itensRaw = p.itens || (nfe ? nfe.itens : '');
                 const items = _parseNfeItemsString(itensRaw);
 
                 let orderPecas = 0;
@@ -2602,7 +2602,7 @@ export const DashboardApp = (function() {
                 const nfeId = String(rawNfeId).split('.')[0].trim();
                 const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
                 
-                const itensRaw = nfe ? nfe.itens : (p.itens || '');
+                const itensRaw = p.itens || (nfe ? nfe.itens : '');
                 const items = _parseNfeItemsString(itensRaw);
 
                 items.forEach(i => {
