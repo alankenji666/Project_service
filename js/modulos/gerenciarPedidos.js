@@ -53,6 +53,7 @@ export const GerenciarPedidosApp = (function () {
         if (s === '9') return 'Atendido';
         if (s === '15') return 'Em Andamento';
         if (s === '12') return 'Cancelado';
+        if (s === '37589') return 'Atendido P.';
         
         return situacao;
     }
@@ -540,14 +541,33 @@ export const GerenciarPedidosApp = (function () {
             const numeroNota = nfe.numero || nfe.numero_da_nota || '-';
             const serieNota = nfe.serie || '-';
             const linkDanfe = nfe['Link DANFE'] || nfe.link_danfe || nfe.linkDanfe || nfe.link || '#';
-            const emailCliente = nfe.email_do_cliente || nfe.email || pedido.email || '';
+            const chaveAcesso = nfe.chave_acesso || nfe.chaveAcesso || nfe.chave_de_acesso || nfe['Chave de Acesso'] || '';
             
-            const emailBtnHtml = `
-                <button type="button" onclick="if(window.sendNFeByEmail) window.sendNFeByEmail({to:'${emailCliente}', clientName:'${safeClientName}', nfNumber:'${numeroNota}', nfLink:'${linkDanfe}'}); else alert('Função não disponível.');" class="flex items-center gap-1.5 text-[10px] bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors font-bold uppercase shadow-sm">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                    E-mail
-                </button>
-            `;
+            const rawName = (pedido.nome || pedido.contato_nome || pedido['contato nome'] || pedido.cliente || 'Cliente').trim();
+            const rawWords = rawName.split(/\s+/);
+            let resultWords = [];
+            let validNamesCount = 0;
+            for (let word of rawWords) {
+                resultWords.push(word);
+                if (word.length > 3 && /[a-zA-Z]/.test(word)) validNamesCount++;
+                if (validNamesCount >= 2) break;
+            }
+            const shortClientName = resultWords.join(' ');
+            const orcValue = pedido.orcamento || pedido.orçamento || '';
+            const orcamentoStr = (orcValue && String(orcValue) !== '0') ? ` - Orc. ${orcValue}` : '';
+            const numeroNotaStr = numeroNota !== '-' ? ` - Nfe. ${numeroNota}` : '';
+            
+            let baseFilename = `DANFE - ${shortClientName}${numeroNotaStr}${orcamentoStr}`;
+            let safeFilenameForDownload = baseFilename.replace(/[<>:"/\\|?*]/g, '_') + '.pdf';
+            
+            const baixarPdfUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-danfe?chaveAcesso=${chaveAcesso}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
+
+            const baixarBtnHtml = chaveAcesso ? `
+                <a href="#" onclick="event.preventDefault(); window.downloadDanfeWithSpinner('${baixarPdfUrl}', '${safeFilenameForDownload.replace(/'/g, "\\'")}', this)" class="flex items-center gap-1.5 text-[10px] bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors font-bold uppercase shadow-sm" title="Baixar PDF do DANFE com o nome do cliente">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Baixar DANFE
+                </a>
+            ` : '';
 
             gridHtml += `
                 <div class="bg-green-50 p-3 rounded-lg border border-green-100 md:col-span-2">
@@ -558,25 +578,17 @@ export const GerenciarPedidosApp = (function () {
                     <div class="flex items-center justify-between">
                         <span class="block text-sm text-green-800 font-bold">Nº ${numeroNota} (Série ${serieNota})</span>
                         <div class="flex items-center gap-2">
-                            ${emailBtnHtml}
+                            ${baixarBtnHtml}
                             ${linkDanfe !== '#' ? `
                                 <a href="${linkDanfe}" target="_blank" class="flex items-center gap-1.5 text-[10px] bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors font-bold uppercase shadow-sm">
-                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2-2H7a2 2 0 00-2 2v4m14 4h.01"></path></svg>
-                                    Imprimir DANFE
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                    Visualizar DANFE
                                 </a>
                             ` : ''}
                         </div>
                     </div>
                 </div>`;
         } else {
-            const emailCliente = pedido.email || '';
-            const emailBtnHtml = `
-                <button type="button" onclick="if(window.sendNFeByEmail) window.sendNFeByEmail({to:'${emailCliente}', clientName:'${safeClientName}', nfNumber:'Pendente', nfLink:'Nota Fiscal ainda não emitida'}); else alert('Função não disponível.');" class="flex items-center gap-1.5 text-[10px] bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors font-bold uppercase shadow-sm">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                    E-mail
-                </button>
-            `;
-
             gridHtml += `
                 <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 md:col-span-2">
                     <div class="flex items-center gap-2 mb-1">
@@ -585,9 +597,6 @@ export const GerenciarPedidosApp = (function () {
                     </div>
                     <div class="flex items-center justify-between">
                         <span class="block text-sm text-gray-500 font-bold italic">Aguardando emissão...</span>
-                        <div class="flex items-center gap-2">
-                            ${emailBtnHtml}
-                        </div>
                     </div>
                 </div>`;
         }
@@ -1249,7 +1258,27 @@ export const GerenciarPedidosApp = (function () {
         const linkDanfe = nfeVinculada?.['Link DANFE'] || nfeVinculada?.link_danfe || nfeVinculada?.linkDanfe || nfeVinculada?.link;
         
         if (linkDanfe && linkDanfe !== '#') {
-            window.open(linkDanfe, '_blank');
+            const numeroNota = nfeVinculada.numero || nfeVinculada.numero_da_nota || 'Desconhecido';
+            
+            const rawName = (pedido?.contato_nome || pedido?.['contato nome'] || pedido?.cliente || 'Cliente').trim();
+            const rawWords = rawName.split(/\s+/);
+            let resultWords = [];
+            let validNamesCount = 0;
+            for (let word of rawWords) {
+                resultWords.push(word);
+                if (word.length > 3 && /[a-zA-Z]/.test(word)) validNamesCount++;
+                if (validNamesCount >= 2) break;
+            }
+            const shortClientName = resultWords.join(' ');
+            const orcValue = pedido?.orcamento || pedido?.orçamento || '';
+            const orcamentoStr = (orcValue && String(orcValue) !== '0') ? ` - Orc. ${orcValue}` : '';
+            const numeroNotaStr = numeroNota !== 'Desconhecido' ? ` - Nfe. ${numeroNota}` : '';
+            
+            let baseFilename = `DANFE - ${shortClientName}${numeroNotaStr}${orcamentoStr}`;
+            let safeFilenameForDownload = baseFilename.replace(/[<>:"/\\|?*]/g, '_') + '.pdf';
+            
+            const proxyUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-pdf?url=${encodeURIComponent(linkDanfe)}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
+            window.open(proxyUrl, '_blank');
             return;
         }
 
@@ -3218,3 +3247,31 @@ export const GerenciarPedidosApp = (function () {
         }
     }
 })();
+
+// Função global para lidar com o download e exibir o spinner
+window.downloadDanfeWithSpinner = async function(url, filename, btn) {
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<svg class="animate-spin w-3 h-3 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> BAIXANDO...`;
+    btn.classList.add('opacity-75', 'cursor-wait');
+    btn.style.pointerEvents = 'none';
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Falha no download da DANFE.');
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (e) {
+        alert('Erro ao baixar DANFE: ' + e.message);
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.classList.remove('opacity-75', 'cursor-wait');
+        btn.style.pointerEvents = 'auto';
+    }
+};

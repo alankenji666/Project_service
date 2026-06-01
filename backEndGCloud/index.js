@@ -934,6 +934,80 @@ const transportadorasRouter = createTransportadorasRouter(
 );
 app.use('/transportadoras', transportadorasRouter);
 
+// Proxy DANFE PDF em Base64 direto do Bling V3
+app.get('/proxy-danfe', async (req, res, next) => {
+    try {
+        const { chaveAcesso, filename } = req.query;
+        if (!chaveAcesso) {
+            const error = new Error('A chaveAcesso é obrigatória.');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        // Obtém o token
+        const tokenRes = await axios.get(APPS_SCRIPT_TOKEN_URL);
+        const accessToken = tokenRes.data.access_token || tokenRes.data.accessToken;
+
+        // Chama a API V3 do Bling para obter o base64
+        const blingUrl = `${BLING_API_BASE_URL}/nfe/documento/${chaveAcesso}?formato=pdf`;
+        const blingResponse = await axios.get(blingUrl, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (!blingResponse.data || !blingResponse.data.data || !blingResponse.data.data[0]) {
+            throw new Error('Conteúdo do PDF não encontrado no retorno da API do Bling.');
+        }
+
+        const base64Data = blingResponse.data.data[0].conteudo;
+        const compressedBuf = Buffer.from(base64Data, 'base64');
+        const zlib = require('zlib');
+        
+        let pdfBuffer = compressedBuf;
+        try {
+            // A API do Bling V3 retorna o PDF em Base64 comprimido em GZIP
+            pdfBuffer = zlib.gunzipSync(compressedBuf);
+        } catch(e) {
+            // Caso em algum momento a API retorne o PDF sem compressão
+            pdfBuffer = compressedBuf;
+        }
+
+        res.setHeader('Content-Type', 'application/pdf');
+        const safeFilename = filename ? decodeURIComponent(filename).replace(/[^a-zA-Z0-9.\-_ ]/g, '') : 'DANFE.pdf';
+        res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+        res.setHeader('Content-Length', pdfBuffer.length);
+
+        res.send(pdfBuffer);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Proxy PDF para download de DANFE com nome personalizado (legado)
+app.get('/proxy-pdf', async (req, res, next) => {
+    try {
+        const { url, filename } = req.query;
+        if (!url) {
+            const error = new Error('A URL do PDF é obrigatória.');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const response = await axios({
+            url: decodeURIComponent(url),
+            method: 'GET',
+            responseType: 'stream'
+        });
+
+        res.setHeader('Content-Type', 'application/pdf');
+        const safeFilename = filename ? decodeURIComponent(filename).replace(/[^a-zA-Z0-9.\-_ ]/g, '') : 'documento.pdf';
+        res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+
+        response.data.pipe(res);
+    } catch (error) {
+        next(error);
+    }
+});
+
 // --- EXPORTAÇÃO DA APLICAÇÃO EXPRESS ---
 // Middleware de Erro Global - Captura todos os erros lançados nas rotas
 app.use((err, req, res, next) => {

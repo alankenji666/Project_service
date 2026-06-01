@@ -222,6 +222,65 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                     results.erros.push({ id, erro: errMsg });
                 }
             }
+
+            // Tradução para sincronia com a planilha
+            function traduzirSituacaoPedido(id) {
+                const s = {
+                    6: "Em aberto",
+                    9: "Atendido",
+                    12: "Cancelado",
+                    15: "Em andamento",
+                    18: "Venda agenciada",
+                    21: "Para entregar",
+                    24: "Em digitação",
+                    27: "Verificado",
+                    37589: "Atendido P."
+                };
+                return s[id] || "ID: " + id;
+            }
+
+            // Se houver algum sucesso, atualiza também diretamente na planilha do Google Sheets
+            if (results.sucessos.length > 0) {
+                try {
+                    const sheets = await getSheetsClient();
+                    const mResp = await sheets.spreadsheets.values.get({ 
+                        spreadsheetId: spreadsheetIdNFE, 
+                        range: `${sheetNamePedidosBling}!A:Z` 
+                    });
+                    const mRows = mResp.data.values || [];
+                    if (mRows.length > 0) {
+                        const mHeaders = mRows[0].map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_'));
+                        const idCol = mHeaders.indexOf('id_pedido') !== -1 ? mHeaders.indexOf('id_pedido') : (mHeaders.indexOf('id') !== -1 ? mHeaders.indexOf('id') : mHeaders.indexOf('id_pedido_bling'));
+                        const numCol = mHeaders.indexOf('numero');
+                        const sitCol = mHeaders.indexOf('situacao');
+
+                        if (sitCol !== -1) {
+                            const newStatusLabel = traduzirSituacaoPedido(idSituacao);
+                            for (const id of results.sucessos) {
+                                let mIdx = -1;
+                                for (let i = 1; i < mRows.length; i++) {
+                                    if (String(mRows[i][idCol]).trim() === String(id).trim() || String(mRows[i][numCol]).trim() === String(id).trim()) {
+                                        mIdx = i;
+                                        break;
+                                    }
+                                }
+                                if (mIdx !== -1) {
+                                    console.log(`[update-status] Sincronizando planilha para pedido ${id} (linha ${mIdx + 1}) -> "${newStatusLabel}"`);
+                                    await sheets.spreadsheets.values.update({
+                                        spreadsheetId: spreadsheetIdNFE,
+                                        range: `${sheetNamePedidosBling}!${colToA1(sitCol + 1)}${mIdx + 1}`,
+                                        valueInputOption: 'USER_ENTERED',
+                                        resource: { values: [[newStatusLabel]] }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (sheetErr) {
+                    console.error("[update-status] Erro ao sincronizar planilha em update-status:", sheetErr.message);
+                }
+            }
+
             res.status(200).send({ status: results.erros.length > 0 ? 'partial_success' : 'success', data: results });
         } catch (error) { 
             console.error("[Backend Error] update-status:", error.message);

@@ -15,7 +15,8 @@ function traduzirSituacaoPedido(id) {
         18: "Venda agenciada",
         21: "Para entregar",
         24: "Em digitação",
-        27: "Verificado"
+        27: "Verificado",
+        37589: "Atendido P."
     };
     return s[id] || "ID: " + id;
 }

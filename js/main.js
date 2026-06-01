@@ -19,6 +19,7 @@
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js';
         import { TransportadorasApp } from './modulos/transportadoras.js';
         window.TransportadorasApp = TransportadorasApp;
+        import * as AjusteEstoque from './modulos/ajusteEstoque.js';
 
         // Início do padrão Revealing Module para a aplicação principal
         const App = (function () {
@@ -5208,6 +5209,17 @@ async function _saveProductTagGroupEdit() {
                         _showMessageModal("Erro de Carregamento", "Não foi possível carregar o módulo de pesquisa de produtos.");
                     }
                     _showPage('pesquisar');
+                    if (typeof AjusteEstoque !== 'undefined') {
+                        AjusteEstoque.init({
+                            allProducts: _allProducts,
+                            apiUrls: API_URLS,
+                            utils: {
+                                showMessageModal: _showMessageModal,
+                                toggleLoading: (isLoading) => _loadingOverlay.classList.toggle('hidden', !isLoading),
+                                fetchData: _fetchData
+                            }
+                        });
+                    }
                     _fetchData();
                 }
             };

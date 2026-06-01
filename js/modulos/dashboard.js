@@ -11,6 +11,8 @@ export const DashboardApp = (function() {
     let _allLojaIntegradaOrders = [];
     let _allPedidosBling = []; // Nova fonte primária
     let _currentSalesDetails = []; // Armazena os dados para o modal de detalhes
+    let _currentMonthKey = '';
+    let _currentChannel = '';
     let _vendedorMap = {
         '15596443462': 'Julio Martins dos Santos',
         '15596443455': 'Reginaldo Araujo de Souza',
@@ -316,6 +318,25 @@ export const DashboardApp = (function() {
         _dom.rankingReportModalContent = document.getElementById('ranking-report-modal-content');
         _dom.clearRankingSelectionBtn = document.getElementById('clear-ranking-selection-btn');
         _dom.reportBtn = document.getElementById('open-product-report-modal-btn');
+
+        // NOVO: Cache dos elementos do modal de detalhe mensal
+        _dom.monthlySummaryModal = document.getElementById('monthly-summary-modal');
+        _dom.closeMonthlySummaryModalBtn = document.getElementById('close-monthly-summary-modal-btn');
+        _dom.closeMonthlySummaryModalOkBtn = document.getElementById('close-monthly-summary-modal-ok-btn');
+        _dom.monthlySummaryModalTitle = document.getElementById('monthly-summary-modal-title');
+        _dom.summarySelectedChannel = document.getElementById('summary-selected-channel');
+        _dom.summaryQtyOrders = document.getElementById('summary-qty-orders');
+        _dom.summaryTotalInvoiced = document.getElementById('summary-total-invoiced');
+        _dom.summarySalesPieces = document.getElementById('summary-sales-pieces');
+        _dom.summarySalesServices = document.getElementById('summary-sales-services');
+        _dom.summarySalesFreight = document.getElementById('summary-sales-freight');
+        _dom.summarySalesDiscount = document.getElementById('summary-sales-discount');
+        _dom.summaryTotalOrders = document.getElementById('summary-total-orders');
+        _dom.ratioBarPieces = document.getElementById('ratio-bar-pieces');
+        _dom.ratioBarServices = document.getElementById('ratio-bar-services');
+        _dom.ratioLabelPieces = document.getElementById('ratio-label-pieces');
+        _dom.ratioLabelServices = document.getElementById('ratio-label-services');
+        _dom.monthlySummaryBtn = document.getElementById('sales-details-monthly-summary-btn');
     }
 
     // --- Navigation Functions ---
@@ -1446,9 +1467,7 @@ export const DashboardApp = (function() {
         if (!p) return 0;
         // Ordem de prioridade exaustiva (incluindo campos de NFe, Pedido Bling e Pedido Loja Integrada)
         const val = p.total_pedido || p['total pedido'] || p.valor_da_nota || p.valor_total || p.total_venda || p.total || p.valortotal || p.valor || p['Valor Total'] || p['Valor total'] || p.valor_total_venda || p.valorTotal || 0;
-        // Limpa a string de valor (remove R$, pontos de milhar, espaços e converte vírgula em ponto)
-        const cleanVal = String(val).replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-        return parseFloat(cleanVal) || 0;
+        return _parseCurrencyBRL(val);
     }
 
     function _renderSalesView() {
@@ -1506,6 +1525,52 @@ export const DashboardApp = (function() {
 
         const aggregationLevel = ['current_month', 'last_month', '30'].includes(_state.currentDateFilterValue) ? 'day' : 'month';
         const salesByPeriod = {};
+        
+        // --- PREENCHIMENTO DE MESES VAZIOS ---
+        if (aggregationLevel === 'month') {
+            const currentYear = new Date().getFullYear();
+            const currentMonth = new Date().getMonth() + 1;
+            const selectedYear = parseInt(_state.selectedYearFilter, 10);
+            
+            let startYear = currentYear, endYear = currentYear;
+            let startMonth = 1, endMonth = currentMonth;
+            
+            if (selectedYear && !isNaN(selectedYear)) {
+                startYear = selectedYear;
+                endYear = selectedYear;
+                startMonth = 1;
+                endMonth = (selectedYear === currentYear) ? currentMonth : 12;
+            } else if (_state.startDate || _state.endDate) {
+                const d1 = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : new Date(currentYear, 0, 1);
+                const d2 = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : new Date();
+                startYear = d1.getFullYear();
+                startMonth = d1.getMonth() + 1;
+                endYear = d2.getFullYear();
+                endMonth = d2.getMonth() + 1;
+            } else {
+                if (filteredPedidos.length > 0) {
+                    const dates = filteredPedidos.map(p => _getOrderDate(p).getTime()).filter(t => !isNaN(t));
+                    if (dates.length > 0) {
+                        const minDate = new Date(Math.min(...dates));
+                        const maxDate = new Date(); 
+                        startYear = minDate.getFullYear();
+                        startMonth = minDate.getMonth() + 1;
+                        endYear = maxDate.getFullYear();
+                        endMonth = maxDate.getMonth() + 1;
+                    }
+                }
+            }
+
+            for (let y = startYear; y <= endYear; y++) {
+                const mStart = (y === startYear) ? startMonth : 1;
+                const mEnd = (y === endYear) ? endMonth : 12;
+                for (let m = mStart; m <= mEnd; m++) {
+                    const key = `${y}-${String(m).padStart(2, '0')}`;
+                    salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+                }
+            }
+        }
+        // ------------------------------------
         
         filteredPedidos.forEach(p => {
             const date = _getOrderDate(p);
@@ -1948,6 +2013,8 @@ export const DashboardApp = (function() {
     }
 
     function _showSalesDetailsModal(monthKey, channel) {
+        _currentMonthKey = monthKey;
+        _currentChannel = channel;
         let start, end, titleDate;
         if (monthKey === 'period-total') {
             start = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
@@ -1994,6 +2061,141 @@ export const DashboardApp = (function() {
     }
 
     /**
+     * Calcula e exibe o modal de detalhe mensal (agrupamento de métricas).
+     */
+    function _showMonthlySummaryModal() {
+        if (!_currentSalesDetails) return;
+
+        let totalFaturado = 0;
+        let totalPecas = 0;
+        let totalServicos = 0;
+        let totalFrete = 0;
+        let totalDesconto = 0;
+        let totalPedidos = 0;
+
+        _currentSalesDetails.forEach(p => {
+            const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
+            const nfeId = String(rawNfeId).split('.')[0].trim();
+            const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+
+            // 1. Total dos Pedidos (Faturado + Pendente)
+            const orderTotalValue = _getOrderValue(p);
+            totalPedidos += orderTotalValue;
+
+            // 2. Faturado (Nota Fiscal)
+            if (nfe) {
+                totalFaturado += _parseCurrencyBRL(nfe.valor_da_nota) || 0;
+            }
+
+            // 3. Frete
+            const frete = nfe ? (_parseCurrencyBRL(nfe.valor_do_frete) || 0) : 0;
+            totalFrete += frete;
+
+            // 4. Itens (Peças vs Serviços)
+            const itensRaw = nfe ? nfe.itens : (p.itens || '');
+            const items = _parseNfeItemsString(itensRaw);
+
+            let orderPecas = 0;
+            let orderServicos = 0;
+            items.forEach(i => {
+                const qty = parseFloat(i.quantidade) || 0;
+                const val = parseFloat(i.valor) || 0;
+                if (String(i.codigo).trim().startsWith('7')) {
+                    orderServicos += (val * qty);
+                } else {
+                    orderPecas += (val * qty);
+                }
+            });
+            totalPecas += orderPecas;
+            totalServicos += orderServicos;
+
+            // 5. Desconto
+            // Fórmula: Desconto = (Subtotal + Frete) - Valor Total Real
+            let orderSubtotal = orderPecas + orderServicos;
+            let orderDesconto = (orderSubtotal + frete) - orderTotalValue;
+            if (Math.abs(orderDesconto) < 0.01) orderDesconto = 0;
+            if (orderDesconto < 0) orderDesconto = 0;
+
+            totalDesconto += orderDesconto;
+        });
+
+        // Título e Informações do Período
+        let titleDate = "";
+        if (_currentMonthKey === 'period-total') {
+            const start = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+            const end = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+            titleDate = (start && end) ? `de ${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')}` : "Todo o Período";
+        } else {
+            const [y, m] = _currentMonthKey.split('-');
+            titleDate = new Date(y, m - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+        }
+
+        // Popula os elementos do DOM
+        if (_dom.monthlySummaryModalTitle) {
+            _dom.monthlySummaryModalTitle.textContent = `Detalhe Mensal (${titleDate})`;
+        }
+        if (_dom.summarySelectedChannel) {
+            _dom.summarySelectedChannel.textContent = _currentChannel || 'Total';
+        }
+        if (_dom.summaryQtyOrders) {
+            _dom.summaryQtyOrders.textContent = _currentSalesDetails.length;
+        }
+        if (_dom.summaryTotalInvoiced) {
+            _dom.summaryTotalInvoiced.textContent = totalFaturado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        if (_dom.summarySalesPieces) {
+            _dom.summarySalesPieces.textContent = totalPecas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        if (_dom.summarySalesServices) {
+            _dom.summarySalesServices.textContent = totalServicos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        if (_dom.summarySalesFreight) {
+            _dom.summarySalesFreight.textContent = totalFrete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        if (_dom.summarySalesDiscount) {
+            if (totalDesconto > 0) {
+                _dom.summarySalesDiscount.textContent = `-${totalDesconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+            } else {
+                _dom.summarySalesDiscount.textContent = totalDesconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            }
+        }
+        if (_dom.summaryTotalOrders) {
+            _dom.summaryTotalOrders.textContent = totalPedidos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        // Calcula a proporção
+        const combinedItemsTotal = totalPecas + totalServicos;
+        let pctPecas = 50;
+        let pctServicos = 50;
+
+        if (combinedItemsTotal > 0) {
+            pctPecas = (totalPecas / combinedItemsTotal) * 100;
+            pctServicos = (totalServicos / combinedItemsTotal) * 100;
+        } else {
+            pctPecas = 0;
+            pctServicos = 0;
+        }
+
+        if (_dom.ratioBarPieces) {
+            _dom.ratioBarPieces.style.width = `${pctPecas}%`;
+            _dom.ratioBarPieces.title = `Peças: ${pctPecas.toFixed(1)}%`;
+        }
+        if (_dom.ratioBarServices) {
+            _dom.ratioBarServices.style.width = `${pctServicos}%`;
+            _dom.ratioBarServices.title = `Serviços: ${pctServicos.toFixed(1)}%`;
+        }
+        if (_dom.ratioLabelPieces) {
+            _dom.ratioLabelPieces.textContent = `${pctPecas.toFixed(1)}%`;
+        }
+        if (_dom.ratioLabelServices) {
+            _dom.ratioLabelServices.textContent = `${pctServicos.toFixed(1)}%`;
+        }
+
+        // Exibe o modal
+        _dom.monthlySummaryModal?.classList.remove('hidden');
+    }
+
+    /**
      * Gera o HTML de ícone de ordenação baseado na chave e estado atual.
      */
     function _getSortIcon(key, sortState) {
@@ -2016,10 +2218,7 @@ export const DashboardApp = (function() {
                 <thead class="bg-gray-50 sticky top-0 z-10">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="pedido">
-                            <div class="flex items-center">Pedido ${_getSortIcon('pedido', sort)}</div>
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="nota">
-                            <div class="flex items-center">Nota ${_getSortIcon('nota', sort)}</div>
+                            <div class="flex items-center">Nº Pedido ${_getSortIcon('pedido', sort)}</div>
                         </th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="cliente">
                             <div class="flex items-center">Cliente ${_getSortIcon('cliente', sort)}</div>
@@ -2139,20 +2338,28 @@ export const DashboardApp = (function() {
             for (const [id, name] of Object.entries(_vendedorMap)) {
                 if (vendedorRaw.includes(id)) { vendedor = name; break; }
             }
+            vendedor = vendedor !== 'N/A' && vendedor ? vendedor.trim().split(' ')[0] : 'N/A';
             
             const itensRaw = nfe ? nfe.itens : (p.itens || '');
             const totalValue = _getOrderValue(p);
+            
+            const checkService = (str) => typeof str === 'string' && (str.includes('(7') || str.includes('( 7'));
+            const hasService = checkService(nfe ? nfe.itens : '') || checkService(p.itens || '');
 
             html += `
             <tr id="sales-detail-row-${p.id || p.id_pedido}" class="hover:bg-gray-50 transition-colors">
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-600">
-                    ${p.numero || p.número || '-'}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline font-bold">${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center gap-1.5">
+                        <div class="text-sm font-medium text-gray-600">${p.numero || p.número || '-'}</div>
+                        ${hasService ? `<div class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" title="Contém Serviço"></div>` : ''}
+                    </div>
+                    <div class="text-[10px] mt-0.5">
+                        ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline font-bold" title="Visualizar DANFE">NF: ${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
+                    </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" 
-                    data-itens="${itensRaw}" 
+                    data-itens="${p.itens || itensRaw}" 
+                    data-itens-faturados="${nfe ? (nfe.itens || '') : ''}" 
                     data-frete="${nfe ? (_parseCurrencyBRL(nfe.valor_do_frete) || 0) : 0}" 
                     data-valor-total="${totalValue}">
                     <div class="text-sm font-medium text-gray-900 truncate max-w-[200px]" title="${p.contato_nome || p['contato nome'] || '-'}">${p.contato_nome || p['contato nome'] || '-'}</div>
@@ -2193,11 +2400,20 @@ export const DashboardApp = (function() {
         if (!trigger || !_dom.customProductTooltip) return;
 
         const items = _parseNfeItemsString(trigger.dataset.itens);
+        const faturadosStr = trigger.dataset.itensFaturados || '';
+        const faturados = _parseNfeItemsString(faturadosStr);
         if (items.length === 0) return;
 
         const frete = _parseCurrencyBRL(trigger.dataset.frete) || 0;
         const valorNotaReal = _parseCurrencyBRL(trigger.dataset.valorTotal) || 0;
-        const subtotal = items.reduce((s, i) => s + (i.valor * i.quantidade), 0);
+        
+        let subtotalPecas = 0;
+        let subtotalServicos = 0;
+        items.forEach(i => {
+            if (String(i.codigo).trim().startsWith('7')) subtotalServicos += (i.valor * i.quantidade);
+            else subtotalPecas += (i.valor * i.quantidade);
+        });
+        const subtotal = subtotalPecas + subtotalServicos;
 
         // Calcula o desconto pela diferença (Fórmula: Desconto = (Subtotal + Frete) - Valor Total Real)
         let descontoCalculado = (subtotal + frete) - valorNotaReal;
@@ -2206,16 +2422,19 @@ export const DashboardApp = (function() {
         if (Math.abs(descontoCalculado) < 0.01) descontoCalculado = 0;
         if (descontoCalculado < 0) descontoCalculado = 0;
 
-        let html = `<div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 max-w-md"><h4 class="font-bold text-sm mb-2 pb-1 border-b">Itens da NFe</h4><ul class="space-y-1 text-xs">`;
+        let html = `<div class="p-2 bg-white rounded-lg shadow-xl border border-gray-300 max-w-md"><h4 class="font-bold text-sm mb-2 pb-1 border-b">Itens do Pedido</h4><ul class="space-y-1 text-xs">`;
         items.forEach(i => {
             const p = _allProducts.find(prod => prod.codigo === i.codigo);
-            html += `<li class="flex justify-between"><span>${i.quantidade}x ${p ? p.descricao : i.codigo}</span><span class="font-semibold ml-4">${i.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></li>`;
+            const isFaturado = faturados.some(f => String(f.codigo).trim() === String(i.codigo).trim());
+            const badgeF = isFaturado ? `<span class="inline-flex items-center justify-center bg-red-100 text-red-600 text-[10px] font-bold h-3.5 w-3.5 rounded mr-1.5" title="Item Faturado na NFe">F</span>` : '';
+            html += `<li class="flex justify-between items-center"><div class="flex items-center flex-1 pr-2 truncate">${badgeF}<span class="truncate">${i.quantidade}x ${p ? p.descricao : i.codigo}</span></div><span class="font-semibold ml-2 flex-shrink-0">${i.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></li>`;
         });
         html += `</ul><div class="mt-2 pt-2 border-t text-xs">
-            <div class="flex justify-between"><span>Subtotal:</span><span>${subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+            <div class="flex justify-between"><span>Subtotal (Peças):</span><span>${subtotalPecas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+            ${subtotalServicos > 0 ? `<div class="flex justify-between text-green-700 font-medium"><span>Subtotal (Serviços):</span><span>${subtotalServicos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
             <div class="flex justify-between"><span>Frete:</span><span>${frete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
             ${descontoCalculado > 0 ? `<div class="flex justify-between text-red-600 font-medium"><span>Desconto:</span><span>-${descontoCalculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
-            <div class="flex justify-between font-bold border-t mt-1 pt-1 text-sm"><span>Total da Nota:</span><span>${valorNotaReal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+            <div class="flex justify-between font-bold border-t mt-1 pt-1 text-sm"><span>Total da Venda:</span><span>${valorNotaReal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
         </div></div>`;
 
         _dom.customProductTooltip.innerHTML = html;
@@ -2660,6 +2879,7 @@ export const DashboardApp = (function() {
             if (e.target.closest('#sales-details-export-button')) { e.stopPropagation(); _dom.exportDropdown.classList.toggle('hidden'); }
             if (e.target.closest('#export-sales-details-notes-csv-btn')) { e.preventDefault(); _exportToCSV('notes'); _dom.exportDropdown.classList.add('hidden'); }
             if (e.target.closest('#export-sales-details-items-csv-btn')) { e.preventDefault(); _exportToCSV('items'); _dom.exportDropdown.classList.add('hidden'); }
+            if (e.target.closest('#sales-details-monthly-summary-btn')) { e.preventDefault(); _showMonthlySummaryModal(); _dom.exportDropdown.classList.add('hidden'); }
             const editObsBtn = e.target.closest('.edit-sales-observation-btn');
             if (editObsBtn && _utils.openOrderObservationModal) {
                 _utils.openOrderObservationModal(editObsBtn.dataset.targetId);
@@ -2687,6 +2907,16 @@ export const DashboardApp = (function() {
             if (_dom.customProductTooltip) {
                 _dom.customProductTooltip.style.opacity = '0';
                 setTimeout(() => { if (_dom.customProductTooltip.style.opacity === '0') _dom.customProductTooltip.classList.add('hidden'); }, 200);
+            }
+        });
+
+        // Close handlers for Monthly Summary Modal
+        const closeMonthlySummaryModal = () => _dom.monthlySummaryModal?.classList.add('hidden');
+        _dom.closeMonthlySummaryModalBtn?.addEventListener('click', closeMonthlySummaryModal);
+        _dom.closeMonthlySummaryModalOkBtn?.addEventListener('click', closeMonthlySummaryModal);
+        _dom.monthlySummaryModal?.addEventListener('click', e => {
+            if (e.target === _dom.monthlySummaryModal) {
+                closeMonthlySummaryModal();
             }
         });
     }

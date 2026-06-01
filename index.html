@@ -129,6 +129,7 @@
                         class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200">
                         <a href="#" id="user-data-link"
                             class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Dados de usuário</a>
+                        <button id="adjust-stock-menu-btn" class="w-full text-left block px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-semibold">Ajustar estoque</button>
                         <div class="border-t border-gray-100"></div>
                         <button id="logout-button"
                             class="w-full text-left block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">Sair</button>
@@ -1331,6 +1332,8 @@
                                 class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Exportar CSV Notas</a>
                             <a href="#" id="export-sales-details-items-csv-btn"
                                 class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Exportar CSV Itens</a>
+                            <a href="#" id="sales-details-monthly-summary-btn"
+                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-100">Detalhe Mensal</a>
                         </div>
                     </div>
                     <button id="close-sales-details-modal-btn" class="text-gray-500 hover:text-gray-800">
@@ -1348,6 +1351,123 @@
             </div>
             <p id="no-sales-details-message" class="text-center text-gray-500 py-8 hidden">Nenhum detalhe de venda
                 encontrado para este período.</p>
+        </div>
+    </div>
+
+    <!-- NOVO: Modal de Detalhe Mensal -->
+    <div id="monthly-summary-modal"
+        class="fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm transition-all duration-300">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col transform scale-100 transition-transform duration-300">
+            <!-- Header do Modal com um Gradiente Premium -->
+            <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 text-white p-6 relative">
+                <button id="close-monthly-summary-modal-btn" class="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors bg-white bg-opacity-10 hover:bg-opacity-20 p-2 rounded-full">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-white bg-opacity-10 rounded-xl">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 id="monthly-summary-modal-title" class="text-2xl font-bold tracking-tight">Detalhe Mensal</h2>
+                        <p id="monthly-summary-modal-subtitle" class="text-sm opacity-80 mt-0.5">Visão consolidada de faturamento e vendas</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Conteúdo do Modal -->
+            <div class="p-6 overflow-y-auto max-h-[75vh] space-y-6 bg-gray-50">
+                <!-- Grid de Cards de Métricas Principais -->
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Qtd Pedidos -->
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                        <div class="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantidade de Pedidos</p>
+                            <p id="summary-qty-orders" class="text-2xl font-bold text-gray-800">0</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Total Faturado -->
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                        <div class="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Faturado (NF-e)</p>
+                            <p id="summary-total-invoiced" class="text-2xl font-bold text-gray-800 font-mono">R$ 0,00</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detalhamento Fincanceiro - Tabela Estilizada Premium -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="px-5 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h4 class="font-bold text-gray-700 text-sm uppercase tracking-wider">Composição dos Valores</h4>
+                        <span class="text-xs font-medium text-gray-400">Canal: <strong id="summary-selected-channel" class="text-gray-600">Total</strong></span>
+                    </div>
+                    <div class="divide-y divide-gray-100">
+                        <div class="px-5 py-3.5 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                            <span class="text-sm font-medium text-gray-600">Vendas de Peças (Produtos)</span>
+                            <span id="summary-sales-pieces" class="text-sm font-bold text-gray-800 font-mono">R$ 0,00</span>
+                        </div>
+                        <div class="px-5 py-3.5 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                            <span class="text-sm font-medium text-gray-600">Vendas de Serviços (Serviços)</span>
+                            <span id="summary-sales-services" class="text-sm font-bold text-gray-800 font-mono">R$ 0,00</span>
+                        </div>
+                        <div class="px-5 py-3.5 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                            <span class="text-sm font-medium text-gray-600">Total em Frete</span>
+                            <span id="summary-sales-freight" class="text-sm font-semibold text-gray-700 font-mono">R$ 0,00</span>
+                        </div>
+                        <div class="px-5 py-3.5 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                            <span class="text-sm font-medium text-gray-600 flex items-center gap-1">
+                                Total em Desconto
+                            </span>
+                            <span id="summary-sales-discount" class="text-sm font-semibold text-red-500 font-mono">-R$ 0,00</span>
+                        </div>
+                        <div class="px-5 py-4 flex justify-between items-center bg-blue-50 bg-opacity-40">
+                            <span class="text-sm font-bold text-blue-900">Total dos Pedidos (Faturado + Pendente)</span>
+                            <span id="summary-total-orders" class="text-base font-extrabold text-blue-700 font-mono">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gráfico ou Barra de Progresso Visual de Composição -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                    <h4 class="font-bold text-gray-700 text-xs uppercase tracking-wider mb-4">Proporção Peças vs Serviços</h4>
+                    <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden flex">
+                        <div id="ratio-bar-pieces" class="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-500" style="width: 50%" title="Peças"></div>
+                        <div id="ratio-bar-services" class="bg-gradient-to-r from-green-400 to-emerald-500 h-full transition-all duration-500" style="width: 50%" title="Serviços"></div>
+                    </div>
+                    <div class="flex justify-between items-center mt-3 text-xs font-semibold text-gray-500">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                            <span>Peças: <strong id="ratio-label-pieces" class="text-gray-700">50%</strong></span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                            <span>Serviços: <strong id="ratio-label-services" class="text-gray-700">50%</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end">
+                <button id="close-monthly-summary-modal-ok-btn"
+                    class="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 hover:shadow-lg transition-all duration-200">
+                    Fechar
+                </button>
+            </div>
         </div>
     </div>
 
