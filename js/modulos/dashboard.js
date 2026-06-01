@@ -2465,11 +2465,10 @@ export const DashboardApp = (function() {
     function _exportToCSV(type) {
         if (!_currentSalesDetails.length) return;
         
-        const formatBRL = (val) => {
-            return new Intl.NumberFormat('pt-BR', { 
-                style: 'currency', 
-                currency: 'BRL' 
-            }).format(val || 0).replace(/\u00A0/g, ' '); // Garante espaços normais
+        // Formato numérico limpo para CSV (1234,56) sem R$ ou milhares, permitindo soma no Excel/Sheets do usuário
+        const formatCSVNumber = (val) => {
+            const num = typeof val === 'number' ? val : _parseCurrencyBRL(val);
+            return num.toFixed(2).replace('.', ',');
         };
 
         const getVendedor = (p, nfe) => {
@@ -2488,14 +2487,14 @@ export const DashboardApp = (function() {
                 const nfeId = String(rawNfeId).split('.')[0].trim();
                 const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
                 
-                const totalValue = _parseCurrencyBRL(p.total_pedido || p['total pedido'] || p.valor_total || p.total_venda || p.total || p.valortotal || 0) || 0;
+                const totalValue = _getOrderValue(p);
                 
                 return [
                     nfe ? nfe.numero_da_nota : (p.numero || p.número || '-'), 
                     _formatDate(nfe ? nfe.data_de_emissao : (p.data || p.data_criacao || p.data_pedido)), 
                     p.contato_nome || p['contato nome'] || (nfe ? nfe.nome_do_client : '-'), 
                     getVendedor(p, nfe), 
-                    formatBRL(nfe ? nfe.valor_da_nota : totalValue), 
+                    formatCSVNumber(nfe ? nfe.valor_da_nota : totalValue), 
                     p.situação || p.situacao || (nfe ? nfe.situacao : '-'), 
                     _getNormalizedStoreName(p) || (nfe ? nfe.origem_loja : '-')
                 ];
@@ -2526,10 +2525,10 @@ export const DashboardApp = (function() {
                         p.contato_nome || p['contato nome'] || (nfe ? nfe.nome_do_client : '-'), 
                         i.codigo, 
                         quantidade, 
-                        formatBRL(vendaUnitario),
-                        formatBRL(custoUnitario),
-                        formatBRL(totalVenda),
-                        formatBRL(totalCusto)
+                        formatCSVNumber(vendaUnitario),
+                        formatCSVNumber(custoUnitario),
+                        formatCSVNumber(totalVenda),
+                        formatCSVNumber(totalCusto)
                     ]);
                 });
             });
