@@ -11,6 +11,173 @@ export const PesquisarProduto = (function() {
     let _currentPage = 1;
     let _pageSize = 50;
 
+    /**
+     * Imprime a etiqueta de identificação contendo imagem, QR Code e informações customizadas.
+     */
+    function _printProductLabel(product, customDesc, customSpecs, customLoc) {
+        const printWindow = window.open('', '_blank', 'width=600,height=400');
+        if (!printWindow) {
+            alert("Por favor, permita pop-ups para imprimir a etiqueta.");
+            return;
+        }
+
+        const qrContainer = document.getElementById('label-preview-qrcode');
+        let qrHtml = '';
+        if (qrContainer) {
+            qrHtml = qrContainer.innerHTML;
+        }
+
+        const imageUrl = product.url_imagens_externas && product.url_imagens_externas[0]
+            ? product.url_imagens_externas[0]
+            : 'https://placehold.co/150x150/e2e8f0/64748b?text=?';
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Imprimir Etiqueta - ${product.codigo}</title>
+                <style>
+                    @page {
+                        size: auto;
+                        margin: 0mm;
+                    }
+                    body {
+                        margin: 0;
+                        padding: 10px;
+                        font-family: Arial, sans-serif;
+                        background: white;
+                        -webkit-print-color-adjust: exact;
+                    }
+                    .label-container {
+                        width: 380px;
+                        height: 120px;
+                        border: 2px solid black;
+                        padding: 8px;
+                        box-sizing: border-box;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                        background: white;
+                    }
+                    .label-top {
+                        display: flex;
+                        align-items: flex-start;
+                        gap: 8px;
+                        flex-grow: 1;
+                    }
+                    .label-img-box {
+                        width: 70px;
+                        height: 70px;
+                        border: 1px solid #ccc;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        overflow: hidden;
+                        background: white;
+                        flex-shrink: 0;
+                    }
+                    .label-img-box img {
+                        max-width: 100%;
+                        max-height: 100%;
+                        object-fit: contain;
+                    }
+                    .label-info {
+                        flex-grow: 1;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        min-width: 0;
+                    }
+                    .label-title {
+                        font-size: 14px;
+                        font-weight: bold;
+                        margin: 0 0 2px 0;
+                        color: black;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                    }
+                    .label-code {
+                        font-size: 11px;
+                        font-weight: bold;
+                        margin: 0 0 2px 0;
+                        color: black;
+                    }
+                    .label-specs {
+                        font-size: 11px;
+                        margin: 0;
+                        color: #333;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                    }
+                    .label-qr-box {
+                        width: 70px;
+                        height: 70px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        flex-shrink: 0;
+                    }
+                    .label-qr-box canvas, .label-qr-box img {
+                        width: 100% !important;
+                        height: 100% !important;
+                    }
+                    .label-bottom {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: flex-end;
+                        border-top: 1px dashed #ccc;
+                        padding-top: 4px;
+                        margin-top: 4px;
+                    }
+                    .label-location {
+                        font-size: 14px;
+                        font-weight: bold;
+                        color: black;
+                    }
+                    .label-location span {
+                        font-weight: normal;
+                    }
+                    .label-sku-bottom {
+                        font-size: 14px;
+                        font-weight: bold;
+                        color: black;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="label-container">
+                    <div class="label-top">
+                        <div class="label-img-box">
+                            <img src="${imageUrl}" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
+                        </div>
+                        <div class="label-info">
+                            <h2 class="label-title">${customDesc}</h2>
+                            <div class="label-code">${product.codigo}</div>
+                            <p class="label-specs">${customSpecs}</p>
+                        </div>
+                        <div class="label-qr-box">
+                            ${qrHtml}
+                        </div>
+                    </div>
+                    <div class="label-bottom">
+                        <div class="label-location">Localização: <span>${customLoc}</span></div>
+                        <div class="label-sku-bottom">${product.codigo}</div>
+                    </div>
+                </div>
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        setTimeout(function() { window.close(); }, 500);
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+
     function _renderProductDetails(product) {
         if (!_dom.product_details || !_utils.createDetailItem) return;
     
@@ -99,9 +266,114 @@ export const PesquisarProduto = (function() {
                     }
                 </div>
             </div>
+
+            <!-- Gerador de Etiqueta Identificadora com QR Code -->
+            <div class="mt-8 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    Gerador de Etiqueta Identificadora
+                </h3>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                    <!-- Controles de Customização -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Título / Descrição</label>
+                            <input type="text" id="label-edit-desc" value="${product.descricao}" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Especificações Extras</label>
+                            <input type="text" id="label-edit-specs" value="${product.unidade || 'UN'}" placeholder="Ex: 3000kg 380v" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Localização</label>
+                            <input type="text" id="label-edit-location" value="${product.localizacao || 'N/A'}" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <button id="label-print-btn" class="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-indigo-700 transition shadow-md flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                            Imprimir Etiqueta
+                        </button>
+                    </div>
+                    
+                    <!-- Live Preview -->
+                    <div class="flex flex-col items-center">
+                        <span class="text-xs font-semibold text-gray-400 mb-2">Pré-visualização da Etiqueta</span>
+                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-gray-800 p-3 rounded flex flex-col justify-between h-[120px] shadow-sm select-none">
+                            <div class="flex items-start gap-2 flex-grow">
+                                <div class="w-[64px] h-[64px] border border-gray-200 rounded flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
+                                    <img id="label-preview-img" src="${product.url_imagens_externas && product.url_imagens_externas[0] ? product.url_imagens_externas[0] : 'https://placehold.co/150x150/e2e8f0/64748b?text=?'}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
+                                </div>
+                                <div class="flex-grow min-w-0 flex flex-col justify-center">
+                                    <h4 id="label-preview-title" class="text-xs font-bold text-black truncate max-w-[160px]">${product.descricao}</h4>
+                                    <div id="label-preview-code" class="text-[10px] font-bold text-black mt-0.5">${product.codigo}</div>
+                                    <p id="label-preview-specs" class="text-[10px] text-gray-700 truncate max-w-[160px]">${product.unidade || 'UN'}</p>
+                                </div>
+                                <div id="label-preview-qrcode" class="w-[64px] h-[64px] flex items-center justify-center flex-shrink-0">
+                                    <!-- QR Code Canvas inserido pelo qrcode.js -->
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-end border-t border-dashed border-gray-300 pt-1 mt-1">
+                                <div class="text-[11px] font-bold text-black">Localização: <span id="label-preview-loc-text" class="font-normal">${product.localizacao || 'N/A'}</span></div>
+                                <div id="label-preview-sku-bottom" class="text-[11px] font-bold text-black">${product.codigo}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
         _dom.details_placeholder.classList.add('hidden');
         _dom.product_details.classList.remove('hidden');
+
+        // Instanciação dinâmica do QR Code e Event Listeners com pequeno delay
+        setTimeout(() => {
+            const qrContainer = document.getElementById('label-preview-qrcode');
+            if (qrContainer && window.QRCode) {
+                qrContainer.innerHTML = '';
+                new window.QRCode(qrContainer, {
+                    text: String(product.codigo),
+                    width: 64,
+                    height: 64,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: window.QRCode.CorrectLevel.H
+                });
+            }
+            
+            // Add live preview listeners
+            const editDescInput = document.getElementById('label-edit-desc');
+            const editSpecsInput = document.getElementById('label-edit-specs');
+            const editLocInput = document.getElementById('label-edit-location');
+
+            if (editDescInput) {
+                editDescInput.addEventListener('input', (e) => {
+                    const titlePreview = document.getElementById('label-preview-title');
+                    if (titlePreview) titlePreview.textContent = e.target.value;
+                });
+            }
+            if (editSpecsInput) {
+                editSpecsInput.addEventListener('input', (e) => {
+                    const specsPreview = document.getElementById('label-preview-specs');
+                    if (specsPreview) specsPreview.textContent = e.target.value;
+                });
+            }
+            if (editLocInput) {
+                editLocInput.addEventListener('input', (e) => {
+                    const locPreview = document.getElementById('label-preview-loc-text');
+                    if (locPreview) locPreview.textContent = e.target.value || 'N/A';
+                });
+            }
+
+            // Hook Print Button
+            const printBtn = document.getElementById('label-print-btn');
+            if (printBtn) {
+                printBtn.addEventListener('click', () => {
+                    const customDesc = document.getElementById('label-edit-desc')?.value || product.descricao;
+                    const customSpecs = document.getElementById('label-edit-specs')?.value || product.unidade || 'UN';
+                    const customLoc = document.getElementById('label-edit-location')?.value || product.localizacao || 'N/A';
+                    _printProductLabel(product, customDesc, customSpecs, customLoc);
+                });
+            }
+        }, 50);
     }
     
 
