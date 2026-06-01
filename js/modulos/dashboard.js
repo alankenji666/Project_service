@@ -2550,7 +2550,7 @@ export const DashboardApp = (function() {
 
         let headers, rows;
         if (type === 'notes') {
-            headers = ["Nº Pedido", "Nº Nota", "Data", "Cliente", "Vendedor", "Valor Peças", "Valor Serviço", "Valor", "Situação", "Origem"];
+            headers = ["Nº Pedido", "Nº Nota", "Data", "Cliente", "Vendedor", "Valor", "Situação", "Origem"];
             rows = _currentSalesDetails.map(p => {
                 const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
                 const nfeId = String(rawNfeId).split('.')[0].trim();
@@ -2558,22 +2558,6 @@ export const DashboardApp = (function() {
                 
                 const totalValue = _getOrderValue(p);
                 
-                // Calcula divisão entre Peças e Serviços
-                const itensRaw = p.itens || (nfe ? nfe.itens : '');
-                const items = _parseNfeItemsString(itensRaw);
-
-                let orderPecas = 0;
-                let orderServicos = 0;
-                items.forEach(i => {
-                    const qty = parseFloat(i.quantidade) || 0;
-                    const val = parseFloat(i.valor) || 0;
-                    if (String(i.codigo).trim().startsWith('7')) {
-                        orderServicos += (val * qty);
-                    } else {
-                        orderPecas += (val * qty);
-                    }
-                });
-
                 // Formata data estritamente como DD/MM/AAAA (remove horário se houver)
                 const rawDate = nfe ? nfe.data_de_emissao : (p.data || p.data_criacao || p.data_pedido);
                 let formattedDate = _formatDate(rawDate);
@@ -2587,8 +2571,6 @@ export const DashboardApp = (function() {
                     formattedDate,
                     p.contato_nome || p['contato nome'] || (nfe ? nfe.nome_do_client : '-'), 
                     getVendedor(p, nfe), 
-                    formatCSVNumber(orderPecas),
-                    formatCSVNumber(orderServicos),
                     formatCSVNumber(totalValue), 
                     p.situação || p.situacao || (nfe ? nfe.situacao : '-'), 
                     _getNormalizedStoreName(p) || (nfe ? nfe.origem_loja : '-')
