@@ -97,12 +97,6 @@ export const PesquisarProduto = (function() {
                         text-overflow: ellipsis;
                         white-space: nowrap;
                     }
-                    .label-code {
-                        font-size: 11px;
-                        font-weight: bold;
-                        margin: 0 0 2px 0;
-                        color: black;
-                    }
                     .label-specs {
                         font-size: 11px;
                         margin: 0;
@@ -154,7 +148,6 @@ export const PesquisarProduto = (function() {
                         </div>
                         <div class="label-info">
                             <h2 class="label-title">${customDesc}</h2>
-                            <div class="label-code">${product.codigo}</div>
                             <p class="label-specs">${customSpecs}</p>
                         </div>
                         <div class="label-qr-box">
@@ -283,7 +276,7 @@ export const PesquisarProduto = (function() {
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Especificações Extras</label>
-                            <input type="text" id="label-edit-specs" value="${product.unidade || 'UN'}" placeholder="Ex: 3000kg 380v" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <input type="text" id="label-edit-specs" value="" placeholder="Ex: 3000kg 380v" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Localização</label>
@@ -305,8 +298,7 @@ export const PesquisarProduto = (function() {
                                 </div>
                                 <div class="flex-grow min-w-0 flex flex-col justify-center">
                                     <h4 id="label-preview-title" class="text-xs font-bold text-black truncate max-w-[160px]">${product.descricao}</h4>
-                                    <div id="label-preview-code" class="text-[10px] font-bold text-black mt-0.5">${product.codigo}</div>
-                                    <p id="label-preview-specs" class="text-[10px] text-gray-700 truncate max-w-[160px]">${product.unidade || 'UN'}</p>
+                                    <p id="label-preview-specs" class="text-[10px] text-gray-700 truncate max-w-[160px]"></p>
                                 </div>
                                 <div id="label-preview-qrcode" class="w-[64px] h-[64px] flex items-center justify-center flex-shrink-0">
                                     <!-- QR Code Canvas inserido pelo qrcode.js -->
@@ -368,7 +360,7 @@ export const PesquisarProduto = (function() {
             if (printBtn) {
                 printBtn.addEventListener('click', () => {
                     const customDesc = document.getElementById('label-edit-desc')?.value || product.descricao;
-                    const customSpecs = document.getElementById('label-edit-specs')?.value || product.unidade || 'UN';
+                    const customSpecs = document.getElementById('label-edit-specs')?.value || '';
                     const customLoc = document.getElementById('label-edit-location')?.value || product.localizacao || 'N/A';
                     _printProductLabel(product, customDesc, customSpecs, customLoc);
                 });
