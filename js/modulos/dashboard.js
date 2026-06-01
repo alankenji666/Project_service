@@ -336,6 +336,7 @@ export const DashboardApp = (function() {
         _dom.ratioBarServices = document.getElementById('ratio-bar-services');
         _dom.ratioLabelPieces = document.getElementById('ratio-label-pieces');
         _dom.ratioLabelServices = document.getElementById('ratio-label-services');
+        _dom.summarySellerList = document.getElementById('summary-seller-list');
         _dom.monthlySummaryBtn = document.getElementById('sales-details-monthly-summary-btn');
     }
 
@@ -2072,6 +2073,7 @@ export const DashboardApp = (function() {
         let totalFrete = 0;
         let totalDesconto = 0;
         let totalPedidos = 0;
+        const sellerSales = {};
 
         _currentSalesDetails.forEach(p => {
             const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
@@ -2117,6 +2119,14 @@ export const DashboardApp = (function() {
             if (orderDesconto < 0) orderDesconto = 0;
 
             totalDesconto += orderDesconto;
+
+            // Rastrear Vendedor
+            const vendedorName = _getVendedorInfo(p, nfe);
+            if (!sellerSales[vendedorName]) {
+                sellerSales[vendedorName] = { valor: 0, qtd: 0 };
+            }
+            sellerSales[vendedorName].valor += orderTotalValue;
+            sellerSales[vendedorName].qtd += 1;
         });
 
         // Título e Informações do Período
@@ -2189,6 +2199,65 @@ export const DashboardApp = (function() {
         }
         if (_dom.ratioLabelServices) {
             _dom.ratioLabelServices.textContent = `${pctServicos.toFixed(1)}%`;
+        }
+
+        // Popula as vendas por vendedor
+        if (_dom.summarySellerList) {
+            let sellerHtml = '';
+            const sortedSellers = Object.entries(sellerSales).sort((a, b) => b[1].valor - a[1].valor);
+            
+            if (sortedSellers.length === 0) {
+                sellerHtml = `
+                    <div class="text-center py-4 text-xs font-semibold text-gray-400">
+                        Nenhuma venda registrada para vendedores neste período.
+                    </div>
+                `;
+            } else {
+                sortedSellers.forEach(([name, data]) => {
+                    let initials = 'NA';
+                    let displayName = name;
+                    
+                    if (name && name !== 'N/A') {
+                        const words = name.split(' ');
+                        if (words.length > 1) {
+                            initials = (words[0][0] + words[1][0]).toUpperCase();
+                        } else {
+                            initials = name.substring(0, 2).toUpperCase();
+                        }
+                    } else {
+                        displayName = 'Não Informado';
+                        initials = 'NI';
+                    }
+
+                    // Cores harmoniosas baseadas no nome do vendedor
+                    let avatarBg = 'bg-slate-100 text-slate-700';
+                    if (displayName.toLowerCase().includes('julio')) {
+                        avatarBg = 'bg-blue-100 text-blue-700';
+                    } else if (displayName.toLowerCase().includes('reginaldo')) {
+                        avatarBg = 'bg-indigo-100 text-indigo-700';
+                    } else if (displayName.toLowerCase().includes('rodrigo')) {
+                        avatarBg = 'bg-purple-100 text-purple-700';
+                    } else if (displayName !== 'Não Informado') {
+                        avatarBg = 'bg-violet-100 text-violet-700';
+                    }
+
+                    sellerHtml += `
+                        <div class="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-100 hover:bg-gray-100/70 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full ${avatarBg} flex items-center justify-center font-bold text-xs uppercase tracking-wider">${initials}</div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-800">${displayName}</p>
+                                    <p class="text-xs text-gray-500">${data.qtd} ${data.qtd === 1 ? 'pedido' : 'pedidos'}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm font-bold text-gray-800 font-mono">${data.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            _dom.summarySellerList.innerHTML = sellerHtml;
         }
 
         // Exibe o modal
