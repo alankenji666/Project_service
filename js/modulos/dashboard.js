@@ -2481,7 +2481,7 @@ export const DashboardApp = (function() {
 
         let headers, rows;
         if (type === 'notes') {
-            headers = ["Nº Nota", "Data", "Cliente", "Vendedor", "Valor", "Situação", "Origem"];
+            headers = ["Nº Pedido", "Nº Nota", "Data", "Cliente", "Vendedor", "Valor", "Situação", "Origem"];
             rows = _currentSalesDetails.map(p => {
                 const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
                 const nfeId = String(rawNfeId).split('.')[0].trim();
@@ -2489,9 +2489,17 @@ export const DashboardApp = (function() {
                 
                 const totalValue = _getOrderValue(p);
                 
+                // Formata data estritamente como DD/MM/AAAA (remove horário se houver)
+                const rawDate = nfe ? nfe.data_de_emissao : (p.data || p.data_criacao || p.data_pedido);
+                let formattedDate = _formatDate(rawDate);
+                if (formattedDate.includes(' ')) {
+                    formattedDate = formattedDate.split(' ')[0];
+                }
+                
                 return [
-                    nfe ? nfe.numero_da_nota : (p.numero || p.número || '-'), 
-                    _formatDate(nfe ? nfe.data_de_emissao : (p.data || p.data_criacao || p.data_pedido)), 
+                    p.numero || p.número || '-',
+                    nfe ? nfe.numero_da_nota : '-',
+                    formattedDate,
                     p.contato_nome || p['contato nome'] || (nfe ? nfe.nome_do_client : '-'), 
                     getVendedor(p, nfe), 
                     formatCSVNumber(totalValue), 
