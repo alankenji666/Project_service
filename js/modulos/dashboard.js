@@ -2494,7 +2494,7 @@ export const DashboardApp = (function() {
                     _formatDate(nfe ? nfe.data_de_emissao : (p.data || p.data_criacao || p.data_pedido)), 
                     p.contato_nome || p['contato nome'] || (nfe ? nfe.nome_do_client : '-'), 
                     getVendedor(p, nfe), 
-                    formatCSVNumber(nfe ? nfe.valor_da_nota : totalValue), 
+                    formatCSVNumber(totalValue), 
                     p.situação || p.situacao || (nfe ? nfe.situacao : '-'), 
                     _getNormalizedStoreName(p) || (nfe ? nfe.origem_loja : '-')
                 ];
