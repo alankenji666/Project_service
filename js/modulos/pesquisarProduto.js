@@ -68,7 +68,6 @@ export const PesquisarProduto = (function() {
                     .label-img-box {
                         width: 70px;
                         height: 70px;
-                        border: 1px solid #ccc;
                         display: flex;
                         align-items: center;
                         justify-content: center;
@@ -294,9 +293,9 @@ export const PesquisarProduto = (function() {
                     <!-- Live Preview -->
                     <div class="flex flex-col items-center">
                         <span class="text-xs font-semibold text-gray-400 mb-2">Pré-visualização da Etiqueta</span>
-                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-dashed border-gray-200 p-3 rounded flex flex-col justify-between h-[120px] shadow-sm select-none">
+                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-gray-300 p-3 rounded flex flex-col justify-between h-[120px] shadow-sm select-none">
                             <div class="flex items-start gap-2 flex-grow">
-                                <div class="w-[64px] h-[64px] border border-gray-200 rounded flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
+                                <div class="w-[64px] h-[64px] flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
                                     <img id="label-preview-img" src="${product.url_imagens_externas && product.url_imagens_externas[0] ? product.url_imagens_externas[0] : 'https://placehold.co/150x150/e2e8f0/64748b?text=?'}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
                                 </div>
                                 <div class="flex-grow min-w-0 flex flex-col justify-center">
