@@ -55,15 +55,22 @@ export const PesquisarProduto = (function() {
                         padding: 8px;
                         box-sizing: border-box;
                         display: flex;
-                        flex-direction: column;
+                        flex-direction: row;
                         justify-content: space-between;
                         background: white;
                     }
-                    .label-top {
+                    .label-left-side {
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                        flex-grow: 1;
+                        min-width: 0;
+                        margin-right: 8px;
+                    }
+                    .label-left-top {
                         display: flex;
                         align-items: flex-start;
                         gap: 8px;
-                        flex-grow: 1;
                     }
                     .label-img-box {
                         width: 80px;
@@ -112,12 +119,13 @@ export const PesquisarProduto = (function() {
                         width: 100% !important;
                         height: 100% !important;
                     }
-                    .label-bottom {
+                    .label-right-column {
                         display: flex;
-                        justify-content: space-between;
-                        align-items: flex-end;
-                        padding-top: 4px;
-                        margin-top: 4px;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        width: 80px;
+                        flex-shrink: 0;
                     }
                     .label-location {
                         font-size: 14px;
@@ -131,24 +139,30 @@ export const PesquisarProduto = (function() {
                         font-size: 14px;
                         font-weight: bold;
                         color: black;
+                        text-align: center;
+                        margin-top: 4px;
+                        width: 100%;
+                        word-break: break-all;
                     }
                 </style>
             </head>
             <body>
                 <div class="label-container">
-                    <div class="label-top">
-                        <div class="label-img-box">
-                            <img src="${imageUrl}" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
+                    <div class="label-left-side">
+                        <div class="label-left-top">
+                            <div class="label-img-box">
+                                <img src="${imageUrl}" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
+                            </div>
+                            <div class="label-info">
+                                <h2 class="label-title">${customDesc}</h2>
+                            </div>
                         </div>
-                        <div class="label-info">
-                            <h2 class="label-title">${customDesc}</h2>
-                        </div>
+                        <div class="label-location">Localização: <span>${customLoc}</span></div>
+                    </div>
+                    <div class="label-right-column">
                         <div class="label-qr-box">
                             ${qrHtml}
                         </div>
-                    </div>
-                    <div class="label-bottom">
-                        <div class="label-location">Localização: <span>${customLoc}</span></div>
                         <div class="label-sku-bottom">${product.codigo}</div>
                     </div>
                 </div>
@@ -280,21 +294,23 @@ export const PesquisarProduto = (function() {
                     <!-- Live Preview -->
                     <div class="flex flex-col items-center">
                         <span class="text-xs font-semibold text-gray-400 mb-2">Pré-visualização da Etiqueta</span>
-                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-gray-300 p-3 rounded flex flex-col justify-between h-[120px] shadow-sm select-none">
-                            <div class="flex items-start gap-2 flex-grow">
-                                <div class="w-[80px] h-[80px] flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
-                                    <img id="label-preview-img" src="${product.url_imagens_externas && product.url_imagens_externas[0] ? product.url_imagens_externas[0] : 'https://placehold.co/150x150/e2e8f0/64748b?text=?'}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
+                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-gray-300 p-3 rounded flex flex-row justify-between h-[120px] shadow-sm select-none">
+                            <div class="flex flex-col justify-between flex-grow min-w-0 mr-2">
+                                <div class="flex items-start gap-2">
+                                    <div class="w-[80px] h-[80px] flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
+                                        <img id="label-preview-img" src="${product.url_imagens_externas && product.url_imagens_externas[0] ? product.url_imagens_externas[0] : 'https://placehold.co/150x150/e2e8f0/64748b?text=?'}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
+                                    </div>
+                                    <div class="flex-grow min-w-0 flex flex-col justify-center">
+                                        <h4 id="label-preview-title" class="text-[11px] font-bold text-black leading-tight max-w-[180px] overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; word-break: break-word;">${product.descricao}</h4>
+                                    </div>
                                 </div>
-                                <div class="flex-grow min-w-0 flex flex-col justify-center">
-                                    <h4 id="label-preview-title" class="text-[11px] font-bold text-black leading-tight max-w-[180px] overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; word-break: break-word;">${product.descricao}</h4>
-                                </div>
+                                <div class="text-[11px] font-bold text-black truncate">Localização: <span id="label-preview-loc-text" class="font-normal">${product.localizacao || 'N/A'}</span></div>
+                            </div>
+                            <div class="flex flex-col items-center justify-center w-[80px] flex-shrink-0">
                                 <div id="label-preview-qrcode" class="w-[80px] h-[80px] flex items-center justify-center flex-shrink-0">
                                     <!-- QR Code Canvas inserido pelo qrcode.js -->
                                 </div>
-                            </div>
-                            <div class="flex justify-between items-end pt-1 mt-1">
-                                <div class="text-[11px] font-bold text-black">Localização: <span id="label-preview-loc-text" class="font-normal">${product.localizacao || 'N/A'}</span></div>
-                                <div id="label-preview-sku-bottom" class="text-[11px] font-bold text-black">${product.codigo}</div>
+                                <div id="label-preview-sku-bottom" class="text-[11px] font-bold text-black text-center mt-1 w-full truncate">${product.codigo}</div>
                             </div>
                         </div>
                     </div>
