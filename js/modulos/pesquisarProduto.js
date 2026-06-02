@@ -89,13 +89,17 @@ export const PesquisarProduto = (function() {
                         min-width: 0;
                     }
                     .label-title {
-                        font-size: 14px;
+                        font-size: 12px;
                         font-weight: bold;
                         margin: 0 0 2px 0;
                         color: black;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 3;
+                        -webkit-box-orient: vertical;
                         overflow: hidden;
-                        text-overflow: ellipsis;
-                        white-space: nowrap;
+                        line-height: 1.2;
+                        max-height: 3.6em;
+                        word-break: break-word;
                     }
                     .label-specs {
                         font-size: 11px;
@@ -297,7 +301,7 @@ export const PesquisarProduto = (function() {
                                     <img id="label-preview-img" src="${product.url_imagens_externas && product.url_imagens_externas[0] ? product.url_imagens_externas[0] : 'https://placehold.co/150x150/e2e8f0/64748b?text=?'}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
                                 </div>
                                 <div class="flex-grow min-w-0 flex flex-col justify-center">
-                                    <h4 id="label-preview-title" class="text-xs font-bold text-black truncate max-w-[160px]">${product.descricao}</h4>
+                                    <h4 id="label-preview-title" class="text-[11px] font-bold text-black leading-tight max-w-[160px] overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word;">${product.descricao}</h4>
                                     <p id="label-preview-specs" class="text-[10px] text-gray-700 truncate max-w-[160px]"></p>
                                 </div>
                                 <div id="label-preview-qrcode" class="w-[64px] h-[64px] flex items-center justify-center flex-shrink-0">
