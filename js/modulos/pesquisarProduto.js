@@ -14,7 +14,7 @@ export const PesquisarProduto = (function() {
     /**
      * Imprime a etiqueta de identificação contendo imagem, QR Code e informações customizadas.
      */
-    function _printProductLabel(product, customDesc, customSpecs, customLoc) {
+    function _printProductLabel(product, customDesc, customLoc) {
         const printWindow = window.open('', '_blank', 'width=600,height=400');
         if (!printWindow) {
             alert("Por favor, permita pop-ups para imprimir a etiqueta.");
@@ -88,25 +88,17 @@ export const PesquisarProduto = (function() {
                         min-width: 0;
                     }
                     .label-title {
-                        font-size: 12px;
+                        font-size: 11px;
                         font-weight: bold;
-                        margin: 0 0 2px 0;
+                        margin: 0;
                         color: black;
                         display: -webkit-box;
-                        -webkit-line-clamp: 3;
+                        -webkit-line-clamp: 5;
                         -webkit-box-orient: vertical;
                         overflow: hidden;
                         line-height: 1.2;
-                        max-height: 3.6em;
+                        max-height: 6em;
                         word-break: break-word;
-                    }
-                    .label-specs {
-                        font-size: 11px;
-                        margin: 0;
-                        color: #333;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                        white-space: nowrap;
                     }
                     .label-qr-box {
                         width: 70px;
@@ -150,7 +142,6 @@ export const PesquisarProduto = (function() {
                         </div>
                         <div class="label-info">
                             <h2 class="label-title">${customDesc}</h2>
-                            <p class="label-specs">${customSpecs}</p>
                         </div>
                         <div class="label-qr-box">
                             ${qrHtml}
@@ -277,10 +268,6 @@ export const PesquisarProduto = (function() {
                             <input type="text" id="label-edit-desc" value="${product.descricao}" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Especificações Extras</label>
-                            <input type="text" id="label-edit-specs" value="" placeholder="Ex: 3000kg 380v" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        </div>
-                        <div>
                             <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Localização</label>
                             <input type="text" id="label-edit-location" value="${product.localizacao || 'N/A'}" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
@@ -299,8 +286,7 @@ export const PesquisarProduto = (function() {
                                     <img id="label-preview-img" src="${product.url_imagens_externas && product.url_imagens_externas[0] ? product.url_imagens_externas[0] : 'https://placehold.co/150x150/e2e8f0/64748b?text=?'}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
                                 </div>
                                 <div class="flex-grow min-w-0 flex flex-col justify-center">
-                                    <h4 id="label-preview-title" class="text-[11px] font-bold text-black leading-tight max-w-[160px] overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word;">${product.descricao}</h4>
-                                    <p id="label-preview-specs" class="text-[10px] text-gray-700 truncate max-w-[160px]"></p>
+                                    <h4 id="label-preview-title" class="text-[11px] font-bold text-black leading-tight max-w-[160px] overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; word-break: break-word;">${product.descricao}</h4>
                                 </div>
                                 <div id="label-preview-qrcode" class="w-[64px] h-[64px] flex items-center justify-center flex-shrink-0">
                                     <!-- QR Code Canvas inserido pelo qrcode.js -->
@@ -335,19 +321,12 @@ export const PesquisarProduto = (function() {
             
             // Add live preview listeners
             const editDescInput = document.getElementById('label-edit-desc');
-            const editSpecsInput = document.getElementById('label-edit-specs');
             const editLocInput = document.getElementById('label-edit-location');
 
             if (editDescInput) {
                 editDescInput.addEventListener('input', (e) => {
                     const titlePreview = document.getElementById('label-preview-title');
                     if (titlePreview) titlePreview.textContent = e.target.value;
-                });
-            }
-            if (editSpecsInput) {
-                editSpecsInput.addEventListener('input', (e) => {
-                    const specsPreview = document.getElementById('label-preview-specs');
-                    if (specsPreview) specsPreview.textContent = e.target.value;
                 });
             }
             if (editLocInput) {
@@ -362,9 +341,8 @@ export const PesquisarProduto = (function() {
             if (printBtn) {
                 printBtn.addEventListener('click', () => {
                     const customDesc = document.getElementById('label-edit-desc')?.value || product.descricao;
-                    const customSpecs = document.getElementById('label-edit-specs')?.value || '';
                     const customLoc = document.getElementById('label-edit-location')?.value || product.localizacao || 'N/A';
-                    _printProductLabel(product, customDesc, customSpecs, customLoc);
+                    _printProductLabel(product, customDesc, customLoc);
                 });
             }
         }, 50);
