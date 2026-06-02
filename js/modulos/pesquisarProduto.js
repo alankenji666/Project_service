@@ -51,7 +51,7 @@ export const PesquisarProduto = (function() {
                     .label-container {
                         width: 380px;
                         height: 120px;
-                        border: 2px solid black;
+                        border: none;
                         padding: 8px;
                         box-sizing: border-box;
                         display: flex;
@@ -125,7 +125,6 @@ export const PesquisarProduto = (function() {
                         display: flex;
                         justify-content: space-between;
                         align-items: flex-end;
-                        border-top: 1px dashed #ccc;
                         padding-top: 4px;
                         margin-top: 4px;
                     }
@@ -295,7 +294,7 @@ export const PesquisarProduto = (function() {
                     <!-- Live Preview -->
                     <div class="flex flex-col items-center">
                         <span class="text-xs font-semibold text-gray-400 mb-2">Pré-visualização da Etiqueta</span>
-                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-gray-800 p-3 rounded flex flex-col justify-between h-[120px] shadow-sm select-none">
+                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-dashed border-gray-200 p-3 rounded flex flex-col justify-between h-[120px] shadow-sm select-none">
                             <div class="flex items-start gap-2 flex-grow">
                                 <div class="w-[64px] h-[64px] border border-gray-200 rounded flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
                                     <img id="label-preview-img" src="${product.url_imagens_externas && product.url_imagens_externas[0] ? product.url_imagens_externas[0] : 'https://placehold.co/150x150/e2e8f0/64748b?text=?'}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
@@ -308,7 +307,7 @@ export const PesquisarProduto = (function() {
                                     <!-- QR Code Canvas inserido pelo qrcode.js -->
                                 </div>
                             </div>
-                            <div class="flex justify-between items-end border-t border-dashed border-gray-300 pt-1 mt-1">
+                            <div class="flex justify-between items-end pt-1 mt-1">
                                 <div class="text-[11px] font-bold text-black">Localização: <span id="label-preview-loc-text" class="font-normal">${product.localizacao || 'N/A'}</span></div>
                                 <div id="label-preview-sku-bottom" class="text-[11px] font-bold text-black">${product.codigo}</div>
                             </div>
