@@ -11,6 +11,11 @@ export const PesquisarProduto = (function() {
     let _currentPage = 1;
     let _pageSize = 50;
 
+    function _cleanLocation(loc) {
+        if (!loc || loc === 'N/A') return 'N/A';
+        return loc.replace(/^[aA]:/, '');
+    }
+
     /**
      * Imprime a etiqueta de identificação contendo imagem, QR Code e informações customizadas.
      */
@@ -128,12 +133,12 @@ export const PesquisarProduto = (function() {
                         flex-shrink: 0;
                     }
                     .label-location {
-                        font-size: 14px;
+                        font-size: 16px;
                         font-weight: bold;
                         color: black;
                     }
                     .label-location span {
-                        font-weight: normal;
+                        font-weight: bold;
                     }
                     .label-sku-bottom {
                         font-size: 14px;
@@ -157,7 +162,7 @@ export const PesquisarProduto = (function() {
                                 <h2 class="label-title">${customDesc}</h2>
                             </div>
                         </div>
-                        <div class="label-location">Localização: <span>${customLoc}</span></div>
+                        <div class="label-location">Localização: <span>${_cleanLocation(customLoc)}</span></div>
                     </div>
                     <div class="label-right-column">
                         <div class="label-qr-box">
@@ -283,7 +288,7 @@ export const PesquisarProduto = (function() {
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Localização</label>
-                            <input type="text" id="label-edit-location" value="${product.localizacao || 'N/A'}" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <input type="text" id="label-edit-location" value="${_cleanLocation(product.localizacao)}" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
                         <button id="label-print-btn" class="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-indigo-700 transition shadow-md flex items-center justify-center gap-2">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
@@ -304,7 +309,7 @@ export const PesquisarProduto = (function() {
                                         <h4 id="label-preview-title" class="text-[11px] font-bold text-black leading-tight max-w-[180px] overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; word-break: break-word;">${product.descricao}</h4>
                                     </div>
                                 </div>
-                                <div class="text-[11px] font-bold text-black truncate">Localização: <span id="label-preview-loc-text" class="font-normal">${product.localizacao || 'N/A'}</span></div>
+                                <div class="text-[14px] font-bold text-black truncate">Localização: <span id="label-preview-loc-text" class="font-bold">${_cleanLocation(product.localizacao)}</span></div>
                             </div>
                             <div class="flex flex-col items-center justify-between w-[80px] flex-shrink-0">
                                 <div id="label-preview-qrcode" class="w-[80px] h-[80px] flex items-center justify-center flex-shrink-0">
@@ -348,7 +353,7 @@ export const PesquisarProduto = (function() {
             if (editLocInput) {
                 editLocInput.addEventListener('input', (e) => {
                     const locPreview = document.getElementById('label-preview-loc-text');
-                    if (locPreview) locPreview.textContent = e.target.value || 'N/A';
+                    if (locPreview) locPreview.textContent = _cleanLocation(e.target.value);
                 });
             }
 
