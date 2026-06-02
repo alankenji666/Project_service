@@ -56,7 +56,7 @@ export const PesquisarProduto = (function() {
                     .label-container {
                         width: 380px;
                         height: 120px;
-                        border: none;
+                        border: 2px solid black;
                         padding: 8px;
                         box-sizing: border-box;
                         display: flex;
@@ -299,7 +299,7 @@ export const PesquisarProduto = (function() {
                     <!-- Live Preview -->
                     <div class="flex flex-col items-center">
                         <span class="text-xs font-semibold text-gray-400 mb-2">Pré-visualização da Etiqueta</span>
-                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-gray-300 p-2 rounded flex flex-row justify-between h-[120px] shadow-sm select-none">
+                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border-2 border-black p-2 rounded flex flex-row justify-between h-[120px] shadow-sm select-none">
                             <div class="flex flex-col justify-between flex-grow min-w-0 mr-2">
                                 <div class="flex items-start gap-2">
                                     <div class="w-[80px] h-[80px] flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
