@@ -66,8 +66,8 @@ export const PesquisarProduto = (function() {
                         flex-grow: 1;
                     }
                     .label-img-box {
-                        width: 70px;
-                        height: 70px;
+                        width: 80px;
+                        height: 80px;
                         display: flex;
                         align-items: center;
                         justify-content: center;
@@ -101,8 +101,8 @@ export const PesquisarProduto = (function() {
                         word-break: break-word;
                     }
                     .label-qr-box {
-                        width: 70px;
-                        height: 70px;
+                        width: 80px;
+                        height: 80px;
                         display: flex;
                         align-items: center;
                         justify-content: center;
@@ -282,13 +282,13 @@ export const PesquisarProduto = (function() {
                         <span class="text-xs font-semibold text-gray-400 mb-2">Pré-visualização da Etiqueta</span>
                         <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-gray-300 p-3 rounded flex flex-col justify-between h-[120px] shadow-sm select-none">
                             <div class="flex items-start gap-2 flex-grow">
-                                <div class="w-[64px] h-[64px] flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
+                                <div class="w-[80px] h-[80px] flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
                                     <img id="label-preview-img" src="${product.url_imagens_externas && product.url_imagens_externas[0] ? product.url_imagens_externas[0] : 'https://placehold.co/150x150/e2e8f0/64748b?text=?'}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x150/e2e8f0/64748b?text=?';">
                                 </div>
                                 <div class="flex-grow min-w-0 flex flex-col justify-center">
-                                    <h4 id="label-preview-title" class="text-[11px] font-bold text-black leading-tight max-w-[160px] overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; word-break: break-word;">${product.descricao}</h4>
+                                    <h4 id="label-preview-title" class="text-[11px] font-bold text-black leading-tight max-w-[180px] overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; word-break: break-word;">${product.descricao}</h4>
                                 </div>
-                                <div id="label-preview-qrcode" class="w-[64px] h-[64px] flex items-center justify-center flex-shrink-0">
+                                <div id="label-preview-qrcode" class="w-[80px] h-[80px] flex items-center justify-center flex-shrink-0">
                                     <!-- QR Code Canvas inserido pelo qrcode.js -->
                                 </div>
                             </div>
@@ -311,8 +311,8 @@ export const PesquisarProduto = (function() {
                 qrContainer.innerHTML = '';
                 new window.QRCode(qrContainer, {
                     text: String(product.codigo),
-                    width: 64,
-                    height: 64,
+                    width: 80,
+                    height: 80,
                     colorDark: "#000000",
                     colorLight: "#ffffff",
                     correctLevel: window.QRCode.CorrectLevel.H
