@@ -123,7 +123,7 @@ export const PesquisarProduto = (function() {
                         display: flex;
                         flex-direction: column;
                         align-items: center;
-                        justify-content: center;
+                        justify-content: space-between;
                         width: 80px;
                         flex-shrink: 0;
                     }
@@ -140,7 +140,7 @@ export const PesquisarProduto = (function() {
                         font-weight: bold;
                         color: black;
                         text-align: center;
-                        margin-top: 4px;
+                        margin-top: 0px;
                         width: 100%;
                         word-break: break-all;
                     }
@@ -294,7 +294,7 @@ export const PesquisarProduto = (function() {
                     <!-- Live Preview -->
                     <div class="flex flex-col items-center">
                         <span class="text-xs font-semibold text-gray-400 mb-2">Pré-visualização da Etiqueta</span>
-                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-gray-300 p-3 rounded flex flex-row justify-between h-[120px] shadow-sm select-none">
+                        <div id="label-live-preview-box" class="w-full max-w-[380px] bg-white border border-gray-300 p-2 rounded flex flex-row justify-between h-[120px] shadow-sm select-none">
                             <div class="flex flex-col justify-between flex-grow min-w-0 mr-2">
                                 <div class="flex items-start gap-2">
                                     <div class="w-[80px] h-[80px] flex items-center justify-center overflow-hidden bg-white flex-shrink-0">
@@ -306,11 +306,11 @@ export const PesquisarProduto = (function() {
                                 </div>
                                 <div class="text-[11px] font-bold text-black truncate">Localização: <span id="label-preview-loc-text" class="font-normal">${product.localizacao || 'N/A'}</span></div>
                             </div>
-                            <div class="flex flex-col items-center justify-center w-[80px] flex-shrink-0">
+                            <div class="flex flex-col items-center justify-between w-[80px] flex-shrink-0">
                                 <div id="label-preview-qrcode" class="w-[80px] h-[80px] flex items-center justify-center flex-shrink-0">
                                     <!-- QR Code Canvas inserido pelo qrcode.js -->
                                 </div>
-                                <div id="label-preview-sku-bottom" class="text-[11px] font-bold text-black text-center mt-1 w-full truncate">${product.codigo}</div>
+                                <div id="label-preview-sku-bottom" class="text-[11px] font-bold text-black text-center w-full truncate">${product.codigo}</div>
                             </div>
                         </div>
                     </div>
