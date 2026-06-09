@@ -1196,24 +1196,85 @@
                 <!-- Seção 1: Dados do Cliente e Operação -->
                 <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Dados Gerais da Nota</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-500 mb-1">ID do Cliente/Contato (Bling)</label>
-                            <input type="number" id="nfe-edit-contato-id" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <span id="nfe-edit-contato-nome-display" class="block text-[11px] text-gray-400 mt-1 font-medium">Nome: -</span>
+                    
+                    <!-- Linha principal: Cliente, Natureza e Data -->
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        <div class="md:col-span-7">
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Cliente</label>
+                            <input type="text" id="nfe-edit-contato-nome" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-500 mb-1">ID da Natureza de Operação</label>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">ID Natureza</label>
                             <input type="number" id="nfe-edit-natureza-id" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
-                        <div>
+                        <div class="md:col-span-3">
                             <label class="block text-xs font-semibold text-gray-500 mb-1">Data da Operação</label>
                             <input type="date" id="nfe-edit-data" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
-                        <div class="md:col-span-3">
-                            <label class="block text-xs font-semibold text-gray-500 mb-1">Observações (Informações Complementares / Fisco)</label>
-                            <textarea id="nfe-edit-observacoes" rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Observações do pedido de venda..."></textarea>
+                    </div>
+
+                    <!-- Botão Toggle de Detalhes -->
+                    <div class="mt-3 pt-3 border-t border-gray-200">
+                        <button id="nfe-edit-client-toggle-btn" type="button" class="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 transition-colors">
+                            <svg id="nfe-edit-client-toggle-chevron" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            Ver/Editar Detalhes do Cliente (CPF/CNPJ, IE, Contribuinte, Fantasia, Código)
+                        </button>
+                    </div>
+
+                    <!-- Detalhes do Cliente (Collapsible) -->
+                    <div id="nfe-edit-client-details" class="hidden mt-4 pt-4 border-t border-gray-200 space-y-4">
+                        <h5 class="text-xs font-bold text-gray-600">Dados do Cliente</h5>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                            <!-- Código e Nome -->
+                            <div class="md:col-span-4">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">Código</label>
+                                <input type="number" id="nfe-edit-contato-id" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 font-medium">
+                            </div>
+                            <div class="md:col-span-8">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">Nome</label>
+                                <input type="text" id="nfe-edit-contato-nome-detalhe" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+
+                            <!-- Fantasia -->
+                            <div class="md:col-span-12">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">Fantasia</label>
+                                <input type="text" id="nfe-edit-contato-fantasia" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+
+                            <!-- Tipo da Pessoa e CNPJ -->
+                            <div class="md:col-span-6">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">Tipo da Pessoa</label>
+                                <select id="nfe-edit-contato-tipo" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <option value="J">Pessoa Jurídica</option>
+                                    <option value="F">Pessoa Física</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-6">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">CNPJ / CPF</label>
+                                <input type="text" id="nfe-edit-contato-cnpj" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+
+                            <!-- Inscrição Estadual e Contribuinte -->
+                            <div class="md:col-span-6">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">Inscrição Estadual</label>
+                                <input type="text" id="nfe-edit-contato-ie" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-6">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">Contribuinte</label>
+                                <select id="nfe-edit-contato-contribuinte" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <option value="1">1 - Contribuinte ICMS</option>
+                                    <option value="2">2 - Contribuinte isento de Inscrição no Cadastro de Contribuintes</option>
+                                    <option value="9">9 - Não contribuinte, que pode ou não possuir Inscrição Estadual no Cadastro de Contribuintes</option>
+                                </select>
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- Observações -->
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Observações (Informações Complementares / Fisco)</label>
+                        <textarea id="nfe-edit-observacoes" rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Observações do pedido de venda..."></textarea>
                     </div>
                 </div>
 

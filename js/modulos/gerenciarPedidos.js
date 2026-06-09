@@ -168,7 +168,16 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditAddItemBtn = document.getElementById('nfe-edit-add-item-btn');
         _state.nfeEditItensTbody = document.getElementById('nfe-edit-itens-tbody');
         _state.nfeEditContatoId = document.getElementById('nfe-edit-contato-id');
-        _state.nfeEditContatoNomeDisplay = document.getElementById('nfe-edit-contato-nome-display');
+        _state.nfeEditContatoNome = document.getElementById('nfe-edit-contato-nome');
+        _state.nfeEditContatoNomeDetalhe = document.getElementById('nfe-edit-contato-nome-detalhe');
+        _state.nfeEditClientToggleBtn = document.getElementById('nfe-edit-client-toggle-btn');
+        _state.nfeEditClientToggleChevron = document.getElementById('nfe-edit-client-toggle-chevron');
+        _state.nfeEditClientDetails = document.getElementById('nfe-edit-client-details');
+        _state.nfeEditContatoFantasia = document.getElementById('nfe-edit-contato-fantasia');
+        _state.nfeEditContatoTipo = document.getElementById('nfe-edit-contato-tipo');
+        _state.nfeEditContatoCnpj = document.getElementById('nfe-edit-contato-cnpj');
+        _state.nfeEditContatoIe = document.getElementById('nfe-edit-contato-ie');
+        _state.nfeEditContatoContribuinte = document.getElementById('nfe-edit-contato-contribuinte');
         _state.nfeEditNaturezaId = document.getElementById('nfe-edit-natureza-id');
         _state.nfeEditData = document.getElementById('nfe-edit-data');
         _state.nfeEditFrete = document.getElementById('nfe-edit-frete');
@@ -375,6 +384,52 @@ export const GerenciarPedidosApp = (function () {
             _state.nfeEditModal.addEventListener('click', (e) => {
                 if (e.target === _state.nfeEditModal) {
                     _closeNfeEditModal();
+                }
+            });
+        }
+        if (_state.nfeEditClientToggleBtn && _state.nfeEditClientDetails) {
+            _state.nfeEditClientToggleBtn.addEventListener('click', () => {
+                const isHidden = _state.nfeEditClientDetails.classList.toggle('hidden');
+                if (_state.nfeEditClientToggleChevron) {
+                    if (isHidden) {
+                        _state.nfeEditClientToggleChevron.classList.remove('rotate-180');
+                    } else {
+                        _state.nfeEditClientToggleChevron.classList.add('rotate-180');
+                    }
+                }
+            });
+        }
+        if (_state.nfeEditContatoNome && _state.nfeEditContatoNomeDetalhe) {
+            _state.nfeEditContatoNome.addEventListener('input', (e) => {
+                _state.nfeEditContatoNomeDetalhe.value = e.target.value;
+            });
+            _state.nfeEditContatoNomeDetalhe.addEventListener('input', (e) => {
+                _state.nfeEditContatoNome.value = e.target.value;
+            });
+        }
+
+        if (_state.nfeEditContatoId) {
+            _state.nfeEditContatoId.addEventListener('change', async (e) => {
+                const id = e.target.value.trim();
+                if (!id) return;
+                try {
+                    const res = await fetch(`${API_URLS.ORDERS_BLING}/contatos/${id}`);
+                    if (!res.ok) throw new Error();
+                    const result = await res.json();
+                    const contato = result.data;
+                    if (contato) {
+                        if (_state.nfeEditContatoNome) _state.nfeEditContatoNome.value = contato.nome || '';
+                        if (_state.nfeEditContatoNomeDetalhe) _state.nfeEditContatoNomeDetalhe.value = contato.nome || '';
+                        if (_state.nfeEditContatoFantasia) _state.nfeEditContatoFantasia.value = contato.fantasia || '';
+                        if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = contato.tipoPessoa || 'J';
+                        if (_state.nfeEditContatoCnpj) _state.nfeEditContatoCnpj.value = contato.numeroDocumento || '';
+                        if (_state.nfeEditContatoIe) _state.nfeEditContatoIe.value = contato.ie || '';
+                        if (_state.nfeEditContatoContribuinte) {
+                            _state.nfeEditContatoContribuinte.value = contato.indicadorIe !== undefined ? contato.indicadorIe : 9;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[NFe Edit] Não foi possível carregar os detalhes do contato pelo ID digitado.');
                 }
             });
         }
@@ -1233,10 +1288,43 @@ export const GerenciarPedidosApp = (function () {
     function _openNfeEditModal(pedidoBling) {
         if (!_state.nfeEditModal) return;
 
-        // Preencher metadados
+        // Preencher metadados básicos do cliente
         if (_state.nfeEditContatoId) _state.nfeEditContatoId.value = pedidoBling.contato?.id || '';
-        if (_state.nfeEditContatoNomeDisplay) {
-            _state.nfeEditContatoNomeDisplay.textContent = pedidoBling.contato?.nome ? `Nome: ${pedidoBling.contato.nome}` : 'Nome: -';
+        if (_state.nfeEditContatoNome) _state.nfeEditContatoNome.value = pedidoBling.contato?.nome || '';
+        if (_state.nfeEditContatoNomeDetalhe) _state.nfeEditContatoNomeDetalhe.value = pedidoBling.contato?.nome || '';
+        
+        // Resetar campos detalhados para evitar lixo de carregamentos anteriores
+        if (_state.nfeEditContatoFantasia) _state.nfeEditContatoFantasia.value = '';
+        if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = 'J';
+        if (_state.nfeEditContatoCnpj) _state.nfeEditContatoCnpj.value = '';
+        if (_state.nfeEditContatoIe) _state.nfeEditContatoIe.value = '';
+        if (_state.nfeEditContatoContribuinte) _state.nfeEditContatoContribuinte.value = '9';
+        
+        // Esconder detalhes do cliente por padrão ao abrir
+        if (_state.nfeEditClientDetails) _state.nfeEditClientDetails.classList.add('hidden');
+        if (_state.nfeEditClientToggleChevron) _state.nfeEditClientToggleChevron.classList.remove('rotate-180');
+
+        // Carregar detalhes cadastrais do cliente em background
+        if (pedidoBling.contato?.id) {
+            fetch(`${API_URLS.ORDERS_BLING}/contatos/${pedidoBling.contato.id}`)
+                .then(res => res.json())
+                .then(result => {
+                    const c = result.data;
+                    if (c && String(c.id) === String(_state.nfeEditContatoId.value)) {
+                        if (_state.nfeEditContatoNome) _state.nfeEditContatoNome.value = c.nome || '';
+                        if (_state.nfeEditContatoNomeDetalhe) _state.nfeEditContatoNomeDetalhe.value = c.nome || '';
+                        if (_state.nfeEditContatoFantasia) _state.nfeEditContatoFantasia.value = c.fantasia || '';
+                        if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = c.tipoPessoa || 'J';
+                        if (_state.nfeEditContatoCnpj) _state.nfeEditContatoCnpj.value = c.numeroDocumento || '';
+                        if (_state.nfeEditContatoIe) _state.nfeEditContatoIe.value = c.ie || '';
+                        if (_state.nfeEditContatoContribuinte) {
+                            _state.nfeEditContatoContribuinte.value = c.indicadorIe !== undefined ? c.indicadorIe : 9;
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.warn('[NFe Edit] Não foi possível carregar os detalhes cadastrais do contato.', err);
+                });
         }
         
         // Buscar natureza de operação (se estiver na raiz ou no primeiro item)
@@ -1365,6 +1453,12 @@ export const GerenciarPedidosApp = (function () {
 
         // Obter valores
         const contatoIdStr = _state.nfeEditContatoId ? _state.nfeEditContatoId.value.trim() : '';
+        const contatoNome = _state.nfeEditContatoNome ? _state.nfeEditContatoNome.value.trim() : '';
+        const contatoFantasia = _state.nfeEditContatoFantasia ? _state.nfeEditContatoFantasia.value.trim() : '';
+        const contatoTipo = _state.nfeEditContatoTipo ? _state.nfeEditContatoTipo.value : 'J';
+        const contatoCnpj = _state.nfeEditContatoCnpj ? _state.nfeEditContatoCnpj.value.trim() : '';
+        const contatoIe = _state.nfeEditContatoIe ? _state.nfeEditContatoIe.value.trim() : '';
+        const contatoContribuinte = _state.nfeEditContatoContribuinte ? parseInt(_state.nfeEditContatoContribuinte.value) : 9;
         const naturezaIdStr = _state.nfeEditNaturezaId ? _state.nfeEditNaturezaId.value.trim() : '';
         const dataOperacao = _state.nfeEditData ? _state.nfeEditData.value.trim() : '';
         const observacoes = _state.nfeEditObservacoes ? _state.nfeEditObservacoes.value.trim() : '';
@@ -1466,7 +1560,14 @@ export const GerenciarPedidosApp = (function () {
         // Preparar payload customizado
         const payload = {
             finalidade: 1, // 1 = Normal
-            contato: { id: contatoId }
+            contato: {
+                id: contatoId,
+                nome: contatoNome,
+                tipoPessoa: contatoTipo,
+                numeroDocumento: contatoCnpj,
+                ie: contatoIe,
+                indicadorIe: contatoContribuinte
+            }
         };
 
         if (naturezaIdStr) {
