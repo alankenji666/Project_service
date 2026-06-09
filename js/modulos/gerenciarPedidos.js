@@ -1141,6 +1141,7 @@ export const GerenciarPedidosApp = (function () {
 
         // Verificar se já tem nota
         const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
+        console.log("Pedido para Emissão de NF-e:", pedido);
         const idNotaFromPedido = pedido?.id_nota || pedido?.idNota || pedido?.['id nota'] || pedido?.idnotafiscal || pedido?.id_nota_fiscal || pedido?.['id nota fiscal'] || '';
         const orderNumber = pedido?.numero || pedido?.número || '';
 
