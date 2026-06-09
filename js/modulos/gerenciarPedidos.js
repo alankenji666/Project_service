@@ -181,6 +181,11 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditContatoContribuinte = document.getElementById('nfe-edit-contato-contribuinte');
         _state.nfeEditNaturezaId = document.getElementById('nfe-edit-natureza-id');
         _state.nfeEditData = document.getElementById('nfe-edit-data');
+        _state.nfeEditDataWarning = document.getElementById('nfe-edit-data-warning');
+        _state.nfeEditDataSaida = document.getElementById('nfe-edit-data-saida');
+        _state.nfeEditDataSaidaWarning = document.getElementById('nfe-edit-data-saida-warning');
+        _state.nfeEditDataPrevista = document.getElementById('nfe-edit-data-prevista');
+        _state.nfeEditDataPrevistaWarning = document.getElementById('nfe-edit-data-prevista-warning');
         _state.nfeEditFrete = document.getElementById('nfe-edit-frete');
         _state.nfeEditFretePorConta = document.getElementById('nfe-edit-frete-por-conta');
         _state.nfeEditVolumes = document.getElementById('nfe-edit-volumes');
@@ -412,6 +417,19 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditContatoIe) {
             _state.nfeEditContatoIe.addEventListener('input', _updateIeWarning);
             _state.nfeEditContatoIe.addEventListener('change', _updateIeWarning);
+        }
+
+        if (_state.nfeEditData) {
+            _state.nfeEditData.addEventListener('input', _updateAllDateWarnings);
+            _state.nfeEditData.addEventListener('change', _updateAllDateWarnings);
+        }
+        if (_state.nfeEditDataSaida) {
+            _state.nfeEditDataSaida.addEventListener('input', _updateAllDateWarnings);
+            _state.nfeEditDataSaida.addEventListener('change', _updateAllDateWarnings);
+        }
+        if (_state.nfeEditDataPrevista) {
+            _state.nfeEditDataPrevista.addEventListener('input', _updateAllDateWarnings);
+            _state.nfeEditDataPrevista.addEventListener('change', _updateAllDateWarnings);
         }
 
         if (_state.nfeEditContatoId) {
@@ -1349,7 +1367,12 @@ export const GerenciarPedidosApp = (function () {
         }
         if (_state.nfeEditNaturezaId) _state.nfeEditNaturezaId.value = naturezaId;
         
-        if (_state.nfeEditData) _state.nfeEditData.value = pedidoBling.data || new Date().toISOString().substring(0, 10);
+        const defaultDate = new Date().toISOString().substring(0, 10);
+        if (_state.nfeEditData) _state.nfeEditData.value = pedidoBling.data || defaultDate;
+        if (_state.nfeEditDataSaida) _state.nfeEditDataSaida.value = pedidoBling.dataSaida || pedidoBling.data || defaultDate;
+        if (_state.nfeEditDataPrevista) _state.nfeEditDataPrevista.value = pedidoBling.dataPrevista || pedidoBling.data || defaultDate;
+        
+        _updateAllDateWarnings();
         if (_state.nfeEditObservacoes) _state.nfeEditObservacoes.value = pedidoBling.observacoes || '';
 
         // Preencher transporte e valores
@@ -1467,6 +1490,39 @@ export const GerenciarPedidosApp = (function () {
         }
     }
 
+    function _updateDateWarning(inputEl, warningEl) {
+        if (!inputEl || !warningEl) return;
+        const val = inputEl.value.trim();
+        if (!val) {
+            warningEl.classList.add('hidden');
+            return;
+        }
+        
+        const parts = val.split('-');
+        if (parts.length === 3) {
+            const year = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1; // 0-indexed
+            
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth();
+            
+            if (year !== currentYear || month !== currentMonth) {
+                warningEl.classList.remove('hidden');
+            } else {
+                warningEl.classList.add('hidden');
+            }
+        } else {
+            warningEl.classList.add('hidden');
+        }
+    }
+
+    function _updateAllDateWarnings() {
+        _updateDateWarning(_state.nfeEditData, _state.nfeEditDataWarning);
+        _updateDateWarning(_state.nfeEditDataSaida, _state.nfeEditDataSaidaWarning);
+        _updateDateWarning(_state.nfeEditDataPrevista, _state.nfeEditDataPrevistaWarning);
+    }
+
     async function _confirmCustomEmitirNfe() {
         const idPedido = _currentModalPedidoId;
         if (!idPedido) return;
@@ -1481,6 +1537,8 @@ export const GerenciarPedidosApp = (function () {
         const contatoContribuinte = _state.nfeEditContatoContribuinte ? parseInt(_state.nfeEditContatoContribuinte.value) : 9;
         const naturezaIdStr = _state.nfeEditNaturezaId ? _state.nfeEditNaturezaId.value.trim() : '';
         const dataOperacao = _state.nfeEditData ? _state.nfeEditData.value.trim() : '';
+        const dataSaida = _state.nfeEditDataSaida ? _state.nfeEditDataSaida.value.trim() : '';
+        const dataPrevista = _state.nfeEditDataPrevista ? _state.nfeEditDataPrevista.value.trim() : '';
         const observacoes = _state.nfeEditObservacoes ? _state.nfeEditObservacoes.value.trim() : '';
 
         const frete = _state.nfeEditFrete ? parseFloat(_state.nfeEditFrete.value) || 0 : 0;
@@ -1599,6 +1657,14 @@ export const GerenciarPedidosApp = (function () {
 
         if (dataOperacao) {
             payload.dataOperacao = dataOperacao;
+        }
+
+        if (dataSaida) {
+            payload.dataSaida = dataSaida;
+        }
+
+        if (dataPrevista) {
+            payload.dataPrevista = dataPrevista;
         }
 
         if (observacoes) {
