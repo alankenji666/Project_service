@@ -312,8 +312,36 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
     });
 
     /**
+     * NOVO: Rota para obter os detalhes completos de um pedido de venda no Bling.
+     */
+    router.get('/vendas/:id', async (req, res, next) => {
+        try {
+            const idPedido = req.params.id;
+            if (!idPedido) throw new Error("ID do pedido é obrigatório.");
+
+            const accessToken = await getToken();
+            const httpClient = axios || axiosModule;
+
+            console.log(`[Bling] Buscando detalhes completos do pedido ${idPedido} para o frontend...`);
+            const resPedido = await httpClient.get(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            res.status(200).send(resPedido.data);
+        } catch (error) {
+            const errMsg = error.response?.data?.error?.message || error.response?.data?.message || error.message;
+            console.error("[Backend Error] buscar-venda:", errMsg);
+            res.status(400).send({ 
+                status: 'error', 
+                message: `Erro ao buscar pedido no Bling: ${errMsg}`,
+                details: error.response?.data
+            });
+        }
+    });
+
+    /**
      * NOVO: Rota para gerar uma NF-e a partir de um pedido de venda no Bling.
      * Segue o fluxo da API V3: criar a nota referenciando o pedido e depois enviar.
+     * Aceita payload customizado opcional em req.body.
      */
     router.post('/vendas/:id/gerar-nfe', async (req, res, next) => {
         try {
@@ -323,85 +351,94 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             const accessToken = await getToken();
             const httpClient = axios || axiosModule;
 
-            console.log(`[Bling] Iniciando processo de NF-e para pedido ${idPedido}...`);
+            let payloadCriacao;
 
-            // 1. Buscar o pedido original para obter dados básicos (contato, natureza, etc.)
-            console.log(`[Bling] Buscando detalhes do pedido ${idPedido}...`);
-            let pedidoBling;
-            try {
-                const resPedido = await httpClient.get(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                pedidoBling = resPedido.data.data;
-            } catch (err) {
-                console.warn(`[Bling] Não foi possível obter detalhes do pedido ${idPedido}. Tentando criar nota apenas com o ID.`);
-            }
+            // Se o corpo da requisição conter o payload editado do frontend
+            if (req.body && Object.keys(req.body).length > 0) {
+                console.log(`[Bling] Usando payload customizado enviado pelo frontend para o pedido ${idPedido}...`);
+                payloadCriacao = req.body;
+                payloadCriacao.tipo = 1; // 1 = Saída
+                payloadCriacao.pedido = { id: parseInt(idPedido) };
+            } else {
+                console.log(`[Bling] Iniciando processo de NF-e padrão para o pedido ${idPedido}...`);
 
-            // 2. Criar a Nota Fiscal referenciando o Pedido de Venda
-            // Incluímos referências explícitas ao contato e natureza para evitar erros de "Não foi possível salvar"
-            const payloadCriacao = {
-                tipo: 1, // 1 = Saída
-                pedido: { id: parseInt(idPedido) }
-            };
-
-            if (pedidoBling) {
-                if (pedidoBling.contato && pedidoBling.contato.id) {
-                    payloadCriacao.contato = { id: pedidoBling.contato.id };
-                }
-                if (pedidoBling.naturezaOperacao && pedidoBling.naturezaOperacao.id) {
-                    payloadCriacao.naturezaOperacao = { id: pedidoBling.naturezaOperacao.id };
-                }
-                if (pedidoBling.data) {
-                    payloadCriacao.dataOperacao = pedidoBling.data; // Formato YYYY-MM-DD
-                }
-                // Finalidade 1 = NF-e normal
-                payloadCriacao.finalidade = 1;
-
-                // Bling V3 exige que os itens da nota sejam passados
-                if (pedidoBling.itens && Array.isArray(pedidoBling.itens)) {
-                    payloadCriacao.itens = pedidoBling.itens.map(item => ({
-                        codigo: item.codigo || "",
-                        descricao: item.descricao || "",
-                        quantidade: item.quantidade || 1,
-                        valor: item.valor || 0
-                    }));
-                }
-
-                // Repassar o frete e informações de volume para a nota fiscal
-                if (pedidoBling.transporte) {
-                    payloadCriacao.transporte = {
-                        fretePorConta: pedidoBling.transporte.fretePorConta !== undefined ? pedidoBling.transporte.fretePorConta : 0,
-                        frete: pedidoBling.transporte.frete || 0,
-                        quantidadeVolumes: pedidoBling.transporte.quantidadeVolumes || 0,
-                        pesoBruto: pedidoBling.transporte.pesoBruto || 0,
-                        pesoLiquido: pedidoBling.transporte.pesoBruto || 0
-                    };
-                    if (pedidoBling.transporte.contato && pedidoBling.transporte.contato.id) {
-                        payloadCriacao.transporte.contato = { id: pedidoBling.transporte.contato.id };
-                    }
-                }
-
-                // Repassar parcelas (pagamento)
-                if (pedidoBling.parcelas && Array.isArray(pedidoBling.parcelas) && pedidoBling.parcelas.length > 0) {
-                    payloadCriacao.parcelas = pedidoBling.parcelas.map(p => {
-                        const parcelaObj = {
-                            data: p.dataVencimento || payloadCriacao.dataOperacao,
-                            valor: p.valor || 0,
-                            observacoes: p.observacoes || ""
-                        };
-                        if (p.formaPagamento && p.formaPagamento.id) {
-                            parcelaObj.formaPagamento = { id: p.formaPagamento.id };
-                        }
-                        return parcelaObj;
+                // 1. Buscar o pedido original para obter dados básicos (contato, natureza, etc.)
+                console.log(`[Bling] Buscando detalhes do pedido ${idPedido}...`);
+                let pedidoBling;
+                try {
+                    const resPedido = await httpClient.get(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
+                    pedidoBling = resPedido.data.data;
+                } catch (err) {
+                    console.warn(`[Bling] Não foi possível obter detalhes do pedido ${idPedido}. Tentando criar nota apenas com o ID.`);
                 }
 
-                // Repassar o desconto para a nota fiscal
-                if (pedidoBling.desconto && pedidoBling.desconto.valor > 0) {
-                    payloadCriacao.desconto = {
-                        valor: pedidoBling.desconto.valor,
-                        unidade: pedidoBling.desconto.unidade || 'REAL'
-                    };
+                // 2. Criar a Nota Fiscal referenciando o Pedido de Venda
+                payloadCriacao = {
+                    tipo: 1, // 1 = Saída
+                    pedido: { id: parseInt(idPedido) }
+                };
+
+                if (pedidoBling) {
+                    if (pedidoBling.contato && pedidoBling.contato.id) {
+                        payloadCriacao.contato = { id: pedidoBling.contato.id };
+                    }
+                    if (pedidoBling.naturezaOperacao && pedidoBling.naturezaOperacao.id) {
+                        payloadCriacao.naturezaOperacao = { id: pedidoBling.naturezaOperacao.id };
+                    }
+                    if (pedidoBling.data) {
+                        payloadCriacao.dataOperacao = pedidoBling.data; // Formato YYYY-MM-DD
+                    }
+                    // Finalidade 1 = NF-e normal
+                    payloadCriacao.finalidade = 1;
+
+                    // Bling V3 exige que os itens da nota sejam passados
+                    if (pedidoBling.itens && Array.isArray(pedidoBling.itens)) {
+                        payloadCriacao.itens = pedidoBling.itens.map(item => ({
+                            codigo: item.codigo || "",
+                            descricao: item.descricao || "",
+                            quantidade: item.quantidade || 1,
+                            valor: item.valor || 0
+                        }));
+                    }
+
+                    // Repassar o frete e informações de volume para a nota fiscal
+                    if (pedidoBling.transporte) {
+                        payloadCriacao.transporte = {
+                            fretePorConta: pedidoBling.transporte.fretePorConta !== undefined ? pedidoBling.transporte.fretePorConta : 0,
+                            frete: pedidoBling.transporte.frete || 0,
+                            quantidadeVolumes: pedidoBling.transporte.quantidadeVolumes || 0,
+                            pesoBruto: pedidoBling.transporte.pesoBruto || 0,
+                            pesoLiquido: pedidoBling.transporte.pesoBruto || 0
+                        };
+                        if (pedidoBling.transporte.contato && pedidoBling.transporte.contato.id) {
+                            payloadCriacao.transporte.contato = { id: pedidoBling.transporte.contato.id };
+                        }
+                    }
+
+                    // Repassar parcelas (pagamento)
+                    if (pedidoBling.parcelas && Array.isArray(pedidoBling.parcelas) && pedidoBling.parcelas.length > 0) {
+                        payloadCriacao.parcelas = pedidoBling.parcelas.map(p => {
+                            const parcelaObj = {
+                                data: p.dataVencimento || payloadCriacao.dataOperacao,
+                                valor: p.valor || 0,
+                                observacoes: p.observacoes || ""
+                            };
+                            if (p.formaPagamento && p.formaPagamento.id) {
+                                parcelaObj.formaPagamento = { id: p.formaPagamento.id };
+                            }
+                            return parcelaObj;
+                        });
+                    }
+
+                    // Repassar o desconto para a nota fiscal
+                    if (pedidoBling.desconto && pedidoBling.desconto.valor > 0) {
+                        payloadCriacao.desconto = {
+                            valor: pedidoBling.desconto.valor,
+                            unidade: pedidoBling.desconto.unidade || 'REAL'
+                        };
+                    }
                 }
             }
 

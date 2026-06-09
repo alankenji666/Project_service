@@ -1173,6 +1173,125 @@
             </div>
         </div>
     </div>
+
+    <!-- NOVO: Modal de Edição de Pedido antes da Emissão de NF-e -->
+    <div id="nfe-edit-modal"
+        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col relative">
+            <!-- Cabeçalho -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    Conferir e Editar Pedido para Emissão de NF-e
+                </h3>
+                <button id="close-nfe-edit-modal-btn" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Conteúdo editável com scroll -->
+            <div class="overflow-y-auto p-6 flex-1 space-y-6 text-left">
+                <!-- Seção 1: Dados do Cliente e Operação -->
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Dados Gerais da Nota</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">ID do Cliente/Contato (Bling)</label>
+                            <input type="number" id="nfe-edit-contato-id" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <span id="nfe-edit-contato-nome-display" class="block text-[11px] text-gray-400 mt-1 font-medium">Nome: -</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">ID da Natureza de Operação</label>
+                            <input type="number" id="nfe-edit-natureza-id" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Data da Operação</label>
+                            <input type="date" id="nfe-edit-data" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seção 2: Itens do Pedido (Tabela interativa) -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Itens da Nota Fiscal</h4>
+                        <button id="nfe-edit-add-item-btn" type="button" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors border border-blue-100">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            Adicionar Item
+                        </button>
+                    </div>
+                    <div class="border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase w-[120px]">Código (SKU)</th>
+                                    <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Descrição do Produto</th>
+                                    <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase w-[90px]">Quantidade</th>
+                                    <th class="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase w-[120px]">Preço Unit. (R$)</th>
+                                    <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase w-[60px]">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="nfe-edit-itens-tbody" class="bg-white divide-y divide-gray-100">
+                                <!-- Preenchido dinamicamente pelo JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Seção 3: Transporte e Valores Fiscais -->
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Frete, Transporte e Descontos</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Valor do Frete (R$)</label>
+                            <input type="number" step="0.01" id="nfe-edit-frete" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Frete por Conta (Modalidade)</label>
+                            <select id="nfe-edit-frete-por-conta" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="0">0 - Contratação por conta do Remetente (CIF)</option>
+                                <option value="1">1 - Contratação por conta do Destinatário (FOB)</option>
+                                <option value="2">2 - Contratação por conta de Terceiros</option>
+                                <option value="3">3 - Próprio por conta do Remetente</option>
+                                <option value="4">4 - Próprio por conta do Destinatário</option>
+                                <option value="9">9 - Sem Ocorrência de Transporte</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Quantidade Volumes</label>
+                            <input type="number" id="nfe-edit-volumes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Peso Bruto (kg)</label>
+                            <input type="number" step="0.001" id="nfe-edit-peso-bruto" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Valor Desconto (R$)</label>
+                            <input type="number" step="0.01" id="nfe-edit-desconto" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rodapé / Ações -->
+            <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0 bg-gray-50 rounded-b-xl">
+                <button id="cancel-nfe-edit-btn" class="px-5 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg text-sm font-semibold transition-colors">
+                    Cancelar
+                </button>
+                <button id="confirm-nfe-edit-btn" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-md">
+                    <!-- Spinner de envio -->
+                    <svg id="nfe-edit-spinner" class="animate-spin h-3.5 w-3.5 mr-1 hidden" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Confirmar Emissão de NF-e
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="message-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[75]">
         <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center relative">
             <button id="close-message-modal-btn" class="absolute top-3 right-3 text-gray-500 hover:text-gray-800">
