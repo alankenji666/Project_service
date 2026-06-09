@@ -172,6 +172,7 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditContatoNomeDetalhe = document.getElementById('nfe-edit-contato-nome-detalhe');
         _state.nfeEditClientToggleBtn = document.getElementById('nfe-edit-client-toggle-btn');
         _state.nfeEditClientToggleChevron = document.getElementById('nfe-edit-client-toggle-chevron');
+        _state.nfeEditIeWarning = document.getElementById('nfe-edit-ie-warning');
         _state.nfeEditClientDetails = document.getElementById('nfe-edit-client-details');
         _state.nfeEditContatoFantasia = document.getElementById('nfe-edit-contato-fantasia');
         _state.nfeEditContatoTipo = document.getElementById('nfe-edit-contato-tipo');
@@ -408,6 +409,11 @@ export const GerenciarPedidosApp = (function () {
             });
         }
 
+        if (_state.nfeEditContatoIe) {
+            _state.nfeEditContatoIe.addEventListener('input', _updateIeWarning);
+            _state.nfeEditContatoIe.addEventListener('change', _updateIeWarning);
+        }
+
         if (_state.nfeEditContatoId) {
             _state.nfeEditContatoId.addEventListener('change', async (e) => {
                 const id = e.target.value.trim();
@@ -427,6 +433,7 @@ export const GerenciarPedidosApp = (function () {
                         if (_state.nfeEditContatoContribuinte) {
                             _state.nfeEditContatoContribuinte.value = contato.indicadorIe !== undefined ? contato.indicadorIe : 9;
                         }
+                        _updateIeWarning();
                     }
                 } catch (err) {
                     console.warn('[NFe Edit] Não foi possível carregar os detalhes do contato pelo ID digitado.');
@@ -1304,6 +1311,8 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditClientDetails) _state.nfeEditClientDetails.classList.add('hidden');
         if (_state.nfeEditClientToggleChevron) _state.nfeEditClientToggleChevron.classList.remove('rotate-180');
 
+        _updateIeWarning();
+
         // Carregar detalhes cadastrais do cliente em background
         if (pedidoBling.contato?.id) {
             fetch(`${API_URLS.ORDERS_BLING}/contatos/${pedidoBling.contato.id}`)
@@ -1320,6 +1329,7 @@ export const GerenciarPedidosApp = (function () {
                         if (_state.nfeEditContatoContribuinte) {
                             _state.nfeEditContatoContribuinte.value = c.indicadorIe !== undefined ? c.indicadorIe : 9;
                         }
+                        _updateIeWarning();
                     }
                 })
                 .catch(err => {
@@ -1444,6 +1454,16 @@ export const GerenciarPedidosApp = (function () {
     function _closeNfeEditModal() {
         if (_state.nfeEditModal) {
             _state.nfeEditModal.classList.add('hidden');
+        }
+    }
+
+    function _updateIeWarning() {
+        if (!_state.nfeEditContatoIe || !_state.nfeEditIeWarning) return;
+        const ieVal = _state.nfeEditContatoIe.value.trim();
+        if (!ieVal) {
+            _state.nfeEditIeWarning.classList.remove('hidden');
+        } else {
+            _state.nfeEditIeWarning.classList.add('hidden');
         }
     }
 
