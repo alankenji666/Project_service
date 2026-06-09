@@ -193,6 +193,7 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditPesoLiquido = document.getElementById('nfe-edit-peso-liquido');
         _state.nfeEditDesconto = document.getElementById('nfe-edit-desconto');
         _state.nfeEditObservacoes = document.getElementById('nfe-edit-observacoes');
+        _state.nfeEditObservacoesOriginal = document.getElementById('nfe-edit-observacoes-original');
         _state.nfeEditAddParcelaBtn = document.getElementById('nfe-edit-add-parcela-btn');
         _state.nfeEditParcelasTbody = document.getElementById('nfe-edit-parcelas-tbody');
         _state.nfeEditSpinner = document.getElementById('nfe-edit-spinner');
@@ -1373,6 +1374,7 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditDataPrevista) _state.nfeEditDataPrevista.value = pedidoBling.dataPrevista || pedidoBling.data || defaultDate;
         
         _updateAllDateWarnings();
+        if (_state.nfeEditObservacoesOriginal) _state.nfeEditObservacoesOriginal.value = pedidoBling.observacoes || '';
         if (_state.nfeEditObservacoes) _state.nfeEditObservacoes.value = pedidoBling.observacoes || '';
 
         // Preencher transporte e valores
