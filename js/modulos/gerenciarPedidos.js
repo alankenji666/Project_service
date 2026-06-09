@@ -175,7 +175,11 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditFretePorConta = document.getElementById('nfe-edit-frete-por-conta');
         _state.nfeEditVolumes = document.getElementById('nfe-edit-volumes');
         _state.nfeEditPesoBruto = document.getElementById('nfe-edit-peso-bruto');
+        _state.nfeEditPesoLiquido = document.getElementById('nfe-edit-peso-liquido');
         _state.nfeEditDesconto = document.getElementById('nfe-edit-desconto');
+        _state.nfeEditObservacoes = document.getElementById('nfe-edit-observacoes');
+        _state.nfeEditAddParcelaBtn = document.getElementById('nfe-edit-add-parcela-btn');
+        _state.nfeEditParcelasTbody = document.getElementById('nfe-edit-parcelas-tbody');
         _state.nfeEditSpinner = document.getElementById('nfe-edit-spinner');
     }
 
@@ -365,6 +369,7 @@ export const GerenciarPedidosApp = (function () {
         if (_state.closeNfeEditModalBtn) _state.closeNfeEditModalBtn.addEventListener('click', _closeNfeEditModal);
         if (_state.cancelNfeEditBtn) _state.cancelNfeEditBtn.addEventListener('click', _closeNfeEditModal);
         if (_state.nfeEditAddItemBtn) _state.nfeEditAddItemBtn.addEventListener('click', () => _addNfeEditItemRow({}));
+        if (_state.nfeEditAddParcelaBtn) _state.nfeEditAddParcelaBtn.addEventListener('click', () => _addNfeEditParcelaRow({}));
         if (_state.confirmNfeEditBtn) _state.confirmNfeEditBtn.addEventListener('click', _confirmCustomEmitirNfe);
         if (_state.nfeEditModal) {
             _state.nfeEditModal.addEventListener('click', (e) => {
@@ -1233,14 +1238,28 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditContatoNomeDisplay) {
             _state.nfeEditContatoNomeDisplay.textContent = pedidoBling.contato?.nome ? `Nome: ${pedidoBling.contato.nome}` : 'Nome: -';
         }
-        if (_state.nfeEditNaturezaId) _state.nfeEditNaturezaId.value = pedidoBling.naturezaOperacao?.id || '';
+        
+        // Buscar natureza de operação (se estiver na raiz ou no primeiro item)
+        let naturezaId = '';
+        if (pedidoBling.naturezaOperacao?.id) {
+            naturezaId = pedidoBling.naturezaOperacao.id;
+        } else if (pedidoBling.itens && Array.isArray(pedidoBling.itens)) {
+            const itemComNat = pedidoBling.itens.find(item => item.naturezaOperacao && item.naturezaOperacao.id);
+            if (itemComNat) {
+                naturezaId = itemComNat.naturezaOperacao.id;
+            }
+        }
+        if (_state.nfeEditNaturezaId) _state.nfeEditNaturezaId.value = naturezaId;
+        
         if (_state.nfeEditData) _state.nfeEditData.value = pedidoBling.data || new Date().toISOString().substring(0, 10);
+        if (_state.nfeEditObservacoes) _state.nfeEditObservacoes.value = pedidoBling.observacoes || '';
 
         // Preencher transporte e valores
         if (_state.nfeEditFrete) _state.nfeEditFrete.value = pedidoBling.transporte?.frete || 0;
         if (_state.nfeEditFretePorConta) _state.nfeEditFretePorConta.value = pedidoBling.transporte?.fretePorConta !== undefined ? pedidoBling.transporte.fretePorConta : 9;
         if (_state.nfeEditVolumes) _state.nfeEditVolumes.value = pedidoBling.transporte?.quantidadeVolumes || 0;
         if (_state.nfeEditPesoBruto) _state.nfeEditPesoBruto.value = pedidoBling.transporte?.pesoBruto || 0;
+        if (_state.nfeEditPesoLiquido) _state.nfeEditPesoLiquido.value = pedidoBling.transporte?.pesoLiquido || pedidoBling.transporte?.pesoBruto || 0;
         if (_state.nfeEditDesconto) _state.nfeEditDesconto.value = pedidoBling.desconto?.valor || 0;
 
         // Limpar e carregar itens
@@ -1249,6 +1268,16 @@ export const GerenciarPedidosApp = (function () {
             if (pedidoBling.itens && Array.isArray(pedidoBling.itens)) {
                 pedidoBling.itens.forEach(item => {
                     _addNfeEditItemRow(item);
+                });
+            }
+        }
+
+        // Limpar e carregar parcelas
+        if (_state.nfeEditParcelasTbody) {
+            _state.nfeEditParcelasTbody.innerHTML = '';
+            if (pedidoBling.parcelas && Array.isArray(pedidoBling.parcelas)) {
+                pedidoBling.parcelas.forEach(p => {
+                    _addNfeEditParcelaRow(p);
                 });
             }
         }
@@ -1286,6 +1315,44 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditItensTbody.appendChild(tr);
     }
 
+    function _addNfeEditParcelaRow(parcela = {}) {
+        if (!_state.nfeEditParcelasTbody) return;
+
+        const tr = document.createElement('tr');
+        tr.className = 'nfe-edit-parcela-row';
+
+        let dataVenc = '';
+        if (parcela.dataVencimento) {
+            dataVenc = parcela.dataVencimento.substring(0, 10);
+        } else {
+            const dateInput = _state.nfeEditData;
+            dataVenc = dateInput && dateInput.value ? dateInput.value : new Date().toISOString().substring(0, 10);
+        }
+
+        tr.innerHTML = `
+            <td class="px-4 py-2">
+                <input type="date" class="nfe-edit-parcela-data w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" value="${dataVenc}">
+            </td>
+            <td class="px-4 py-2">
+                <input type="number" step="0.01" min="0" class="nfe-edit-parcela-valor w-full px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-1 focus:ring-blue-500" value="${parcela.valor || 0}">
+            </td>
+            <td class="px-4 py-2">
+                <input type="number" class="nfe-edit-parcela-forma-id w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" value="${parcela.formaPagamento?.id || ''}" placeholder="Ex: 6220057">
+            </td>
+            <td class="px-4 py-2">
+                <input type="text" class="nfe-edit-parcela-obs w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" value="${parcela.observacoes || ''}" placeholder="Opcional">
+            </td>
+            <td class="px-4 py-2 text-center">
+                <button type="button" class="text-red-500 hover:text-red-700 p-1 delete-parcela-row-btn transition-colors">
+                    <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </td>
+        `;
+
+        tr.querySelector('.delete-parcela-row-btn').addEventListener('click', () => tr.remove());
+        _state.nfeEditParcelasTbody.appendChild(tr);
+    }
+
     function _closeNfeEditModal() {
         if (_state.nfeEditModal) {
             _state.nfeEditModal.classList.add('hidden');
@@ -1300,11 +1367,13 @@ export const GerenciarPedidosApp = (function () {
         const contatoIdStr = _state.nfeEditContatoId ? _state.nfeEditContatoId.value.trim() : '';
         const naturezaIdStr = _state.nfeEditNaturezaId ? _state.nfeEditNaturezaId.value.trim() : '';
         const dataOperacao = _state.nfeEditData ? _state.nfeEditData.value.trim() : '';
+        const observacoes = _state.nfeEditObservacoes ? _state.nfeEditObservacoes.value.trim() : '';
 
         const frete = _state.nfeEditFrete ? parseFloat(_state.nfeEditFrete.value) || 0 : 0;
         const fretePorConta = _state.nfeEditFretePorConta ? parseInt(_state.nfeEditFretePorConta.value) || 0 : 0;
         const quantidadeVolumes = _state.nfeEditVolumes ? parseInt(_state.nfeEditVolumes.value) || 0 : 0;
         const pesoBruto = _state.nfeEditPesoBruto ? parseFloat(_state.nfeEditPesoBruto.value) || 0 : 0;
+        const pesoLiquido = _state.nfeEditPesoLiquido ? parseFloat(_state.nfeEditPesoLiquido.value) || 0 : 0;
         const descontoVal = _state.nfeEditDesconto ? parseFloat(_state.nfeEditDesconto.value) || 0 : 0;
 
         // Validações básicas
@@ -1344,6 +1413,52 @@ export const GerenciarPedidosApp = (function () {
             return;
         }
 
+        const parcelas = [];
+        if (_state.nfeEditParcelasTbody) {
+            const rows = _state.nfeEditParcelasTbody.querySelectorAll('.nfe-edit-parcela-row');
+            for (const row of rows) {
+                const dataVencimento = row.querySelector('.nfe-edit-parcela-data').value;
+                const valor = parseFloat(row.querySelector('.nfe-edit-parcela-valor').value) || 0;
+                const formaIdStr = row.querySelector('.nfe-edit-parcela-forma-id').value.trim();
+                const obs = row.querySelector('.nfe-edit-parcela-obs').value.trim();
+
+                if (!dataVencimento) {
+                    alert('Todas as parcelas devem conter uma data de vencimento.');
+                    return;
+                }
+                if (valor <= 0) {
+                    alert('Todas as parcelas devem ter valor maior que zero.');
+                    return;
+                }
+
+                const pObj = { data: dataVencimento, valor, observacoes: obs };
+                if (formaIdStr) {
+                    const formaId = parseInt(formaIdStr);
+                    if (!isNaN(formaId)) {
+                        pObj.formaPagamento = { id: formaId };
+                    }
+                }
+                parcelas.push(pObj);
+            }
+        }
+
+        // Validação da soma das parcelas vs valor total da nota
+        let totalItens = 0;
+        items.forEach(it => { totalItens += it.quantidade * it.valor; });
+        const totalNotaCalculado = Math.round((totalItens + frete - descontoVal) * 100) / 100;
+
+        if (parcelas.length > 0) {
+            let totalParcelas = 0;
+            parcelas.forEach(p => { totalParcelas += p.valor; });
+            totalParcelas = Math.round(totalParcelas * 100) / 100;
+
+            if (Math.abs(totalNotaCalculado - totalParcelas) > 0.05) {
+                if (!confirm(`Aviso: A soma das parcelas (R$ ${totalParcelas.toFixed(2)}) é diferente do total líquido calculado da nota (R$ ${totalNotaCalculado.toFixed(2)}).\n\nDeseja continuar assim mesmo? (Nota: Caso prossiga, a SEFAZ ou o Bling podem rejeitar a nota por inconsistência de valores)`)) {
+                    return;
+                }
+            }
+        }
+
         if (!confirm('Confirmar a emissão da Nota Fiscal com os dados editados? Esta ação enviará a nota para a SEFAZ.')) {
             return;
         }
@@ -1365,6 +1480,10 @@ export const GerenciarPedidosApp = (function () {
             payload.dataOperacao = dataOperacao;
         }
 
+        if (observacoes) {
+            payload.observacoes = observacoes;
+        }
+
         payload.itens = items;
 
         payload.transporte = {
@@ -1372,7 +1491,7 @@ export const GerenciarPedidosApp = (function () {
             frete: frete,
             quantidadeVolumes: quantidadeVolumes,
             pesoBruto: pesoBruto,
-            pesoLiquido: pesoBruto
+            pesoLiquido: pesoLiquido
         };
 
         if (descontoVal > 0) {
@@ -1380,6 +1499,10 @@ export const GerenciarPedidosApp = (function () {
                 valor: descontoVal,
                 unidade: 'REAL'
             };
+        }
+
+        if (parcelas.length > 0) {
+            payload.parcelas = parcelas;
         }
 
         const confirmBtn = _state.confirmNfeEditBtn;
@@ -1445,7 +1568,7 @@ export const GerenciarPedidosApp = (function () {
             alert('Erro ao emitir nota com dados customizados: ' + err.message);
         } finally {
             if (confirmBtn) confirmBtn.disabled = false;
-            if (cancelBtn) cancelBtn.disabled = false;
+            if (cancelBtn) confirmBtn.disabled = false;
             if (spinner) spinner.classList.add('hidden');
         }
     }

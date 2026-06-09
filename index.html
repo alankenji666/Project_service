@@ -1210,6 +1210,10 @@
                             <label class="block text-xs font-semibold text-gray-500 mb-1">Data da Operação</label>
                             <input type="date" id="nfe-edit-data" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
+                        <div class="md:col-span-3">
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Observações (Informações Complementares / Fisco)</label>
+                            <textarea id="nfe-edit-observacoes" rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Observações do pedido de venda..."></textarea>
+                        </div>
                     </div>
                 </div>
 
@@ -1243,24 +1247,24 @@
                 <!-- Seção 3: Transporte e Valores Fiscais -->
                 <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Frete, Transporte e Descontos</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                         <div>
                             <label class="block text-xs font-semibold text-gray-500 mb-1">Valor do Frete (R$)</label>
                             <input type="number" step="0.01" id="nfe-edit-frete" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-500 mb-1">Frete por Conta (Modalidade)</label>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Frete por Conta</label>
                             <select id="nfe-edit-frete-por-conta" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                <option value="0">0 - Contratação por conta do Remetente (CIF)</option>
-                                <option value="1">1 - Contratação por conta do Destinatário (FOB)</option>
-                                <option value="2">2 - Contratação por conta de Terceiros</option>
-                                <option value="3">3 - Próprio por conta do Remetente</option>
-                                <option value="4">4 - Próprio por conta do Destinatário</option>
-                                <option value="9">9 - Sem Ocorrência de Transporte</option>
+                                <option value="0">0 - CIF (Remetente)</option>
+                                <option value="1">1 - FOB (Destinatário)</option>
+                                <option value="2">2 - Terceiros</option>
+                                <option value="3">3 - Próprio Remetente</option>
+                                <option value="4">4 - Próprio Destinatário</option>
+                                <option value="9">9 - Sem Transporte</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-500 mb-1">Quantidade Volumes</label>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Volumes</label>
                             <input type="number" id="nfe-edit-volumes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
                         <div>
@@ -1268,9 +1272,40 @@
                             <input type="number" step="0.001" id="nfe-edit-peso-bruto" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-500 mb-1">Valor Desconto (R$)</label>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Peso Líquido (kg)</label>
+                            <input type="number" step="0.001" id="nfe-edit-peso-liquido" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Desconto (R$)</label>
                             <input type="number" step="0.01" id="nfe-edit-desconto" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
+                    </div>
+                </div>
+
+                <!-- Seção 4: Parcelas e Pagamento -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Formas de Pagamento / Parcelas</h4>
+                        <button id="nfe-edit-add-parcela-btn" type="button" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors border border-blue-100">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            Adicionar Parcela
+                        </button>
+                    </div>
+                    <div class="border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Data de Vencimento</th>
+                                    <th class="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase w-[150px]">Valor da Parcela (R$)</th>
+                                    <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase w-[220px]">Forma de Pagamento ID</th>
+                                    <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Observações</th>
+                                    <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase w-[60px]">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="nfe-edit-parcelas-tbody" class="bg-white divide-y divide-gray-100">
+                                <!-- Preenchido dinamicamente pelo JS -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
