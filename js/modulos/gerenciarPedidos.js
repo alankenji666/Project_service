@@ -36,6 +36,22 @@ export const GerenciarPedidosApp = (function () {
         return vendedor;
     }
 
+    // Formas de pagamento conhecidas (ID Bling -> Nome)
+    const FORMAS_PAGAMENTO = [
+        { id: '6220056', nome: 'Dinheiro' },
+        { id: '6220057', nome: 'Conta a receber/pagar' },
+    ];
+
+    const FORMA_PAGAMENTO_PADRAO = '6220056'; // Dinheiro
+
+    function _buildFormasPagamentoOptions(selectedId) {
+        const efectiveId = String(selectedId || FORMA_PAGAMENTO_PADRAO);
+        return FORMAS_PAGAMENTO.map(f => {
+            const sel = f.id === efectiveId ? ' selected' : '';
+            return `<option value="${f.id}"${sel}>${f.nome}</option>`;
+        }).join('');
+    }
+
     /**
      * Converte IDs numéricos de situação para labels legíveis.
      */
@@ -189,14 +205,22 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditFrete = document.getElementById('nfe-edit-frete');
         _state.nfeEditFretePorConta = document.getElementById('nfe-edit-frete-por-conta');
         _state.nfeEditVolumes = document.getElementById('nfe-edit-volumes');
+        _state.nfeEditVolumesWarning = document.getElementById('nfe-edit-volumes-warning');
+        _state.nfeEditFreteContainer = document.getElementById('nfe-edit-frete-container');
+        _state.nfeEditVolumesContainer = document.getElementById('nfe-edit-volumes-container');
+        _state.nfeEditPesoBrutoContainer = document.getElementById('nfe-edit-peso-bruto-container');
+        _state.nfeEditPesoLiquidoContainer = document.getElementById('nfe-edit-peso-liquido-container');
         _state.nfeEditPesoBruto = document.getElementById('nfe-edit-peso-bruto');
         _state.nfeEditPesoLiquido = document.getElementById('nfe-edit-peso-liquido');
         _state.nfeEditDesconto = document.getElementById('nfe-edit-desconto');
         _state.nfeEditObservacoes = document.getElementById('nfe-edit-observacoes');
         _state.nfeEditObservacoesOriginal = document.getElementById('nfe-edit-observacoes-original');
         _state.nfeEditAddParcelaBtn = document.getElementById('nfe-edit-add-parcela-btn');
+        _state.nfeEditAutoParcelasBtn = document.getElementById('nfe-edit-auto-parcelas-btn');
         _state.nfeEditParcelasTbody = document.getElementById('nfe-edit-parcelas-tbody');
         _state.nfeEditSpinner = document.getElementById('nfe-edit-spinner');
+        _state.draftNfeEditBtn = document.getElementById('draft-nfe-edit-btn');
+        _state.nfeDraftSpinner = document.getElementById('nfe-draft-spinner');
     }
 
     function _bindEvents() {
@@ -386,7 +410,11 @@ export const GerenciarPedidosApp = (function () {
         if (_state.cancelNfeEditBtn) _state.cancelNfeEditBtn.addEventListener('click', _closeNfeEditModal);
         if (_state.nfeEditAddItemBtn) _state.nfeEditAddItemBtn.addEventListener('click', () => _addNfeEditItemRow({}));
         if (_state.nfeEditAddParcelaBtn) _state.nfeEditAddParcelaBtn.addEventListener('click', () => _addNfeEditParcelaRow({}));
-        if (_state.confirmNfeEditBtn) _state.confirmNfeEditBtn.addEventListener('click', _confirmCustomEmitirNfe);
+        if (_state.nfeEditAutoParcelasBtn) {
+            _state.nfeEditAutoParcelasBtn.addEventListener('click', _handleAutoAdjustParcelas);
+        }
+        if (_state.confirmNfeEditBtn) _state.confirmNfeEditBtn.addEventListener('click', () => _confirmCustomEmitirNfe(false));
+        if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.addEventListener('click', () => _confirmCustomEmitirNfe(true));
         if (_state.nfeEditModal) {
             _state.nfeEditModal.addEventListener('click', (e) => {
                 if (e.target === _state.nfeEditModal) {
@@ -431,6 +459,40 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditDataPrevista) {
             _state.nfeEditDataPrevista.addEventListener('input', _updateAllDateWarnings);
             _state.nfeEditDataPrevista.addEventListener('change', _updateAllDateWarnings);
+        }
+
+        // Botões para ajustar data fora do mês atual para hoje
+        const adjustBtns = document.querySelectorAll('.adjust-to-today-btn');
+        adjustBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const targetId = btn.getAttribute('data-target');
+                const targetInput = document.getElementById(targetId);
+                if (targetInput) {
+                    targetInput.value = new Date().toISOString().substring(0, 10);
+                    targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    _updateAllDateWarnings();
+                }
+            });
+        });
+
+        if (_state.nfeEditFrete) _formatCurrencyInput(_state.nfeEditFrete);
+        if (_state.nfeEditDesconto) _formatCurrencyInput(_state.nfeEditDesconto);
+
+        // Listener para Frete por Conta - ocultar/mostrar campos de transporte
+        if (_state.nfeEditFretePorConta) {
+            _state.nfeEditFretePorConta.addEventListener('change', _updateFreteFields);
+        }
+        // Listener nos campos de frete e volumes para warning
+        if (_state.nfeEditFrete) {
+            _state.nfeEditFrete.addEventListener('input', _updateVolumesWarning);
+            _state.nfeEditFrete.addEventListener('change', _updateVolumesWarning);
+        }
+        if (_state.nfeEditVolumes) {
+            _state.nfeEditVolumes.addEventListener('input', _updateVolumesWarning);
+            _state.nfeEditVolumes.addEventListener('change', _updateVolumesWarning);
         }
 
         if (_state.nfeEditContatoId) {
@@ -1366,7 +1428,22 @@ export const GerenciarPedidosApp = (function () {
                 naturezaId = itemComNat.naturezaOperacao.id;
             }
         }
-        if (_state.nfeEditNaturezaId) _state.nfeEditNaturezaId.value = naturezaId;
+        if (_state.nfeEditNaturezaId) {
+            const selectEl = _state.nfeEditNaturezaId;
+            // Remove previous custom option if any exists
+            const customOption = selectEl.querySelector('option[data-custom="true"]');
+            if (customOption) customOption.remove();
+
+            const targetVal = String(naturezaId || '15107272436').trim();
+            if (targetVal && targetVal !== '15107272436' && targetVal !== '15107272437') {
+                const opt = document.createElement('option');
+                opt.value = targetVal;
+                opt.textContent = `Outra (${targetVal})`;
+                opt.setAttribute('data-custom', 'true');
+                selectEl.appendChild(opt);
+            }
+            selectEl.value = targetVal;
+        }
         
         const defaultDate = new Date().toISOString().substring(0, 10);
         if (_state.nfeEditData) _state.nfeEditData.value = pedidoBling.data || defaultDate;
@@ -1375,15 +1452,43 @@ export const GerenciarPedidosApp = (function () {
         
         _updateAllDateWarnings();
         if (_state.nfeEditObservacoesOriginal) _state.nfeEditObservacoesOriginal.value = pedidoBling.observacoes || '';
-        if (_state.nfeEditObservacoes) _state.nfeEditObservacoes.value = pedidoBling.observacoes || '';
+        
+        let obsVal = pedidoBling.observacoes || '';
+        let vendedorVal = '';
+        if (pedidoBling.vendedor) {
+            if (typeof pedidoBling.vendedor === 'object' && pedidoBling.vendedor.id) {
+                vendedorVal = pedidoBling.vendedor.id;
+            } else {
+                vendedorVal = pedidoBling.vendedor;
+            }
+        }
+        const vendedorNome = _getVendedorName(vendedorVal);
+        if (vendedorNome && vendedorNome !== '-') {
+            obsVal = obsVal.trim();
+            const suffix = `Vendedor: ${vendedorNome}`;
+            if (!obsVal.endsWith(suffix) && !obsVal.includes(suffix)) {
+                if (obsVal) {
+                    obsVal += `\n\n${suffix}`;
+                } else {
+                    obsVal = suffix;
+                }
+            }
+        }
+        if (_state.nfeEditObservacoes) _state.nfeEditObservacoes.value = obsVal;
 
         // Preencher transporte e valores
-        if (_state.nfeEditFrete) _state.nfeEditFrete.value = pedidoBling.transporte?.frete || 0;
+        if (_state.nfeEditFrete) {
+            const num = parseFloat(pedidoBling.transporte?.frete) || 0;
+            _state.nfeEditFrete.value = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+        }
         if (_state.nfeEditFretePorConta) _state.nfeEditFretePorConta.value = pedidoBling.transporte?.fretePorConta !== undefined ? pedidoBling.transporte.fretePorConta : 9;
         if (_state.nfeEditVolumes) _state.nfeEditVolumes.value = pedidoBling.transporte?.quantidadeVolumes || 0;
         if (_state.nfeEditPesoBruto) _state.nfeEditPesoBruto.value = pedidoBling.transporte?.pesoBruto || 0;
         if (_state.nfeEditPesoLiquido) _state.nfeEditPesoLiquido.value = pedidoBling.transporte?.pesoLiquido || pedidoBling.transporte?.pesoBruto || 0;
-        if (_state.nfeEditDesconto) _state.nfeEditDesconto.value = pedidoBling.desconto?.valor || 0;
+        if (_state.nfeEditDesconto) {
+            const num = parseFloat(pedidoBling.desconto?.valor) || 0;
+            _state.nfeEditDesconto.value = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+        }
 
         // Limpar e carregar itens
         if (_state.nfeEditItensTbody) {
@@ -1405,7 +1510,27 @@ export const GerenciarPedidosApp = (function () {
             }
         }
 
+        // Botão de ajuste de parcelas: sempre visível
+        // Quando encontra condições nas observações mostra com destaque pulsante,
+        // caso contrário fica disponível para ajustar manualmente (1x à vista).
+        if (_state.nfeEditAutoParcelasBtn) {
+            _state.nfeEditAutoParcelasBtn.classList.remove('hidden');
+            const hasCond = _parseDaysFromObservacoes(pedidoBling.observacoes || '');
+            const svgEl = _state.nfeEditAutoParcelasBtn.querySelector('svg');
+            if (hasCond) {
+                // Condição detectada: destaque pulsante
+                if (svgEl) svgEl.classList.add('animate-pulse');
+                _state.nfeEditAutoParcelasBtn.title = 'Condições de pagamento detectadas. Clique para ajustar parcelas automaticamente.';
+            } else {
+                // Sem condição: botão disponível mas sem pulsar
+                if (svgEl) svgEl.classList.remove('animate-pulse');
+                _state.nfeEditAutoParcelasBtn.title = 'Clique para ajustar como 1 parcela à vista (data atual).';
+            }
+        }
+
         // Exibir o modal
+        _updateFreteFields(); // Aplica visibilidade inicial dos campos de transporte
+        _updateVolumesWarning(); // Aplica estado inicial do warning de volumes
         _state.nfeEditModal.classList.remove('hidden');
     }
 
@@ -1425,7 +1550,7 @@ export const GerenciarPedidosApp = (function () {
                 <input type="number" step="1" min="1" class="nfe-edit-item-quantidade w-full px-2 py-1 text-sm border border-gray-300 rounded text-center focus:ring-1 focus:ring-blue-500" value="${item.quantidade || 1}">
             </td>
             <td class="px-4 py-2 text-right">
-                <input type="number" step="0.01" min="0" class="nfe-edit-item-valor w-full px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-1 focus:ring-blue-500" value="${item.valor || 0}">
+                <input type="text" class="nfe-edit-item-valor w-full px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-1 focus:ring-blue-500" value="${item.valor || 0}">
             </td>
             <td class="px-4 py-2 text-center">
                 <button type="button" class="text-red-500 hover:text-red-700 p-1 delete-item-row-btn transition-colors">
@@ -1435,6 +1560,12 @@ export const GerenciarPedidosApp = (function () {
         `;
 
         tr.querySelector('.delete-item-row-btn').addEventListener('click', () => tr.remove());
+        
+        const valorInput = tr.querySelector('.nfe-edit-item-valor');
+        if (valorInput) {
+            _formatCurrencyInput(valorInput);
+        }
+
         _state.nfeEditItensTbody.appendChild(tr);
     }
 
@@ -1457,10 +1588,12 @@ export const GerenciarPedidosApp = (function () {
                 <input type="date" class="nfe-edit-parcela-data w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" value="${dataVenc}">
             </td>
             <td class="px-4 py-2">
-                <input type="number" step="0.01" min="0" class="nfe-edit-parcela-valor w-full px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-1 focus:ring-blue-500" value="${parcela.valor || 0}">
+                <input type="text" class="nfe-edit-parcela-valor w-full px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-1 focus:ring-blue-500" value="${parcela.valor || 0}">
             </td>
             <td class="px-4 py-2">
-                <input type="number" class="nfe-edit-parcela-forma-id w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" value="${parcela.formaPagamento?.id || ''}" placeholder="Ex: 6220057">
+                <select class="nfe-edit-parcela-forma-id w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 bg-white">
+                    ${_buildFormasPagamentoOptions(parcela.formaPagamento?.id || '')}
+                </select>
             </td>
             <td class="px-4 py-2">
                 <input type="text" class="nfe-edit-parcela-obs w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" value="${parcela.observacoes || ''}" placeholder="Opcional">
@@ -1473,6 +1606,12 @@ export const GerenciarPedidosApp = (function () {
         `;
 
         tr.querySelector('.delete-parcela-row-btn').addEventListener('click', () => tr.remove());
+        
+        const valorInput = tr.querySelector('.nfe-edit-parcela-valor');
+        if (valorInput) {
+            _formatCurrencyInput(valorInput);
+        }
+
         _state.nfeEditParcelasTbody.appendChild(tr);
     }
 
@@ -1525,7 +1664,164 @@ export const GerenciarPedidosApp = (function () {
         _updateDateWarning(_state.nfeEditDataPrevista, _state.nfeEditDataPrevistaWarning);
     }
 
-    async function _confirmCustomEmitirNfe() {
+    // Mostra/oculta campos de transporte baseado no "Frete por Conta"
+    function _updateFreteFields() {
+        const semTransporte = _state.nfeEditFretePorConta && parseInt(_state.nfeEditFretePorConta.value) === 9;
+        const containers = [
+            _state.nfeEditFreteContainer,
+            _state.nfeEditVolumesContainer,
+            _state.nfeEditPesoBrutoContainer,
+            _state.nfeEditPesoLiquidoContainer
+        ];
+        containers.forEach(c => {
+            if (c) {
+                if (semTransporte) {
+                    c.classList.add('hidden');
+                } else {
+                    c.classList.remove('hidden');
+                }
+            }
+        });
+        // Atualiza o warning de volumes também
+        _updateVolumesWarning();
+    }
+
+    // Mostra/oculta warning em Volumes quando há frete mas volumes não preenchido
+    function _updateVolumesWarning() {
+        const semTransporte = _state.nfeEditFretePorConta && parseInt(_state.nfeEditFretePorConta.value) === 9;
+        if (semTransporte) {
+            if (_state.nfeEditVolumesWarning) _state.nfeEditVolumesWarning.classList.add('hidden');
+            return;
+        }
+        // Detectar valor do frete
+        let freteVal = 0;
+        if (_state.nfeEditFrete) {
+            const raw = _state.nfeEditFrete.value.replace(/[^\d,]/g, '').replace(',', '.');
+            freteVal = parseFloat(raw) || 0;
+        }
+        const volumes = parseInt(_state.nfeEditVolumes?.value) || 0;
+        // Mostrar warning se tem frete mas volumes zerado/vazio
+        if (_state.nfeEditVolumesWarning) {
+            if (freteVal > 0 && volumes <= 0) {
+                _state.nfeEditVolumesWarning.classList.remove('hidden');
+            } else {
+                _state.nfeEditVolumesWarning.classList.add('hidden');
+            }
+        }
+    }
+
+    function _parseDaysFromObservacoes(obsText) {
+        if (!obsText) return null;
+
+        // Detectar "À VISTA" ou "A VISTA" -> 1 parcela na data atual (0 dias)
+        if (/\bà\s*vista\b|\ba\s*vista\b/i.test(obsText)) {
+            return [0]; // 0 dias = vencimento hoje
+        }
+        
+        // Expressão regular para encontrar "Condições Pagto: - FATURADO" ou apenas "FATURADO"
+        const regex = /(?:Condi[çc][õo]es\s+Pagto:\s*-\s*)?FATURADO\s+([0-9\s/,\-a-zA-Z]+)/i;
+        const match = obsText.match(regex);
+        if (!match) return null;
+        
+        const rawVal = match[1];
+        // Divide o valor extraído em partes numéricas
+        const parts = rawVal.split(/[^0-9]+/);
+        const days = parts.map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p >= 0);
+        
+        return days.length > 0 ? days : null;
+    }
+
+    function _addDaysToDate(baseDateStr, days) {
+        const date = new Date(baseDateStr + 'T12:00:00');
+        date.setDate(date.getDate() + days);
+        return date.toISOString().substring(0, 10);
+    }
+
+    function _handleAutoAdjustParcelas() {
+        if (!_state.nfeEditParcelasTbody) return;
+
+        const obsText = _state.nfeEditObservacoesOriginal ? _state.nfeEditObservacoesOriginal.value : '';
+        let days = _parseDaysFromObservacoes(obsText);
+
+        // Se não encontrou condição nas observações, ajusta como 1 parcela à vista (hoje)
+        if (!days || days.length === 0) {
+            days = [0];
+        }
+
+        // Calcular valor total da nota com base nos inputs atuais do modal
+        let totalItens = 0;
+        if (_state.nfeEditItensTbody) {
+            const rows = _state.nfeEditItensTbody.querySelectorAll('.nfe-edit-item-row');
+            rows.forEach(row => {
+                const quantidade = parseInt(row.querySelector('.nfe-edit-item-quantidade').value) || 0;
+                const valor = _parseNumber(row.querySelector('.nfe-edit-item-valor').value);
+                totalItens += quantidade * valor;
+            });
+        }
+        const frete = _state.nfeEditFrete ? _parseNumber(_state.nfeEditFrete.value) : 0;
+        const descontoVal = _state.nfeEditDesconto ? _parseNumber(_state.nfeEditDesconto.value) : 0;
+        const totalNota = Math.round((totalItens + frete - descontoVal) * 100) / 100;
+
+        if (totalNota <= 0) {
+            alert('O valor total líquido calculado para a nota é R$ 0.00 ou menor. Adicione itens com valores antes de ajustar as parcelas.');
+            return;
+        }
+
+        // Obter a forma de pagamento ID existente na primeira parcela atual do formulário
+        let formaPagamentoId = '';
+        const firstFormaInput = _state.nfeEditParcelasTbody.querySelector('.nfe-edit-parcela-forma-id');
+        if (firstFormaInput) {
+            formaPagamentoId = firstFormaInput.value.trim();
+        }
+
+        // Calcular parcelas usando divisão precisa centavos a centavos
+        const numParcelas = days.length;
+        const baseValor = Math.floor((totalNota / numParcelas) * 100) / 100;
+        let somaCalculada = 0;
+
+        // Data base do pedido (sempre a data atual)
+        const baseDateStr = new Date().toISOString().substring(0, 10);
+
+        // Limpar parcelas atuais
+        _state.nfeEditParcelasTbody.innerHTML = '';
+
+        for (let i = 0; i < numParcelas; i++) {
+            let valorP = baseValor;
+            if (i === numParcelas - 1) {
+                // Última parcela absorve a diferença dos centavos
+                valorP = Math.round((totalNota - somaCalculada) * 100) / 100;
+            } else {
+                somaCalculada += baseValor;
+            }
+
+            const vencimentoStr = _addDaysToDate(baseDateStr, days[i]);
+
+            _addNfeEditParcelaRow({
+                dataVencimento: vencimentoStr,
+                valor: valorP,
+                formaPagamento: { id: formaPagamentoId || FORMA_PAGAMENTO_PADRAO },
+                observacoes: numParcelas === 1 ? 'À Vista' : `Parcela ${i + 1}/${numParcelas}`
+            });
+        }
+
+        const descricao = days.length === 1 && days[0] === 0
+            ? `1 parcela à vista (hoje)`
+            : `${days.join('/')} dias (${numParcelas}x de R$ ${(totalNota / numParcelas).toFixed(2).replace('.', ',')})`;
+
+        if (typeof Toastify !== 'undefined') {
+            Toastify({
+                text: `✅ Parcelas ajustadas: ${descricao}`,
+                duration: 3500,
+                gravity: 'top',
+                position: 'center',
+                style: { background: 'linear-gradient(to right, #10b981, #059669)' }
+            }).showToast();
+        } else {
+            alert(`Parcelas ajustadas: ${descricao}`);
+        }
+    }
+
+    async function _confirmCustomEmitirNfe(somenteGerar = false) {
         const idPedido = _currentModalPedidoId;
         if (!idPedido) return;
 
@@ -1543,12 +1839,12 @@ export const GerenciarPedidosApp = (function () {
         const dataPrevista = _state.nfeEditDataPrevista ? _state.nfeEditDataPrevista.value.trim() : '';
         const observacoes = _state.nfeEditObservacoes ? _state.nfeEditObservacoes.value.trim() : '';
 
-        const frete = _state.nfeEditFrete ? parseFloat(_state.nfeEditFrete.value) || 0 : 0;
+        const frete = _state.nfeEditFrete ? _parseNumber(_state.nfeEditFrete.value) : 0;
         const fretePorConta = _state.nfeEditFretePorConta ? parseInt(_state.nfeEditFretePorConta.value) || 0 : 0;
         const quantidadeVolumes = _state.nfeEditVolumes ? parseInt(_state.nfeEditVolumes.value) || 0 : 0;
         const pesoBruto = _state.nfeEditPesoBruto ? parseFloat(_state.nfeEditPesoBruto.value) || 0 : 0;
         const pesoLiquido = _state.nfeEditPesoLiquido ? parseFloat(_state.nfeEditPesoLiquido.value) || 0 : 0;
-        const descontoVal = _state.nfeEditDesconto ? parseFloat(_state.nfeEditDesconto.value) || 0 : 0;
+        const descontoVal = _state.nfeEditDesconto ? _parseNumber(_state.nfeEditDesconto.value) : 0;
 
         // Validações básicas
         if (!contatoIdStr) {
@@ -1568,7 +1864,7 @@ export const GerenciarPedidosApp = (function () {
                 const codigo = row.querySelector('.nfe-edit-item-codigo').value.trim();
                 const descricao = row.querySelector('.nfe-edit-item-descricao').value.trim();
                 const quantidade = parseInt(row.querySelector('.nfe-edit-item-quantidade').value) || 0;
-                const valor = parseFloat(row.querySelector('.nfe-edit-item-valor').value) || 0;
+                const valor = _parseNumber(row.querySelector('.nfe-edit-item-valor').value);
 
                 if (!descricao) {
                     alert('Todas as linhas de item devem conter uma descrição.');
@@ -1592,7 +1888,7 @@ export const GerenciarPedidosApp = (function () {
             const rows = _state.nfeEditParcelasTbody.querySelectorAll('.nfe-edit-parcela-row');
             for (const row of rows) {
                 const dataVencimento = row.querySelector('.nfe-edit-parcela-data').value;
-                const valor = parseFloat(row.querySelector('.nfe-edit-parcela-valor').value) || 0;
+                const valor = _parseNumber(row.querySelector('.nfe-edit-parcela-valor').value);
                 const formaIdStr = row.querySelector('.nfe-edit-parcela-forma-id').value.trim();
                 const obs = row.querySelector('.nfe-edit-parcela-obs').value.trim();
 
@@ -1633,8 +1929,10 @@ export const GerenciarPedidosApp = (function () {
             }
         }
 
-        if (!confirm('Confirmar a emissão da Nota Fiscal com os dados editados? Esta ação enviará a nota para a SEFAZ.')) {
-            return;
+        if (somenteGerar) {
+            if (!confirm('Criar a NF-e no Bling SEM enviar para a SEFAZ?\n\nA nota ficará como rascunho e poderá ser conferida e enviada manualmente no Bling.')) return;
+        } else {
+            if (!confirm('Confirmar a emissão da Nota Fiscal com os dados editados? Esta ação enviará a nota para a SEFAZ.')) return;
         }
 
         // Preparar payload customizado
@@ -1696,17 +1994,19 @@ export const GerenciarPedidosApp = (function () {
 
         const confirmBtn = _state.confirmNfeEditBtn;
         const cancelBtn = _state.cancelNfeEditBtn;
-        const spinner = _state.nfeEditSpinner;
+        const spinner = somenteGerar ? _state.nfeDraftSpinner : _state.nfeEditSpinner;
+        const actionBtn = somenteGerar ? _state.draftNfeEditBtn : confirmBtn;
 
         try {
             if (confirmBtn) confirmBtn.disabled = true;
+            if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.disabled = true;
             if (cancelBtn) cancelBtn.disabled = true;
             if (spinner) spinner.classList.remove('hidden');
 
             const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${idPedido}/gerar-nfe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ ...payload, somenteGerar })
             });
 
             const result = await res.json();
@@ -1717,8 +2017,22 @@ export const GerenciarPedidosApp = (function () {
                 throw new Error(errorMsg + details);
             }
 
-            if (result.status === 'partial_success') {
-                alert('Atenção: ' + result.message);
+            if (result.status === 'partial_success' || result.status === 'draft_success') {
+                // Nota criada mas não enviada (rascunho ou falha no envio)
+                const toastText = result.status === 'draft_success'
+                    ? `✅ Rascunho criado no Bling! ID da Nota: ${result.data?.idNota || ''}. Confira e envie manualmente pelo Bling.`
+                    : 'Atenção: ' + result.message;
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({
+                        text: toastText,
+                        duration: 7000,
+                        gravity: 'top',
+                        position: 'center',
+                        style: { background: 'linear-gradient(to right, #f59e0b, #d97706)' }
+                    }).showToast();
+                } else {
+                    alert(toastText);
+                }
             } else if (typeof Toastify !== 'undefined') {
                 Toastify({
                     text: '🚀 NF-e Gerada com Sucesso!',
@@ -1745,11 +2059,7 @@ export const GerenciarPedidosApp = (function () {
 
             // Fechar modal de edição
             _closeNfeEditModal();
-
-            // Atualizar a tabela ao fundo
             _filterPedidos();
-
-            // Reabrir modal de detalhes para atualizar os dados visíveis
             _openOrderDetailsModal(idPedido);
 
         } catch (err) {
@@ -1757,9 +2067,46 @@ export const GerenciarPedidosApp = (function () {
             alert('Erro ao emitir nota com dados customizados: ' + err.message);
         } finally {
             if (confirmBtn) confirmBtn.disabled = false;
-            if (cancelBtn) confirmBtn.disabled = false;
+            if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.disabled = false;
+            if (cancelBtn) cancelBtn.disabled = false;
             if (spinner) spinner.classList.add('hidden');
         }
+    }
+
+    function _formatCurrencyInput(inputEl) {
+        if (!inputEl) return;
+        
+        function formatValue(value) {
+            let clean = String(value).replace(/\D/g, '');
+            if (!clean || clean === '00' || clean === '0') return 'R$ 0,00';
+            
+            let cents = parseInt(clean, 10);
+            let valFloat = cents / 100;
+            
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(valFloat);
+        }
+        
+        // Formata valor inicial se for numérico puro
+        if (inputEl.value && !inputEl.value.includes('R$')) {
+            const num = parseFloat(inputEl.value) || 0;
+            inputEl.value = new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(num);
+        }
+        
+        inputEl.addEventListener('input', (e) => {
+            e.target.value = formatValue(e.target.value);
+        });
+        
+        inputEl.addEventListener('focus', () => {
+            setTimeout(() => {
+                inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+            }, 10);
+        });
     }
 
     function _handlePrintNfe() {

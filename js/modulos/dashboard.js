@@ -1452,11 +1452,16 @@ export const DashboardApp = (function() {
         const rawDate = p['Data Criação'] || p['Data criação'] || p.data_criação || p.data_criacao || p.dataCriacao || p.data_de_emissao || p.data_emissao || p.data_saida || p.data_faturamento || p.data || p.data_pedido || p['data pedido'] || p.data_venda || p.Data || "";
         if (!rawDate) return null;
 
-        // Tenta ISO primeiro (como na versão original que funcionava para Loja Integrada)
-        let d = new Date(rawDate);
-        if (isNaN(d.getTime())) {
-            // Se falhar (ex: DD/MM/AAAA), usa o utilitário manual para fuso local
+        // CORREÇÃO DE FUSO HORÁRIO:
+        // new Date("2026-06-01") interpreta como UTC midnight → vira 31/05 no fuso UTC-3.
+        // _utils.parsePtBrDate trata YYYY-MM-DD como hora LOCAL, evitando o deslocamento.
+        let d = null;
+        if (_utils && _utils.parsePtBrDate) {
             d = _utils.parsePtBrDate(String(rawDate));
+        }
+        // Fallback apenas para strings com timezone explícito (ex: "2026-06-01T10:00:00Z")
+        if (!d || isNaN(d.getTime())) {
+            d = new Date(rawDate);
         }
         return (d && !isNaN(d.getTime())) ? d : null;
     }
@@ -2284,24 +2289,29 @@ export const DashboardApp = (function() {
 
         const html = `
             <table class="min-w-full divide-y divide-gray-200" id="sales-details-table">
-                <thead class="bg-gray-50 sticky top-0 z-10">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="pedido">
-                            <div class="flex items-center">Nº Pedido ${_getSortIcon('pedido', sort)}</div>
+                <thead>
+                    <tr class="border-b-2 border-gray-200 shadow-sm">
+                        <th class="sticky top-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="pedido" title="Clique para ordenar por Nº Pedido. Clique novamente para ordenar por Nº NF-e">
+                            <div class="flex items-center gap-1">
+                                ${(sort.key === 'nota')
+                                    ? `<span class="text-blue-600 font-bold">Nº NF-e</span><span class="text-gray-300 text-[10px]">/Pedido</span> ${_getSortIcon('nota', sort)}`
+                                    : `<span>Nº Pedido</span><span class="text-gray-300 text-[10px]">/NF-e</span> ${_getSortIcon('pedido', sort)}`
+                                }
+                            </div>
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="cliente">
+                        <th class="sticky top-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="cliente">
                             <div class="flex items-center">Cliente ${_getSortIcon('cliente', sort)}</div>
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="data">
+                        <th class="sticky top-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="data">
                             <div class="flex items-center">Data ${_getSortIcon('data', sort)}</div>
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="vendedor">
+                        <th class="sticky top-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="vendedor">
                             <div class="flex items-center">Vendedor ${_getSortIcon('vendedor', sort)}</div>
                         </th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="valor">
+                        <th class="sticky top-0 z-20 bg-gray-50 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="valor">
                             <div class="flex items-center justify-end">Valor ${_getSortIcon('valor', sort)}</div>
                         </th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        <th class="sticky top-0 z-20 bg-gray-50 px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200" id="sales-details-tbody">
@@ -2402,6 +2412,10 @@ export const DashboardApp = (function() {
             const linkDanfe = nfe ? nfe.link_danfe : '#';
             const hasNfe = !!nfe;
             
+            // Natureza de Operação — campo "natureza_de_operacao" (col T da planilha)
+            const naturezaRaw = nfe ? (nfe.natureza_de_operacao || nfe.natureza || '') : '';
+            const isGarantia = naturezaRaw && naturezaRaw.toLowerCase().includes('garantia');
+
             let vendedorRaw = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
             let vendedor = vendedorRaw;
             for (const [id, name] of Object.entries(_vendedorMap)) {
@@ -2416,11 +2430,12 @@ export const DashboardApp = (function() {
             const hasService = checkService(nfe ? nfe.itens : '') || checkService(p.itens || '');
 
             html += `
-            <tr id="sales-detail-row-${p.id || p.id_pedido}" class="hover:bg-gray-50 transition-colors">
+            <tr id="sales-detail-row-${p.id || p.id_pedido}" data-natureza="${naturezaRaw}" class="hover:bg-gray-50 transition-colors">
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center gap-1.5">
                         <div class="text-sm font-medium text-gray-600">${p.numero || p.número || '-'}</div>
                         ${hasService ? `<div class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" title="Contém Serviço"></div>` : ''}
+                        ${isGarantia ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-700 border border-purple-200 flex-shrink-0" title="${naturezaRaw}">GARANTIA</span>` : ''}
                     </div>
                     <div class="text-[10px] mt-0.5">
                         ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline font-bold" title="Visualizar DANFE">NF: ${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
@@ -2447,12 +2462,14 @@ export const DashboardApp = (function() {
                         <span class="edit-sales-observation-btn cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors" 
                             data-target-id="${p.numero || p.número || p.id || p.id_pedido}" 
                             data-observation='${(() => {
-                                const obsPedido = p.observacao || p.observação || "";
+                                const raw = p.observacao || p.observação || "";
+                                // Pode ser string (da planilha) ou Array (após sync Firestore)
+                                const obsPedido = Array.isArray(raw) ? raw.join('\n') : String(raw);
                                 if (obsPedido && obsPedido.trim()) return JSON.stringify([{ autor: 'Pedido', obs: obsPedido.trim() }]);
                                 return JSON.stringify([]);
                             })()}'
                             title="Adicionar/Ver Observação">
-                           <svg class="h-5 w-5 ${(p.observacao || p.observação) ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
+                           <svg class="h-5 w-5 ${(() => { const r = p.observacao || p.observação; return (Array.isArray(r) ? r.length > 0 : !!r) ? 'text-red-500' : 'text-gray-300'; })()}" viewBox="0 0 20 20" fill="currentColor">
                                <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
                            </svg>
                         </span>
@@ -2985,11 +3002,32 @@ export const DashboardApp = (function() {
         _dom.salesDetailsModalContent?.addEventListener('click', e => {
             const header = e.target.closest('[data-sales-sort]');
             if (header) {
-                const key = header.dataset.salesSort;
-                _state.salesSort = {
-                    key: key,
-                    direction: (_state.salesSort.key === key && _state.salesSort.direction === 'desc') ? 'asc' : 'desc'
-                };
+                const clickedKey = header.dataset.salesSort;
+                const currentKey = _state.salesSort.key;
+
+                // Ciclo especial para a coluna Pedido/NF-e:
+                // pedido desc -> pedido asc -> nota desc -> nota asc -> pedido desc ...
+                if (clickedKey === 'pedido') {
+                    if (currentKey === 'pedido' && _state.salesSort.direction === 'desc') {
+                        // pedido desc -> pedido asc
+                        _state.salesSort = { key: 'pedido', direction: 'asc' };
+                    } else if (currentKey === 'pedido' && _state.salesSort.direction === 'asc') {
+                        // pedido asc -> nota desc
+                        _state.salesSort = { key: 'nota', direction: 'desc' };
+                    } else if (currentKey === 'nota' && _state.salesSort.direction === 'desc') {
+                        // nota desc -> nota asc
+                        _state.salesSort = { key: 'nota', direction: 'asc' };
+                    } else {
+                        // nota asc -> pedido desc (reinicia ciclo)
+                        _state.salesSort = { key: 'pedido', direction: 'desc' };
+                    }
+                } else {
+                    // Outras colunas: toggle normal asc/desc
+                    _state.salesSort = {
+                        key: clickedKey,
+                        direction: (currentKey === clickedKey && _state.salesSort.direction === 'desc') ? 'asc' : 'desc'
+                    };
+                }
                 _renderSalesDetailsTable();
             }
         });
@@ -3075,16 +3113,15 @@ export const DashboardApp = (function() {
         },
 
         updateOrderObservationStatus: function(id, obs) {
-            const row = document.getElementById(`sales-detail-row-${id}`);
-            if (row) {
-                const icon = row.querySelector('.edit-sales-observation-btn');
-                if (icon) {
-                    icon.dataset.observation = JSON.stringify(obs || []);
-                    const svg = icon.querySelector('svg');
-                    const has = Array.isArray(obs) && obs.length > 0;
-                    svg?.classList.toggle('text-red-500', has);
-                    svg?.classList.toggle('text-gray-300', !has);
-                }
+            // A <tr> usa p.id (ID longo), mas o orderId passado pode ser p.numero.
+            // Busca o ícone pelo data-target-id que sempre usa p.numero — mais confiável.
+            const icon = document.querySelector(`.edit-sales-observation-btn[data-target-id="${id}"]`);
+            if (icon) {
+                icon.dataset.observation = JSON.stringify(obs || []);
+                const svg = icon.querySelector('svg');
+                const has = Array.isArray(obs) ? obs.length > 0 : !!(obs && String(obs).trim());
+                svg?.classList.toggle('text-red-500', has);
+                svg?.classList.toggle('text-gray-300', !has);
             }
         },
 
@@ -3131,6 +3168,13 @@ export const DashboardApp = (function() {
          */
         resetToSelector: function() {
             _showSelector();
+        },
+
+        /**
+         * Expõe os pedidos Bling carregados no dashboard para uso por outros módulos (ex: modal de observação).
+         */
+        getAllPedidosBling: function() {
+            return _allPedidosBling;
         }
     };
 })();

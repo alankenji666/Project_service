@@ -148,7 +148,8 @@ const COLUMNS_NFE = {
     FRETE_POR_CONTA: 14,
     ORIGEM_LOJA: 15,
     LINK_DANFE: 16,
-    OBSERVACAO: 17
+    OBSERVACAO: 17,
+    NATUREZA: 19  // Coluna T — Natureza de Operação (col S = índice 18 é Itens)
 };
 
 // --- CONSTANTES DE MAPEAMENTO DE COLUNAS PARA 'PedidosBling' ---
@@ -194,17 +195,18 @@ app.post('/', async (req, res, next) => {
         const formattedDate = `${day}/${month}/${year}`;
 
         const values = items.map(item => [
-            phoenixCode,
-            item.codigo,
-            '',
-            item.descricao,
-            item.localizacao || '',
-            item.quantidade,
-            'PENDENTE',
-            formattedDate,
-            '',
-            '',
-            '15'
+            phoenixCode,       // A - Requisição
+            item.codigo,       // B - Codigo Service
+            '',                // C - Codigo MKS Equipamentos
+            item.descricao,    // D - Descrição
+            item.localizacao || '', // E - Localização
+            item.quantidade,   // F - Quantidade Pedido
+            '',                // G - Quantidade Recebido (vazio ao lançar)
+            'PENDENTE',        // H - Situação
+            formattedDate,     // I - Data Pedido
+            '',                // J - Dias Corridos
+            '',                // K - Observação
+            '15'               // L - Prazo Entrega
         ]);
 
         const response = await sheets.spreadsheets.values.append({
@@ -280,17 +282,18 @@ app.post('/launch-fabrica', async (req, res, next) => {
         const formattedDate = `${day}/${month}/${year}`;
 
         const values = items.map(item => [
-            phoenixCode,
-            item.codigo,
-            '',
-            item.descricao,
-            item.localizacao || '',
-            item.quantidade,
-            'PENDENTE',
-            formattedDate,
-            '',
-            '',
-            item.prazoEntrega || '15'
+            phoenixCode,       // A - Requisição
+            item.codigo,       // B - Codigo Service
+            '',                // C - Codigo MKS Equipamentos
+            item.descricao,    // D - Descrição
+            item.localizacao || '', // E - Localização
+            item.quantidade,   // F - Quantidade Pedido
+            '',                // G - Quantidade Recebido (vazio ao lançar)
+            'PENDENTE',        // H - Situação
+            formattedDate,     // I - Data Pedido
+            '',                // J - Dias Corridos
+            '',                // K - Observação
+            item.prazoEntrega || '15' // L - Prazo Entrega
         ]);
 
         const response = await sheets.spreadsheets.values.append({

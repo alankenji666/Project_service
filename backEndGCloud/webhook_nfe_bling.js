@@ -132,7 +132,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
                 }
             }
 
-            const rowValues = new Array(18).fill('');
+            const rowValues = new Array(20).fill('');
             if (action === 'deleted') {
                 rowValues[COLUMNS_NFE.ID_NOTA] = String(nfeId);
                 rowValues[COLUMNS_NFE.SITUACAO] = "Cancelada (Excluída)";
@@ -174,6 +174,27 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
                     const vlr = parseFloat(i.valor || 0).toFixed(2);
                     return `(${cod}, ${qtd}, ${vlr})`;
                 }).join("; ") : "";
+
+                // Mapeamento de IDs de Natureza de Operação do Bling
+                const naturezasMap = {
+                    "15107272436": "Venda de mercadoria",
+                    "15107272437": "Venda de mercadoria a não contribuinte",
+                    "15108636006": "Remessa em Garantia"
+                };
+
+                // Tenta extrair a descrição. Se vier só o ID, usa o mapeamento.
+                let natRaiz = n.naturezaOperacao || n.natureza_operacao || {};
+                let naturezaFinal = natRaiz.descricao || naturezasMap[natRaiz.id] || String(natRaiz.id || "");
+
+                // Se não achou na raiz, procura no primeiro item
+                if (!naturezaFinal) {
+                    const natItem = n.itens?.find(i => i.naturezaOperacao)?.naturezaOperacao || {};
+                    naturezaFinal = natItem.descricao || naturezasMap[natItem.id] || String(natItem.id || "");
+                }
+
+                console.log(`[Webhook NF-e] ID=${n.id} | naturezaOperacao raiz:`, JSON.stringify(n.naturezaOperacao));
+                console.log(`[Webhook NF-e] ID=${n.id} | natureza final mapeada: "${naturezaFinal}"`);
+                rowValues[COLUMNS_NFE.NATUREZA] = naturezaFinal;
             }
 
             if (rowIndexToUpdate !== -1) {

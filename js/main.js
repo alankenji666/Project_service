@@ -1168,27 +1168,84 @@ const data = filteredProducts.map(product => {
 
 
             // NOVO: Adicionando de volta a lógica de observação de Pedido
-            function _renderObservationChat(observations) {
+            function _renderObservationChat(observations, orderId) {
                 if (!_orderObservationHistory) return;
                 if (!observations || !Array.isArray(observations) || observations.length === 0) {
                     _orderObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
                     return;
                 }
-                const chatHtml = observations.map(obsString => {
+                const chatHtml = observations.map((obsString, idx) => {
                     const parts = obsString.split(' - ');
                     const timestamp = parts.length > 1 ? parts[0] : '';
                     const message = parts.length > 1 ? parts.slice(1).join(' - ') : obsString;
                     return `
-                    <div class="p-3 rounded-lg bg-blue-100 text-gray-800 max-w-md self-start">
-                        <p class="text-sm whitespace-pre-wrap">${message}</p>
+                    <div class="relative group p-3 rounded-lg bg-blue-100 text-gray-800 max-w-md self-start">
+                        <button class="delete-obs-btn absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded-full bg-red-100 hover:bg-red-200 text-red-500 hover:text-red-700" 
+                            data-obs-index="${idx}" title="Excluir esta observação">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
+                            </svg>
+                        </button>
+                        <p class="text-sm whitespace-pre-wrap pr-4">${message}</p>
                         <div class="flex items-center justify-end mt-1">
                             <span class="text-xs text-gray-500 mr-1">${timestamp}</span>
-                            <span title="Salvo"><svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></span>
+                            <span title="Salvo"><svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></span>
                         </div>
                     </div>`;
                 }).join('');
                 _orderObservationHistory.innerHTML = chatHtml;
                 _orderObservationHistory.scrollTop = _orderObservationHistory.scrollHeight;
+
+                // Listener dos botões de excluir
+                _orderObservationHistory.querySelectorAll('.delete-obs-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const idx = parseInt(btn.dataset.obsIndex, 10);
+                        _deleteOrderObservation(idx);
+                    });
+                });
+            }
+
+            async function _deleteOrderObservation(indexToDelete) {
+                const orderId = _orderObservationModal?.dataset.orderId;
+                if (!orderId) return;
+
+                // Encontra o pedido
+                const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
+                let order = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+                if (!order && typeof DashboardApp !== 'undefined' && typeof DashboardApp.getAllPedidosBling === 'function') {
+                    order = DashboardApp.getAllPedidosBling().find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.número) === String(orderId));
+                }
+                if (!order) return;
+
+                const current = Array.isArray(order.observacao) ? [...order.observacao] : [];
+                if (indexToDelete < 0 || indexToDelete >= current.length) return;
+
+                const confirmed = await _showConfirmationModal('Excluir Observação', 'Tem certeza que deseja excluir esta mensagem? Esta ação não pode ser desfeita.');
+                if (!confirmed) return;
+
+                const updated = current.filter((_, i) => i !== indexToDelete);
+
+                try {
+                    const response = await fetch(API_URLS.ORDER_OBSERVATION, {
+                        method: 'PUT',
+                        mode: 'cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ numero_do_pedido: orderId, observacoes_completas: updated, senderId: _myClientId })
+                    });
+                    if (!response.ok) { const t = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${t}`); }
+
+                    order.observacao = updated;
+                    _renderObservationChat(updated, orderId);
+
+                    if (typeof DashboardApp !== 'undefined' && typeof DashboardApp.updateOrderObservationStatus === 'function') {
+                        DashboardApp.updateOrderObservationStatus(orderId, updated);
+                    }
+                    if (typeof GerenciarPedidosApp !== 'undefined' && typeof GerenciarPedidosApp.updateOrderObservationStatus === 'function') {
+                        GerenciarPedidosApp.updateOrderObservationStatus(orderId, updated);
+                    }
+                } catch (error) {
+                    _showMessageModal('Erro', `Não foi possível excluir a observação: ${error.message}`);
+                }
             }
 
             function _updateObservationCharCount() {
@@ -1253,8 +1310,18 @@ const data = filteredProducts.map(product => {
             }
 
             async function _openOrderObservationModal(orderId) {
-                const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
-                const order = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+                // Busca em GerenciarPedidosApp primeiro
+                let allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
+                let order = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+
+                // Fallback: busca nos pedidos do Dashboard (Vendas Detalhadas)
+                if (!order && typeof DashboardApp !== 'undefined' && typeof DashboardApp.getAllPedidosBling === 'function') {
+                    const dashPedidos = DashboardApp.getAllPedidosBling();
+                    order = dashPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.número) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+                    // Se encontrou no dashboard mas não no GerenciarPedidos, injeta no array local para o save funcionar
+                    if (order) allPedidos.push(order);
+                }
+
                 if (!order) {
                     _showMessageModal("Erro", "Pedido não encontrado.");
                     return;
@@ -1312,7 +1379,14 @@ const data = filteredProducts.map(product => {
                 if (!orderId || !newObservation.trim()) return;
 
                 const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
-                const orderToUpdate = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+                let orderToUpdate = allPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+
+                // Fallback: busca nos pedidos carregados no Dashboard
+                if (!orderToUpdate && typeof DashboardApp !== 'undefined' && typeof DashboardApp.getAllPedidosBling === 'function') {
+                    const dashPedidos = DashboardApp.getAllPedidosBling();
+                    orderToUpdate = dashPedidos.find(o => String(o.id) === String(orderId) || String(o.numero) === String(orderId) || String(o.número) === String(orderId) || String(o.numero_loja || o.numeroLoja) === String(orderId));
+                }
+
                 if (!orderToUpdate) {
                     _showMessageModal("Erro", "Pedido não encontrado para salvar a observação.");
                     return;
@@ -3169,7 +3243,7 @@ const data = filteredProducts.map(product => {
                         _selectedStockItems.delete(productIdToRemove);
                         _reportQuantities.delete(productIdToRemove);
                         _prepareRequisition(); // CORREÇÃO
-                        _updateSelectedCountDisplay();
+                        if (typeof EstoqueApp !== 'undefined') { EstoqueApp.updateSelectedCountDisplay(); }
                     });
                 });
 
@@ -3361,7 +3435,7 @@ const data = filteredProducts.map(product => {
                         _selectedStockItems.delete(launchedItem.id);
                         _reportQuantities.delete(launchedItem.id);
                     });
-                    _updateSelectedCountDisplay();
+                    if (typeof EstoqueApp !== 'undefined') { EstoqueApp.updateSelectedCountDisplay(); }
                     _showPage('estoque');
                     _renderRequisitionOverviewPage();
                     if (!_terceirosOrdersModal.classList.contains('hidden')) _renderConsolidatedOrdersTable();

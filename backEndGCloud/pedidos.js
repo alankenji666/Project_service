@@ -291,23 +291,96 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
     router.post('/observacao', async (req, res, next) => {
         try {
             const { numero_do_pedido, observacao, senderId } = req.body;
+            if (!numero_do_pedido || !observacao) throw Object.assign(new Error("numero_do_pedido e observacao são obrigatórios."), { statusCode: 400 });
+
             const sheets = await getSheetsClient();
             const response = await sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNamePedidosBling}!A:Z` });
             const rows = response.data.values || [];
-            const headers = rows[0].map(h => (h || '').toLowerCase().trim());
-            const obsCol = 16;
+            if (rows.length === 0) throw new Error("Planilha de pedidos vazia.");
+
+            // Normaliza headers removendo acentos (igual ao GET /) para lidar com 'Número' → 'numero'
+            const normalizeHeader = h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const headers = rows[0].map(normalizeHeader);
+
+            // Descobre índices das colunas-chave por nome normalizado
+            const idColIdx  = headers.indexOf('id pedido') !== -1 ? headers.indexOf('id pedido') : headers.indexOf('id');
+            const numColIdx = headers.indexOf('numero');      // 'Número' → 'numero' após normalização
+            const obsColIdx = 16; // Coluna Q — Observação (confirmado na linha 70 do GET /)
+
+            console.log(`[/observacao] Buscando pedido: "${numero_do_pedido}" | idCol=${idColIdx} numCol=${numColIdx}`);
+
             let rIdx = -1;
             for (let i = 1; i < rows.length; i++) {
-                const idVal = String(rows[i][headers.indexOf('id pedido')] || rows[i][headers.indexOf('id')] || '').trim();
-                const numVal = String(rows[i][headers.indexOf('numero')] || '').trim();
+                const row = rows[i];
+                const idVal  = idColIdx  !== -1 ? String(row[idColIdx]  || '').trim() : '';
+                const numVal = numColIdx !== -1 ? String(row[numColIdx] || '').trim() : '';
+                if (idVal === String(numero_do_pedido) || numVal === String(numero_do_pedido)) {
+                    rIdx = i;
+                    break;
+                }
+            }
+
+            if (rIdx === -1) throw new Error(`Pedido não encontrado. Buscado: "${numero_do_pedido}" (idCol=${idColIdx}, numCol=${numColIdx})`);
+
+            const obsAt  = rows[rIdx][obsColIdx] || '';
+            const ts     = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+            const obsFin = obsAt ? `${obsAt}\\n${ts} - ${observacao}` : `${ts} - ${observacao}`;
+
+            const colLetter = colToA1(obsColIdx + 1); // +1 porque colToA1 é 1-based
+            await sheets.spreadsheets.values.update({
+                spreadsheetId: spreadsheetIdNFE,
+                range: `${sheetNamePedidosBling}!${colLetter}${rIdx + 1}`,
+                valueInputOption: 'RAW',
+                resource: { values: [[obsFin]] }
+            });
+
+            if (typeof notifySync === 'function') notifySync('orderObservationUpdated', { numeroPedido: String(numero_do_pedido), novaObservacao: obsFin, senderId });
+            res.status(200).send({ status: 'success', data: { newObservation: obsFin } });
+        } catch (error) { next(error); }
+    });
+
+    // PUT /observacao — Sobrescreve TODA a lista de observações (usado ao excluir uma mensagem)
+    router.put('/observacao', async (req, res, next) => {
+        try {
+            const { numero_do_pedido, observacoes_completas, senderId } = req.body;
+            if (!numero_do_pedido || !Array.isArray(observacoes_completas)) {
+                throw Object.assign(new Error("numero_do_pedido e observacoes_completas (array) são obrigatórios."), { statusCode: 400 });
+            }
+
+            const sheets = await getSheetsClient();
+            const response = await sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNamePedidosBling}!A:Z` });
+            const rows = response.data.values || [];
+            if (rows.length === 0) throw new Error("Planilha de pedidos vazia.");
+
+            const normalizeHeader = h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const headers = rows[0].map(normalizeHeader);
+            const idColIdx  = headers.indexOf('id pedido') !== -1 ? headers.indexOf('id pedido') : headers.indexOf('id');
+            const numColIdx = headers.indexOf('numero');
+            const obsColIdx = 16;
+
+            let rIdx = -1;
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const idVal  = idColIdx  !== -1 ? String(row[idColIdx]  || '').trim() : '';
+                const numVal = numColIdx !== -1 ? String(row[numColIdx] || '').trim() : '';
                 if (idVal === String(numero_do_pedido) || numVal === String(numero_do_pedido)) { rIdx = i; break; }
             }
-            if (rIdx === -1) throw new Error("Pedido não encontrado.");
-            const obsAt = rows[rIdx][obsCol] || '';
-            const obsFin = obsAt ? `${obsAt}\\n${new Date().toLocaleString('pt-BR')} - ${observacao}` : `${new Date().toLocaleString('pt-BR')} - ${observacao}`;
-            await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNamePedidosBling}!${colToA1(obsCol + 1)}${rIdx + 1}`, valueInputOption: 'RAW', resource: { values: [[obsFin]] } });
+
+            if (rIdx === -1) throw new Error(`Pedido não encontrado. Buscado: "${numero_do_pedido}"`);
+
+            // Junta o array de volta para a string com \\n separador (igual ao formato da planilha)
+            const obsFin = observacoes_completas.join('\\n');
+
+            const colLetter = colToA1(obsColIdx + 1);
+            await sheets.spreadsheets.values.update({
+                spreadsheetId: spreadsheetIdNFE,
+                range: `${sheetNamePedidosBling}!${colLetter}${rIdx + 1}`,
+                valueInputOption: 'RAW',
+                resource: { values: [[obsFin]] }
+            });
+
             if (typeof notifySync === 'function') notifySync('orderObservationUpdated', { numeroPedido: String(numero_do_pedido), novaObservacao: obsFin, senderId });
-            res.status(200).send({ status: 'success' });
+            res.status(200).send({ status: 'success', data: { newObservation: obsFin } });
         } catch (error) { next(error); }
     });
 
@@ -490,7 +563,19 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 });
             }
 
-            // 2. Enviar a Nota Fiscal para a SEFAZ
+            // 2. Verificar se deve enviar para a SEFAZ ou apenas criar como rascunho
+            const somenteGerar = req.body && req.body.somenteGerar === true;
+
+            if (somenteGerar) {
+                console.log(`[Bling] Modo RASCUNHO: NF-e ${idNota} criada sem envio à SEFAZ.`);
+                return res.status(200).send({
+                    status: 'draft_success',
+                    message: `Rascunho da NF-e criado no Bling (ID ${idNota}). Nota NÃO enviada à SEFAZ. Confira e envie manualmente pelo Bling.`,
+                    data: { idNota }
+                });
+            }
+
+            // 3. Enviar a Nota Fiscal para a SEFAZ
             try {
                 console.log(`[Bling] Enviando NF-e ${idNota} para a SEFAZ...`);
                 const resEnvio = await httpClient.post(`${BLING_API_BASE_URL}/nfe/${idNota}/enviar`, {}, {
