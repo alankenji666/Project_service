@@ -329,6 +329,7 @@ export const DashboardApp = (function() {
         _dom.summaryTotalInvoiced = document.getElementById('summary-total-invoiced');
         _dom.summarySalesPieces = document.getElementById('summary-sales-pieces');
         _dom.summarySalesServices = document.getElementById('summary-sales-services');
+        _dom.summarySalesGarantia = document.getElementById('summary-sales-garantia');
         _dom.summarySalesFreight = document.getElementById('summary-sales-freight');
         _dom.summarySalesDiscount = document.getElementById('summary-sales-discount');
         _dom.summaryTotalOrders = document.getElementById('summary-total-orders');
@@ -2078,6 +2079,7 @@ export const DashboardApp = (function() {
         let totalFrete = 0;
         let totalDesconto = 0;
         let totalPedidos = 0;
+        let totalGarantia = 0;
         const sellerSales = {};
 
         _currentSalesDetails.forEach(p => {
@@ -2089,9 +2091,15 @@ export const DashboardApp = (function() {
             const orderTotalValue = _getOrderValue(p);
             totalPedidos += orderTotalValue;
 
-            // 2. Faturado (Nota Fiscal)
+            // 2. Faturado (Nota Fiscal) e Garantia
             if (nfe) {
-                totalFaturado += _parseCurrencyBRL(nfe.valor_da_nota) || 0;
+                const valorNota = _parseCurrencyBRL(nfe.valor_da_nota) || 0;
+                totalFaturado += valorNota;
+                
+                const naturezaRaw = nfe.natureza_de_operacao || nfe.natureza || '';
+                if (naturezaRaw && naturezaRaw.toLowerCase().includes('garantia')) {
+                    totalGarantia += valorNota;
+                }
             }
 
             // 3. Frete
@@ -2163,6 +2171,9 @@ export const DashboardApp = (function() {
         }
         if (_dom.summarySalesServices) {
             _dom.summarySalesServices.textContent = totalServicos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        if (_dom.summarySalesGarantia) {
+            _dom.summarySalesGarantia.textContent = totalGarantia.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
         if (_dom.summarySalesFreight) {
             _dom.summarySalesFreight.textContent = totalFrete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
