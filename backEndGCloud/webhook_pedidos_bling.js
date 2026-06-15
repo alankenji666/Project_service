@@ -82,7 +82,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                 const existingRows = currentSheetData.slice(1); // Ignora cabeçalho
                 
                 let rowIndexToUpdate = -1;
-                let dadosManuais = { conferido: "", observacao: "", id_nota: "" };
+                let dadosManuais = { conferido: "", observacao: "", observacao_frontend: "", id_nota: "" };
 
                 for (let i = 0; i < existingRows.length; i++) {
                     const idNaPlanilha = String(existingRows[i][COLUMNS.ID] || "").trim();
@@ -90,6 +90,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                         rowIndexToUpdate = i + 2; // +1 do cabeçalho, +1 porque Sheets é 1-indexed
                         dadosManuais.conferido = existingRows[i][COLUMNS.CONFERIDO] || "";
                         dadosManuais.observacao = existingRows[i][COLUMNS.OBSERVACAO] || "";
+                        dadosManuais.observacao_frontend = existingRows[i][16] || ""; // Coluna Q
                         dadosManuais.id_nota = existingRows[i][COLUMNS.ID_NOTA] || "";
                         break;
                     }
@@ -102,6 +103,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     rowValues[COLUMNS.ID] = String(pedidoId);
                     rowValues[COLUMNS.SITUACAO] = 'Cancelado (Excluído)';
                     rowValues[COLUMNS.OBSERVACAO] = dadosManuais.observacao;
+                    rowValues[16] = dadosManuais.observacao_frontend; // Restaura Coluna Q
                     rowValues[COLUMNS.ID_NOTA] = dadosManuais.id_nota;
                     // Mantém orçamento vazio em deletão
                 } else if (!p) {
@@ -140,7 +142,8 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     rowValues[COLUMNS.ID_NOTA] = notaDoBling ? notaDoBling : dadosManuais.id_nota;
                     
                     rowValues[COLUMNS.OBSERVACAO] = dadosManuais.observacao;
-                    rowValues[COLUMNS.ORCAMENTO] = extrairOrcamentoCRM(p.observacoesInternas); // Col P
+                    rowValues[16] = dadosManuais.observacao_frontend; // Restaura Coluna Q
+                    rowValues[COLUMNS.ORCAMENTO] = extrairOrcamentoCRM(p.observacoesInternas); // Col P (15) / R (17) dependendo do script
 
                     // Processamento de Itens com Preservação de Status Manual
                     if (p.itens && Array.isArray(p.itens)) {
