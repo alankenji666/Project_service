@@ -2616,6 +2616,7 @@ export const DashboardApp = (function() {
                 let formattedDate = _formatDate(rawDate);
                 if (formattedDate.includes(' ')) {
                     formattedDate = formattedDate.split(' ')[0];
+                }
                 let numeroPedidoStr = p.numero || p.número || '-';
                 
                 let situacaoStr = p.situação || p.situacao || (nfe ? nfe.situacao : '-');
