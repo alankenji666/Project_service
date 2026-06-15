@@ -2440,8 +2440,10 @@ export const DashboardApp = (function() {
             const checkService = (str) => typeof str === 'string' && (str.includes('(7') || str.includes('( 7'));
             const hasService = checkService(nfe ? nfe.itens : '') || checkService(p.itens || '');
 
+            const rowBgClass = isGarantia ? "bg-[#FBE2D5] hover:bg-[#f0d0bf]" : "hover:bg-gray-50";
+
             html += `
-            <tr id="sales-detail-row-${p.id || p.id_pedido}" data-natureza="${naturezaRaw}" class="hover:bg-gray-50 transition-colors">
+            <tr id="sales-detail-row-${p.id || p.id_pedido}" data-natureza="${naturezaRaw}" class="${rowBgClass} transition-colors">
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center gap-1.5">
                         <div class="text-sm font-medium text-gray-600">${p.numero || p.número || '-'}</div>
