@@ -73,16 +73,16 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
 
                 const sheets = await getInitializedSheetsClient();
                 
-                // 3. Ler dados atuais para verificar se o pedido já existe e preservar dados manuais (Colunas A e M)
+                // 3. Ler dados atuais para verificar se o pedido já existe e preservar dados manuais
                 const response = await sheets.spreadsheets.values.get({
                     spreadsheetId: SPREADSHEET_ID,
-                    range: `${SHEET_NAME}!A:P`
+                    range: `${SHEET_NAME}!A:Z`
                 });
                 const currentSheetData = response.data.values || [];
                 const existingRows = currentSheetData.slice(1); // Ignora cabeçalho
                 
                 let rowIndexToUpdate = -1;
-                let dadosManuais = { conferido: "", observacao: "" };
+                let dadosManuais = { conferido: "", observacao: "", id_nota: "" };
 
                 for (let i = 0; i < existingRows.length; i++) {
                     const idNaPlanilha = String(existingRows[i][COLUMNS.ID] || "").trim();
@@ -90,6 +90,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                         rowIndexToUpdate = i + 2; // +1 do cabeçalho, +1 porque Sheets é 1-indexed
                         dadosManuais.conferido = existingRows[i][COLUMNS.CONFERIDO] || "";
                         dadosManuais.observacao = existingRows[i][COLUMNS.OBSERVACAO] || "";
+                        dadosManuais.id_nota = existingRows[i][COLUMNS.ID_NOTA] || "";
                         break;
                     }
                 }
@@ -101,6 +102,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     rowValues[COLUMNS.ID] = String(pedidoId);
                     rowValues[COLUMNS.SITUACAO] = 'Cancelado (Excluído)';
                     rowValues[COLUMNS.OBSERVACAO] = dadosManuais.observacao;
+                    rowValues[COLUMNS.ID_NOTA] = dadosManuais.id_nota;
                     // Mantém orçamento vazio em deletão
                 } else if (!p) {
                     throw new Error(`Dados do pedido ${pedidoId} não encontrados após consulta.`);
@@ -132,9 +134,13 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     rowValues[COLUMNS.TOTAL_PEDIDO] = p.total || 0;
                     rowValues[COLUMNS.VENDEDOR] = vendedorFinal;
                     rowValues[COLUMNS.LOJA] = origemLoja;
-                    rowValues[COLUMNS.ID_NOTA] = p.notaFiscal ? (p.notaFiscal.id || "") : "";
+                    
+                    // Preserva a nota se o bling enviar vazio mas a gente já tem gravado
+                    const notaDoBling = p.notaFiscal ? (p.notaFiscal.id || "") : "";
+                    rowValues[COLUMNS.ID_NOTA] = notaDoBling ? notaDoBling : dadosManuais.id_nota;
+                    
                     rowValues[COLUMNS.OBSERVACAO] = dadosManuais.observacao;
-                    rowValues[COLUMNS.ORCAMENTO] = extrairOrcamentoCRM(p.observacoesInternas); // Col R
+                    rowValues[COLUMNS.ORCAMENTO] = extrairOrcamentoCRM(p.observacoesInternas); // Col P
 
                     // Processamento de Itens com Preservação de Status Manual
                     if (p.itens && Array.isArray(p.itens)) {
