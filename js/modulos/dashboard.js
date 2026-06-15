@@ -2567,7 +2567,7 @@ export const DashboardApp = (function() {
         // Formato numérico limpo para CSV (1234,56) sem R$ ou milhares, permitindo soma no Excel/Sheets do usuário
         const formatCSVNumber = (val) => {
             const num = typeof val === 'number' ? val : _parseCurrencyBRL(val);
-            return num.toFixed(2).replace('.', ',');
+            return `R$ ${num.toFixed(2).replace('.', ',')}`;
         };
 
         const getVendedor = (p, nfe) => {
@@ -2580,7 +2580,7 @@ export const DashboardApp = (function() {
 
         let headers, rows;
         if (type === 'notes') {
-            headers = ["Nº Pedido", "Nº Nota", "Data", "Cliente", "Vendedor", "Valor Peças", "Valor Serviço", "Valor Garantia", "Valor Total", "Situação", "Origem"];
+            headers = ["Nº Pedido", "Nº Nota", "Data", "Cliente", "Vendedor", "Valor Peças", "Valor Serviço", "Valor Total", "Situação", "Origem"];
             rows = _currentSalesDetails.map(p => {
                 const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
                 const nfeId = String(rawNfeId).split('.')[0].trim();
@@ -2632,7 +2632,6 @@ export const DashboardApp = (function() {
                     getVendedor(p, nfe), 
                     formatCSVNumber(orderPecas),
                     formatCSVNumber(orderServicos),
-                    formatCSVNumber(orderGarantia),
                     formatCSVNumber(totalValue), 
                     situacaoStr, 
                     _getNormalizedStoreName(p) || (nfe ? nfe.origem_loja : '-')
