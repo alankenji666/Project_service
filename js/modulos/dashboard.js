@@ -2617,9 +2617,13 @@ export const DashboardApp = (function() {
                 if (formattedDate.includes(' ')) {
                     formattedDate = formattedDate.split(' ')[0];
                 }
+                let numeroPedidoStr = p.numero || p.número || '-';
+                if (isGarantia) {
+                    numeroPedidoStr = `[GARANTIA] ${numeroPedidoStr}`;
+                }
                 
                 return [
-                    p.numero || p.número || '-',
+                    numeroPedidoStr,
                     nfe ? nfe.numero_da_nota : '-',
                     formattedDate,
                     p.contato_nome || p['contato nome'] || (nfe ? nfe.nome_do_client : '-'), 
