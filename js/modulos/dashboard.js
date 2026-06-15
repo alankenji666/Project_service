@@ -2448,7 +2448,7 @@ export const DashboardApp = (function() {
                     <div class="flex items-center gap-1.5">
                         <div class="text-sm font-medium text-gray-600">${p.numero || p.número || '-'}</div>
                         ${hasService ? `<div class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" title="Contém Serviço"></div>` : ''}
-                        ${isGarantia ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-700 border border-purple-200 flex-shrink-0" title="${naturezaRaw}">GARANTIA</span>` : ''}
+                        ${isGarantia ? `<div class="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0" title="${naturezaRaw}"></div>` : ''}
                     </div>
                     <div class="text-[10px] mt-0.5">
                         ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline font-bold" title="Visualizar DANFE">NF: ${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
