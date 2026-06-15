@@ -2578,7 +2578,7 @@ export const DashboardApp = (function() {
 
         let headers, rows;
         if (type === 'notes') {
-            headers = ["Nº Pedido", "Nº Nota", "Data", "Cliente", "Vendedor", "Valor Peças", "Valor Serviço", "Valor Total", "Situação", "Origem"];
+            headers = ["Nº Pedido", "Nº Nota", "Data", "Cliente", "Vendedor", "Valor Peças", "Valor Serviço", "Valor Garantia", "Valor Total", "Situação", "Origem"];
             rows = _currentSalesDetails.map(p => {
                 const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
                 const nfeId = String(rawNfeId).split('.')[0].trim();
@@ -2604,6 +2604,11 @@ export const DashboardApp = (function() {
                 let orderPecas = totalValue - orderServicos;
                 if (orderPecas < 0) orderPecas = 0;
 
+                // Valor Garantia
+                const naturezaRaw = nfe ? (nfe.natureza_de_operacao || nfe.natureza || '') : '';
+                const isGarantia = naturezaRaw && naturezaRaw.toLowerCase().includes('garantia');
+                const orderGarantia = isGarantia ? totalValue : 0;
+
                 // Formata data estritamente como DD/MM/AAAA (remove horário se houver)
                 const rawDate = nfe ? nfe.data_de_emissao : (p.data || p.data_criacao || p.data_pedido);
                 let formattedDate = _formatDate(rawDate);
@@ -2619,6 +2624,7 @@ export const DashboardApp = (function() {
                     getVendedor(p, nfe), 
                     formatCSVNumber(orderPecas),
                     formatCSVNumber(orderServicos),
+                    formatCSVNumber(orderGarantia),
                     formatCSVNumber(totalValue), 
                     p.situação || p.situacao || (nfe ? nfe.situacao : '-'), 
                     _getNormalizedStoreName(p) || (nfe ? nfe.origem_loja : '-')
