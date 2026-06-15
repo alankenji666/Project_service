@@ -2616,10 +2616,11 @@ export const DashboardApp = (function() {
                 let formattedDate = _formatDate(rawDate);
                 if (formattedDate.includes(' ')) {
                     formattedDate = formattedDate.split(' ')[0];
-                }
                 let numeroPedidoStr = p.numero || p.número || '-';
+                
+                let situacaoStr = p.situação || p.situacao || (nfe ? nfe.situacao : '-');
                 if (isGarantia) {
-                    numeroPedidoStr = `[GARANTIA] ${numeroPedidoStr}`;
+                    situacaoStr = 'Atendido G.';
                 }
                 
                 return [
@@ -2632,7 +2633,7 @@ export const DashboardApp = (function() {
                     formatCSVNumber(orderServicos),
                     formatCSVNumber(orderGarantia),
                     formatCSVNumber(totalValue), 
-                    p.situação || p.situacao || (nfe ? nfe.situacao : '-'), 
+                    situacaoStr, 
                     _getNormalizedStoreName(p) || (nfe ? nfe.origem_loja : '-')
                 ];
             });
