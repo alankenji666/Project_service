@@ -2212,9 +2212,9 @@ export const GerenciarPedidosApp = (function () {
         const itensList = _parseItens(itensRaw, pedido.detalhesProducao || {}, finalId);
 
         // Montar linhas da tabela a partir das imagens já carregadas no modal
-        const itensRows = itensList.map(item => {
-            const imgEl  = document.getElementById(`img-${item.codigo}`);
-            const descEl = document.getElementById(`desc-${item.codigo}`);
+        const itensRows = itensList.map((item, index) => {
+            const imgEl  = document.getElementById(`img-${item.codigo}-${index}`);
+            const descEl = document.getElementById(`desc-${item.codigo}-${index}`);
             const imgSrc = imgEl?.src || '';
             const desc   = descEl?.textContent || item.codigo;
             const valorCol = showValor ? `<td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;">${fmtBRL(item.valor)}</td>` : '';
