@@ -718,7 +718,7 @@
             let _globalFilterBar, _pedidosFilterBar, _dashboardFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer;
             let _product_list_container, _product_details_container, _details_placeholder, _product_details, _requisitionOverviewCardsContainer, _saidaOverviewCards, _ordersTableTitle, _ordersTableContent, _noOrdersMessage, _noOrdersMessageModal, _ordersSearchInput;
             let _saidaActionsContainer, _selectedSaidaItemsCount, _clearSaidaSelectionBtn, _viewSaidasBtn, _createSaidaBtn;
-            let _ordersTableActionsMenuContainer, _ordersTableActionsButton, _ordersTableActionsDropdown, _ordersTableActionPrintGeneric, _ordersTableActionPrintList, _ordersTableActionPrintSolicitation, _ordersTableActionExcel;
+            let _ordersTableActionsMenuContainer, _ordersTableActionsButton, _ordersTableActionsDropdown, _ordersTableActionPrintGeneric, _ordersTableActionPrintList, _ordersTableActionPrintSolicitation, _ordersTableActionPrintGarantia, _ordersTableActionExcel;
             let _ordersFilterMenuContainer, _ordersFilterButton, _ordersFilterButtonLabel, _ordersFilterDropdown, _ordersStatusCheckboxesContainer;
             let _clearGlobalSearchBtn, _clearOrdersSearchBtn; // NOVO: Botões para limpar busca
             let _nfeOverviewCardsContainer, _noNFeMessageOverview, _nfeFilterBar, _nfeStartDateInput, _nfeEndDateInput, _nfeClearFiltersBtn, _nfeDashboardGrid, _nfeDiagnosticTableContainer;
@@ -2359,6 +2359,7 @@ const data = filteredProducts.map(product => {
                 if (_ordersTableActionPrintGeneric) _ordersTableActionPrintGeneric.classList.add('hidden');
                 if (_ordersTableActionPrintList) _ordersTableActionPrintList.classList.remove('hidden');
                 if (_ordersTableActionPrintSolicitation) _ordersTableActionPrintSolicitation.classList.remove('hidden');
+                if (_ordersTableActionPrintGarantia) _ordersTableActionPrintGarantia.classList.remove('hidden');
 
                 if (_ordersTableState.selectedType === 'terceiros') {
                     ordersToProcess = _allOrdersTerceiros;
@@ -3611,7 +3612,7 @@ const data = filteredProducts.map(product => {
             /**
              * ATUALIZADO: Imprime a "Solicitação" a partir da Lista de Pedidos em uma única folha.
              */
-            function _printRequisitionSolicitation() {
+            function _printRequisitionSolicitation(titleType) {
                 if (_currentFilteredOrderItems.length === 0) {
                     _showMessageModal("Nenhum Item", "Não há itens na tabela para imprimir a solicitação.");
                     return;
@@ -3622,7 +3623,11 @@ const data = filteredProducts.map(product => {
 
                 // NOVO: Define o título dinamicamente com base no tipo de lista
                 let reportTitle = 'Itens de Reposição'; // Título padrão para requisições de compra
-                if (_ordersTableState.selectedType === 'saidas-fabrica') {
+                if (titleType === 'estoque') {
+                    reportTitle = 'Requisição Estoque';
+                } else if (titleType === 'garantia') {
+                    reportTitle = 'Requisição Garantia';
+                } else if (_ordersTableState.selectedType === 'saidas-fabrica') {
                     reportTitle = 'Saída para Fábrica';
                 } else if (_ordersTableState.selectedType === 'saidas-garantia') {
                     reportTitle = 'Itens de Garantia';
@@ -4300,7 +4305,14 @@ if (_generateProductReportBtn) {
                 if (_ordersTableActionPrintSolicitation) {
                     _ordersTableActionPrintSolicitation.addEventListener('click', (e) => {
                         e.preventDefault();
-                        _printRequisitionSolicitation();
+                        _printRequisitionSolicitation('estoque');
+                        if (_ordersTableActionsDropdown) _ordersTableActionsDropdown.classList.add('hidden');
+                    });
+                }
+                if (_ordersTableActionPrintGarantia) {
+                    _ordersTableActionPrintGarantia.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        _printRequisitionSolicitation('garantia');
                         if (_ordersTableActionsDropdown) _ordersTableActionsDropdown.classList.add('hidden');
                     });
                 }
@@ -4450,6 +4462,7 @@ if (_generateProductReportBtn) {
                 _ordersTableActionPrintGeneric = document.getElementById('orders-table-action-print-generic');
                 _ordersTableActionPrintList = document.getElementById('orders-table-action-print-list');
                 _ordersTableActionPrintSolicitation = document.getElementById('orders-table-action-print-solicitation');
+                _ordersTableActionPrintGarantia = document.getElementById('orders-table-action-print-garantia');
                 _ordersTableActionExcel = document.getElementById('orders-table-action-excel');
                 _ordersFilterMenuContainer = document.getElementById('orders-filter-menu-container');
                 _ordersFilterButton = document.getElementById('orders-filter-button');
