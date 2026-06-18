@@ -594,7 +594,7 @@ export const GerenciarPedidosApp = (function () {
         modal.dataset.currentOrderNumber = orderNumber;
 
         // Gerenciar valor e texto do dropdown customizado
-        const situacao = _getStatusLabel(pedido.situação || pedido.situacao || '-');
+        const situacao = _getStatusLabel(pedido.situação || pedido.situacao || pedido.id_situacao || '-');
         const situacaoRaw = situacao.toLowerCase();
         let currentStatusVal = "6";
         let currentStatusLabel = "Em Aberto";
@@ -613,8 +613,9 @@ export const GerenciarPedidosApp = (function () {
             currentStatusLabel = "Cancelado";
         }
  
-        if (_state.modalStatusCurrentText) {
-            _state.modalStatusCurrentText.innerText = currentStatusLabel;
+        const statusTextEl = document.getElementById('modal-status-current-text') || _state.modalStatusCurrentText;
+        if (statusTextEl) {
+            statusTextEl.innerText = currentStatusLabel;
         }
         _updateModalStatusButtonStyle(currentStatusVal);
  
@@ -1201,24 +1202,24 @@ export const GerenciarPedidosApp = (function () {
     // --- LOGICA DE TROCA DE STATUS E NF-E ---
 
     function _updateModalStatusButtonStyle(val) {
-        if (!_state.modalStatusDropdownBtn) return;
-        const btn = _state.modalStatusDropdownBtn;
+        const btn = document.getElementById('modal-status-dropdown-btn') || _state.modalStatusDropdownBtn;
+        if (!btn) return;
         
         // Remove classes antigas de cor e borda
-        btn.classList.remove('bg-yellow-50', 'text-yellow-700', 'border-yellow-200',
-                          'bg-blue-50', 'text-blue-700', 'border-blue-200',
-                          'bg-green-50', 'text-green-700', 'border-green-200',
-                          'bg-red-50', 'text-red-700', 'border-red-200',
+        btn.classList.remove('bg-yellow-100', 'text-yellow-800', 'border-yellow-200', 'bg-yellow-50', 'text-yellow-700',
+                          'bg-blue-100', 'text-blue-800', 'border-blue-200', 'bg-blue-50', 'text-blue-700',
+                          'bg-green-100', 'text-green-800', 'border-green-200', 'bg-green-50', 'text-green-700',
+                          'bg-red-100', 'text-red-800', 'border-red-200', 'bg-red-50', 'text-red-700',
                           'bg-gray-50', 'text-gray-700', 'border-gray-200');
 
         if (val === "6") { // Em Aberto
-            btn.classList.add('bg-yellow-50', 'text-yellow-700', 'border-yellow-200');
+            btn.classList.add('bg-yellow-100', 'text-yellow-800', 'border-yellow-200');
         } else if (val === "447331") { // Produção
-            btn.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-200');
+            btn.classList.add('bg-blue-100', 'text-blue-800', 'border-blue-200');
         } else if (val === "9") { // Atendido
-            btn.classList.add('bg-green-50', 'text-green-700', 'border-green-200');
+            btn.classList.add('bg-green-100', 'text-green-800', 'border-green-200');
         } else if (val === "12") { // Cancelado
-            btn.classList.add('bg-red-50', 'text-red-700', 'border-red-200');
+            btn.classList.add('bg-red-100', 'text-red-800', 'border-red-200');
         } else {
             btn.classList.add('bg-gray-50', 'text-gray-700', 'border-gray-200');
         }
