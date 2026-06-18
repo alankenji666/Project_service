@@ -50,7 +50,9 @@ export const EstoqueApp = (function() {
 
         allPedidos.forEach(pedido => {
             const dataPedido = _parseDate(pedido.data || pedido.dataCriacao);
-            if (dataPedido >= ninetyDaysAgo) {
+            const situacaoStr = String(pedido.situação || pedido.situacao || '').toLowerCase();
+            
+            if (dataPedido >= ninetyDaysAgo && !situacaoStr.includes('cancelad')) {
                 const itensRaw = pedido.itens || pedido.Itens || '';
                 const itemsList = _parseItensLocal(itensRaw);
                 itemsList.forEach(item => {
@@ -334,9 +336,10 @@ export const EstoqueApp = (function() {
 
         allPedidos.forEach(pedido => {
             const dataPedido = _parseDate(pedido.data || pedido.dataCriacao);
+            const situacaoStr = String(pedido.situação || pedido.situacao || '').toLowerCase();
             
-            // Verifica se o pedido é dos últimos 90 dias
-            if (dataPedido >= ninetyDaysAgo) {
+            // Verifica se o pedido é dos últimos 90 dias e não está cancelado
+            if (dataPedido >= ninetyDaysAgo && !situacaoStr.includes('cancelad')) {
                 const itensRaw = pedido.itens || pedido.Itens || '';
                 const itemsList = _parseItensLocal(itensRaw);
                 
