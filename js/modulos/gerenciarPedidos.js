@@ -1334,10 +1334,7 @@ export const GerenciarPedidosApp = (function () {
         const idNotaExistente = nfeVinculada?.id || nfeVinculada?.id_nota || nfeVinculada?.numero || idNotaFromPedido;
         
         if (idNotaExistente) {
-            if (confirm("Este pedido já possui uma nota fiscal emitida. Deseja imprimir a nota ao invés de emitir uma nova?")) {
-                _handlePrintNfe();
-                return;
-            }
+            _showCustomAlert('Ação não permitida', 'NFe do pedido já emitida, não é possivel emitir outra.', false);
             return;
         }
 
