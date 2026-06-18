@@ -277,7 +277,7 @@ export const EstoqueApp = (function() {
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'vendas-90d-details-modal';
-            modal.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200] hidden';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-40 hidden';
             modal.innerHTML = `
                 <div class="bg-white rounded-xl shadow-2xl w-[90%] max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white rounded-t-xl">
