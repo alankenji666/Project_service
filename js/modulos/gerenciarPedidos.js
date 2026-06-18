@@ -2132,27 +2132,7 @@ export const GerenciarPedidosApp = (function () {
         const linkDanfe = nfeVinculada?.['Link DANFE'] || nfeVinculada?.link_danfe || nfeVinculada?.linkDanfe || nfeVinculada?.link;
         
         if (linkDanfe && linkDanfe !== '#') {
-            const numeroNota = nfeVinculada.numero || nfeVinculada.numero_da_nota || 'Desconhecido';
-            
-            const rawName = (pedido?.contato_nome || pedido?.['contato nome'] || pedido?.cliente || 'Cliente').trim();
-            const rawWords = rawName.split(/\s+/);
-            let resultWords = [];
-            let validNamesCount = 0;
-            for (let word of rawWords) {
-                resultWords.push(word);
-                if (word.length > 3 && /[a-zA-Z]/.test(word)) validNamesCount++;
-                if (validNamesCount >= 2) break;
-            }
-            const shortClientName = resultWords.join(' ');
-            const orcValue = pedido?.orcamento || pedido?.orçamento || '';
-            const orcamentoStr = (orcValue && String(orcValue) !== '0') ? ` - Orc. ${orcValue}` : '';
-            const numeroNotaStr = numeroNota !== 'Desconhecido' ? ` - Nfe. ${numeroNota}` : '';
-            
-            let baseFilename = `DANFE - ${shortClientName}${numeroNotaStr}${orcamentoStr}`;
-            let safeFilenameForDownload = baseFilename.replace(/[<>:"/\\|?*]/g, '_') + '.pdf';
-            
-            const proxyUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-pdf?url=${encodeURIComponent(linkDanfe)}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
-            window.open(proxyUrl, '_blank');
+            window.open(linkDanfe, '_blank');
             return;
         }
 
