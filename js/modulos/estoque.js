@@ -148,7 +148,11 @@ export const EstoqueApp = (function() {
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-gray-800 stock-value">${p.estoque ?? 0}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-blue-600">${p.aguardandoChegar}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-gray-600">${p.vendas_ultimos_90_dias ?? 0}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold">
+                            <span class="vendas-90d-link cursor-pointer text-blue-600 hover:text-blue-800 hover:underline" data-product-code="${p.codigo}" data-product-desc="${p.descricao}">
+                                ${p.vendas_ultimos_90_dias ?? 0}
+                            </span>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">${p.estoque_minimo ?? 0} / ${p.estoque_maximo ?? 0}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">${createStatusPill(p.stockStatus)}</td>
                     </tr>`;
@@ -174,6 +178,15 @@ export const EstoqueApp = (function() {
             stockTable.addEventListener('mouseout', (event) => {
                 if (event.target.classList.contains('product-list-item-img')) {
                     _utils.hideProductTooltip();
+                }
+            });
+
+            // Adiciona evento de clique para Vendas 90D
+            stockTable.addEventListener('click', (event) => {
+                if (event.target.classList.contains('vendas-90d-link')) {
+                    const productCode = event.target.dataset.productCode;
+                    const productDesc = event.target.dataset.productDesc;
+                    _showVendas90dModal(productCode, productDesc);
                 }
             });
         }
@@ -230,6 +243,163 @@ export const EstoqueApp = (function() {
 
     function _createStatusCard(status, title, count, color) {
         return `<div data-status="${status}" class="status-card ${color} text-white p-3 rounded-lg shadow-lg cursor-pointer transform transition-transform duration-300 hover:scale-105 ${status === _state.statusFilter ? 'active' : ''}"><h3 class="text-sm font-semibold">${title}</h3><p class="text-2xl font-bold mt-2">${count}</p></div>`;
+    }
+
+    function _showVendas90dModal(productCode, productDesc) {
+        let modal = document.getElementById('vendas-90d-details-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'vendas-90d-details-modal';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200] hidden';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-[90%] max-w-5xl max-h-[90vh] flex flex-col">
+                    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800">Detalhamento de Vendas</h3>
+                            <p class="text-sm text-gray-500 mt-1" id="vendas-90d-modal-subtitle"></p>
+                        </div>
+                        <button id="close-vendas-90d-modal-btn" class="text-gray-500 hover:text-gray-800">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="p-6 overflow-y-auto flex-1">
+                        <table class="min-w-full divide-y divide-gray-200" id="vendas-90d-table">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pedido</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                                    <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Qtd Vendida</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Situação</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="vendas-90d-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            document.getElementById('close-vendas-90d-modal-btn').addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.add('hidden');
+            });
+        }
+
+        const subtitle = document.getElementById('vendas-90d-modal-subtitle');
+        subtitle.innerHTML = `Produto: <strong>${productCode}</strong> - ${productDesc}`;
+
+        const tbody = document.getElementById('vendas-90d-tbody');
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-500">Buscando vendas nos pedidos carregados...</td></tr>';
+        
+        modal.classList.remove('hidden');
+
+        // Busca pedidos
+        const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
+        
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+        let salesRows = [];
+
+        allPedidos.forEach(pedido => {
+            const dataPedido = _parseDate(pedido.data || pedido.dataCriacao);
+            
+            // Verifica se o pedido é dos últimos 90 dias
+            if (dataPedido >= ninetyDaysAgo) {
+                const itensRaw = pedido.itens || pedido.Itens || '';
+                const itemsList = _parseItensLocal(itensRaw);
+                
+                const itemEncontrado = itemsList.find(i => String(i.codigo) === String(productCode));
+                if (itemEncontrado) {
+                    const numPedido = pedido.numero || pedido.número || pedido.id || '-';
+                    const cliente = pedido.contato_nome || pedido['contato nome'] || pedido.cliente || '-';
+                    const dataFormatada = dataPedido.toLocaleDateString('pt-BR');
+                    const situacao = pedido.situação || pedido.situacao || '-';
+                    const qtdVendida = itemEncontrado.quantidade || 0;
+
+                    salesRows.push({
+                        dataStr: dataFormatada,
+                        dataObj: dataPedido,
+                        html: \`
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">\${numPedido}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">\${dataFormatada}</td>
+                                <td class="px-4 py-3 text-sm text-gray-500 max-w-[250px] truncate" title="\${cliente}">\${cliente}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-center font-bold text-gray-800">\${qtdVendida}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">\${situacao}</td>
+                            </tr>
+                        \`
+                    });
+                }
+            }
+        });
+
+        // Ordenar do mais recente para o mais antigo
+        salesRows.sort((a, b) => b.dataObj - a.dataObj);
+
+        if (salesRows.length > 0) {
+            tbody.innerHTML = salesRows.map(s => s.html).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-500">Nenhuma venda carregada na memória do sistema para este produto nos últimos 90 dias.<br><small class="text-gray-400">Verifique se os pedidos mais antigos já foram carregados na aba Pedidos Bling.</small></td></tr>';
+        }
+    }
+
+    function _parseDate(dateStr) {
+        if (!dateStr) return new Date(0);
+        // Tenta parse de yyyy-mm-dd
+        if (dateStr.includes('-')) {
+            const parts = dateStr.split('-');
+            if (parts.length >= 3) {
+                // assume yyyy-mm-dd
+                return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2].substring(0, 2)));
+            }
+        }
+        // Tenta parse de dd/mm/yyyy
+        if (dateStr.includes('/')) {
+            const parts = dateStr.split('/');
+            if (parts.length >= 3) {
+                return new Date(parseInt(parts[2].substring(0, 4)), parseInt(parts[1]) - 1, parseInt(parts[0]));
+            }
+        }
+        return new Date(dateStr);
+    }
+
+    function _parseItensLocal(itensRaw) {
+        let items = [];
+        if (!itensRaw) return items;
+        if (Array.isArray(itensRaw)) {
+            // Pode já ser um array de objetos dependendo da origem
+            itensRaw.forEach(it => {
+                if (typeof it === 'object') {
+                    items.push({
+                        codigo: it.codigo || '',
+                        descricao: it.descricao || '',
+                        quantidade: parseFloat(it.quantidade || 0)
+                    });
+                }
+            });
+            return items;
+        }
+
+        const lines = typeof itensRaw === 'string' ? itensRaw.split('\\n') : [];
+        lines.forEach(line => {
+            if (!line.trim()) return;
+            const parts = line.split(' - ');
+            if (parts.length >= 4) {
+                const qtdeStr = parts[0].trim().replace(',', '.');
+                let qtde = parseFloat(qtdeStr) || 1;
+                const codigo = parts[1].trim();
+                const obj = { codigo: codigo, quantidade: qtde };
+                items.push(obj);
+            }
+        });
+        return items;
     }
 
     function _renderStockSortIcon(column) {
