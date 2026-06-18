@@ -279,38 +279,46 @@ export const EstoqueApp = (function() {
             modal.id = 'vendas-90d-details-modal';
             modal.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200] hidden';
             modal.innerHTML = `
-                <div class="bg-white rounded-xl shadow-2xl w-[90%] max-w-5xl max-h-[90vh] flex flex-col">
-                    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <div class="bg-white rounded-xl shadow-2xl w-[90%] max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white rounded-t-xl">
                         <div>
-                            <h3 class="text-xl font-bold text-gray-800">Detalhamento de Vendas</h3>
+                            <h3 class="text-xl font-bold text-gray-800" id="vendas-90d-modal-title">Detalhamento de Vendas</h3>
                             <p class="text-sm text-gray-500 mt-1" id="vendas-90d-modal-subtitle"></p>
                         </div>
-                        <button id="close-vendas-90d-modal-btn" class="text-gray-500 hover:text-gray-800">
+                        <button id="close-vendas-90d-modal-btn" class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
                         </button>
                     </div>
-                    <div class="p-6 overflow-y-auto flex-1">
-                        <table class="min-w-full divide-y divide-gray-200" id="vendas-90d-table">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pedido</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                                    <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Qtd Vendida</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Situação</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200" id="vendas-90d-tbody">
-                            </tbody>
-                        </table>
+                    <div class="p-6 overflow-y-auto flex-1 bg-white">
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200" id="vendas-90d-table">
+                                <thead class="bg-gray-100">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Pedido</th>
+                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Data</th>
+                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Cliente</th>
+                                        <th class="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Qtd.</th>
+                                        <th class="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-100" id="vendas-90d-tbody">
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+                    <button id="vendas-90d-modal-ok-btn" class="bg-blue-600 text-white font-bold py-3 px-6 hover:bg-blue-700 transition w-full shrink-0 uppercase tracking-wider text-sm">
+                        CONCLUÍDO
+                    </button>
                 </div>
             `;
             document.body.appendChild(modal);
             
             document.getElementById('close-vendas-90d-modal-btn').addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+            document.getElementById('vendas-90d-modal-ok-btn').addEventListener('click', () => {
                 modal.classList.add('hidden');
             });
             modal.addEventListener('click', (e) => {
@@ -319,7 +327,9 @@ export const EstoqueApp = (function() {
         }
 
         const subtitle = document.getElementById('vendas-90d-modal-subtitle');
-        subtitle.innerHTML = `Produto: <strong>${productCode}</strong> - ${productDesc}`;
+        const title = document.getElementById('vendas-90d-modal-title');
+        title.innerHTML = `${productDesc}`;
+        subtitle.innerHTML = `Código: <strong>${productCode}</strong>`;
 
         const tbody = document.getElementById('vendas-90d-tbody');
         tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-500">Buscando vendas nos pedidos carregados...</td></tr>';
@@ -347,20 +357,24 @@ export const EstoqueApp = (function() {
                 if (itemEncontrado) {
                     const numPedido = pedido.numero || pedido.número || pedido.id || '-';
                     const cliente = pedido.contato_nome || pedido['contato nome'] || pedido.cliente || '-';
-                    const dataFormatada = dataPedido.toLocaleDateString('pt-BR');
-                    const situacao = pedido.situação || pedido.situacao || '-';
+                    const vendedor = pedido.vendedor || pedido.vendedor_nome || '';
+                    const dataFormatada = dataPedido.toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
                     const qtdVendida = itemEncontrado.quantidade || 0;
+                    const valorItem = itemEncontrado.valor || 0;
 
                     salesRows.push({
                         dataStr: dataFormatada,
                         dataObj: dataPedido,
                         html: `
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${numPedido}</td>
+                            <tr>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="text-sm font-bold text-blue-600">#${numPedido}</div>
+                                    <div class="text-[9px] text-gray-400 italic">${vendedor}</div>
+                                </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${dataFormatada}</td>
-                                <td class="px-4 py-3 text-sm text-gray-500 max-w-[250px] truncate" title="${cliente}">${cliente}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-center font-bold text-gray-800">${qtdVendida}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${situacao}</td>
+                                <td class="px-4 py-3 text-sm text-gray-900 font-medium max-w-[250px] truncate" title="${cliente}">${cliente}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-center font-bold text-orange-600">${qtdVendida}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-700">${valorItem.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                             </tr>
                         `
                     });
@@ -370,6 +384,8 @@ export const EstoqueApp = (function() {
 
         // Ordenar do mais recente para o mais antigo
         salesRows.sort((a, b) => b.dataObj - a.dataObj);
+
+        subtitle.innerHTML = `Código: <strong>${productCode}</strong> - ${salesRows.length} aparições em pedidos no período (90d).`;
 
         if (salesRows.length > 0) {
             tbody.innerHTML = salesRows.map(s => s.html).join('');
@@ -433,7 +449,13 @@ export const EstoqueApp = (function() {
             if (parts.length >= 2) {
                 const sku = parts[0];
                 const qty = parseFloat(parts[1]) || 1;
-                items.push({ codigo: sku, quantidade: qty });
+                let val = 0;
+                if (parts.length >= 3) {
+                    let valPart = parts[2];
+                    if (valPart.includes('|')) valPart = valPart.split('|')[0];
+                    val = parseFloat(valPart.replace('R$', '').replace(/\./g, '').replace(',', '.')) || 0;
+                }
+                items.push({ codigo: sku, quantidade: qty, valor: val });
             }
         });
         
