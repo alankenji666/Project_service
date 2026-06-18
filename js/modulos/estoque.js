@@ -300,7 +300,6 @@ export const EstoqueApp = (function() {
                                         <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Data</th>
                                         <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Cliente</th>
                                         <th class="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Qtd.</th>
-                                        <th class="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">Total</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-100" id="vendas-90d-tbody">
@@ -357,10 +356,8 @@ export const EstoqueApp = (function() {
                 if (itemEncontrado) {
                     const numPedido = pedido.numero || pedido.número || pedido.id || '-';
                     const cliente = pedido.contato_nome || pedido['contato nome'] || pedido.cliente || '-';
-                    const vendedor = pedido.vendedor || pedido.vendedor_nome || '';
                     const dataFormatada = dataPedido.toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
                     const qtdVendida = itemEncontrado.quantidade || 0;
-                    const valorItem = itemEncontrado.valor || 0;
 
                     salesRows.push({
                         dataStr: dataFormatada,
@@ -369,12 +366,10 @@ export const EstoqueApp = (function() {
                             <tr>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <div class="text-sm font-bold text-blue-600">#${numPedido}</div>
-                                    <div class="text-[9px] text-gray-400 italic">${vendedor}</div>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${dataFormatada}</td>
                                 <td class="px-4 py-3 text-sm text-gray-900 font-medium max-w-[250px] truncate" title="${cliente}">${cliente}</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-center font-bold text-orange-600">${qtdVendida}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-700">${valorItem.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                             </tr>
                         `
                     });
