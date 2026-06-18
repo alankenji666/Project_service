@@ -387,18 +387,28 @@ export const EstoqueApp = (function() {
             return items;
         }
 
-        const lines = typeof itensRaw === 'string' ? itensRaw.split('\\n') : [];
-        lines.forEach(line => {
-            if (!line.trim()) return;
-            const parts = line.split(' - ');
-            if (parts.length >= 4) {
-                const qtdeStr = parts[0].trim().replace(',', '.');
-                let qtde = parseFloat(qtdeStr) || 1;
-                const codigo = parts[1].trim();
-                const obj = { codigo: codigo, quantidade: qtde };
-                items.push(obj);
+        // Limpa a string e divide pelo padrão "(SKU, QTD"
+        const itemStrings = String(itensRaw).split(/(?=\([^,]+,\s*\d+)/).filter(Boolean);
+        itemStrings.forEach(itemStr => {
+            let content = itemStr.trim();
+            if (!content) return;
+
+            // Remove parênteses básicos
+            if (content.startsWith('(')) content = content.substring(1).trim();
+            if (content.endsWith(')')) {
+                const openCount = (content.match(/\(/g) || []).length;
+                const closeCount = (content.match(/\)/g) || []).length;
+                if (closeCount > openCount) content = content.substring(0, content.length - 1).trim();
+            }
+
+            const parts = content.split(',').map(s => s.trim());
+            if (parts.length >= 2) {
+                const sku = parts[0];
+                const qty = parseFloat(parts[1]) || 1;
+                items.push({ codigo: sku, quantidade: qty });
             }
         });
+        
         return items;
     }
 
