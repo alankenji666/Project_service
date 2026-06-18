@@ -269,6 +269,13 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 preco: preco !== undefined ? parseFloat(preco) : currentProduct.preco
             };
 
+            // REMOÇÃO CRÍTICA: O Bling V3 apaga as imagens se enviarmos o objeto 'midia' de volta no PUT
+            // sem que seja um formato específico de upload. Como não estamos atualizando imagens,
+            // devemos remover o campo para que o Bling preserve as imagens originais.
+            if (blingPayload.midia) {
+                delete blingPayload.midia;
+            }
+
             const productCode = codigo || currentProduct.codigo || '';
             const isService = String(productCode).startsWith('7');
 
