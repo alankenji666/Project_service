@@ -3452,8 +3452,8 @@ export const GerenciarPedidosApp = (function () {
         });
     }
 
-
     return {
+        openOrderDetailsModal: _openOrderDetailsModal,
         handleItemClick: handleItemClick,
         handleEditItemDescription: async function(pedidoId, itemCodigo, index, event) {
             if (event) {

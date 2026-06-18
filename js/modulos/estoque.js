@@ -365,7 +365,7 @@ export const EstoqueApp = (function() {
                         html: `
                             <tr>
                                 <td class="px-4 py-3 whitespace-nowrap">
-                                    <div class="text-sm font-bold text-blue-600">#${numPedido}</div>
+                                    <div class="text-sm font-bold text-blue-600 cursor-pointer hover:underline" onclick="if(typeof GerenciarPedidosApp !== 'undefined' && GerenciarPedidosApp.openOrderDetailsModal) GerenciarPedidosApp.openOrderDetailsModal('${numPedido}')">${numPedido}</div>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${dataFormatada}</td>
                                 <td class="px-4 py-3 text-sm text-gray-900 font-medium max-w-[250px] truncate" title="${cliente}">${cliente}</td>
