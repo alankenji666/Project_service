@@ -38,19 +38,45 @@ export const EstoqueApp = (function() {
                 aguardandoMap.set(item.codigoService, currentQty + itemQty);
             }
         }
+        }
         return aguardandoMap;
     }
     
+    function _calculateVendas90dMap() {
+        const vendasMap = new Map();
+        const allPedidos = (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [];
+        
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+        allPedidos.forEach(pedido => {
+            const dataPedido = _parseDate(pedido.data || pedido.dataCriacao);
+            if (dataPedido >= ninetyDaysAgo) {
+                const itensRaw = pedido.itens || pedido.Itens || '';
+                const itemsList = _parseItensLocal(itensRaw);
+                itemsList.forEach(item => {
+                    const code = String(item.codigo);
+                    const currentQty = vendasMap.get(code) || 0;
+                    vendasMap.set(code, currentQty + (item.quantidade || 0));
+                });
+            }
+        });
+        return vendasMap;
+    }
 
     function _renderStockPage(productsToRender) {
         if (!productsToRender) return;
 
         const aguardandoMap = _calculateAguardandoChegarMap();
+        const vendas90dMap = _calculateVendas90dMap();
 
         const productsWithStatus = productsToRender.map(p => {
             const aguardandoChegar = aguardandoMap.get(p.codigo) || 0;
             const estoqueAtual = p.estoque ?? 0;
             const estoqueEfetivo = estoqueAtual + aguardandoChegar;
+            
+            // Força a quantidade de vendas a bater com a contagem exata do modal
+            p.vendas_ultimos_90_dias = vendas90dMap.get(String(p.codigo)) || 0;
 
             let status = 'ok';
             if (p.estoque_minimo !== null && estoqueEfetivo <= p.estoque_minimo) status = 'baixo';
