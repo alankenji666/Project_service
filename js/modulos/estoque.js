@@ -326,15 +326,15 @@ export const EstoqueApp = (function() {
                     salesRows.push({
                         dataStr: dataFormatada,
                         dataObj: dataPedido,
-                        html: \`
+                        html: `
                             <tr class="hover:bg-gray-50">
-                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">\${numPedido}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">\${dataFormatada}</td>
-                                <td class="px-4 py-3 text-sm text-gray-500 max-w-[250px] truncate" title="\${cliente}">\${cliente}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-center font-bold text-gray-800">\${qtdVendida}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">\${situacao}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${numPedido}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${dataFormatada}</td>
+                                <td class="px-4 py-3 text-sm text-gray-500 max-w-[250px] truncate" title="${cliente}">${cliente}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-center font-bold text-gray-800">${qtdVendida}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${situacao}</td>
                             </tr>
-                        \`
+                        `
                     });
                 }
             }
