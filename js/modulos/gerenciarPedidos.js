@@ -3705,6 +3705,19 @@ export const GerenciarPedidosApp = (function () {
             }
 
             const newStatus = (currentStatus === 'OK') ? 'EM PRODUÇÃO' : 'OK';
+            
+            // Busca o pedido no cache
+            const pCache = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+            
+            // Bloqueia se o pedido já estiver Atendido e o usuário tentar colocar o item Em Produção
+            if (newStatus === 'EM PRODUÇÃO' && pCache) {
+                const sit = String(pCache.situação || pCache.situacao || '').toLowerCase().trim();
+                if (sit.includes('atendid')) {
+                    _showCustomAlert('Ação não permitida', 'Não é possivel alterar o item para "Em Produção", o pedido está como "Atendido"', false);
+                    return;
+                }
+            }
+
             const btn = document.getElementById(`status-badge-${pedidoId}-${index}`);
             
             // Optimistic UI Update
