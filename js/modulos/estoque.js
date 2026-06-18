@@ -38,7 +38,6 @@ export const EstoqueApp = (function() {
                 aguardandoMap.set(item.codigoService, currentQty + itemQty);
             }
         }
-        }
         return aguardandoMap;
     }
     
