@@ -2106,7 +2106,7 @@ export const GerenciarPedidosApp = (function () {
         });
     }
 
-    function _handlePrintNfe() {
+    async function _handlePrintNfe() {
         const idPedido = _currentModalPedidoId;
         const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
         const idNotaFromPedido = pedido?.id_nota || pedido?.idNota || pedido?.['id nota'] || pedido?.idnotafiscal || pedido?.id_nota_fiscal || pedido?.['id nota fiscal'] || '';
@@ -2122,7 +2122,8 @@ export const GerenciarPedidosApp = (function () {
         const idNota = nfeVinculada?.id || nfeVinculada?.id_nota || nfeVinculada?.idNota || nfeVinculada?.numero || idNotaFromPedido;
 
         if (!idNota) {
-            if (confirm("Este pedido ainda não possui Nota Fiscal emitida. Deseja emitir agora?")) {
+            const wantEmit = await _showCustomConfirm('Atenção', 'Este pedido ainda não possui Nota Fiscal emitida. Deseja emitir agora?');
+            if (wantEmit) {
                 _handleEmitirNfe();
             }
             return;
