@@ -1392,10 +1392,9 @@ export const GerenciarPedidosApp = (function () {
     function _openNfeEditModal(pedidoBling) {
         if (!_state.nfeEditModal) return;
 
-        // Iniciar o carregamento das transportadoras para o select
-        const transpBlingId = pedidoBling.transporte?.contato?.id || '';
-        const transpBlingNome = pedidoBling.transporte?.etiqueta?.nome || pedidoBling.transporte?.contato?.nome || '';
-        _loadTransportadoras(transpBlingId, transpBlingNome);
+        // Salvar as informações da transportadora do pedido no estado para quando ela for necessária
+        _state.nfeEditCurrentTranspId = pedidoBling.transporte?.contato?.id || '';
+        _state.nfeEditCurrentTranspNome = pedidoBling.transporte?.etiqueta?.nome || pedidoBling.transporte?.contato?.nome || '';
 
         // Preencher metadados básicos do cliente
         if (_state.nfeEditContatoId) _state.nfeEditContatoId.value = pedidoBling.contato?.id || '';
@@ -1735,8 +1734,17 @@ export const GerenciarPedidosApp = (function () {
     // Mostra/oculta campos de transporte baseado no "Frete por Conta"
     function _updateFreteFields() {
         const semTransporte = _state.nfeEditFretePorConta && parseInt(_state.nfeEditFretePorConta.value) === 9;
+        
+        if (_state.nfeEditTransportadoraContainer) {
+            _state.nfeEditTransportadoraContainer.classList.toggle('hidden', semTransporte);
+            
+            // Se for necessário mostrar a transportadora e ela ainda não foi carregada, carregue agora
+            if (!semTransporte && !_state.transportadorasLoaded) {
+                _loadTransportadoras(_state.nfeEditCurrentTranspId, _state.nfeEditCurrentTranspNome);
+            }
+        }
+
         const containers = [
-            _state.nfeEditTransportadoraContainer,
             _state.nfeEditFreteContainer,
             _state.nfeEditVolumesContainer,
             _state.nfeEditPesoBrutoContainer,
