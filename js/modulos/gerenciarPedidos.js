@@ -1580,6 +1580,9 @@ export const GerenciarPedidosApp = (function () {
             <td class="px-4 py-2 text-right">
                 <input type="text" class="nfe-edit-item-valor w-full px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-1 focus:ring-blue-500" value="${item.valor || 0}">
             </td>
+            <td class="px-4 py-2 text-right text-gray-700 font-medium">
+                <span class="nfe-edit-item-subtotal">R$ 0,00</span>
+            </td>
             <td class="px-4 py-2 text-center">
                 <button type="button" class="text-red-500 hover:text-red-700 p-1 delete-item-row-btn transition-colors">
                     <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
@@ -1833,6 +1836,12 @@ export const GerenciarPedidosApp = (function () {
                 const valor = parseFloat(valorStr) || 0;
 
                 const subtotal = qtd * valor;
+                
+                // Atualiza o texto do subtotal na linha
+                const subtotalSpan = row.querySelector('.nfe-edit-item-subtotal');
+                if (subtotalSpan) {
+                    subtotalSpan.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(subtotal);
+                }
 
                 if (codigo.startsWith('7')) {
                     totalServicos += subtotal;
