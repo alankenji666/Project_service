@@ -1684,7 +1684,7 @@ export const GerenciarPedidosApp = (function () {
         _updateDateWarning(_state.nfeEditDataPrevista, _state.nfeEditDataPrevistaWarning);
     }
 
-    async function _loadTransportadoras(selectIdBling, selectNomeBling) {
+    async function _loadNfeTransportadorasBling(selectIdBling, selectNomeBling) {
         if (!_state.nfeEditTransportadora) return;
         
         function setValue(id, nome) {
@@ -1740,7 +1740,7 @@ export const GerenciarPedidosApp = (function () {
             
             // Se for necessário mostrar a transportadora e ela ainda não foi carregada, carregue agora
             if (!semTransporte && !_state.transportadorasLoaded) {
-                _loadTransportadoras(_state.nfeEditCurrentTranspId, _state.nfeEditCurrentTranspNome);
+                _loadNfeTransportadorasBling(_state.nfeEditCurrentTranspId, _state.nfeEditCurrentTranspNome);
             }
         }
 
