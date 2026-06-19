@@ -2033,6 +2033,11 @@ export const GerenciarPedidosApp = (function () {
             return;
         }
 
+        if (fretePorConta === 9 && frete > 0) {
+            alert('O pedido tem valor em frete, mas a opção frete está com a opção "Sem Transporte"');
+            return;
+        }
+
         const items = [];
         if (_state.nfeEditItensTbody) {
             const rows = _state.nfeEditItensTbody.querySelectorAll('.nfe-edit-item-row');
