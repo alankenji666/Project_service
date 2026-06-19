@@ -1852,17 +1852,15 @@ export const GerenciarPedidosApp = (function () {
             }
         });
 
-        // Pegar frete e desconto
-        const semTransporte = _state.nfeEditFretePorConta && parseInt(_state.nfeEditFretePorConta.value) === 9;
-        
+        // Pegar frete e desconto (sempre pega, independente de semTransporte, pois estão sempre visíveis)
         let frete = 0;
-        if (!semTransporte && _state.nfeEditFrete) {
+        if (_state.nfeEditFrete) {
             let freteStr = _state.nfeEditFrete.value.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
             frete = parseFloat(freteStr) || 0;
         }
 
         let desconto = 0;
-        if (!semTransporte && _state.nfeEditDesconto) {
+        if (_state.nfeEditDesconto) {
             let descontoStr = _state.nfeEditDesconto.value.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
             desconto = parseFloat(descontoStr) || 0;
         }
@@ -2034,7 +2032,11 @@ export const GerenciarPedidosApp = (function () {
         }
 
         if (fretePorConta === 9 && frete > 0) {
-            alert('O pedido tem valor em frete, mas a opção frete está com a opção "Sem Transporte"');
+            if (window.App && window.App.showMessageModal) {
+                window.App.showMessageModal('Atenção: Frete Incompatível', 'O pedido tem valor em frete, mas a opção frete está com a opção <b>"Sem Transporte"</b>. Mude para outra opção de frete antes de emitir a nota.');
+            } else {
+                alert('O pedido tem valor em frete, mas a opção frete está com a opção "Sem Transporte"');
+            }
             return;
         }
 
