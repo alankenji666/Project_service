@@ -216,6 +216,7 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditPesoBruto = document.getElementById('nfe-edit-peso-bruto');
         _state.nfeEditPesoLiquido = document.getElementById('nfe-edit-peso-liquido');
         _state.nfeEditDesconto = document.getElementById('nfe-edit-desconto');
+        _state.nfeEditDescontoContainer = document.getElementById('nfe-edit-desconto-container');
         _state.nfeEditObservacoes = document.getElementById('nfe-edit-observacoes');
         _state.nfeEditObservacoesOriginal = document.getElementById('nfe-edit-observacoes-original');
         _state.nfeEditAddParcelaBtn = document.getElementById('nfe-edit-add-parcela-btn');
@@ -1748,7 +1749,8 @@ export const GerenciarPedidosApp = (function () {
             _state.nfeEditFreteContainer,
             _state.nfeEditVolumesContainer,
             _state.nfeEditPesoBrutoContainer,
-            _state.nfeEditPesoLiquidoContainer
+            _state.nfeEditPesoLiquidoContainer,
+            _state.nfeEditDescontoContainer
         ];
         containers.forEach(c => {
             if (c) {
