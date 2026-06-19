@@ -571,6 +571,8 @@ export const EstoqueApp = (function() {
         clearSelection: _clearSelection,
         updateSelectedCountDisplay: _updateSelectedCountDisplay,
         updateProductStockInTable: updateProductStockInTable,
-        updateProductNameInTable: updateProductNameInTable
+        updateProductNameInTable: updateProductNameInTable,
+        showVendas90dModal: _showVendas90dModal,
+        calculateVendas90dMap: _calculateVendas90dMap
     };
 })();

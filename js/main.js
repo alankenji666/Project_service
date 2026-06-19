@@ -743,6 +743,7 @@
             let _productReportModal, _openProductReportModalBtn, _closeProductReportModalBtn, _cancelProductReportBtn, _generateProductReportBtn;
             let _productNameEditModal, _closeProductNameEditModalBtn, _productNameEditInfo, _productNameEditInput, _productNameEditLoading, _productNameEditSuccess, _cancelProductNameEditBtn, _confirmProductNameEditBtn;
             let _productLocationEditModal, _closeProductLocationEditModalBtn, _productLocationEditInfo, _productLocationEditInput, _productLocationEditLoading, _productLocationEditSuccess, _cancelProductLocationEditBtn, _confirmProductLocationEditBtn;
+            let _productImageEditModal, _closeProductImageEditModalBtn, _productImageEditInfo, _productImageEditInput, _productImageEditLoading, _productImageEditSuccess, _cancelProductImageEditBtn, _confirmProductImageEditBtn;
             let _productCodeEditModal, _closeProductCodeEditModalBtn, _productCodeEditInfo, _productCodeEditInput, _productCodeEditLoading, _productCodeEditSuccess, _cancelProductCodeEditBtn, _confirmProductCodeEditBtn;
             let _productCostPriceEditModal, _closeProductCostPriceEditModalBtn, _productCostPriceEditInfo, _productCostPriceEditInput, _productCostPriceEditLoading, _productCostPriceEditSuccess, _cancelProductCostPriceEditBtn, _confirmProductCostPriceEditBtn;
             let _productPriceEditModal, _closeProductPriceEditModalBtn, _productPriceEditInfo, _productPriceEditInput, _productPriceEditLoading, _productPriceEditSuccess, _cancelProductPriceEditBtn, _confirmProductPriceEditBtn;
@@ -4592,6 +4593,16 @@ _productLocationEditSuccess = document.getElementById('product-location-edit-suc
 _cancelProductLocationEditBtn = document.getElementById('cancel-product-location-edit-btn');
 _confirmProductLocationEditBtn = document.getElementById('confirm-product-location-edit-btn');
 
+// NOVO: Cache dos elementos do modal de edição de imagem do produto
+_productImageEditModal = document.getElementById('product-image-edit-modal');
+_closeProductImageEditModalBtn = document.getElementById('close-product-image-edit-modal-btn');
+_productImageEditInfo = document.getElementById('product-image-edit-info');
+_productImageEditInput = document.getElementById('product-image-edit-input');
+_productImageEditLoading = document.getElementById('product-image-edit-loading');
+_productImageEditSuccess = document.getElementById('product-image-edit-success');
+_cancelProductImageEditBtn = document.getElementById('cancel-product-image-edit-btn');
+_confirmProductImageEditBtn = document.getElementById('confirm-product-image-edit-btn');
+
 // NOVO: Cache dos elementos do modal de edição de código do produto
 _productCodeEditModal = document.getElementById('product-code-edit-modal');
 _closeProductCodeEditModalBtn = document.getElementById('close-product-code-edit-modal-btn');
@@ -4752,6 +4763,21 @@ if (_confirmProductLocationEditBtn) {
 }
 
 /**
+* NOVO: Vincula os eventos dos botões do modal de edição de imagem do produto.
+*/
+function _bindProductImageEditModalEvents() {
+    if (_closeProductImageEditModalBtn) {
+        _closeProductImageEditModalBtn.addEventListener('click', () => _productImageEditModal.classList.add('hidden'));
+    }
+    if (_cancelProductImageEditBtn) {
+        _cancelProductImageEditBtn.addEventListener('click', () => _productImageEditModal.classList.add('hidden'));
+    }
+    if (_confirmProductImageEditBtn) {
+        _confirmProductImageEditBtn.addEventListener('click', _saveProductImageEdit);
+    }
+}
+
+/**
 * NOVO: Vincula os eventos dos botões do modal de edição de preço de custo do produto.
 */
 function _bindProductCostPriceEditModalEvents() {
@@ -4805,6 +4831,41 @@ if (_productLocationEditModal) {
     _productLocationEditModal.classList.remove('hidden');
     if (_productLocationEditInput) _productLocationEditInput.focus();
 }
+}
+
+/**
+* NOVO: Abre o modal para editar a imagem do produto.
+*/
+function _openProductImageEditModal(productId) {
+    const product = _allProducts.find(p => String(p.id) === String(productId));
+    if (!product) {
+        _showMessageModal("Erro", "Produto não encontrado para editar a imagem.");
+        return;
+    }
+
+    if (_productImageEditModal) {
+        _productImageEditModal.dataset.productId = product.id;
+        _productImageEditModal.dataset.codigo = product.codigo;
+        if (_productImageEditInfo) _productImageEditInfo.innerHTML = `Editando imagem do produto código: <b>${product.codigo}</b>`;
+        
+        let imgUrl = '';
+        if (product.url_imagens_externas && product.url_imagens_externas.length > 0) {
+            imgUrl = product.url_imagens_externas[0];
+        } else if (typeof product.url_imagens_externas === 'string') {
+            imgUrl = product.url_imagens_externas;
+        } else if (product.imagem) {
+            imgUrl = product.imagem;
+        }
+        if (_productImageEditInput) _productImageEditInput.value = imgUrl;
+
+        // Reseta estados de feedback
+        if (_productImageEditLoading) _productImageEditLoading.classList.add('hidden');
+        if (_productImageEditSuccess) _productImageEditSuccess.classList.add('hidden');
+        if (_confirmProductImageEditBtn) _confirmProductImageEditBtn.disabled = false;
+
+        _productImageEditModal.classList.remove('hidden');
+        if (_productImageEditInput) _productImageEditInput.focus();
+    }
 }
 
 /**
@@ -4868,6 +4929,89 @@ try {
     _confirmProductLocationEditBtn.disabled = false;
     _showMessageModal("Erro na Atualização", `Falha ao atualizar localização: ${error.message}`);
 }
+}
+
+/**
+* NOVO: Salva a alteração da imagem do produto no backend.
+*/
+async function _saveProductImageEdit() {
+    const productId = _productImageEditModal.dataset.productId;
+    const codigo = _productImageEditModal.dataset.codigo;
+    const novaImagemUrl = _productImageEditInput.value.trim();
+
+    const product = _allProducts.find(p => String(p.id) === String(productId));
+    const atualUrl = (product.url_imagens_externas && product.url_imagens_externas.length > 0) ? product.url_imagens_externas[0] : (product.url_imagens_externas || product.imagem || "");
+    
+    if (novaImagemUrl === atualUrl) {
+        _productImageEditModal.classList.add('hidden');
+        return;
+    }
+
+    // UI Feedback
+    _confirmProductImageEditBtn.disabled = true;
+    _productImageEditLoading.classList.remove('hidden');
+
+    // Validação básica da imagem antes de enviar
+    if (novaImagemUrl) {
+        try {
+            await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(true);
+                img.onerror = () => reject(new Error("A URL informada não contém uma imagem válida ou o acesso foi negado (AccessDenied)."));
+                img.src = novaImagemUrl;
+            });
+        } catch (e) {
+            _productImageEditLoading.classList.add('hidden');
+            _confirmProductImageEditBtn.disabled = false;
+            _showMessageModal("Erro de Imagem", e.message);
+            return;
+        }
+    }
+
+    try {
+        const payload = {
+            imagem_url: novaImagemUrl,
+            codigo: codigo
+        };
+
+        const response = await fetch(`${API_BASE_URL}/produtos/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Erro ao atualizar imagem do produto.");
+        }
+
+        // Atualiza localmente o objeto _allProducts
+        if (product) {
+            product.url_imagens_externas = novaImagemUrl ? [novaImagemUrl] : [];
+        }
+
+        // Feedback de Sucesso
+        _productImageEditLoading.classList.add('hidden');
+        _productImageEditSuccess.classList.remove('hidden');
+
+        // Fecha o modal após um pequeno delay
+        setTimeout(() => {
+            _productImageEditModal.classList.add('hidden');
+            // Re-render the UI
+            if (typeof PesquisarProduto !== 'undefined' && String(PesquisarProduto.getSelectedProductId()) === String(productId)) {
+                PesquisarProduto.renderDetails(product);
+            }
+            
+            // Re-renderiza a lista da esquerda (miniatura da imagem) aplicando o filtro atual
+            _applyGlobalFilters();
+        }, 1500);
+
+    } catch (error) {
+        console.error("[App] Erro ao editar imagem:", error);
+        _productImageEditLoading.classList.add('hidden');
+        _confirmProductImageEditBtn.disabled = false;
+        _showMessageModal("Erro na Atualização", `Falha ao atualizar imagem: ${error.message}`);
+    }
 }
 
 /**
@@ -5209,6 +5353,7 @@ async function _saveProductTagGroupEdit() {
                     _bindStockAdjustmentModalEvents(); // NOVO
                     _bindProductNameEditModalEvents(); // NOVO
                     _bindProductLocationEditModalEvents(); // NOVO
+                    _bindProductImageEditModalEvents(); // NOVO
                     _bindProductCodeEditModalEvents(); // NOVO
                     _bindProductCostPriceEditModalEvents(); // NOVO
                     _bindProductPriceEditModalEvents(); // NOVO
@@ -5288,7 +5433,8 @@ async function _saveProductTagGroupEdit() {
                             openProductCodeEditModal: _openProductCodeEditModal,
                             openProductCostPriceEditModal: _openProductCostPriceEditModal,
                             openProductPriceEditModal: _openProductPriceEditModal,
-                            openProductTagGroupEditModal: _openProductTagGroupEditModal
+                            openProductTagGroupEditModal: _openProductTagGroupEditModal,
+                            openProductImageEditModal: _openProductImageEditModal
                         });
                     }
                     else {

@@ -244,9 +244,9 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 throw new Error("Não foi possível obter o token do Bling.");
             }
 
-            // 2. Buscar dados atuais do produto no Bling
+            // 2. Buscar dados atuais do produto no Bling (trazendo camposCustomizados para não perdê-los no PUT)
             console.log(`[Bling] Buscando dados atuais completos do produto ID ${idProduto}...`);
-            const getBlingUrl = `${blingBaseUrl}/produtos/${idProduto}`;
+            const getBlingUrl = `${blingBaseUrl}/produtos/${idProduto}?campos=camposCustomizados`;
             const getBlingRes = await axios.get(getBlingUrl, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
@@ -279,7 +279,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 if (links.length > 0) {
                     blingPayload.midia = {
                         imagens: {
-                            externas: links.map(link => ({ link: link }))
+                            imagensURL: links.map(link => ({ link: link }))
                         }
                     };
                     console.log(`[Bling] Adicionando midia ao payload:`, JSON.stringify(blingPayload.midia));
@@ -376,14 +376,22 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             const headers = headerRes.data.values[0];
             const normalizedHeaders = headers.map(h => normalizeKey(h));
             
+            const getColIndices = (predicate) => {
+                const indices = [];
+                normalizedHeaders.forEach((h, i) => {
+                    if (predicate(h)) indices.push(i);
+                });
+                return indices;
+            };
+
             const idColIndex = normalizedHeaders.indexOf('id');
-            const descricaoColIndex = normalizedHeaders.indexOf('descricao');
-            const localizacaoColIndex = normalizedHeaders.indexOf('localizacao');
-            const codigoColIndex = normalizedHeaders.indexOf('codigo');
-            const precoCustoColIndex = normalizedHeaders.indexOf('preco_de_custo');
-            const precoColIndex = normalizedHeaders.indexOf('preco');
-            const grupoTagsColIndex = normalizedHeaders.indexOf('grupo_de_tags_tags');
-            const imagemUrlColIndex = normalizedHeaders.findIndex(h => ['url_imagens_externas', 'imagem', 'imagens', 'url_imagem', 'url_imagens'].includes(h));
+            const descricaoColIndices = getColIndices(h => h === 'descricao');
+            const localizacaoColIndices = getColIndices(h => h === 'localizacao');
+            const codigoColIndices = getColIndices(h => h === 'codigo');
+            const precoCustoColIndices = getColIndices(h => h === 'preco_de_custo');
+            const precoColIndices = getColIndices(h => h === 'preco');
+            const grupoTagsColIndices = getColIndices(h => h === 'grupo_de_tags_tags');
+            const imagemUrlColIndices = getColIndices(h => h.includes('imagem') || h.includes('imagens') || h.includes('url_formatada') || h.includes('midia'));
 
             if (idColIndex === -1) {
                 throw new Error("Coluna 'ID' não encontrada na planilha.");
@@ -417,67 +425,81 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
 
             if (rowIndex !== -1) {
                 // Atualiza Descrição se houver
-                if (nome && descricaoColIndex !== -1) {
-                    const updateDescRange = `'${sheetNameProdutos}'!${colToA1(descricaoColIndex)}${rowIndex}`;
-                    console.log(`[Sheets] Atualizando descrição na linha ${rowIndex}`);
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId, range: updateDescRange, valueInputOption: 'RAW', resource: { values: [[nome]] }
-                    });
+                if (nome && descricaoColIndices.length > 0) {
+                    for (let colIdx of descricaoColIndices) {
+                        const updateDescRange = `'${sheetNameProdutos}'!${colToA1(colIdx)}${rowIndex}`;
+                        console.log(`[Sheets] Atualizando descrição na linha ${rowIndex}, coluna ${colToA1(colIdx)}`);
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId, range: updateDescRange, valueInputOption: 'RAW', resource: { values: [[nome]] }
+                        });
+                    }
                 }
 
                 // Atualiza Localização se houver
-                if (localizacao !== undefined && localizacaoColIndex !== -1) {
-                    const updateLocRange = `'${sheetNameProdutos}'!${colToA1(localizacaoColIndex)}${rowIndex}`;
-                    console.log(`[Sheets] Atualizando localização na linha ${rowIndex}`);
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId, range: updateLocRange, valueInputOption: 'RAW', resource: { values: [[localizacao]] }
-                    });
+                if (localizacao !== undefined && localizacaoColIndices.length > 0) {
+                    for (let colIdx of localizacaoColIndices) {
+                        const updateLocRange = `'${sheetNameProdutos}'!${colToA1(colIdx)}${rowIndex}`;
+                        console.log(`[Sheets] Atualizando localização na linha ${rowIndex}, coluna ${colToA1(colIdx)}`);
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId, range: updateLocRange, valueInputOption: 'RAW', resource: { values: [[localizacao]] }
+                        });
+                    }
                 }
 
                 // Atualiza Imagem URL se houver
-                if (imagem_url !== undefined && imagemUrlColIndex !== -1) {
-                    const updateImgRange = `'${sheetNameProdutos}'!${colToA1(imagemUrlColIndex)}${rowIndex}`;
-                    console.log(`[Sheets] Atualizando url da imagem na linha ${rowIndex}`);
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId, range: updateImgRange, valueInputOption: 'RAW', resource: { values: [[imagem_url]] }
-                    });
+                if (imagem_url !== undefined && imagemUrlColIndices.length > 0) {
+                    for (let colIdx of imagemUrlColIndices) {
+                        const updateImgRange = `'${sheetNameProdutos}'!${colToA1(colIdx)}${rowIndex}`;
+                        console.log(`[Sheets] Atualizando url da imagem na linha ${rowIndex}, coluna ${colToA1(colIdx)}`);
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId, range: updateImgRange, valueInputOption: 'RAW', resource: { values: [[imagem_url]] }
+                        });
+                    }
                 }
 
-
                 // NOVO: Atualiza Código se houver
-                if (codigo && codigoColIndex !== -1) {
-                    const updateCodeRange = `'${sheetNameProdutos}'!${colToA1(codigoColIndex)}${rowIndex}`;
-                    console.log(`[Sheets] Atualizando código na linha ${rowIndex}`);
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId, range: updateCodeRange, valueInputOption: 'RAW', resource: { values: [[codigo]] }
-                    });
+                if (codigo && codigoColIndices.length > 0) {
+                    for (let colIdx of codigoColIndices) {
+                        const updateCodeRange = `'${sheetNameProdutos}'!${colToA1(colIdx)}${rowIndex}`;
+                        console.log(`[Sheets] Atualizando código na linha ${rowIndex}, coluna ${colToA1(colIdx)}`);
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId, range: updateCodeRange, valueInputOption: 'RAW', resource: { values: [[codigo]] }
+                        });
+                    }
                 }
 
                 // NOVO: Atualiza Preço de Custo se houver
-                if (preco_de_custo !== undefined && precoCustoColIndex !== -1) {
-                    const updatePriceRange = `'${sheetNameProdutos}'!${colToA1(precoCustoColIndex)}${rowIndex}`;
-                    console.log(`[Sheets] Atualizando preço de custo na linha ${rowIndex}`);
-                    // Formata como número para que a planilha possa aplicar formatação de moeda
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId, range: updatePriceRange, valueInputOption: 'USER_ENTERED', resource: { values: [[preco_de_custo]] }
-                    });
+                if (preco_de_custo !== undefined && precoCustoColIndices.length > 0) {
+                    for (let colIdx of precoCustoColIndices) {
+                        const updatePriceRange = `'${sheetNameProdutos}'!${colToA1(colIdx)}${rowIndex}`;
+                        console.log(`[Sheets] Atualizando preço de custo na linha ${rowIndex}, coluna ${colToA1(colIdx)}`);
+                        // Formata como número para que a planilha possa aplicar formatação de moeda
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId, range: updatePriceRange, valueInputOption: 'USER_ENTERED', resource: { values: [[preco_de_custo]] }
+                        });
+                    }
                 }
 
                 // NOVO: Atualiza Preço de Venda se houver
-                if (preco !== undefined && precoColIndex !== -1) {
-                    const updatePriceSaleRange = `'${sheetNameProdutos}'!${colToA1(precoColIndex)}${rowIndex}`;
-                    console.log(`[Sheets] Atualizando preço na linha ${rowIndex}`);
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId, range: updatePriceSaleRange, valueInputOption: 'USER_ENTERED', resource: { values: [[preco]] }
-                    });
+                if (preco !== undefined && precoColIndices.length > 0) {
+                    for (let colIdx of precoColIndices) {
+                        const updatePriceSaleRange = `'${sheetNameProdutos}'!${colToA1(colIdx)}${rowIndex}`;
+                        console.log(`[Sheets] Atualizando preço na linha ${rowIndex}, coluna ${colToA1(colIdx)}`);
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId, range: updatePriceSaleRange, valueInputOption: 'USER_ENTERED', resource: { values: [[preco]] }
+                        });
+                    }
                 }
+                
                 // NOVO: Atualiza Grupo de Tags se houver
-                if (grupo_tag_id !== undefined && grupoTagsColIndex !== -1) {
-                    const updateTagRange = `'${sheetNameProdutos}'!${colToA1(grupoTagsColIndex)}${rowIndex}`;
-                    console.log(`[Sheets] Atualizando grupo de tags na linha ${rowIndex}: ${novoGrupoLabel}`);
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId, range: updateTagRange, valueInputOption: 'RAW', resource: { values: [[novoGrupoLabel || '']] }
-                    });
+                if (grupo_tag_id !== undefined && grupoTagsColIndices.length > 0) {
+                    for (let colIdx of grupoTagsColIndices) {
+                        const updateTagRange = `'${sheetNameProdutos}'!${colToA1(colIdx)}${rowIndex}`;
+                        console.log(`[Sheets] Atualizando grupo de tags na linha ${rowIndex}, coluna ${colToA1(colIdx)}: ${novoGrupoLabel}`);
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId, range: updateTagRange, valueInputOption: 'RAW', resource: { values: [[novoGrupoLabel || '']] }
+                        });
+                    }
                 }
             } else {
                 console.warn(`[Sheets] Produto ID ${idProduto} não encontrado na planilha para atualização.`);
@@ -486,15 +508,20 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             // 5. Notificar via Firestore Sync
             if (notifySync) {
                 console.log(`[Firestore Sync] Notificando atualização de produto: ${codigo || idProduto}`);
-                await notifySync('productUpdated', {
+                const syncPayload = {
                     id: idProduto,
                     codigo: codigo || currentProduct.codigo || null,
                     novoNome: nome || currentProduct.nome || null,
                     novaLocalizacao: localizacao !== undefined ? localizacao : (currentProduct.estoque?.localizacao ?? null),
                     novoPrecoCusto: preco_de_custo !== undefined ? preco_de_custo : (currentProduct.precoCusto ?? currentProduct.fornecedor?.precoCusto ?? null),
-                    novoPreco: preco !== undefined ? preco : (currentProduct.preco ?? null),
-                    novoGrupoTags: novoGrupoLabel ?? null
-                });
+                    novoPreco: preco !== undefined ? preco : (currentProduct.preco ?? null)
+                };
+                
+                if (grupo_tag_id !== undefined) {
+                    syncPayload.novoGrupoTags = novoGrupoLabel ?? null;
+                }
+
+                await notifySync('productUpdated', syncPayload);
             }
 
             res.status(200).json({ 

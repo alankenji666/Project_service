@@ -1,4 +1,5 @@
 import { PecasEquipamentoApp } from './pecasEquipamento.js';
+import { EstoqueApp } from './estoque.js';
 
 export const PesquisarProduto = (function() {
     // --- Variáveis de estado e configuração ---
@@ -185,6 +186,13 @@ export const PesquisarProduto = (function() {
 
     function _renderProductDetails(product) {
         if (!_dom.product_details || !_utils.createDetailItem) return;
+        
+        let vendas90d = product.vendas_ultimos_90_dias || 0;
+        if (typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.calculateVendas90dMap === 'function') {
+            const vendasMap = EstoqueApp.calculateVendas90dMap();
+            vendas90d = vendasMap.get(String(product.codigo)) || 0;
+            product.vendas_ultimos_90_dias = vendas90d; // Atualiza o objeto na memória
+        }
     
         _dom.product_details.innerHTML = `
             <div class="flex items-start justify-between mb-2">
@@ -254,11 +262,24 @@ export const PesquisarProduto = (function() {
                     </button>
                 </div>
 
-                ${_utils.createDetailItem('Vendas (90d)', product.vendas_ultimos_90_dias || '0')}
+                <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Vendas (90d)</p>
+                        <p class="text-lg text-gray-800 font-bold product-detail-vendas-90d">${product.vendas_ultimos_90_dias || '0'}</p>
+                    </div>
+                    <button class="open-vendas-90d-modal-btn p-2 rounded-full hover:bg-gray-200 text-blue-600" data-product-code="${product.codigo}" data-product-desc="${product.descricao}" title="Ver Detalhamento de Vendas">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                    </button>
+                </div>
             </div>
             
-            <div class="mt-8">
-                <h3 class="text-lg font-semibold text-gray-700 mb-4">Imagens do Produto</h3>
+            <div class="mt-8 relative">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-700">Imagens do Produto</h3>
+                    <button class="read-only-disable edit-product-image-btn p-2 rounded-full hover:bg-gray-200 text-blue-600" data-product-id="${product.id}" title="Editar URL da Imagem">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
+                    </button>
+                </div>
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     ${(product.url_imagens_externas && product.url_imagens_externas.length > 0) ? 
                         product.url_imagens_externas.map(url => `
@@ -636,6 +657,16 @@ export const PesquisarProduto = (function() {
                 const editPriceBtn = event.target.closest('.edit-product-price-btn');
                 if (editPriceBtn && typeof config.openProductPriceEditModal === 'function') {
                     config.openProductPriceEditModal(editPriceBtn.dataset.productId);
+                }
+
+                const editImageBtn = event.target.closest('.edit-product-image-btn');
+                if (editImageBtn && typeof config.openProductImageEditModal === 'function') {
+                    config.openProductImageEditModal(editImageBtn.dataset.productId);
+                }
+
+                const openVendas90dBtn = event.target.closest('.open-vendas-90d-modal-btn');
+                if (openVendas90dBtn && typeof EstoqueApp !== 'undefined' && typeof EstoqueApp.showVendas90dModal === 'function') {
+                    EstoqueApp.showVendas90dModal(openVendas90dBtn.dataset.productCode, openVendas90dBtn.dataset.productDesc);
                 }
             });
         }
