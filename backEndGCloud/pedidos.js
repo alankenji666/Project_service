@@ -439,6 +439,32 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
     });
 
     /**
+     * NOVO: Rota para obter a lista de contatos, com suporte a query params (ex: idTipoContato).
+     */
+    router.get('/contatos', async (req, res, next) => {
+        try {
+            const accessToken = await getToken();
+            const httpClient = axios || axiosModule;
+            const queryParams = req.query ? new URLSearchParams(req.query).toString() : '';
+            const queryString = queryParams ? `?${queryParams}` : '';
+
+            console.log(`[Bling] Buscando lista de contatos para o frontend... Query: ${queryString}`);
+            const resContatos = await httpClient.get(`${BLING_API_BASE_URL}/contatos${queryString}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            res.status(200).send(resContatos.data);
+        } catch (error) {
+            const errMsg = error.response?.data?.error?.message || error.response?.data?.message || error.message;
+            console.error("[Backend Error] listar-contatos:", errMsg);
+            res.status(400).send({ 
+                status: 'error', 
+                message: `Erro ao listar contatos no Bling: ${errMsg}`,
+                details: error.response?.data
+            });
+        }
+    });
+
+    /**
      * NOVO: Rota para gerar uma NF-e a partir de um pedido de venda no Bling.
      * Segue o fluxo da API V3: criar a nota referenciando o pedido e depois enviar.
      * Aceita payload customizado opcional em req.body.

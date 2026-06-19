@@ -205,6 +205,8 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditDataPrevistaWarning = document.getElementById('nfe-edit-data-prevista-warning');
         _state.nfeEditFrete = document.getElementById('nfe-edit-frete');
         _state.nfeEditFretePorConta = document.getElementById('nfe-edit-frete-por-conta');
+        _state.nfeEditTransportadora = document.getElementById('nfe-edit-transportadora');
+        _state.nfeEditTransportadoraContainer = document.getElementById('nfe-edit-transportadora-container');
         _state.nfeEditVolumes = document.getElementById('nfe-edit-volumes');
         _state.nfeEditVolumesWarning = document.getElementById('nfe-edit-volumes-warning');
         _state.nfeEditFreteContainer = document.getElementById('nfe-edit-frete-container');
@@ -1390,6 +1392,11 @@ export const GerenciarPedidosApp = (function () {
     function _openNfeEditModal(pedidoBling) {
         if (!_state.nfeEditModal) return;
 
+        // Iniciar o carregamento das transportadoras para o select
+        const transpBlingId = pedidoBling.transporte?.contato?.id || '';
+        const transpBlingNome = pedidoBling.transporte?.etiqueta?.nome || pedidoBling.transporte?.contato?.nome || '';
+        _loadTransportadoras(transpBlingId, transpBlingNome);
+
         // Preencher metadados básicos do cliente
         if (_state.nfeEditContatoId) _state.nfeEditContatoId.value = pedidoBling.contato?.id || '';
         if (_state.nfeEditContatoNome) _state.nfeEditContatoNome.value = pedidoBling.contato?.nome || '';
@@ -1490,7 +1497,7 @@ export const GerenciarPedidosApp = (function () {
         }
         if (_state.nfeEditObservacoes) _state.nfeEditObservacoes.value = obsVal;
 
-        // Preencher transporte e valores
+        // Transporte e valores (a transportadora é setada pelo _loadTransportadoras de forma assíncrona)
         if (_state.nfeEditFrete) {
             const num = parseFloat(pedidoBling.transporte?.frete) || 0;
             _state.nfeEditFrete.value = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
@@ -1678,10 +1685,58 @@ export const GerenciarPedidosApp = (function () {
         _updateDateWarning(_state.nfeEditDataPrevista, _state.nfeEditDataPrevistaWarning);
     }
 
+    async function _loadTransportadoras(selectIdBling, selectNomeBling) {
+        if (!_state.nfeEditTransportadora) return;
+        
+        function setValue(id, nome) {
+            if (id && Array.from(_state.nfeEditTransportadora.options).some(o => o.value === String(id))) {
+                _state.nfeEditTransportadora.value = String(id);
+            } else if (nome) {
+                const opt = Array.from(_state.nfeEditTransportadora.options).find(o => o.text.toUpperCase() === String(nome).toUpperCase() || o.getAttribute('data-nome')?.toUpperCase() === String(nome).toUpperCase());
+                if (opt) {
+                    _state.nfeEditTransportadora.value = opt.value;
+                } else {
+                    _state.nfeEditTransportadora.value = '';
+                }
+            } else {
+                _state.nfeEditTransportadora.value = '';
+            }
+        }
+
+        if (_state.transportadorasLoaded) {
+            setValue(selectIdBling, selectNomeBling);
+            return;
+        }
+
+        try {
+            _state.nfeEditTransportadora.innerHTML = '<option value="">Carregando...</option>';
+            // idTipoContato=14578222406 = Transportadoras
+            const res = await fetch(`${API_URLS.ORDERS_BLING}/contatos?idTipoContato=14578222406`);
+            if (res.ok) {
+                const result = await res.json();
+                const contatos = result.data || [];
+                
+                let html = '<option value="">Selecione a Transportadora</option>';
+                contatos.forEach(c => {
+                    html += `<option value="${c.id}" data-nome="${c.nome}">${c.nome}</option>`;
+                });
+                _state.nfeEditTransportadora.innerHTML = html;
+                _state.transportadorasLoaded = true;
+                setValue(selectIdBling, selectNomeBling);
+            } else {
+                _state.nfeEditTransportadora.innerHTML = '<option value="">Erro ao carregar</option>';
+            }
+        } catch (e) {
+            console.error('Erro ao buscar transportadoras:', e);
+            _state.nfeEditTransportadora.innerHTML = '<option value="">Erro ao carregar</option>';
+        }
+    }
+
     // Mostra/oculta campos de transporte baseado no "Frete por Conta"
     function _updateFreteFields() {
         const semTransporte = _state.nfeEditFretePorConta && parseInt(_state.nfeEditFretePorConta.value) === 9;
         const containers = [
+            _state.nfeEditTransportadoraContainer,
             _state.nfeEditFreteContainer,
             _state.nfeEditVolumesContainer,
             _state.nfeEditPesoBrutoContainer,
@@ -1853,6 +1908,10 @@ export const GerenciarPedidosApp = (function () {
         const dataPrevista = _state.nfeEditDataPrevista ? _state.nfeEditDataPrevista.value.trim() : '';
         const observacoes = _state.nfeEditObservacoes ? _state.nfeEditObservacoes.value.trim() : '';
 
+        const transportadoraIdStr = _state.nfeEditTransportadora ? _state.nfeEditTransportadora.value : '';
+        const transportadoraOpt = _state.nfeEditTransportadora && _state.nfeEditTransportadora.selectedIndex > 0 ? _state.nfeEditTransportadora.options[_state.nfeEditTransportadora.selectedIndex] : null;
+        const transportadoraNome = transportadoraOpt ? transportadoraOpt.text : '';
+
         const frete = _state.nfeEditFrete ? _parseNumber(_state.nfeEditFrete.value) : 0;
         const fretePorConta = _state.nfeEditFretePorConta ? parseInt(_state.nfeEditFretePorConta.value) || 0 : 0;
         const quantidadeVolumes = _state.nfeEditVolumes ? parseInt(_state.nfeEditVolumes.value) || 0 : 0;
@@ -1994,6 +2053,12 @@ export const GerenciarPedidosApp = (function () {
             pesoBruto: pesoBruto,
             pesoLiquido: pesoLiquido
         };
+
+        if (transportadoraIdStr || transportadoraNome) {
+            payload.transporte.contato = {};
+            if (transportadoraIdStr) payload.transporte.contato.id = parseInt(transportadoraIdStr);
+            if (transportadoraNome) payload.transporte.contato.nome = transportadoraNome;
+        }
 
         if (descontoVal > 0) {
             payload.desconto = {
