@@ -1501,7 +1501,7 @@ export const GerenciarPedidosApp = (function () {
             const num = parseFloat(pedidoBling.transporte?.frete) || 0;
             _state.nfeEditFrete.value = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
         }
-        if (_state.nfeEditFretePorConta) _state.nfeEditFretePorConta.value = pedidoBling.transporte?.fretePorConta !== undefined ? pedidoBling.transporte.fretePorConta : 9;
+        if (_state.nfeEditFretePorConta) _state.nfeEditFretePorConta.value = 9; // Força "9 - Sem Transporte" como padrão
         if (_state.nfeEditVolumes) _state.nfeEditVolumes.value = pedidoBling.transporte?.quantidadeVolumes || 0;
         if (_state.nfeEditPesoBruto) _state.nfeEditPesoBruto.value = pedidoBling.transporte?.pesoBruto || 0;
         if (_state.nfeEditPesoLiquido) _state.nfeEditPesoLiquido.value = pedidoBling.transporte?.pesoLiquido || pedidoBling.transporte?.pesoBruto || 0;
