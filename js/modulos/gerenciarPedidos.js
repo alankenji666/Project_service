@@ -491,12 +491,18 @@ export const GerenciarPedidosApp = (function () {
         }
         // Listener nos campos de frete e volumes para warning
         if (_state.nfeEditFrete) {
-            _state.nfeEditFrete.addEventListener('input', _updateVolumesWarning);
+            _state.nfeEditFrete.addEventListener('input', () => {
+                _updateVolumesWarning();
+                _calculateTotals();
+            });
             _state.nfeEditFrete.addEventListener('change', _updateVolumesWarning);
         }
         if (_state.nfeEditVolumes) {
             _state.nfeEditVolumes.addEventListener('input', _updateVolumesWarning);
             _state.nfeEditVolumes.addEventListener('change', _updateVolumesWarning);
+        }
+        if (_state.nfeEditDesconto) {
+            _state.nfeEditDesconto.addEventListener('input', _calculateTotals);
         }
 
         if (_state.nfeEditContatoId) {
@@ -1552,6 +1558,7 @@ export const GerenciarPedidosApp = (function () {
         // Exibir o modal
         _updateFreteFields(); // Aplica visibilidade inicial dos campos de transporte
         _updateVolumesWarning(); // Aplica estado inicial do warning de volumes
+        _calculateTotals(); // Calcula totais iniciais
         _state.nfeEditModal.classList.remove('hidden');
     }
 
@@ -1580,14 +1587,25 @@ export const GerenciarPedidosApp = (function () {
             </td>
         `;
 
-        tr.querySelector('.delete-item-row-btn').addEventListener('click', () => tr.remove());
+        tr.querySelector('.delete-item-row-btn').addEventListener('click', () => {
+            tr.remove();
+            _calculateTotals();
+        });
         
         const valorInput = tr.querySelector('.nfe-edit-item-valor');
         if (valorInput) {
             _formatCurrencyInput(valorInput);
+            valorInput.addEventListener('input', _calculateTotals);
         }
+        
+        const qtdInput = tr.querySelector('.nfe-edit-item-quantidade');
+        if (qtdInput) qtdInput.addEventListener('input', _calculateTotals);
+
+        const codigoInput = tr.querySelector('.nfe-edit-item-codigo');
+        if (codigoInput) codigoInput.addEventListener('input', _calculateTotals);
 
         _state.nfeEditItensTbody.appendChild(tr);
+        _calculateTotals();
     }
 
     function _addNfeEditParcelaRow(parcela = {}) {
@@ -1763,6 +1781,11 @@ export const GerenciarPedidosApp = (function () {
         });
         // Atualiza o warning de volumes também
         _updateVolumesWarning();
+        
+        // Recalcula totais (pois o frete e desconto podem ter sumido/aparecido)
+        if (typeof _calculateTotals === 'function') {
+            _calculateTotals();
+        }
     }
 
     // Mostra/oculta warning em Volumes quando há frete mas volumes não preenchido
