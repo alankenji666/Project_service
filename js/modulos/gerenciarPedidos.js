@@ -1812,6 +1812,69 @@ export const GerenciarPedidosApp = (function () {
         }
     }
 
+    function _calculateTotals() {
+        if (!_state.nfeEditItensTbody) return;
+
+        const rows = _state.nfeEditItensTbody.querySelectorAll('.nfe-edit-item-row');
+        let totalPecas = 0;
+        let totalServicos = 0;
+
+        rows.forEach(row => {
+            const codigoInput = row.querySelector('.nfe-edit-item-codigo');
+            const qtdInput = row.querySelector('.nfe-edit-item-quantidade');
+            const valorInput = row.querySelector('.nfe-edit-item-valor');
+
+            if (codigoInput && qtdInput && valorInput) {
+                const codigo = codigoInput.value.trim();
+                const qtd = parseFloat(qtdInput.value) || 0;
+                
+                // Extrai valor monetário
+                let valorStr = valorInput.value.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
+                const valor = parseFloat(valorStr) || 0;
+
+                const subtotal = qtd * valor;
+
+                if (codigo.startsWith('7')) {
+                    totalServicos += subtotal;
+                } else if (codigo.startsWith('5') || codigo.startsWith('6')) {
+                    totalPecas += subtotal;
+                } else {
+                    // Outros códigos também tratamos como peças por padrão
+                    totalPecas += subtotal;
+                }
+            }
+        });
+
+        // Pegar frete e desconto
+        const semTransporte = _state.nfeEditFretePorConta && parseInt(_state.nfeEditFretePorConta.value) === 9;
+        
+        let frete = 0;
+        if (!semTransporte && _state.nfeEditFrete) {
+            let freteStr = _state.nfeEditFrete.value.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
+            frete = parseFloat(freteStr) || 0;
+        }
+
+        let desconto = 0;
+        if (!semTransporte && _state.nfeEditDesconto) {
+            let descontoStr = _state.nfeEditDesconto.value.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
+            desconto = parseFloat(descontoStr) || 0;
+        }
+
+        totalPecas += frete;
+        const totalPedido = totalPecas + totalServicos - desconto;
+
+        // Atualizar UI
+        const formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+        
+        const elPecas = document.getElementById('nfe-edit-total-pecas');
+        const elServicos = document.getElementById('nfe-edit-total-servicos');
+        const elPedido = document.getElementById('nfe-edit-total-pedido');
+
+        if (elPecas) elPecas.textContent = formatter.format(totalPecas);
+        if (elServicos) elServicos.textContent = formatter.format(totalServicos);
+        if (elPedido) elPedido.textContent = formatter.format(totalPedido);
+    }
+
     function _parseDaysFromObservacoes(obsText) {
         if (!obsText) return null;
 
