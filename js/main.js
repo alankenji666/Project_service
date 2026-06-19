@@ -1,25 +1,25 @@
         // Importa as funções utilitárias do novo módulo
-        import { debounce, addBusinessDays, getBusinessDaysDifference, formatCnpjCpf, createDetailItem, createStatusPill, positionTooltip } from './utils.js';
-        import { sendNFeByEmail } from './utils/sendNfeEmail.js';
+        import { debounce, addBusinessDays, getBusinessDaysDifference, formatCnpjCpf, createDetailItem, createStatusPill, positionTooltip } from './utils.js?v=2';
+        import { sendNFeByEmail } from './utils/sendNfeEmail.js?v=2';
         window.sendNFeByEmail = sendNFeByEmail;
 
 
         // URLs das suas APIs do Google Apps Script
         // ATENÇÃO: Substitua estas URLs pelas URLs de IMPLANTAÇÃO dos seus respectivos scripts
-        import { API_URLS } from './apiConfig.js';
-        import { PesquisarProduto } from './modulos/pesquisarProduto.js';
+        import { API_URLS } from './apiConfig.js?v=2';
+        import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=2';
         window.PesquisarProduto = PesquisarProduto;
-        import { Atendimento } from './modulos/atendimento.js';
-        import { DashboardApp } from './modulos/dashboard.js';
-        import { EstoqueApp } from './modulos/estoque.js';
-        import { SaidaItens } from './modulos/saidaItens.js';
-        import { LojaIntegradaApp } from './modulos/lojaIntegrada.js';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js';
+        import { Atendimento } from './modulos/atendimento.js?v=2';
+        import { DashboardApp } from './modulos/dashboard.js?v=2';
+        import { EstoqueApp } from './modulos/estoque.js?v=2';
+        import { SaidaItens } from './modulos/saidaItens.js?v=2';
+        import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=2';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
-        import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js';
-        import { TransportadorasApp } from './modulos/transportadoras.js';
+        import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=2';
+        import { TransportadorasApp } from './modulos/transportadoras.js?v=2';
         window.TransportadorasApp = TransportadorasApp;
-        import * as AjusteEstoque from './modulos/ajusteEstoque.js';
+        import * as AjusteEstoque from './modulos/ajusteEstoque.js?v=2';
 
         // Início do padrão Revealing Module para a aplicação principal
         const App = (function () {
