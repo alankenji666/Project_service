@@ -213,7 +213,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
      */
     router.put('/:id', async (req, res, next) => {
         const idProduto = req.params.id;
-        const { nome, localizacao, codigo, preco_de_custo, preco, grupo_tag_id } = req.body;
+        const { nome, localizacao, codigo, preco_de_custo, preco, grupo_tag_id, imagem_url } = req.body;
 
     // Mapa fixo dos IDs de tags para labels legíveis
     // Mapa fixo dos IDs reais de camposCustomizados para labels legíveis (com acentuação correspondente à planilha)
@@ -229,9 +229,10 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
         console.log(`--- ATUALIZANDO PRODUTO: ID ${idProduto} ---`);
         if (nome) console.log(` > Novo Nome: ${nome}`);
         if (localizacao !== undefined) console.log(` > Nova Localização: ${localizacao}`);
+        if (imagem_url) console.log(` > Nova Imagem URL: ${imagem_url}`);
 
-        if (!nome && localizacao === undefined && !codigo && preco_de_custo === undefined && preco === undefined && grupo_tag_id === undefined) {
-            return res.status(400).json({ error: "Nome, localização, código, preço de custo, preço ou grupo de tags do produto deve ser informado." });
+        if (!nome && localizacao === undefined && !codigo && preco_de_custo === undefined && preco === undefined && grupo_tag_id === undefined && imagem_url === undefined) {
+            return res.status(400).json({ error: "Nenhum campo para atualizar foi informado." });
         }
 
         try {
@@ -270,9 +271,22 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             };
 
             // REMOÇÃO CRÍTICA: O Bling V3 apaga as imagens se enviarmos o objeto 'midia' de volta no PUT
-            // sem que seja um formato específico de upload. Como não estamos atualizando imagens,
-            // devemos remover o campo para que o Bling preserve as imagens originais.
-            if (blingPayload.midia) {
+            // sem que seja um formato específico de upload.
+            // Se o usuário enviou uma imagem_url nova, nós a adicionamos na estrutura exigida pelo Bling.
+            // Caso contrário, removemos o campo para preservar as imagens atuais.
+            if (imagem_url) {
+                const links = imagem_url.split(/[|,]/).map(url => url.trim()).filter(url => url.startsWith('http'));
+                if (links.length > 0) {
+                    blingPayload.midia = {
+                        imagens: {
+                            externas: links.map(link => ({ link: link }))
+                        }
+                    };
+                    console.log(`[Bling] Adicionando midia ao payload:`, JSON.stringify(blingPayload.midia));
+                } else if (blingPayload.midia) {
+                    delete blingPayload.midia;
+                }
+            } else if (blingPayload.midia) {
                 delete blingPayload.midia;
             }
 
@@ -369,6 +383,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             const precoCustoColIndex = normalizedHeaders.indexOf('preco_de_custo');
             const precoColIndex = normalizedHeaders.indexOf('preco');
             const grupoTagsColIndex = normalizedHeaders.indexOf('grupo_de_tags_tags');
+            const imagemUrlColIndex = normalizedHeaders.findIndex(h => ['url_imagens_externas', 'imagem', 'imagens', 'url_imagem', 'url_imagens'].includes(h));
 
             if (idColIndex === -1) {
                 throw new Error("Coluna 'ID' não encontrada na planilha.");
@@ -418,6 +433,16 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                         spreadsheetId, range: updateLocRange, valueInputOption: 'RAW', resource: { values: [[localizacao]] }
                     });
                 }
+
+                // Atualiza Imagem URL se houver
+                if (imagem_url !== undefined && imagemUrlColIndex !== -1) {
+                    const updateImgRange = `'${sheetNameProdutos}'!${colToA1(imagemUrlColIndex)}${rowIndex}`;
+                    console.log(`[Sheets] Atualizando url da imagem na linha ${rowIndex}`);
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId, range: updateImgRange, valueInputOption: 'RAW', resource: { values: [[imagem_url]] }
+                    });
+                }
+
 
                 // NOVO: Atualiza Código se houver
                 if (codigo && codigoColIndex !== -1) {

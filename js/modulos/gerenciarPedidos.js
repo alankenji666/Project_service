@@ -171,6 +171,7 @@ export const GerenciarPedidosApp = (function () {
         _state.quickEditCostInput = document.getElementById('quick-edit-cost-price');
         _state.quickEditStockInput = document.getElementById('quick-edit-stock');
         _state.quickEditLocInput = document.getElementById('quick-edit-location');
+        _state.quickEditImageUrl = document.getElementById('quick-edit-image-url');
         _state.quickEditLoading = document.getElementById('quick-edit-loading');
         _state.quickEditSaveBtn = document.getElementById('save-item-quick-edit-btn');
         _state.quickEditCancelBtn = document.getElementById('cancel-item-quick-edit-btn');
@@ -1071,6 +1072,18 @@ export const GerenciarPedidosApp = (function () {
         if (_state.quickEditLocInput) {
             _state.quickEditLocInput.value = _state.originalQuickEditValues.location;
         }
+        if (_state.quickEditImageUrl) {
+            let imgUrl = '';
+            if (prod.url_imagens_externas && prod.url_imagens_externas.length > 0) {
+                imgUrl = prod.url_imagens_externas[0];
+            } else if (typeof prod.url_imagens_externas === 'string') {
+                imgUrl = prod.url_imagens_externas;
+            } else if (prod.imagem) {
+                imgUrl = prod.imagem;
+            }
+            _state.quickEditImageUrl.value = imgUrl;
+            _state.originalQuickEditValues.imageUrl = imgUrl;
+        }
 
         _state.quickEditModal.classList.remove('hidden');
     }
@@ -1090,6 +1103,7 @@ export const GerenciarPedidosApp = (function () {
         const newCost = parseFloat(_state.quickEditCostInput.value);
         const newStock = parseFloat(_state.quickEditStockInput.value);
         const newLoc = _state.quickEditLocInput.value.trim();
+        const newImageUrl = _state.quickEditImageUrl ? _state.quickEditImageUrl.value.trim() : '';
 
         if (isNaN(newCost) || isNaN(newStock)) {
             alert('Por favor, insira valores válidos para preço e estoque.');
@@ -1100,29 +1114,31 @@ export const GerenciarPedidosApp = (function () {
         const costChanged = Math.abs(newCost - originals.cost) > 0.001;
         const stockChanged = Math.abs(newStock - originals.stock) > 0.001;
         const locChanged = newLoc !== originals.location;
+        const imageChanged = newImageUrl !== (originals.imageUrl || '');
 
         // Se nada mudou, apenas fecha
-        if (!costChanged && !stockChanged && !locChanged) {
+        if (!costChanged && !stockChanged && !locChanged && !imageChanged) {
             _closeQuickEditModal();
             return;
         }
 
-        console.log(`[QuickEdit] Iniciando salvamento para ${prod.codigo}. Mudanças: Custo=${costChanged}, Estoque=${stockChanged}, Local=${locChanged}`);
+        console.log(`[QuickEdit] Iniciando salvamento para ${prod.codigo}. Mudanças: Custo=${costChanged}, Estoque=${stockChanged}, Local=${locChanged}, Imagem=${imageChanged}`);
         console.log(`[QuickEdit] Valores: Custo(${originals.cost} -> ${newCost}), Estoque(${originals.stock} -> ${newStock})`);
 
         _state.quickEditLoading.classList.remove('hidden');
         _state.quickEditSaveBtn.disabled = true;
 
         try {
-            // 1. Atualizar Detalhes (Custo e Localização) - Apenas se necessário
-            if (costChanged || locChanged) {
+            // 1. Atualizar Detalhes (Custo, Localização e Imagem) - Apenas se necessário
+            if (costChanged || locChanged || imageChanged) {
                 console.log(`[QuickEdit] Enviando PUT para atualizar detalhes (ID: ${prod.id})...`);
                 const updateDetailsRes = await fetch(`${API_URLS.PRODUCTS}/${prod.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         preco_de_custo: newCost,
-                        localizacao: newLoc
+                        localizacao: newLoc,
+                        imagem_url: newImageUrl
                     })
                 });
 
