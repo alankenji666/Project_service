@@ -1767,11 +1767,9 @@ export const GerenciarPedidosApp = (function () {
         }
 
         const containers = [
-            _state.nfeEditFreteContainer,
             _state.nfeEditVolumesContainer,
             _state.nfeEditPesoBrutoContainer,
-            _state.nfeEditPesoLiquidoContainer,
-            _state.nfeEditDescontoContainer
+            _state.nfeEditPesoLiquidoContainer
         ];
         containers.forEach(c => {
             if (c) {
