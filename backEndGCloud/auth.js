@@ -139,7 +139,7 @@ const createAuthRouter = (getSheetsClient, spreadsheetId, sheetNameEmpresa, shee
             const isAdmin = (userRow) => {
                 const requiredPermissions = {
                     'acesso (pesquisar produto)': '1', 'acesso (gerenciar entrada)': '1',
-                    'acesso (gerenciar saida)': '1', 'acesso (dashboards)': '1',
+                    'acesso (gerenciar saida)': '1', 'acesso (gerenciar pedidos)': '1', 'acesso (dashboards)': '1',
                     'acesso (whatsapp)': '1', 'configurações': '1', 'somente visualizar dados?': '0'
                 };
                 for (const perm in requiredPermissions) {
@@ -255,7 +255,7 @@ const createAuthRouter = (getSheetsClient, spreadsheetId, sheetNameEmpresa, shee
             const isAdmin = (userRow) => {
                 const requiredPermissions = {
                     'acesso (pesquisar produto)': '1', 'acesso (gerenciar entrada)': '1',
-                    'acesso (gerenciar saida)': '1', 'acesso (dashboards)': '1',
+                    'acesso (gerenciar saida)': '1', 'acesso (gerenciar pedidos)': '1', 'acesso (dashboards)': '1',
                     'acesso (whatsapp)': '1', 'configurações': '1', 'somente visualizar dados?': '0'
                 };
                 for (const perm in requiredPermissions) {

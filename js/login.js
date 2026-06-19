@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
             user['acesso (pesquisar produto)'] === '1' &&
             user['acesso (gerenciar entrada)'] === '1' &&
             user['acesso (gerenciar saida)'] === '1' &&
+            user['acesso (gerenciar pedidos)'] === '1' &&
             user['acesso (dashboards)'] === '1' &&
             user['acesso (whatsapp)'] === '1' &&
             user['configurações'] === '1' &&

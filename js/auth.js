@@ -48,8 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'acesso (pesquisar produto)': 'nav-pesquisar',
             'acesso (gerenciar entrada)': 'nav-estoque',
             'acesso (gerenciar saida)': 'nav-gerenciar-saida',
+            'acesso (gerenciar pedidos)': 'nav-gerenciar-pedidos',
             'acesso (dashboards)': 'nav-dashboards',
-            'configurações': 'settings-menu-container'
+            'acesso (whatsapp)': 'nav-atendimento'
         };
 
         for (const [permissionKey, elementId] of Object.entries(permissionMap)) {
@@ -59,6 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hasAccess = permissions[permissionKey] === '1';
                 element.classList.toggle('hidden', !hasAccess);
             }
+        }
+
+        // Ajustar Estoque: visível apenas para administradores
+        const adjustStockBtn = document.getElementById('adjust-stock-menu-btn');
+        if (adjustStockBtn) {
+            adjustStockBtn.classList.toggle('hidden', !isUserAdmin(permissions));
         }
     }
 
@@ -186,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
             user['acesso (pesquisar produto)'] === '1' &&
             user['acesso (gerenciar entrada)'] === '1' &&
             user['acesso (gerenciar saida)'] === '1' &&
+            user['acesso (gerenciar pedidos)'] === '1' &&
             user['acesso (dashboards)'] === '1' &&
             user['acesso (whatsapp)'] === '1' &&
             user['configurações'] === '1' &&
@@ -336,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const user = JSON.parse(userDataString);
         const permissionKeys = [
             'acesso (pesquisar produto)', 'acesso (gerenciar entrada)', 
-            'acesso (gerenciar saida)', 'acesso (dashboards)', 'acesso (whatsapp)', 
+            'acesso (gerenciar saida)', 'acesso (gerenciar pedidos)', 'acesso (dashboards)', 'acesso (whatsapp)', 
             'configurações', 'somente visualizar dados?'
         ];
 
