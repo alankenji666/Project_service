@@ -601,6 +601,19 @@ export const GerenciarPedidosApp = (function () {
 
         const orderNumber = pedido.numero || pedido.número || orderRef;
 
+        // Limpa o destaque de "novo pedido" se existir
+        const numStr = String(orderNumber);
+        const newOrders = JSON.parse(localStorage.getItem('new_orders_highlight') || '[]');
+        if (newOrders.includes(numStr)) {
+            const updated = newOrders.filter(id => id !== numStr);
+            localStorage.setItem('new_orders_highlight', JSON.stringify(updated));
+            const tr = document.getElementById(`pedido-row-${numStr}`);
+            if (tr) {
+                tr.classList.remove('bg-blue-50', 'border-blue-500', 'hover:bg-blue-100');
+                tr.classList.add('hover:bg-gray-50', 'border-transparent');
+            }
+        }
+
         // Salvar o ID do pedido atual no modal
         const pedidoId = pedido.id || pedido.id_pedido || pedido['id pedido'] || '';
         _currentModalPedidoId = pedidoId || orderNumber;
@@ -3377,6 +3390,8 @@ export const GerenciarPedidosApp = (function () {
 
         // Render rows
         if (_tableContent) {
+            const newOrders = JSON.parse(localStorage.getItem('new_orders_highlight') || '[]');
+
             _tableContent.innerHTML = itemsToDisplay.map(p => {
                 const numero = p.número || p.numero || '-';
                 const cliente = p.contato_nome || p['contato nome'] || p.cliente || '-';
@@ -3400,8 +3415,14 @@ export const GerenciarPedidosApp = (function () {
                 else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento')) badgeClass = 'bg-yellow-100 text-yellow-800';
                 else if (sitLower.includes('produ')) badgeClass = 'bg-blue-100 text-blue-800';
 
+                // Verificação de Pedido Novo
+                const isNewOrder = newOrders.includes(String(numero)) || newOrders.includes(String(p.id));
+                const rowClass = isNewOrder 
+                    ? 'bg-blue-50 border-l-4 border-blue-500 transition-colors hover:bg-blue-100'
+                    : 'hover:bg-gray-50 transition-colors border-l-4 border-transparent';
+
                 return `
-                    <tr id="pedido-row-${numero}" data-order-number="${numero}" class="hover:bg-gray-50 transition-colors">
+                    <tr id="pedido-row-${numero}" data-order-number="${numero}" class="${rowClass}">
                         <td class="px-6 py-4 whitespace-nowrap text-left text-sm">
                             <input type="checkbox" class="pedido-row-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" value="${p.id || p.numero || numero}">
                         </td>

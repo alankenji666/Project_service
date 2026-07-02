@@ -613,6 +613,13 @@
                 // Mostra Toast visual na tela
                 if (data.evento === 'created') {
                     _showToastNotification(`Novo pedido recebido: ${numeroPedido} - ${cliente}`, 'info');
+                    
+                    // Salva na lista de "novos pedidos" para pintar a linha de outra cor
+                    const newOrders = JSON.parse(localStorage.getItem('new_orders_highlight') || '[]');
+                    if (!newOrders.includes(String(numeroPedido))) {
+                        newOrders.push(String(numeroPedido));
+                        localStorage.setItem('new_orders_highlight', JSON.stringify(newOrders));
+                    }
                 } else {
                     _showToastNotification(`Pedido ${numeroPedido} ${subTextKey}`, 'info');
                 }
