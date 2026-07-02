@@ -396,35 +396,36 @@ export const DashboardApp = (function() {
         if (!_dom.pendingOrdersModal) return;
         _dom.pendingOrdersModal.classList.remove('hidden');
         
-        // 1. Filtrar pedidos originais do Bling (Vendas/Em Aberto/Em Produção)
-        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
-        const selectedYear = parseInt(_state.selectedYearFilter, 10);
+        // 1. Filtrar pedidos usando as mesmas regras do modal ativo (_currentMonthKey e _currentChannel)
+        let start = null, end = null;
+        if (_currentMonthKey && _currentMonthKey !== 'period-total') {
+            const [y, m] = _currentMonthKey.split('-');
+            start = new Date(parseInt(y), parseInt(m) - 1, 1, 0, 0, 0);
+            end = new Date(parseInt(y), parseInt(m), 0, 23, 59, 59, 999);
+        } else {
+            start = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+            end = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+        }
 
         let pendingPedidos = _allPedidosBling.filter(p => {
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
             // Apenas pedidos pendentes
             if (!(sit.includes('em aberto') || sit.includes('em produ'))) return false;
 
+            // Filtro de Canal (se visualizando um canal específico)
+            if (_currentChannel && _currentChannel !== 'total') {
+                if (_getNormalizedStoreName(p) !== _currentChannel) return false;
+            }
+
             // Filtro de Data
-            const rawDate = p.data || p.data_saida || p.data_faturamento || p.data_emissao || p.data_criacao || p.data_pedido || p['data pedido'] || "";
-            let pDate = null;
-            if (rawDate) {
-                if (String(rawDate).includes('-')) {
-                    pDate = new Date(rawDate + 'T00:00:00');
-                } else {
-                    pDate = _utils.parsePtBrDate(rawDate);
-                }
-            }
-            if (!pDate || isNaN(pDate.getTime())) return false;
+            const d = _getOrderDate(p);
+            if (!d) return false;
             
-            if (startDate || endDate) {
-                const afterStart = !startDate || pDate >= startDate;
-                const beforeEnd = !endDate || pDate <= endDate;
-                return afterStart && beforeEnd;
-            }
-            if (selectedYear && !isNaN(selectedYear)) {
-                return pDate.getFullYear() === selectedYear;
+            if (start && end) {
+                if (d < start || d > end) return false;
+            } else if (_currentMonthKey === 'period-total') {
+                const selectedYear = parseInt(_state.selectedYearFilter, 10);
+                if (selectedYear && !isNaN(selectedYear) && d.getFullYear() !== selectedYear) return false;
             }
             return true;
         });
