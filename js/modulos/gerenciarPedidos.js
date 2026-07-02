@@ -1591,6 +1591,8 @@ export const GerenciarPedidosApp = (function () {
 
         const tr = document.createElement('tr');
         tr.className = 'nfe-edit-item-row';
+        if (item.id) tr.dataset.itemId = item.id; // NOVO: Armazena o ID interno do item
+        
         tr.innerHTML = `
             <td class="px-4 py-2">
                 <input type="text" class="nfe-edit-item-codigo w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" value="${item.codigo || ''}">
@@ -2064,9 +2066,11 @@ export const GerenciarPedidosApp = (function () {
                 const quantidade = parseInt(row.querySelector('.nfe-edit-item-quantidade').value) || 0;
                 const valor = _parseNumber(row.querySelector('.nfe-edit-item-valor').value);
 
+                const idItem = row.dataset.itemId || null;
+
                 if (!descricao) { alert('Todas as linhas de item devem conter uma descrição.'); return; }
                 if (quantidade <= 0) { alert(`O item "${descricao}" deve ter quantidade maior que zero.`); return; }
-                items.push({ codigo, descricao, quantidade, valor });
+                items.push({ codigo, descricao, quantidade, valor, idItem });
             }
         }
         if (items.length === 0) { alert('A nota fiscal deve possuir ao menos 1 item.'); return; }
@@ -2109,13 +2113,35 @@ export const GerenciarPedidosApp = (function () {
         if (dataPrevista) payloadUpdate.dataPrevista = dataPrevista;
         if (observacoes) payloadUpdate.observacoes = observacoes;
 
-        // O payload de itens em vendas
-        payloadUpdate.itens = items.map(i => ({
-            codigo: i.codigo,
-            descricao: i.descricao,
-            quantidade: i.quantidade,
-            valor: i.valor
-        }));
+        // O payload de itens em vendas (Bling requer o ID interno se o item já existia no pedido)
+        payloadUpdate.itens = items.map((i, index) => {
+            let originalItem = null;
+            if (i.idItem) {
+                originalItem = _state.currentPedidoBlingBruto.itens?.find(orig => String(orig.id) === i.idItem);
+            }
+            if (!originalItem && _state.currentPedidoBlingBruto.itens && _state.currentPedidoBlingBruto.itens[index]) {
+                originalItem = _state.currentPedidoBlingBruto.itens[index];
+            }
+
+            if (originalItem) {
+                // Mantém id, produto.id, etc., atualizando apenas os campos alteráveis
+                return {
+                    ...originalItem,
+                    codigo: i.codigo,
+                    descricao: i.descricao,
+                    quantidade: i.quantidade,
+                    valor: i.valor
+                };
+            } else {
+                // Item inteiramente novo adicionado pelo usuário
+                return {
+                    codigo: i.codigo,
+                    descricao: i.descricao,
+                    quantidade: i.quantidade,
+                    valor: i.valor
+                };
+            }
+        });
 
         payloadUpdate.transporte = {
             fretePorConta: fretePorConta,
