@@ -441,13 +441,19 @@ export const DashboardApp = (function() {
                 const client = p.contato_nome || p['contato nome'] || p.cliente || p.nome_cliente || (p.contato && p.contato.nome) || 'N/A';
                 const total = _getOrderValue(p);
                 const sit = p.situação || p.situacao || p.status || "N/A";
+                
+                const orcamento = p.orcamento || p.orçamento || p.numero_loja || p.numeroLoja || p.numero_pedido_loja || '';
+                const orcamentoHtml = (orcamento && String(orcamento) !== '0') ? `<div class="text-[11px] text-gray-400 mt-0.5" title="Orçamento/Loja">Orç. ${orcamento}</div>` : '';
 
                 html += `
                     <tr class="hover:bg-indigo-50 transition-colors">
                         <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
                             <input type="checkbox" class="pending-item-cb rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer" data-id="${id}" ${isChecked ? 'checked' : ''}>
                         </td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-800">#${id}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-800">
+                            #${id}
+                            ${orcamentoHtml}
+                        </td>
                         <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${date}</td>
                         <td class="px-4 py-3 text-sm text-gray-700 truncate max-w-[200px]" title="${client}">${client}</td>
                         <td class="px-4 py-3 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">${sit}</span></td>
