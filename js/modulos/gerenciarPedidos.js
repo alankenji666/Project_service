@@ -3949,6 +3949,11 @@ export const GerenciarPedidosApp = (function () {
                     if (data.situacao) _filteredPedidos[fIndex].situacao = data.situacao;
                     if (data.total) _filteredPedidos[fIndex].total_pedido = data.total;
                 }
+            } else {
+                // Pedido novo que não está no frontend ainda. Recarrega a lista toda.
+                console.log(`[GerenciarPedidos] Pedido novo detectado (${numero}). Recarregando lista completa...`);
+                fetchPedidos();
+                return;
             }
 
             // 2. Update DOM row directly
