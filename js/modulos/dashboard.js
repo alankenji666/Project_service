@@ -365,6 +365,11 @@ export const DashboardApp = (function() {
     function _refreshActiveDashboard() {
         if (!_dom.vendasContainer.classList.contains('hidden')) _renderSalesView();
         if (!_dom.rankingContainer.classList.contains('hidden')) _renderRankingDashboard();
+        
+        // Atualiza também o modal de detalhes de vendas se ele estiver visível
+        if (_dom.salesDetailsModal && !_dom.salesDetailsModal.classList.contains('hidden')) {
+            _showSalesDetailsModal(_currentMonthKey, _currentChannel);
+        }
     }
 
     function _showEstoqueDashboard() {
