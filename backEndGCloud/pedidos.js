@@ -412,6 +412,34 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
     });
 
     /**
+     * NOVO: Rota para atualizar os detalhes de um pedido de venda no Bling.
+     */
+    router.put('/vendas/:id', async (req, res, next) => {
+        try {
+            const idPedido = req.params.id;
+            if (!idPedido) throw new Error("ID do pedido é obrigatório.");
+
+            const accessToken = await getToken();
+            const httpClient = axios || axiosModule;
+            const payloadUpdate = req.body;
+
+            console.log(`[Bling] Atualizando pedido ${idPedido} com payload clonado/modificado...`);
+            const resUpdate = await httpClient.put(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}`, payloadUpdate, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            res.status(200).send(resUpdate.data);
+        } catch (error) {
+            const errMsg = error.response?.data?.error?.message || error.response?.data?.message || error.message;
+            console.error("[Backend Error] atualizar-venda:", errMsg);
+            res.status(400).send({ 
+                status: 'error', 
+                message: `Erro ao atualizar pedido no Bling: ${errMsg}`,
+                details: error.response?.data
+            });
+        }
+    });
+
+    /**
      * NOVO: Rota para obter os detalhes completos de um contato/cliente no Bling.
      */
     router.get('/contatos/:id', async (req, res, next) => {
