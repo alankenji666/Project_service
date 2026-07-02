@@ -211,8 +211,9 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                         id: pedidoId,
                         numero: p ? p.numero : 'N/A',
                         total: p ? p.total : 0,
-                        evento: action,
-                        situacao: rowValues[COLUMNS.SITUACAO]
+                        evento: rowIndexToUpdate === -1 ? 'created' : 'updated',
+                        situacao: rowValues[COLUMNS.SITUACAO],
+                        cliente: p ? p.contato?.nome : 'N/A' // Adicionado cliente para o toast
                     });
                 }
 

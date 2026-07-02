@@ -609,8 +609,13 @@ export const GerenciarPedidosApp = (function () {
             localStorage.setItem('new_orders_highlight', JSON.stringify(updated));
             const tr = document.getElementById(`pedido-row-${numStr}`);
             if (tr) {
-                tr.classList.remove('bg-blue-50', 'border-blue-500', 'hover:bg-blue-100');
-                tr.classList.add('hover:bg-gray-50', 'border-transparent');
+                tr.classList.remove('bg-blue-50', 'hover:bg-blue-100');
+                tr.classList.add('hover:bg-gray-50');
+                const firstTd = tr.querySelector('td');
+                if (firstTd) {
+                    firstTd.classList.remove('border-l-4', 'border-blue-500');
+                    firstTd.classList.add('border-l-4', 'border-transparent');
+                }
             }
         }
 
@@ -3418,12 +3423,13 @@ export const GerenciarPedidosApp = (function () {
                 // Verificação de Pedido Novo
                 const isNewOrder = newOrders.includes(String(numero)) || newOrders.includes(String(p.id));
                 const rowClass = isNewOrder 
-                    ? 'bg-blue-50 border-l-4 border-blue-500 transition-colors hover:bg-blue-100'
-                    : 'hover:bg-gray-50 transition-colors border-l-4 border-transparent';
+                    ? 'bg-blue-50 transition-colors hover:bg-blue-100'
+                    : 'hover:bg-gray-50 transition-colors';
+                const firstTdClass = isNewOrder ? 'border-l-4 border-blue-500' : 'border-l-4 border-transparent';
 
                 return `
                     <tr id="pedido-row-${numero}" data-order-number="${numero}" class="${rowClass}">
-                        <td class="px-6 py-4 whitespace-nowrap text-left text-sm">
+                        <td class="${firstTdClass} px-6 py-4 whitespace-nowrap text-left text-sm">
                             <input type="checkbox" class="pedido-row-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" value="${p.id || p.numero || numero}">
                         </td>
                         <td class="order-cell-numero px-6 py-4 whitespace-nowrap text-sm font-medium">
