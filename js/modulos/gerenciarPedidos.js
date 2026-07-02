@@ -3977,9 +3977,27 @@ export const GerenciarPedidosApp = (function () {
                     if (data.total) _filteredPedidos[fIndex].total_pedido = data.total;
                 }
             } else {
-                // Pedido novo que não está no frontend ainda. Recarrega a lista toda.
-                console.log(`[GerenciarPedidos] Pedido novo detectado (${numero}). Recarregando lista completa...`);
-                fetchPedidos(true); // O true força o bypass do cache
+                // Pedido novo que não está no frontend ainda. Adiciona diretamente na memória!
+                console.log(`[GerenciarPedidos] Pedido novo detectado (${numero}). Injetando no cache local sem recarregar...`);
+                
+                const newOrderObj = {
+                    id: data.id,
+                    numero: data.numero,
+                    número: data.numero,
+                    contato_nome: data.cliente,
+                    cliente: data.cliente,
+                    situação: data.situacao,
+                    situacao: data.situacao,
+                    total_pedido: data.total,
+                    data: data.data,
+                    vendedor: data.vendedor,
+                    orcamento: data.orcamento
+                };
+
+                _allPedidos.unshift(newOrderObj);
+                
+                // Força re-render com o novo pedido inserido
+                _filterPedidos();
                 return;
             }
 

@@ -209,11 +209,14 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                 if (req.notifySync) {
                     await req.notifySync('pedidoBlingReceived', {
                         id: pedidoId,
-                        numero: p ? p.numero : 'N/A',
-                        total: p ? p.total : 0,
+                        numero: rowValues[COLUMNS.NUMERO] || 'N/A',
+                        total: rowValues[COLUMNS.TOTAL_PEDIDO] || 0,
                         evento: rowIndexToUpdate === -1 ? 'created' : 'updated',
                         situacao: rowValues[COLUMNS.SITUACAO],
-                        cliente: p ? p.contato?.nome : 'N/A' // Adicionado cliente para o toast
+                        cliente: rowValues[COLUMNS.CONTATO_NOME] || 'N/A',
+                        data: p ? p.data : '',
+                        vendedor: rowValues[COLUMNS.VENDEDOR] || '',
+                        orcamento: rowValues[COLUMNS.ORCAMENTO] || ''
                     });
                 }
 
