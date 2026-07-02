@@ -438,8 +438,8 @@ export const DashboardApp = (function() {
                 const id = String(p.numero || p.id || '');
                 const isChecked = _state.tempContabilizados.has(id);
                 const date = _formatDate(p.data || p.data_saida || p.data_criacao || "");
-                const client = p.cliente || p.nome_cliente || p.contato || 'N/A';
-                const total = _parseCurrencyBRL(p.totalvenda || p.total_venda || p.total || p.valor_total || 0);
+                const client = p.contato_nome || p['contato nome'] || p.cliente || p.nome_cliente || (p.contato && p.contato.nome) || 'N/A';
+                const total = _getOrderValue(p);
                 const sit = p.situação || p.situacao || p.status || "N/A";
 
                 html += `
