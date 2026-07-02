@@ -2155,7 +2155,15 @@ export const GerenciarPedidosApp = (function () {
 
             if (!res.ok) {
                 const errorResult = await res.json().catch(() => ({}));
-                throw new Error(errorResult.message || 'Falha ao atualizar pedido no Bling.');
+                console.error("Erro completo retornado pelo backend:", errorResult);
+                
+                let errMsg = errorResult.message || 'Falha ao atualizar pedido no Bling.';
+                if (errorResult.details && errorResult.details.error && errorResult.details.error.fields) {
+                    const fields = errorResult.details.error.fields;
+                    const mapErros = fields.map(f => `${f.msg || f.message} (Cód: ${f.code})`).join(' | ');
+                    errMsg += ` Detalhes do Bling: ${mapErros}`;
+                }
+                throw new Error(errMsg);
             }
 
             if (typeof Toastify !== 'undefined') {
