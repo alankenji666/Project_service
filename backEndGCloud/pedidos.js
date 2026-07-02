@@ -15,12 +15,32 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
         return letter || 'A';
     }
 
+    let _cachedToken = null;
+    let _tokenExpiresAt = 0;
+
     async function getToken() {
+        if (_cachedToken && Date.now() < _tokenExpiresAt) {
+            return _cachedToken;
+        }
         try {
-            // Usa o axios injetado se disponível, caso contrário usa o módulo
             const httpClient = axios || axiosModule;
-            const response = await httpClient.get(APPS_SCRIPT_TOKEN_URL);
-            return response.data.access_token || response.data.accessToken;
+            let response;
+            let lastErr;
+            // Tenta até 3 vezes caso o Apps Script retorne erro intermitente (ex: 404 ou timeout)
+            for (let i = 0; i < 3; i++) {
+                try {
+                    response = await httpClient.get(APPS_SCRIPT_TOKEN_URL);
+                    break;
+                } catch (e) {
+                    lastErr = e;
+                    if (i === 2) throw e;
+                    await new Promise(r => setTimeout(r, 1500)); // Aguarda 1.5s antes da próxima tentativa
+                }
+            }
+            const token = response.data.access_token || response.data.accessToken;
+            _cachedToken = token;
+            _tokenExpiresAt = Date.now() + (1000 * 60 * 30); // Cache por 30 minutos
+            return token;
         } catch (err) {
             console.error("Erro ao obter token do Apps Script:", err.message);
             throw new Error("Falha ao obter token de acesso.");
