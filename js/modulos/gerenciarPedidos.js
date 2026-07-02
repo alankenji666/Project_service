@@ -3952,7 +3952,7 @@ export const GerenciarPedidosApp = (function () {
             } else {
                 // Pedido novo que não está no frontend ainda. Recarrega a lista toda.
                 console.log(`[GerenciarPedidos] Pedido novo detectado (${numero}). Recarregando lista completa...`);
-                fetchPedidos();
+                fetchPedidos(true); // O true força o bypass do cache
                 return;
             }
 

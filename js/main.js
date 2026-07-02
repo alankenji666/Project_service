@@ -609,6 +609,13 @@
 
                 // NOVO: Adiciona ao sistema de histórico persistente
                 _addNotificationToHistory('order', data, numeroPedido, subTextKey, notificationTime);
+                
+                // Mostra Toast visual na tela
+                if (data.evento === 'created') {
+                    _showToastNotification(`Novo pedido recebido: ${numeroPedido} - ${cliente}`, 'info');
+                } else {
+                    _showToastNotification(`Pedido ${numeroPedido} ${subTextKey}`, 'info');
+                }
             }
 
             function _showToastNotification(message, type = 'info', link = '#') {
