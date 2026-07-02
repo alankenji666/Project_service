@@ -295,6 +295,7 @@ export const DashboardApp = (function() {
         _dom.pendingOrdersConfirmBtn = document.getElementById('pending-orders-confirm-btn');
         _dom.pendingSelectAll = document.getElementById('pending-select-all');
         _dom.pendingSelectedCount = document.getElementById('pending-selected-count');
+        _dom.pendingTotalPreview = document.getElementById('pending-total-preview');
 
         _dom.estoqueContainer = document.getElementById('dashboard-estoque-container');
         _dom.estoqueSummaryCards = document.getElementById('estoque-summary-cards');
@@ -448,7 +449,7 @@ export const DashboardApp = (function() {
                 html += `
                     <tr class="hover:bg-indigo-50 transition-colors">
                         <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
-                            <input type="checkbox" class="pending-item-cb rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer" data-id="${id}" ${isChecked ? 'checked' : ''}>
+                            <input type="checkbox" class="pending-item-cb rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer" data-id="${id}" data-val="${total}" ${isChecked ? 'checked' : ''}>
                         </td>
                         <td class="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-800">
                             #${id}
@@ -468,11 +469,40 @@ export const DashboardApp = (function() {
     }
 
     function _updatePendingCount() {
-        const checked = _dom.pendingOrdersModalContent?.querySelectorAll('.pending-item-cb:checked').length || 0;
-        if (_dom.pendingSelectedCount) _dom.pendingSelectedCount.textContent = checked;
+        let pendingSum = 0;
+        let checkedCount = 0;
+        let allCount = 0;
+        const cbs = _dom.pendingOrdersModalContent?.querySelectorAll('.pending-item-cb');
+        if (cbs) {
+            cbs.forEach(cb => {
+                allCount++;
+                if (cb.checked) {
+                    checkedCount++;
+                    pendingSum += parseFloat(cb.dataset.val || 0);
+                }
+            });
+        }
+        
+        if (_dom.pendingSelectedCount) _dom.pendingSelectedCount.textContent = checkedCount;
         if (_dom.pendingSelectAll) {
-            const all = _dom.pendingOrdersModalContent?.querySelectorAll('.pending-item-cb').length || 0;
-            _dom.pendingSelectAll.checked = all > 0 && checked === all;
+            _dom.pendingSelectAll.checked = allCount > 0 && checkedCount === allCount;
+        }
+
+        // Calcular a base de faturamento já existente no período e canal atual
+        let baseTotal = 0;
+        if (Array.isArray(_currentSalesDetails)) {
+            _currentSalesDetails.forEach(p => {
+                const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
+                const isConcluidoReal = (sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago'));
+                if (isConcluidoReal) {
+                    baseTotal += _getOrderValue(p);
+                }
+            });
+        }
+
+        const previewTotal = baseTotal + pendingSum;
+        if (_dom.pendingTotalPreview) {
+            _dom.pendingTotalPreview.textContent = previewTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
     }
 
