@@ -70,7 +70,8 @@ export const DashboardApp = (function() {
         rankingSort: { key: 'quantidade', direction: 'desc' },
         rankingProductSort: { key: 'data', direction: 'desc' },
         rankingProductContext: { codigo: '', descricao: '' },
-        selectedRankingItems: [] // Novo: Itens selecionados no ranking para o relatório
+        selectedRankingItems: [], // Novo: Itens selecionados no ranking para o relatório
+        tempContabilizados: new Set() // Novo: Pedidos contabilizados provisoriamente
     };
 
     let _dom = {}; // Cache for DOM elements
@@ -286,6 +287,15 @@ export const DashboardApp = (function() {
         _dom.exportDropdown = document.getElementById('sales-details-export-dropdown');
         _dom.vendaTypeToggle = document.getElementById('venda-type-toggle');
 
+        _dom.addPendingOrdersBtn = document.getElementById('add-pending-orders-btn');
+        _dom.pendingOrdersModal = document.getElementById('pending-orders-modal');
+        _dom.closePendingOrdersModalBtn = document.getElementById('close-pending-orders-modal-btn');
+        _dom.pendingOrdersModalContent = document.getElementById('pending-orders-modal-content');
+        _dom.pendingOrdersCancelBtn = document.getElementById('pending-orders-cancel-btn');
+        _dom.pendingOrdersConfirmBtn = document.getElementById('pending-orders-confirm-btn');
+        _dom.pendingSelectAll = document.getElementById('pending-select-all');
+        _dom.pendingSelectedCount = document.getElementById('pending-selected-count');
+
         _dom.estoqueContainer = document.getElementById('dashboard-estoque-container');
         _dom.estoqueSummaryCards = document.getElementById('estoque-summary-cards');
         _dom.estoqueChartCanvas = document.getElementById('estoque-distribution-chart');
@@ -374,6 +384,90 @@ export const DashboardApp = (function() {
         if (_dom.rankingContainer) _dom.rankingContainer.classList.remove('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
         _renderRankingDashboard();
+    }
+
+    function _openPendingOrdersModal() {
+        if (!_dom.pendingOrdersModal) return;
+        _dom.pendingOrdersModal.classList.remove('hidden');
+        
+        // 1. Filtrar pedidos originais do Bling (Vendas/Em Aberto/Em Produção)
+        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+        const selectedYear = parseInt(_state.selectedYearFilter, 10);
+
+        let pendingPedidos = _allPedidosBling.filter(p => {
+            const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
+            // Apenas pedidos pendentes
+            if (!(sit.includes('em aberto') || sit.includes('em produ'))) return false;
+
+            // Filtro de Data
+            const rawDate = p.data || p.data_saida || p.data_faturamento || p.data_emissao || p.data_criacao || p.data_pedido || p['data pedido'] || "";
+            let pDate = null;
+            if (rawDate) {
+                if (String(rawDate).includes('-')) {
+                    pDate = new Date(rawDate + 'T00:00:00');
+                } else {
+                    pDate = _utils.parsePtBrDate(rawDate);
+                }
+            }
+            if (!pDate || isNaN(pDate.getTime())) return false;
+            
+            if (startDate || endDate) {
+                const afterStart = !startDate || pDate >= startDate;
+                const beforeEnd = !endDate || pDate <= endDate;
+                return afterStart && beforeEnd;
+            }
+            if (selectedYear && !isNaN(selectedYear)) {
+                return pDate.getFullYear() === selectedYear;
+            }
+            return true;
+        });
+
+        // 2. Renderizar a tabela
+        let html = '';
+        if (pendingPedidos.length === 0) {
+            html = `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500 italic">Nenhum pedido pendente neste período.</td></tr>`;
+        } else {
+            pendingPedidos.sort((a,b) => {
+                const numA = parseInt(a.numero || a.id || 0);
+                const numB = parseInt(b.numero || b.id || 0);
+                return numB - numA;
+            });
+            
+            pendingPedidos.forEach(p => {
+                const id = String(p.numero || p.id || '');
+                const isChecked = _state.tempContabilizados.has(id);
+                const date = _formatDate(p.data || p.data_saida || p.data_criacao || "");
+                const client = p.cliente || p.nome_cliente || p.contato || 'N/A';
+                const total = _parseCurrencyBRL(p.totalvenda || p.total_venda || p.total || p.valor_total || 0);
+                const sit = p.situação || p.situacao || p.status || "N/A";
+
+                html += `
+                    <tr class="hover:bg-indigo-50 transition-colors">
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
+                            <input type="checkbox" class="pending-item-cb rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer" data-id="${id}" ${isChecked ? 'checked' : ''}>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-800">#${id}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${date}</td>
+                        <td class="px-4 py-3 text-sm text-gray-700 truncate max-w-[200px]" title="${client}">${client}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">${sit}</span></td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-900 text-right">${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        if (_dom.pendingOrdersModalContent) _dom.pendingOrdersModalContent.innerHTML = html;
+        _updatePendingCount();
+    }
+
+    function _updatePendingCount() {
+        const checked = _dom.pendingOrdersModalContent?.querySelectorAll('.pending-item-cb:checked').length || 0;
+        if (_dom.pendingSelectedCount) _dom.pendingSelectedCount.textContent = checked;
+        if (_dom.pendingSelectAll) {
+            const all = _dom.pendingOrdersModalContent?.querySelectorAll('.pending-item-cb').length || 0;
+            _dom.pendingSelectAll.checked = all > 0 && checked === all;
+        }
     }
 
     function _showSelector() {
@@ -680,8 +774,9 @@ export const DashboardApp = (function() {
 
         const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
-            // Aceita variações de atendido, concluído, faturado, entregue ou pago
-            return sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
+            // Aceita variações de atendido, concluído, faturado, entregue ou pago (ou provisório)
+            const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
+            return isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
         });
 
         // FILTRAGEM DE DATA (CORREÇÃO): Prioriza intervalo específico se existir
@@ -1075,7 +1170,8 @@ export const DashboardApp = (function() {
 
         const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
-            return sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
+            const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
+            return isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
         });
 
         const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
@@ -1497,7 +1593,8 @@ export const DashboardApp = (function() {
 
         const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
-            return sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
+            const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
+            return isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
         });
 
         if (selectedYear && !isNaN(selectedYear)) {
@@ -1758,7 +1855,8 @@ export const DashboardApp = (function() {
             const salesByPeriod = {};
             const liPedidos = _allPedidosBling.filter(p => {
                 const sit = (p.situação || p.situacao || p.situao || "").toLowerCase().trim();
-                const isConcluido = (sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad'));
+                const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
+                const isConcluido = (isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad'));
                 if (!isConcluido) return false;
 
                 const d = _getOrderDate(p);
@@ -2036,7 +2134,8 @@ export const DashboardApp = (function() {
     
         _currentSalesDetails = _allPedidosBling.filter(p => {
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
-            if (!(sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago'))) return false;
+            const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
+            if (!(isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago'))) return false;
 
             // Usa o helper centralizado para consistência
             const d = _getOrderDate(p);
@@ -2856,9 +2955,36 @@ export const DashboardApp = (function() {
                     _state.rankingProductSort.key = key;
                     _state.rankingProductSort.direction = 'desc';
                 }
-                const { codigo, descricao } = _state.rankingProductContext;
-                if (codigo) _showProductSalesDetailsModal(codigo, descricao);
+                // Re-render
+                _showProductSalesDetailsModal(_state.rankingProductContext.codigo, _state.rankingProductContext.descricao);
             }
+        });
+        
+        // NOVO: Eventos do modal de Pedidos Pendentes (Contabilização Provisória)
+        _dom.addPendingOrdersBtn?.addEventListener('click', () => {
+            _openPendingOrdersModal();
+        });
+
+        const closePendingOrdersModal = () => { if (_dom.pendingOrdersModal) _dom.pendingOrdersModal.classList.add('hidden'); };
+        _dom.closePendingOrdersModalBtn?.addEventListener('click', closePendingOrdersModal);
+        _dom.pendingOrdersCancelBtn?.addEventListener('click', closePendingOrdersModal);
+        
+        _dom.pendingOrdersModal?.addEventListener('change', e => {
+            if (e.target.id === 'pending-select-all') {
+                const cbs = _dom.pendingOrdersModalContent.querySelectorAll('.pending-item-cb');
+                cbs.forEach(cb => cb.checked = e.target.checked);
+            }
+            _updatePendingCount();
+        });
+
+        _dom.pendingOrdersConfirmBtn?.addEventListener('click', () => {
+            const cbs = _dom.pendingOrdersModalContent.querySelectorAll('.pending-item-cb');
+            _state.tempContabilizados.clear();
+            cbs.forEach(cb => {
+                if (cb.checked) _state.tempContabilizados.add(cb.dataset.id);
+            });
+            closePendingOrdersModal();
+            _refreshActiveDashboard();
         });
 
         _dom.estoqueTypeToggle?.addEventListener('change', () => { _state.estoqueCurrentPage = 1; _renderEstoqueDashboard(); });
