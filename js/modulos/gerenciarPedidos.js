@@ -4003,13 +4003,35 @@ export const GerenciarPedidosApp = (function () {
             if (index !== -1) {
                 // Update properties if provided in data
                 if (data.situacao) _allPedidos[index].situacao = data.situacao;
-                if (data.total) _allPedidos[index].total_pedido = data.total;
-                // Also update filtered copy if it exists there
+                if (data.total !== undefined) _allPedidos[index].total_pedido = data.total;
+                if (data.cliente) _allPedidos[index].contato_nome = data.cliente;
+                if (data.data) _allPedidos[index].data = data.data;
+                if (data.vendedor) _allPedidos[index].vendedor = data.vendedor;
+                if (data.orcamento) _allPedidos[index].orcamento = data.orcamento;
+                
+                // Também atualiza na cópia filtrada
                 const fIndex = _filteredPedidos.findIndex(p => String(p.numero) === numero || String(p.id) === numero);
                 if (fIndex !== -1) {
                     if (data.situacao) _filteredPedidos[fIndex].situacao = data.situacao;
-                    if (data.total) _filteredPedidos[fIndex].total_pedido = data.total;
+                    if (data.total !== undefined) _filteredPedidos[fIndex].total_pedido = data.total;
+                    if (data.cliente) _filteredPedidos[fIndex].contato_nome = data.cliente;
+                    if (data.data) _filteredPedidos[fIndex].data = data.data;
+                    if (data.vendedor) _filteredPedidos[fIndex].vendedor = data.vendedor;
+                    if (data.orcamento) _filteredPedidos[fIndex].orcamento = data.orcamento;
                 }
+
+                // Força o re-render completo da tabela para refletir TODAS as edições imediatamente
+                _filterPedidos();
+                
+                // Aplica o flash visual na linha re-renderizada
+                setTimeout(() => {
+                    const row = document.getElementById(`pedido-row-${numero}`);
+                    if (row) {
+                        row.classList.add('row-update-flash');
+                        setTimeout(() => row.classList.remove('row-update-flash'), 2000);
+                    }
+                }, 100);
+
             } else {
                 // Pedido novo que não está no frontend ainda. 
                 console.log(`[GerenciarPedidos] Pedido novo detectado (${numero}). Recarregando lista completa...`);
@@ -4023,42 +4045,6 @@ export const GerenciarPedidosApp = (function () {
 
                 fetchPedidos(true); // O true força o bypass do cache
                 return;
-            }
-
-            // 2. Update DOM row directly
-            const row = document.getElementById(`pedido-row-${numero}`);
-            if (row) {
-                console.log(`[GerenciarPedidos] Atualizando linha do pedido ${numero} via DOM.`);
-                
-                // Update Status
-                if (data.situacao) {
-                    const statusCell = row.querySelector('.order-cell-status');
-                    if (statusCell) {
-                        let badgeClass = 'bg-gray-100 text-gray-800';
-                        const sitLower = data.situacao.toLowerCase();
-                        if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badgeClass = 'bg-green-100 text-green-800';
-                        else if (sitLower.includes('cancel')) badgeClass = 'bg-red-100 text-red-800';
-                        else if (sitLower.includes('pendent') || sitLower.includes('abert')) badgeClass = 'bg-yellow-100 text-yellow-800';
-                        else if (sitLower.includes('produção') || sitLower.includes('producao') || sitLower.includes('andamento') || sitLower.includes('em andamento')) badgeClass = 'bg-blue-100 text-blue-800';
-                        else if (sitLower.includes('prepar') || sitLower.includes('impress') || sitLower.includes('verificad')) badgeClass = 'bg-blue-100 text-blue-800';
-                        
-                        statusCell.innerHTML = `<span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${data.situacao}</span>`;
-                    }
-                }
-
-                // Update Total
-                if (data.total !== undefined) {
-                    const totalCell = row.querySelector('.order-cell-total');
-                    if (totalCell) {
-                        const totalVal = _parseNumber(data.total || 0);
-                        const totalFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVal);
-                        totalCell.innerText = totalFormatted;
-                    }
-                }
-
-                // Highlight Row
-                row.classList.add('row-update-flash');
-                setTimeout(() => row.classList.remove('row-update-flash'), 2000);
             }
         },
         updateOrderObservationStatus: function(orderId, obsArray) {
