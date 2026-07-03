@@ -220,11 +220,19 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
             // 5. Notificar via Firestore Sync (Tempo Real)
             if (req.notifySync) {
                 const numeroNf = n ? n.numero : (data ? data.numero : 'N/A');
-                console.log(`[Firestore Sync] Notificando nova NF-e recebida: ${numeroNf}`);
+                // Tenta extrair o ID do pedido vinculado (venda)
+                const idPedido = n ? (n.venda?.id || n.numeroPedidoLoja || null) : null;
+                
+                console.log(`[Firestore Sync] Notificando nova NF-e recebida: ${numeroNf} para Pedido: ${idPedido}`);
                 await req.notifySync('nfeReceived', {
+                    id: n ? n.id : null,
                     numero: numeroNf,
                     cliente: n ? n.contato?.nome : 'N/A',
-                    valor: n ? n.valorNota : 0
+                    valor: n ? n.valorNota : 0,
+                    id_pedido: idPedido,
+                    id_nota: n ? n.id : null,
+                    linkDanfe: n ? n.linkDanfe : null,
+                    chaveAcesso: n ? n.chaveAcesso : null
                 });
             }
 

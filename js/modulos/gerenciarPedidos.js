@@ -4338,6 +4338,11 @@ export const GerenciarPedidosApp = (function () {
             const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
             if (pedido) {
                 pedido.id_nota = nfeData.id || nfeData.id_nota || nfeData.numero;
+                if (nfeData.chaveAcesso) pedido.chave_acesso = nfeData.chaveAcesso;
+                if (nfeData.linkDanfe) pedido.link_danfe = nfeData.linkDanfe;
+                
+                // NOVO: Força o recarregamento da tabela principal em tempo real para exibir o botão da NF-e
+                _filterPedidos();
             }
 
             // 2. Atualizar a UI se o modal estiver aberto para este pedido
