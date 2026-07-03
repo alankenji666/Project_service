@@ -448,6 +448,21 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             res.status(200).send(resUpdate.data);
+
+            // NOVO: Força a atualização da planilha disparando um webhook simulado localmente para o nosso próprio backend
+            // Isso garante que a planilha (e o frontend via Firebase) sejam atualizados imediatamente sem depender do webhook atrasado do Bling
+            setTimeout(async () => {
+                try {
+                    const port = process.env.PORT || 8080;
+                    console.log(`[Bling Proxy] Disparando webhook local para sincronizar planilha do pedido ${idPedido}...`);
+                    await httpClient.post(`http://localhost:${port}/webhook/pedidos-bling`, {
+                        event: 'situacao.alterada', 
+                        data: { id: idPedido }
+                    });
+                } catch (e) {
+                    console.error("[Bling Proxy] Erro ao simular webhook local:", e.message);
+                }
+            }, 1000);
         } catch (error) {
             const errMsg = error.response?.data?.error?.message || error.response?.data?.message || error.message;
             console.error("[Backend Error] atualizar-venda:", errMsg);
