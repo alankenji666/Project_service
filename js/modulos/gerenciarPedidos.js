@@ -2458,11 +2458,27 @@ export const GerenciarPedidosApp = (function () {
             // Atualizar localmente o pedido com o novo ID da nota e status "Atendido"
             const pedidoLocal = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
             if (pedidoLocal) {
-                const idNota = result.data?.idNotaFiscal || result.idNotaFiscal || '';
+                const idNota = result.data?.idNota || result.idNota || result.data?.idNotaFiscal || result.idNotaFiscal || '';
                 if (idNota) {
                     if (pedidoLocal.id_nota !== undefined) pedidoLocal.id_nota = idNota;
                     if (pedidoLocal['id nota'] !== undefined) pedidoLocal['id nota'] = idNota;
                     if (pedidoLocal['idnotafiscal'] !== undefined) pedidoLocal['idnotafiscal'] = idNota;
+                    
+                    // Injeta a NFe provisória no cache para o frontend já exibir que está em processamento
+                    if (window._allNFeData) {
+                        const existingNfe = window._allNFeData.find(n => String(n.id) === String(idNota) || String(n.id_nota) === String(idNota));
+                        if (!existingNfe) {
+                            window._allNFeData.push({
+                                id: idNota,
+                                id_nota: idNota,
+                                id_pedido: idPedido,
+                                numero: 'SEFAZ...',
+                                serie: '-',
+                                chaveAcesso: '',
+                                linkDanfe: '#'
+                            });
+                        }
+                    }
                 }
                 const atendidoLabel = 'Atendido';
                 if (pedidoLocal.situação !== undefined) pedidoLocal.situação = atendidoLabel;

@@ -241,9 +241,13 @@
                         
                         // 1. Atualizar cache local global
                         if (window._allNFeData) {
-                            // Evita duplicatas se o polling também trouxer a mesma nota
-                            const exists = window._allNFeData.some(n => String(n.id) === String(data.id) || String(n.numero) === String(data.numero));
-                            if (!exists) window._allNFeData.push(data);
+                            const index = window._allNFeData.findIndex(n => String(n.id) === String(data.id) || String(n.numero) === String(data.numero));
+                            if (index !== -1) {
+                                // Substitui o placeholder "SEFAZ..." com a NFe real
+                                window._allNFeData[index] = { ...window._allNFeData[index], ...data };
+                            } else {
+                                window._allNFeData.push(data);
+                            }
                         }
 
                         // 2. Notificar GerenciarPedidosApp para atualizar UI (linha da tabela e modal se aberto)
