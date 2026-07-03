@@ -785,12 +785,20 @@ export const GerenciarPedidosApp = (function () {
                 baixarPdfUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-pdf?url=${encodeURIComponent(linkDanfe)}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
             }
 
-            const baixarBtnHtml = baixarPdfUrl ? `
+            let baixarBtnHtml = '';
+            if (baixarPdfUrl && finalChaveAcesso) {
+                baixarBtnHtml = `
                 <a href="#" onclick="event.preventDefault(); window.downloadDanfeWithSpinner('${baixarPdfUrl}', '${safeFilenameForDownload.replace(/'/g, "\\'")}', this)" class="flex items-center gap-1.5 text-[10px] bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors font-bold uppercase shadow-sm" title="Baixar PDF do DANFE com o nome do cliente">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                     Baixar DANFE
-                </a>
-            ` : '';
+                </a>`;
+            } else if (!finalChaveAcesso && String(numeroNota).toLowerCase() !== 'processando...') {
+                baixarBtnHtml = `
+                <div class="flex items-center gap-1 bg-white border border-yellow-300 rounded px-1.5 py-1 shadow-sm">
+                    <input type="text" id="manual-chave-acesso-${idNota}" placeholder="Cole a Chave de Acesso (44 dígitos)" class="text-[9px] text-gray-700 bg-transparent w-44 focus:outline-none placeholder-gray-400">
+                    <button onclick="window.saveChaveAcessoManual('${idNota}', this)" class="bg-yellow-500 hover:bg-yellow-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded transition-colors shadow-sm">SALVAR</button>
+                </div>`;
+            }
 
             gridHtml += `
                 <div class="bg-green-50 p-3 rounded-lg border border-green-100 md:col-span-2">
@@ -4597,5 +4605,46 @@ window.downloadDanfeWithSpinner = async function(url, filename, btn) {
         btn.innerHTML = originalHtml;
         btn.classList.remove('opacity-75', 'cursor-wait');
         btn.style.pointerEvents = 'auto';
+    }
+};
+
+window.saveChaveAcessoManual = async function(idNota, btn) {
+    const inputEl = document.getElementById(`manual-chave-acesso-${idNota}`);
+    if (!inputEl) return;
+    
+    const chave = inputEl.value.trim();
+    if (chave.length !== 44) {
+        alert('A Chave de Acesso deve ter exatamente 44 dígitos numéricos.');
+        return;
+    }
+
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = 'SALVANDO...';
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch(`${API_URLS.ORDERS_BLING}/nfe/${idNota}/chave-acesso`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chaveAcesso: chave })
+        });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.message || 'Erro ao salvar chave.');
+        
+        if (typeof Toastify !== 'undefined') {
+            Toastify({
+                text: '✅ Chave salva na planilha!',
+                duration: 3000,
+                gravity: 'top',
+                position: 'center',
+                style: { background: '#10b981' }
+            }).showToast();
+        }
+    } catch(err) {
+        alert(err.message);
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
     }
 };

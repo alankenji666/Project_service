@@ -693,6 +693,61 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
         }
     });
 
+    // Endpoint para atualizar manualmente a chave de acesso de uma NFe
+    router.put('/nfe/:idNota/chave-acesso', async (req, res, next) => {
+        try {
+            const { idNota } = req.params;
+            const { chaveAcesso } = req.body;
+            if (!chaveAcesso) {
+                return res.status(400).send({ status: 'error', message: 'Chave de acesso é obrigatória.' });
+            }
+
+            const sheets = await getSheetsClient();
+            
+            // Procura a linha da NFe na planilha NotasFiscais
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId: spreadsheetIdNFE,
+                range: `NotasFiscais!A:Z`
+            });
+            const rows = response.data.values || [];
+            let rowIndexToUpdate = -1;
+            
+            for (let i = 1; i < rows.length; i++) {
+                // COLUMNS_NFE.ID_NOTA = 1 (Coluna B)
+                if (String(rows[i][1]).trim() === String(idNota).trim()) {
+                    rowIndexToUpdate = i + 1; // 1-based para Sheets API
+                    break;
+                }
+            }
+
+            if (rowIndexToUpdate === -1) {
+                return res.status(404).send({ status: 'error', message: 'Nota fiscal não encontrada na planilha.' });
+            }
+
+            // Atualiza a coluna F (Chave de Acesso, índice 5)
+            await sheets.spreadsheets.values.update({
+                spreadsheetId: spreadsheetIdNFE,
+                range: `NotasFiscais!F${rowIndexToUpdate}`,
+                valueInputOption: 'USER_ENTERED',
+                resource: { values: [[chaveAcesso]] }
+            });
+
+            // Dispara notificação para o frontend atualizar o modal instantaneamente
+            if (notifySync) {
+                await notifySync('nfeReceived', {
+                    id: idNota,
+                    id_nota: idNota,
+                    chaveAcesso: chaveAcesso
+                });
+            }
+
+            res.status(200).send({ status: 'success', message: 'Chave atualizada com sucesso' });
+        } catch (error) {
+            console.error("[Backend Error] update-chave-acesso:", error.message);
+            res.status(500).send({ status: 'error', message: error.message });
+        }
+    });
+
     return router;
 };
 
