@@ -771,9 +771,21 @@ export const GerenciarPedidosApp = (function () {
             let baseFilename = `DANFE - ${shortClientName}${numeroNotaStr}${orcamentoStr}`;
             let safeFilenameForDownload = baseFilename.replace(/[<>:"/\\|?*]/g, '_') + '.pdf';
             
-            const baixarPdfUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-danfe?chaveAcesso=${chaveAcesso}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
+            // Tenta extrair a chave do link se não veio diretamente (comum no webhook do Bling)
+            let finalChaveAcesso = chaveAcesso;
+            if (!finalChaveAcesso && linkDanfe && linkDanfe !== '#') {
+                const matchChave = linkDanfe.match(/chave=([^&]+)/) || linkDanfe.match(/chaveAcesso=([^&]+)/);
+                if (matchChave) finalChaveAcesso = matchChave[1];
+            }
 
-            const baixarBtnHtml = chaveAcesso ? `
+            let baixarPdfUrl = '';
+            if (finalChaveAcesso) {
+                baixarPdfUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-danfe?chaveAcesso=${finalChaveAcesso}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
+            } else if (linkDanfe && linkDanfe !== '#') {
+                baixarPdfUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-pdf?url=${encodeURIComponent(linkDanfe)}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
+            }
+
+            const baixarBtnHtml = baixarPdfUrl ? `
                 <a href="#" onclick="event.preventDefault(); window.downloadDanfeWithSpinner('${baixarPdfUrl}', '${safeFilenameForDownload.replace(/'/g, "\\'")}', this)" class="flex items-center gap-1.5 text-[10px] bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors font-bold uppercase shadow-sm" title="Baixar PDF do DANFE com o nome do cliente">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                     Baixar DANFE
