@@ -4044,6 +4044,7 @@ export const GerenciarPedidosApp = (function () {
                 if (data.data) _allPedidos[index].data = data.data;
                 if (data.vendedor) _allPedidos[index].vendedor = data.vendedor;
                 if (data.orcamento) _allPedidos[index].orcamento = data.orcamento;
+                if (data.id_nota) _allPedidos[index].id_nota = data.id_nota;
                 
                 // Também atualiza na cópia filtrada
                 const fIndex = _filteredPedidos.findIndex(p => String(p.numero) === numero || String(p.id) === numero);
@@ -4054,10 +4055,16 @@ export const GerenciarPedidosApp = (function () {
                     if (data.data) _filteredPedidos[fIndex].data = data.data;
                     if (data.vendedor) _filteredPedidos[fIndex].vendedor = data.vendedor;
                     if (data.orcamento) _filteredPedidos[fIndex].orcamento = data.orcamento;
+                    if (data.id_nota) _filteredPedidos[fIndex].id_nota = data.id_nota;
                 }
 
                 // Força o re-render completo da tabela para refletir TODAS as edições imediatamente
                 _filterPedidos();
+                
+                // NOVO: Atualizar modal se estiver aberto para este pedido (ex: NFe recém vinculada via webhook de pedido)
+                if (_currentModalPedidoId && String(_currentModalPedidoId) === numero) {
+                    _openOrderDetailsModal(numero);
+                }
                 
                 // Aplica o flash visual na linha re-renderizada
                 setTimeout(() => {

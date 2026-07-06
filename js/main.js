@@ -240,11 +240,22 @@
                         console.log(`[Firestore Sync] Nova NF-e ${data.numero} recebida do cliente ${data.cliente}.`);
                         
                         // 1. Atualizar cache local global
+                        let mergedData = data;
                         if (window._allNFeData) {
                             const index = window._allNFeData.findIndex(n => String(n.id) === String(data.id) || String(n.numero) === String(data.numero));
                             if (index !== -1) {
+                                // Preserva o id_pedido antigo caso o webhook venha com ele nulo (muito comum no Bling V3)
+                                const oldIdPedido = window._allNFeData[index].id_pedido || window._allNFeData[index].idPedido;
+                                
                                 // Substitui o placeholder "SEFAZ..." com a NFe real
                                 window._allNFeData[index] = { ...window._allNFeData[index], ...data };
+                                
+                                // Restaura o id_pedido se o novo for nulo
+                                if (!data.id_pedido && oldIdPedido) {
+                                    window._allNFeData[index].id_pedido = oldIdPedido;
+                                }
+                                
+                                mergedData = window._allNFeData[index];
                             } else {
                                 window._allNFeData.push(data);
                             }
@@ -252,7 +263,7 @@
 
                         // 2. Notificar GerenciarPedidosApp para atualizar UI (linha da tabela e modal se aberto)
                         if (typeof GerenciarPedidosApp !== 'undefined' && typeof GerenciarPedidosApp.updateOrderNfeInfoRealTime === 'function') {
-                            GerenciarPedidosApp.updateOrderNfeInfoRealTime(data);
+                            GerenciarPedidosApp.updateOrderNfeInfoRealTime(mergedData);
                         }
 
                         // 3. Mostrar notificação visual

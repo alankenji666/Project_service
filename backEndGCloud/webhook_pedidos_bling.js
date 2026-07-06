@@ -216,7 +216,8 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                         cliente: rowValues[COLUMNS.CONTATO_NOME] || 'N/A',
                         data: p ? p.data : '',
                         vendedor: rowValues[COLUMNS.VENDEDOR] || '',
-                        orcamento: rowValues[COLUMNS.ORCAMENTO] || ''
+                        orcamento: rowValues[COLUMNS.ORCAMENTO] || '',
+                        id_nota: rowValues[COLUMNS.ID_NOTA] || ''
                     });
                 }
 
