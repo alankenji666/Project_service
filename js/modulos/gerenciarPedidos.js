@@ -1765,12 +1765,8 @@ export const GerenciarPedidosApp = (function () {
 
             const data = await res.json();
             
-            // Preenche Razão e Fantasia se estiverem vazios ou sempre substitui?
-            // Melhor substituir para garantir precisão fiscal
-            if (_state.nfeEditContatoNome) _state.nfeEditContatoNome.value = data.razao_social || '';
-            if (_state.nfeEditContatoNomeDetalhe) _state.nfeEditContatoNomeDetalhe.value = data.razao_social || '';
-            if (_state.nfeEditContatoFantasia) _state.nfeEditContatoFantasia.value = data.estabelecimento?.nome_fantasia || '';
-            if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = 'J';
+            // Removemos a atualização do Nome e Fantasia a pedido do usuário
+            // Apenas adiciona a IE sem mexer no que veio do Bling
 
             // Trata Inscrição Estadual (IE)
             let ieEncontrada = '';
