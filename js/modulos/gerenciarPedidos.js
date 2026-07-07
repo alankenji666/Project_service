@@ -1460,7 +1460,7 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditCurrentTranspId = pedidoBling.transporte?.contato?.id || '';
         _state.nfeEditCurrentTranspNome = pedidoBling.transporte?.etiqueta?.nome || pedidoBling.transporte?.contato?.nome || '';
         
-        _state.nfeEditCurrentUf = pedidoBling.transporte?.enderecoEntrega?.uf || '';
+        _state.nfeEditCurrentUf = pedidoBling.transporte?.etiqueta?.uf || pedidoBling.contato?.endereco?.geral?.uf || pedidoBling.transporte?.enderecoEntrega?.uf || '';
 
         // Preencher metadados básicos do cliente
         if (_state.nfeEditContatoId) _state.nfeEditContatoId.value = pedidoBling.contato?.id || '';
@@ -1497,7 +1497,7 @@ export const GerenciarPedidosApp = (function () {
                             _state.nfeEditContatoContribuinte.value = c.indicadorIe !== undefined ? c.indicadorIe : 9;
                         }
                         
-                        _state.nfeEditCurrentUf = c.enderecoGeral?.uf || c.enderecoCobranca?.uf || _state.nfeEditCurrentUf;
+                        _state.nfeEditCurrentUf = c.endereco?.geral?.uf || c.enderecoGeral?.uf || c.enderecoCobranca?.uf || _state.nfeEditCurrentUf;
                         
                         _updateIeWarning();
                     }
@@ -1775,9 +1775,12 @@ export const GerenciarPedidosApp = (function () {
             // Trata Inscrição Estadual (IE)
             let ieEncontrada = '';
             if (data.estabelecimento?.inscricoes_estaduais && data.estabelecimento.inscricoes_estaduais.length > 0) {
-                const targetUf = _state.nfeEditCurrentUf;
+                const targetUf = String(_state.nfeEditCurrentUf || '').trim().toUpperCase();
                 // Procura IE ativa no estado de destino (UF) do pedido
-                let ieAtiva = data.estabelecimento.inscricoes_estaduais.find(ie => ie.ativo === true && ie.estado?.sigla === targetUf);
+                let ieAtiva = data.estabelecimento.inscricoes_estaduais.find(ie => {
+                    const ieUf = String(ie.estado?.sigla || '').trim().toUpperCase();
+                    return ie.ativo === true && ieUf === targetUf && targetUf !== '';
+                });
                 // Se não achar no UF de destino, pega a primeira ativa
                 if (!ieAtiva) {
                     ieAtiva = data.estabelecimento.inscricoes_estaduais.find(ie => ie.ativo === true);
