@@ -1541,7 +1541,7 @@ export const GerenciarPedidosApp = (function () {
             }
         }
         
-        const localPedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+        const localPedido = _allPedidos.find(p => String(p.id) === String(_currentModalPedidoId) || String(p.numero) === String(_currentModalPedidoId));
         const orcamentoVal = localPedido ? (localPedido.orcamento || localPedido.orçamento || '') : '';
         const vendedorNome = _getVendedorName(vendedorVal);
         
