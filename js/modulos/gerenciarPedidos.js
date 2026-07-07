@@ -2257,8 +2257,9 @@ export const GerenciarPedidosApp = (function () {
 
         if (!confirm('Tem certeza de que deseja atualizar este pedido no Bling com as informações preenchidas?')) return;
 
-        // Sobrescrever payloadUpdate com os dados editados
+        // Sobrescrever payloadUpdate com os dados editados, mantendo os originais (como endereço)
         payloadUpdate.contato = {
+            ...(_state.currentPedidoBlingBruto.contato || {}),
             id: contatoId,
             nome: contatoNome,
             tipoPessoa: contatoTipo,
@@ -2303,6 +2304,7 @@ export const GerenciarPedidosApp = (function () {
         });
 
         payloadUpdate.transporte = {
+            ...(_state.currentPedidoBlingBruto.transporte || {}),
             fretePorConta: fretePorConta,
             frete: frete,
             quantidadeVolumes: quantidadeVolumes,
