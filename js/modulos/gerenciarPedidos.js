@@ -426,6 +426,12 @@ export const GerenciarPedidosApp = (function () {
             _state.nfeEditManualParcelasBtn.addEventListener('click', _handleManualAdjustParcelas);
         }
         
+        // NOVO: Bind do botão de consultar CNPJ
+        const consultarCnpjBtn = document.getElementById('nfe-edit-consultar-cnpj-btn');
+        if (consultarCnpjBtn) {
+            consultarCnpjBtn.addEventListener('click', _handleConsultarCnpj);
+        }
+        
         if (_state.confirmNfeEditBtn) _state.confirmNfeEditBtn.addEventListener('click', () => _confirmCustomEmitirNfe(false));
         if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.addEventListener('click', () => _confirmCustomEmitirNfe(true));
         if (_state.saveOrderEditBtn) _state.saveOrderEditBtn.addEventListener('click', _saveOrderEdit);
@@ -1453,6 +1459,8 @@ export const GerenciarPedidosApp = (function () {
         // Salvar as informações da transportadora do pedido no estado para quando ela for necessária
         _state.nfeEditCurrentTranspId = pedidoBling.transporte?.contato?.id || '';
         _state.nfeEditCurrentTranspNome = pedidoBling.transporte?.etiqueta?.nome || pedidoBling.transporte?.contato?.nome || '';
+        
+        _state.nfeEditCurrentUf = pedidoBling.transporte?.enderecoEntrega?.uf || '';
 
         // Preencher metadados básicos do cliente
         if (_state.nfeEditContatoId) _state.nfeEditContatoId.value = pedidoBling.contato?.id || '';
@@ -1488,6 +1496,9 @@ export const GerenciarPedidosApp = (function () {
                         if (_state.nfeEditContatoContribuinte) {
                             _state.nfeEditContatoContribuinte.value = c.indicadorIe !== undefined ? c.indicadorIe : 9;
                         }
+                        
+                        _state.nfeEditCurrentUf = c.enderecoGeral?.uf || c.enderecoCobranca?.uf || _state.nfeEditCurrentUf;
+                        
                         _updateIeWarning();
                     }
                 })
@@ -1725,6 +1736,88 @@ export const GerenciarPedidosApp = (function () {
     function _closeNfeEditModal() {
         if (_state.nfeEditModal) {
             _state.nfeEditModal.classList.add('hidden');
+        }
+    }
+
+    async function _handleConsultarCnpj() {
+        const btn = document.getElementById('nfe-edit-consultar-cnpj-btn');
+        const cnpjInput = _state.nfeEditContatoCnpj;
+        if (!cnpjInput || !btn) return;
+
+        let cnpj = cnpjInput.value.replace(/\D/g, '');
+        if (cnpj.length !== 14) {
+            alert("Por favor, informe um CNPJ válido com 14 dígitos.");
+            return;
+        }
+
+        const originalHtml = btn.innerHTML;
+        try {
+            btn.innerHTML = `<svg class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+            btn.disabled = true;
+
+            const res = await fetch(`https://publica.cnpj.ws/cnpj/${cnpj}`);
+            if (!res.ok) {
+                if (res.status === 429) {
+                    throw new Error("Limite de consultas excedido (máximo 3 por minuto na API gratuita). Tente novamente em alguns instantes.");
+                }
+                throw new Error("Não foi possível consultar os dados. O CNPJ pode ser inválido.");
+            }
+
+            const data = await res.json();
+            
+            // Preenche Razão e Fantasia se estiverem vazios ou sempre substitui?
+            // Melhor substituir para garantir precisão fiscal
+            if (_state.nfeEditContatoNome) _state.nfeEditContatoNome.value = data.razao_social || '';
+            if (_state.nfeEditContatoNomeDetalhe) _state.nfeEditContatoNomeDetalhe.value = data.razao_social || '';
+            if (_state.nfeEditContatoFantasia) _state.nfeEditContatoFantasia.value = data.estabelecimento?.nome_fantasia || '';
+            if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = 'J';
+
+            // Trata Inscrição Estadual (IE)
+            let ieEncontrada = '';
+            if (data.estabelecimento?.inscricoes_estaduais && data.estabelecimento.inscricoes_estaduais.length > 0) {
+                const targetUf = _state.nfeEditCurrentUf;
+                // Procura IE ativa no estado de destino (UF) do pedido
+                let ieAtiva = data.estabelecimento.inscricoes_estaduais.find(ie => ie.ativo === true && ie.estado?.sigla === targetUf);
+                // Se não achar no UF de destino, pega a primeira ativa
+                if (!ieAtiva) {
+                    ieAtiva = data.estabelecimento.inscricoes_estaduais.find(ie => ie.ativo === true);
+                }
+                if (ieAtiva && ieAtiva.inscricao_estadual) {
+                    ieEncontrada = ieAtiva.inscricao_estadual.replace(/\D/g, '');
+                }
+            }
+
+            if (_state.nfeEditContatoIe) {
+                _state.nfeEditContatoIe.value = ieEncontrada;
+                // Atualiza contribuinte baseado na IE
+                if (_state.nfeEditContatoContribuinte) {
+                    if (ieEncontrada.toLowerCase() === 'isento') {
+                        _state.nfeEditContatoContribuinte.value = '2'; // Isento
+                    } else if (ieEncontrada !== '') {
+                        _state.nfeEditContatoContribuinte.value = '1'; // Contribuinte
+                    } else {
+                        _state.nfeEditContatoContribuinte.value = '9'; // Não contribuinte
+                    }
+                }
+            }
+
+            _updateIeWarning();
+            
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: `✅ CNPJ consultado com sucesso!`,
+                    duration: 2500,
+                    gravity: "top",
+                    position: "center",
+                    style: { background: "#10b981" }
+                }).showToast();
+            }
+
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
         }
     }
 
