@@ -1497,6 +1497,7 @@ export const GerenciarPedidosApp = (function () {
                             _state.nfeEditContatoContribuinte.value = c.indicadorIe !== undefined ? c.indicadorIe : 9;
                         }
                         
+                        _state.nfeEditCurrentContatoBruto = JSON.parse(JSON.stringify(c));
                         _state.nfeEditCurrentUf = c.endereco?.geral?.uf || c.enderecoGeral?.uf || c.enderecoCobranca?.uf || _state.nfeEditCurrentUf;
                         
                         _updateIeWarning();
@@ -2257,16 +2258,9 @@ export const GerenciarPedidosApp = (function () {
 
         if (!confirm('Tem certeza de que deseja atualizar este pedido no Bling com as informações preenchidas?')) return;
 
-        // Sobrescrever payloadUpdate com os dados editados, mantendo os originais (como endereço)
-        payloadUpdate.contato = {
-            ...(_state.currentPedidoBlingBruto.contato || {}),
-            id: contatoId,
-            nome: contatoNome,
-            tipoPessoa: contatoTipo,
-            numeroDocumento: contatoCnpj,
-            ie: contatoIe,
-            indicadorIe: contatoContribuinte
-        };
+        // Para evitar que o Bling apague o endereço do cliente no pedido (já que o GET não traz o endereço dentro de contato),
+        // passamos apenas o ID. As alterações no contato serão salvas via PUT na API de contatos logo abaixo.
+        payloadUpdate.contato = { id: contatoId };
         
         if (dataOperacao) payloadUpdate.data = dataOperacao;
         if (dataSaida) payloadUpdate.dataSaida = dataSaida;
@@ -2333,6 +2327,28 @@ export const GerenciarPedidosApp = (function () {
         try {
             if (btn) btn.disabled = true;
             if (spinner) spinner.classList.remove('hidden');
+
+            // Atualiza os dados fiscais diretamente no cadastro do contato primeiro
+            if (_state.nfeEditCurrentContatoBruto && contatoId) {
+                const contatoPayload = {
+                    ..._state.nfeEditCurrentContatoBruto,
+                    nome: contatoNome,
+                    tipoPessoa: contatoTipo,
+                    numeroDocumento: contatoCnpj,
+                    ie: contatoIe,
+                    indicadorIe: contatoContribuinte
+                };
+                
+                try {
+                    await fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(contatoPayload)
+                    });
+                } catch (cErr) {
+                    console.warn('[NFe Edit] Erro ao atualizar o contato, mas prosseguindo com o pedido.', cErr);
+                }
+            }
 
             const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${idPedido}`, {
                 method: 'PUT',
