@@ -1540,15 +1540,27 @@ export const GerenciarPedidosApp = (function () {
                 vendedorVal = pedidoBling.vendedor;
             }
         }
+        
+        const localPedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+        const orcamentoVal = localPedido ? (localPedido.orcamento || localPedido.orçamento || '') : '';
         const vendedorNome = _getVendedorName(vendedorVal);
+        
+        let appendText = '';
+        if (orcamentoVal && String(orcamentoVal).trim() !== '-' && String(orcamentoVal).trim() !== '0') {
+            appendText += `Orçamento: ${String(orcamentoVal).trim()}\n`;
+        }
         if (vendedorNome && vendedorNome !== '-') {
+            appendText += `Vendedor: ${vendedorNome}`;
+        }
+        appendText = appendText.trim();
+        
+        if (appendText) {
             obsVal = obsVal.trim();
-            const suffix = `Vendedor: ${vendedorNome}`;
-            if (!obsVal.endsWith(suffix) && !obsVal.includes(suffix)) {
+            if (!obsVal.includes(appendText)) {
                 if (obsVal) {
-                    obsVal += `\n\n${suffix}`;
+                    obsVal += `\n\n${appendText}`;
                 } else {
-                    obsVal = suffix;
+                    obsVal = appendText;
                 }
             }
         }
