@@ -2027,7 +2027,7 @@ export const GerenciarPedidosApp = (function () {
                 dataVencimento: vencimentoStr,
                 valor: valorP,
                 formaPagamento: { id: formaPagamentoId || FORMA_PAGAMENTO_PADRAO },
-                observacoes: numParcelas === 1 ? 'À Vista' : `Parcela ${i + 1}/${numParcelas}`
+                observacoes: ''
             });
         }
 
