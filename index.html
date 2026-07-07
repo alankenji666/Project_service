@@ -1444,8 +1444,12 @@
                             <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Formas de Pagamento / Parcelas</h4>
                             <button id="nfe-edit-auto-parcelas-btn" type="button" class="hidden flex items-center gap-1.5 text-amber-600 font-semibold bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded border border-amber-200 text-[10px] transition-colors" title="Condições de pagamento detectadas. Clique para ajustar parcelas automaticamente.">
                                 <svg class="w-3.5 h-3.5 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                                <span>Ajustar Parcelas</span>
+                                <span>Ajustar Auto</span>
                             </button>
+                            <div class="flex items-center gap-1 ml-2">
+                                <input type="text" id="nfe-edit-manual-parcelas-input" placeholder="ex: 28,35,70" class="w-24 px-2 py-1 text-[10px] border border-gray-300 rounded focus:ring-1 focus:ring-amber-500" title="Digite os dias para vencimento separados por vírgula (Ex: 28,35,70) e clique em Gerar">
+                                <button type="button" id="nfe-edit-manual-parcelas-btn" class="bg-amber-500 text-white text-[10px] px-2 py-1 rounded hover:bg-amber-600 font-semibold transition-colors">Gerar</button>
+                            </div>
                         </div>
                         <button id="nfe-edit-add-parcela-btn" type="button" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors border border-blue-100">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>

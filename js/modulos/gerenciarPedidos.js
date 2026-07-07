@@ -419,6 +419,13 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditAutoParcelasBtn) {
             _state.nfeEditAutoParcelasBtn.addEventListener('click', _handleAutoAdjustParcelas);
         }
+        
+        // NOVO: Bind do botão manual de parcelas
+        _state.nfeEditManualParcelasBtn = document.getElementById('nfe-edit-manual-parcelas-btn');
+        if (_state.nfeEditManualParcelasBtn) {
+            _state.nfeEditManualParcelasBtn.addEventListener('click', _handleManualAdjustParcelas);
+        }
+        
         if (_state.confirmNfeEditBtn) _state.confirmNfeEditBtn.addEventListener('click', () => _confirmCustomEmitirNfe(false));
         if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.addEventListener('click', () => _confirmCustomEmitirNfe(true));
         if (_state.saveOrderEditBtn) _state.saveOrderEditBtn.addEventListener('click', _saveOrderEdit);
@@ -1953,16 +1960,8 @@ export const GerenciarPedidosApp = (function () {
         return date.toISOString().substring(0, 10);
     }
 
-    function _handleAutoAdjustParcelas() {
+    function _generateParcelasWithDays(days) {
         if (!_state.nfeEditParcelasTbody) return;
-
-        const obsText = _state.nfeEditObservacoesOriginal ? _state.nfeEditObservacoesOriginal.value : '';
-        let days = _parseDaysFromObservacoes(obsText);
-
-        // Se não encontrou condição nas observações, ajusta como 1 parcela à vista (hoje)
-        if (!days || days.length === 0) {
-            days = [0];
-        }
 
         // Calcular valor total da nota com base nos inputs atuais do modal
         let totalItens = 0;
