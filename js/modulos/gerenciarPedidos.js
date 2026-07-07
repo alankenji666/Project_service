@@ -2048,6 +2048,42 @@ export const GerenciarPedidosApp = (function () {
         }
     }
 
+    function _handleAutoAdjustParcelas() {
+        const obsText = _state.nfeEditObservacoesOriginal ? _state.nfeEditObservacoesOriginal.value : '';
+        let days = _parseDaysFromObservacoes(obsText);
+
+        // Se não encontrou condição nas observações, ajusta como 1 parcela à vista (hoje)
+        if (!days || days.length === 0) {
+            days = [0];
+        }
+
+        _generateParcelasWithDays(days);
+    }
+
+    function _handleManualAdjustParcelas() {
+        const inputEl = document.getElementById('nfe-edit-manual-parcelas-input');
+        if (!inputEl) return;
+        
+        const rawVal = inputEl.value.trim();
+        if (!rawVal) {
+            alert("Digite os dias para vencimento separados por vírgula. Exemplo: 28,35,70");
+            return;
+        }
+
+        // Separa por vírgula, converte pra inteiro, filtra NaN e espaços
+        const days = rawVal.split(',').map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p > 0);
+        
+        if (days.length === 0) {
+            alert("Formato inválido. Digite os dias para vencimento separados por vírgula, apenas números maiores que zero. Exemplo: 28,35,70");
+            return;
+        }
+
+        _generateParcelasWithDays(days);
+        
+        // Limpa o input após usar com sucesso
+        inputEl.value = '';
+    }
+
     async function _saveOrderEdit() {
         const idPedido = _currentModalPedidoId;
         if (!idPedido) return;
