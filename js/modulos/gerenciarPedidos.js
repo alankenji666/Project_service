@@ -2338,15 +2338,30 @@ export const GerenciarPedidosApp = (function () {
                     ie: contatoIe,
                     indicadorIe: contatoContribuinte
                 };
+
+                // O Bling V3 muitas vezes retorna dataNascimento: "0000-00-00" no GET, mas se enviarmos isso de volta no PUT ele rejeita com erro de validação.
+                if (contatoPayload.dadosAdicionais && contatoPayload.dadosAdicionais.dataNascimento === '0000-00-00') {
+                    contatoPayload.dadosAdicionais.dataNascimento = '';
+                }
                 
                 try {
-                    await fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`, {
+                    const putReq = await fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(contatoPayload)
                     });
+                    
+                    if (!putReq.ok) {
+                        const errData = await putReq.json().catch(() => ({}));
+                        console.error('[NFe Edit] Detalhes do erro ao atualizar contato:', errData);
+                        let errMsg = errData.message || 'Erro desconhecido ao atualizar contato';
+                        if (errData.details && errData.details.error && errData.details.error.fields) {
+                            errMsg += ': ' + errData.details.error.fields.map(f => f.msg || f.message).join(', ');
+                        }
+                        throw new Error(`Falha ao atualizar cliente no Bling antes do pedido. Motivo: ${errMsg}`);
+                    }
                 } catch (cErr) {
-                    console.warn('[NFe Edit] Erro ao atualizar o contato, mas prosseguindo com o pedido.', cErr);
+                    throw cErr; // Interrompe o salvamento
                 }
             }
 
@@ -2599,15 +2614,30 @@ export const GerenciarPedidosApp = (function () {
                     ie: contatoIe,
                     indicadorIe: contatoContribuinte
                 };
+
+                // O Bling V3 muitas vezes retorna dataNascimento: "0000-00-00" no GET, mas se enviarmos isso de volta no PUT ele rejeita com erro de validação.
+                if (contatoPayload.dadosAdicionais && contatoPayload.dadosAdicionais.dataNascimento === '0000-00-00') {
+                    contatoPayload.dadosAdicionais.dataNascimento = '';
+                }
                 
                 try {
-                    await fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`, {
+                    const putReq = await fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(contatoPayload)
                     });
+                    
+                    if (!putReq.ok) {
+                        const errData = await putReq.json().catch(() => ({}));
+                        console.error('[NFe Emit] Detalhes do erro ao atualizar contato:', errData);
+                        let errMsg = errData.message || 'Erro desconhecido ao atualizar contato';
+                        if (errData.details && errData.details.error && errData.details.error.fields) {
+                            errMsg += ': ' + errData.details.error.fields.map(f => f.msg || f.message).join(', ');
+                        }
+                        throw new Error(`Falha ao atualizar cliente no Bling antes da nota. Motivo: ${errMsg}`);
+                    }
                 } catch (cErr) {
-                    console.warn('[NFe Emit] Erro ao atualizar o contato, mas prosseguindo com a nota.', cErr);
+                    throw cErr; // Interrompe a emissão da nota e vai para o catch principal
                 }
             }
 
