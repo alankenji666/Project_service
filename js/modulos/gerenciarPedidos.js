@@ -2463,6 +2463,7 @@ export const GerenciarPedidosApp = (function () {
                 const descricao = row.querySelector('.nfe-edit-item-descricao').value.trim();
                 const quantidade = parseInt(row.querySelector('.nfe-edit-item-quantidade').value) || 0;
                 const valor = _parseNumber(row.querySelector('.nfe-edit-item-valor').value);
+                const idItem = row.dataset.itemId || null;
 
                 if (!descricao) {
                     alert('Todas as linhas de item devem conter uma descrição.');
@@ -2472,7 +2473,7 @@ export const GerenciarPedidosApp = (function () {
                     alert(`O item "${descricao}" deve ter quantidade maior que zero.`);
                     return;
                 }
-                items.push({ codigo, descricao, quantidade, valor });
+                items.push({ idItem, codigo, descricao, quantidade, valor });
             }
         }
 
@@ -2480,6 +2481,35 @@ export const GerenciarPedidosApp = (function () {
             alert('A nota fiscal deve possuir ao menos 1 item.');
             return;
         }
+
+        // O payload de itens na NF-e deve preservar os dados originais (como UNIDADE) 
+        // para não falhar a validação do Bling.
+        const itensPayload = items.map((i, index) => {
+            let originalItem = null;
+            if (i.idItem) {
+                originalItem = _state.currentPedidoBlingBruto.itens?.find(orig => String(orig.id) === i.idItem);
+            }
+            if (!originalItem && _state.currentPedidoBlingBruto.itens && _state.currentPedidoBlingBruto.itens[index]) {
+                originalItem = _state.currentPedidoBlingBruto.itens[index];
+            }
+
+            if (originalItem) {
+                return {
+                    ...originalItem,
+                    codigo: i.codigo,
+                    descricao: i.descricao,
+                    quantidade: i.quantidade,
+                    valor: i.valor
+                };
+            } else {
+                return {
+                    codigo: i.codigo,
+                    descricao: i.descricao,
+                    quantidade: i.quantidade,
+                    valor: i.valor
+                };
+            }
+        });
 
         const parcelas = [];
         if (_state.nfeEditParcelasTbody) {
@@ -2596,7 +2626,7 @@ export const GerenciarPedidosApp = (function () {
             payload.observacoes = observacoes;
         }
 
-        payload.itens = items;
+        payload.itens = itensPayload;
 
         payload.transporte = {
             ...(_state.currentPedidoBlingBruto.transporte || {}),
