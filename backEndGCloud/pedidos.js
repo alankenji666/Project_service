@@ -528,6 +528,34 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
     });
 
     /**
+     * NOVO: Rota para atualizar os detalhes de um contato/cliente no Bling.
+     */
+    router.put('/contatos/:id', async (req, res, next) => {
+        try {
+            const idContato = req.params.id;
+            if (!idContato) throw new Error("ID do contato é obrigatório.");
+
+            const accessToken = await getToken();
+            const httpClient = axios || axiosModule;
+            const payloadUpdate = req.body;
+
+            console.log(`[Bling] Atualizando contato ${idContato} com payload clonado/modificado...`);
+            const resUpdate = await httpClient.put(`${BLING_API_BASE_URL}/contatos/${idContato}`, payloadUpdate, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            res.status(200).send(resUpdate.data);
+        } catch (error) {
+            const errMsg = error.response?.data?.error?.message || error.response?.data?.message || error.message;
+            console.error("[Backend Error] atualizar-contato:", errMsg);
+            res.status(400).send({ 
+                status: 'error', 
+                message: `Erro ao atualizar contato no Bling: ${errMsg}`,
+                details: error.response?.data
+            });
+        }
+    });
+
+    /**
      * NOVO: Rota para gerar uma NF-e a partir de um pedido de venda no Bling.
      * Segue o fluxo da API V3: criar a nota referenciando o pedido e depois enviar.
      * Aceita payload customizado opcional em req.body.

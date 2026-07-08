@@ -2339,18 +2339,6 @@ export const GerenciarPedidosApp = (function () {
                     indicadorIe: contatoContribuinte
                 };
                 
-                console.log("=== DEBUG BLING SAVE ===");
-                console.log("1. Contato bruto do GET:", JSON.stringify(_state.nfeEditCurrentContatoBruto, null, 2));
-                console.log("2. Payload PUT /contatos:", JSON.stringify(contatoPayload, null, 2));
-                console.log("3. Payload PUT /pedidos/vendas:", JSON.stringify(payloadUpdate, null, 2));
-                console.log("========================");
-
-                if (!confirm('DEBUG: Abra o console (F12) e verifique os logs. Clique em OK para enviar ao Bling ou Cancelar para abortar e não estragar o pedido.')) {
-                    if (btn) btn.disabled = false;
-                    if (spinner) spinner.classList.add('hidden');
-                    return;
-                }
-                
                 try {
                     await fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`, {
                         method: 'PUT',
@@ -2611,20 +2599,6 @@ export const GerenciarPedidosApp = (function () {
                     ie: contatoIe,
                     indicadorIe: contatoContribuinte
                 };
-                
-                console.log("=== DEBUG BLING NFE ===");
-                console.log("1. Contato bruto do GET:", JSON.stringify(_state.nfeEditCurrentContatoBruto, null, 2));
-                console.log("2. Payload PUT /contatos:", JSON.stringify(contatoPayload, null, 2));
-                console.log("3. Payload POST /nfe:", JSON.stringify(payload, null, 2));
-                console.log("=======================");
-
-                if (!confirm('DEBUG: Abra o console (F12) e verifique os logs. Clique em OK para enviar ao Bling ou Cancelar para abortar e não estragar o pedido.')) {
-                    if (confirmBtn) confirmBtn.disabled = false;
-                    if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.disabled = false;
-                    if (cancelBtn) cancelBtn.disabled = false;
-                    if (spinner) spinner.classList.add('hidden');
-                    return;
-                }
                 
                 try {
                     await fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`, {
