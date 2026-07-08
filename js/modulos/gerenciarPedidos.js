@@ -2534,14 +2534,44 @@ export const GerenciarPedidosApp = (function () {
         }
 
         // Preparar payload customizado. 
-        // ATENÇÃO: Passar apenas o ID do contato para a API de NF-e, 
-        // senão o Bling exige o endereço completo no payload e dá erro.
+        // A API de NF-e do Bling V3 exige o nome, tipoPessoa e documento se o contato for enviado.
+        // Além disso, se enviarmos o contato, devemos enviar o endereço junto, senão a NFe fica sem endereço!
         const payload = {
             finalidade: 1, // 1 = Normal
             contato: {
-                id: contatoId
+                id: contatoId,
+                nome: contatoNome,
+                tipoPessoa: contatoTipo,
+                numeroDocumento: contatoCnpj,
+                ie: contatoIe,
+                indicadorIe: contatoContribuinte
             }
         };
+
+        // Resgatar o endereço da etiqueta do pedido ou do cadastro do contato
+        if (_state.currentPedidoBlingBruto?.transporte?.etiqueta) {
+            const et = _state.currentPedidoBlingBruto.transporte.etiqueta;
+            payload.contato.endereco = {
+                endereco: et.endereco || "",
+                numero: et.numero || "",
+                complemento: et.complemento || "",
+                bairro: et.bairro || "",
+                cep: et.cep || "",
+                municipio: et.municipio || "",
+                uf: et.uf || ""
+            };
+        } else if (_state.nfeEditCurrentContatoBruto?.endereco?.geral) {
+            const eg = _state.nfeEditCurrentContatoBruto.endereco.geral;
+            payload.contato.endereco = {
+                endereco: eg.endereco || "",
+                numero: eg.numero || "",
+                complemento: eg.complemento || "",
+                bairro: eg.bairro || "",
+                cep: eg.cep || "",
+                municipio: eg.municipio || "",
+                uf: eg.uf || ""
+            };
+        }
 
         if (naturezaIdStr) {
             const naturezaId = parseInt(naturezaIdStr);
@@ -2569,6 +2599,7 @@ export const GerenciarPedidosApp = (function () {
         payload.itens = items;
 
         payload.transporte = {
+            ...(_state.currentPedidoBlingBruto.transporte || {}),
             fretePorConta: fretePorConta,
             frete: frete,
             quantidadeVolumes: quantidadeVolumes,
