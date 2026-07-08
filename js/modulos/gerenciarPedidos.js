@@ -2518,16 +2518,13 @@ export const GerenciarPedidosApp = (function () {
             if (!confirm('Confirmar a emissão da Nota Fiscal com os dados editados? Esta ação enviará a nota para a SEFAZ.')) return;
         }
 
-        // Preparar payload customizado
+        // Preparar payload customizado. 
+        // ATENÇÃO: Passar apenas o ID do contato para a API de NF-e, 
+        // senão o Bling exige o endereço completo no payload e dá erro.
         const payload = {
             finalidade: 1, // 1 = Normal
             contato: {
-                id: contatoId,
-                nome: contatoNome,
-                tipoPessoa: contatoTipo,
-                numeroDocumento: contatoCnpj,
-                ie: contatoIe,
-                indicadorIe: contatoContribuinte
+                id: contatoId
             }
         };
 
@@ -2591,6 +2588,28 @@ export const GerenciarPedidosApp = (function () {
             if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.disabled = true;
             if (cancelBtn) cancelBtn.disabled = true;
             if (spinner) spinner.classList.remove('hidden');
+
+            // Atualiza os dados fiscais diretamente no cadastro do contato primeiro
+            if (_state.nfeEditCurrentContatoBruto && contatoId) {
+                const contatoPayload = {
+                    ..._state.nfeEditCurrentContatoBruto,
+                    nome: contatoNome,
+                    tipoPessoa: contatoTipo,
+                    numeroDocumento: contatoCnpj,
+                    ie: contatoIe,
+                    indicadorIe: contatoContribuinte
+                };
+                
+                try {
+                    await fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(contatoPayload)
+                    });
+                } catch (cErr) {
+                    console.warn('[NFe Emit] Erro ao atualizar o contato, mas prosseguindo com a nota.', cErr);
+                }
+            }
 
             const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${idPedido}/gerar-nfe`, {
                 method: 'POST',
