@@ -1935,6 +1935,7 @@ export const DashboardApp = (function() {
         if (_state.activeLiTab === 'vendas') {
             const salesByPeriod = {};
             const liPedidos = _allPedidosBling.filter(p => {
+                if (_isTestOrder(p)) return false;
                 const sit = (p.situação || p.situacao || p.situao || "").toLowerCase().trim();
                 const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
                 const isConcluido = (isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad'));
