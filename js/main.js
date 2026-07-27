@@ -5615,7 +5615,20 @@ async function _saveProductTagGroupEdit() {
                         console.error("Erro: Módulo PesquisarProduto não foi carregado corretamente.");
                         _showMessageModal("Erro de Carregamento", "Não foi possível carregar o módulo de pesquisa de produtos.");
                     }
-                    _showPage('pesquisar');
+                    let defaultPage = 'pesquisar';
+                    const userInfoString = localStorage.getItem('userInfo');
+                    if (userInfoString) {
+                        try {
+                            const userInfo = JSON.parse(userInfoString);
+                            if (userInfo['acesso (pesquisar produto)'] === '1') defaultPage = 'pesquisar';
+                            else if (userInfo['acesso (dashboards)'] === '1') defaultPage = 'dashboards';
+                            else if (userInfo['acesso (gerenciar pedidos)'] === '1') defaultPage = 'gerenciar-pedidos';
+                            else if (userInfo['acesso (gerenciar entrada)'] === '1') defaultPage = 'estoque';
+                            else if (userInfo['acesso (gerenciar saida)'] === '1') defaultPage = 'gerenciar-saida';
+                            else if (userInfo['acesso (whatsapp)'] === '1') defaultPage = 'atendimento';
+                        } catch (e) {}
+                    }
+                    _showPage(defaultPage);
                     if (typeof AjusteEstoque !== 'undefined') {
                         AjusteEstoque.init({
                             allProducts: _allProducts,
