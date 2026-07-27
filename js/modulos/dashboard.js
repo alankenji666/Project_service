@@ -568,7 +568,7 @@ export const DashboardApp = (function() {
             const valorItem = estoqueConsiderado * precoBase;
 
             Object.keys(categories).forEach(catTag => {
-                if (tags.includes(catTag) && estoque !== 0) {
+                if (tags.includes(catTag) && estoque > 0) {
                     categories[catTag].total += valorItem;
                     categories[catTag].count++;
                 }
