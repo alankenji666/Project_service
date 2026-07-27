@@ -1650,18 +1650,21 @@ export const DashboardApp = (function() {
             return isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
         });
 
-        if (selectedYear && !isNaN(selectedYear)) {
+        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+
+        if (startDate || endDate) {
+            filteredPedidos = pedidosBase.filter(p => {
+                const pDate = _getOrderDate(p);
+                return pDate && !isNaN(pDate.getTime()) && (!startDate || pDate >= startDate) && (!endDate || pDate <= endDate);
+            });
+        } else if (selectedYear && !isNaN(selectedYear)) {
             filteredPedidos = pedidosBase.filter(p => {
                 const pDate = _getOrderDate(p);
                 return pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() === selectedYear;
             });
         } else {
-            const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-            const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
-            filteredPedidos = pedidosBase.filter(p => {
-                const pDate = _getOrderDate(p);
-                return pDate && !isNaN(pDate.getTime()) && (!startDate || pDate >= startDate) && (!endDate || pDate <= endDate);
-            });
+            filteredPedidos = pedidosBase;
         }
 
         const stores = ['Bling', 'Mercado Livre', 'Loja Integrada'];
@@ -1692,18 +1695,18 @@ export const DashboardApp = (function() {
             let startYear = currentYear, endYear = currentYear;
             let startMonth = 1, endMonth = currentMonth;
             
-            if (selectedYear && !isNaN(selectedYear)) {
-                startYear = selectedYear;
-                endYear = selectedYear;
-                startMonth = 1;
-                endMonth = (selectedYear === currentYear) ? currentMonth : 12;
-            } else if (_state.startDate || _state.endDate) {
+            if (_state.startDate || _state.endDate) {
                 const d1 = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : new Date(currentYear, 0, 1);
                 const d2 = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : new Date();
                 startYear = d1.getFullYear();
                 startMonth = d1.getMonth() + 1;
                 endYear = d2.getFullYear();
                 endMonth = d2.getMonth() + 1;
+            } else if (selectedYear && !isNaN(selectedYear)) {
+                startYear = selectedYear;
+                endYear = selectedYear;
+                startMonth = 1;
+                endMonth = (selectedYear === currentYear) ? currentMonth : 12;
             } else {
                 if (filteredPedidos.length > 0) {
                     const dates = filteredPedidos.map(p => _getOrderDate(p).getTime()).filter(t => !isNaN(t));
