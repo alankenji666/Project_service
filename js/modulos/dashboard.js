@@ -1277,6 +1277,7 @@ export const DashboardApp = (function() {
                     data: p.data || p.data_pedido || p['data pedido'] || p.data_emissao || '',
                     cliente: p.contato_nome || p.cliente_nome || p['contato nome'] || p['cliente nome'] || p.cliente || p.contato || 'Desconhecido',
                     vendedor: _getVendedorInfo(p, nfe), // Novo: Vendedor
+                    orcamento: p.orcamento || p.orçamento || p.numero_loja || p.numeroLoja || p.numero_pedido_loja || '',
                     quantidade: item.quantidade,
                     valorUnit: item.valor,
                     valorTotal: item.quantidade * item.valor
@@ -1339,6 +1340,9 @@ export const DashboardApp = (function() {
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-200 transition-colors" data-ranking-prod-sort="cliente">
                                 <div class="flex items-center">Cliente ${_getSortIcon('cliente', _state.rankingProductSort)}</div>
                             </th>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-200 transition-colors" data-ranking-prod-sort="vendedor">
+                                <div class="flex items-center">Vendedor ${_getSortIcon('vendedor', _state.rankingProductSort)}</div>
+                            </th>
                             <th class="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-200 transition-colors" data-ranking-prod-sort="quantidade">
                                 <div class="flex items-center justify-center">Qtd. ${_getSortIcon('quantidade', _state.rankingProductSort)}</div>
                             </th>
@@ -1352,10 +1356,11 @@ export const DashboardApp = (function() {
                             <tr>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <div class="text-sm font-bold text-blue-600">#${d.pedido}</div>
-                                    <div class="text-[9px] text-gray-400 italic">${d.vendedor}</div>
+                                    ${d.orcamento && String(d.orcamento) !== '0' ? `<div class="text-[11px] text-gray-400 mt-0.5">${d.orcamento}</div>` : ''}
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${d.data}</td>
                                 <td class="px-4 py-3 text-sm text-gray-900 font-medium">${d.cliente}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${d.vendedor}</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-center font-bold text-orange-600">${d.quantidade}</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-700">${d.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                             </tr>
