@@ -51,6 +51,8 @@ export const DashboardApp = (function() {
         lojaIntegradaCurrentPage: 1,
         lojaIntegradaPageSize: 20,
         estoqueSort: { key: 'valor', direction: 'desc' },
+        tabelaPrecosSort: { key: 'descricao', direction: 'asc' },
+        tabelaPrecosShowZerados: false,
         activeLiTab: 'vendas',
         selectedYearFilter: new Date().getFullYear().toString(),
         chartDisplayMode: 'bruta', // 'bruta' ou 'liquida'
@@ -310,8 +312,10 @@ export const DashboardApp = (function() {
         _dom.estoqueTabelaPrecosModal = document.getElementById('estoque-tabela-precos-modal');
         _dom.closeTabelaPrecosModalBtn = document.getElementById('close-tabela-precos-modal-btn');
         _dom.tabelaPrecosSearch = document.getElementById('tabela-precos-search');
+        _dom.tabelaPrecosZeradosCb = document.getElementById('tabela-precos-zerados-cb');
         _dom.btnExportTabelaPrecos = document.getElementById('btn-export-tabela-precos');
         _dom.tabelaPrecosTbody = document.getElementById('tabela-precos-tbody');
+        _dom.tabelaPrecosHeaders = document.querySelectorAll('#tabela-precos-table th[data-sort]');
 
         _dom.rankingContainer = document.getElementById('dashboard-ranking-container');
         _dom.selectRankingBtn = document.getElementById('select-ranking-dashboard');
@@ -2949,6 +2953,29 @@ export const DashboardApp = (function() {
         _dom.btnEstoqueTabelaPrecos?.addEventListener('click', _openTabelaPrecosModal);
         _dom.closeTabelaPrecosModalBtn?.addEventListener('click', () => _dom.estoqueTabelaPrecosModal?.classList.add('hidden'));
         _dom.tabelaPrecosSearch?.addEventListener('input', _renderTabelaPrecosModal);
+        
+        if (_dom.tabelaPrecosZeradosCb) {
+            _dom.tabelaPrecosZeradosCb.addEventListener('change', (e) => {
+                _state.tabelaPrecosShowZerados = e.target.checked;
+                _renderTabelaPrecosModal();
+            });
+        }
+        
+        if (_dom.tabelaPrecosHeaders) {
+            _dom.tabelaPrecosHeaders.forEach(th => {
+                th.addEventListener('click', () => {
+                    const key = th.dataset.sort;
+                    if (_state.tabelaPrecosSort.key === key) {
+                        _state.tabelaPrecosSort.direction = _state.tabelaPrecosSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        _state.tabelaPrecosSort.key = key;
+                        _state.tabelaPrecosSort.direction = 'asc';
+                    }
+                    _renderTabelaPrecosModal();
+                });
+            });
+        }
+
         _dom.btnExportTabelaPrecos?.addEventListener('click', _exportTabelaPrecosToCsv);
         
         _dom.estoqueTabelaPrecosModal?.addEventListener('click', (e) => {
@@ -3378,6 +3405,9 @@ export const DashboardApp = (function() {
     function _openTabelaPrecosModal() {
         if (!_dom.estoqueTabelaPrecosModal) return;
         if (_dom.tabelaPrecosSearch) _dom.tabelaPrecosSearch.value = '';
+        if (_dom.tabelaPrecosZeradosCb) {
+            _dom.tabelaPrecosZeradosCb.checked = _state.tabelaPrecosShowZerados;
+        }
         _renderTabelaPrecosModal();
         _dom.estoqueTabelaPrecosModal.classList.remove('hidden');
     }
@@ -3386,18 +3416,58 @@ export const DashboardApp = (function() {
         if (!_dom.tabelaPrecosTbody) return;
         
         const searchQuery = (_dom.tabelaPrecosSearch?.value || '').toLowerCase().trim();
+        const showZerados = _state.tabelaPrecosShowZerados;
         let html = '';
+
+        // Atualizar ícones de ordenação
+        if (_dom.tabelaPrecosHeaders) {
+            _dom.tabelaPrecosHeaders.forEach(th => {
+                const icon = th.querySelector('.sort-icon');
+                if (icon) {
+                    if (th.dataset.sort === _state.tabelaPrecosSort.key) {
+                        icon.innerHTML = _state.tabelaPrecosSort.direction === 'asc' ? '▲' : '▼';
+                    } else {
+                        icon.innerHTML = '';
+                    }
+                }
+            });
+        }
 
         // Filtrar e ordenar produtos
         const filteredProducts = _allProducts.filter(p => {
             if (!p.codigo) return false;
+            
+            const estoque = parseFloat(p.estoque) || 0;
+            if (!showZerados && estoque <= 0) return false;
+
             if (searchQuery) {
                 const desc = (p.descricao || '').toLowerCase();
                 const cod = (p.codigo || '').toLowerCase();
                 if (!desc.includes(searchQuery) && !cod.includes(searchQuery)) return false;
             }
             return true;
-        }).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
+        }).sort((a, b) => {
+            const key = _state.tabelaPrecosSort.key;
+            const dir = _state.tabelaPrecosSort.direction === 'asc' ? 1 : -1;
+            
+            let valA, valB;
+            if (key === 'codigo') {
+                valA = a.codigo || ''; valB = b.codigo || '';
+            } else if (key === 'descricao') {
+                valA = a.descricao || ''; valB = b.descricao || '';
+            } else if (key === 'estoque') {
+                valA = parseFloat(a.estoque) || 0; valB = parseFloat(b.estoque) || 0;
+            } else if (key === 'preco_custo') {
+                valA = _parseCurrencyBRL(a.preco_de_custo); valB = _parseCurrencyBRL(b.preco_de_custo);
+            } else if (key === 'preco_venda') {
+                valA = _parseCurrencyBRL(a.preco); valB = _parseCurrencyBRL(b.preco);
+            }
+
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                return valA.localeCompare(valB) * dir;
+            }
+            return (valA > valB ? 1 : valA < valB ? -1 : 0) * dir;
+        });
 
         if (filteredProducts.length === 0) {
             html = `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500 italic">Nenhum produto encontrado.</td></tr>`;
@@ -3429,16 +3499,42 @@ export const DashboardApp = (function() {
         const rows = [headers];
 
         const searchQuery = (_dom.tabelaPrecosSearch?.value || '').toLowerCase().trim();
+        const showZerados = _state.tabelaPrecosShowZerados;
         
         const filteredProducts = _allProducts.filter(p => {
             if (!p.codigo) return false;
+            
+            const estoque = parseFloat(p.estoque) || 0;
+            if (!showZerados && estoque <= 0) return false;
+
             if (searchQuery) {
                 const desc = (p.descricao || '').toLowerCase();
                 const cod = (p.codigo || '').toLowerCase();
                 if (!desc.includes(searchQuery) && !cod.includes(searchQuery)) return false;
             }
             return true;
-        }).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
+        }).sort((a, b) => {
+            const key = _state.tabelaPrecosSort.key;
+            const dir = _state.tabelaPrecosSort.direction === 'asc' ? 1 : -1;
+            
+            let valA, valB;
+            if (key === 'codigo') {
+                valA = a.codigo || ''; valB = b.codigo || '';
+            } else if (key === 'descricao') {
+                valA = a.descricao || ''; valB = b.descricao || '';
+            } else if (key === 'estoque') {
+                valA = parseFloat(a.estoque) || 0; valB = parseFloat(b.estoque) || 0;
+            } else if (key === 'preco_custo') {
+                valA = _parseCurrencyBRL(a.preco_de_custo); valB = _parseCurrencyBRL(b.preco_de_custo);
+            } else if (key === 'preco_venda') {
+                valA = _parseCurrencyBRL(a.preco); valB = _parseCurrencyBRL(b.preco);
+            }
+
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                return valA.localeCompare(valB) * dir;
+            }
+            return (valA > valB ? 1 : valA < valB ? -1 : 0) * dir;
+        });
 
         filteredProducts.forEach(p => {
             const row = [
