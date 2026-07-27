@@ -827,6 +827,7 @@ export const DashboardApp = (function() {
         });
 
         const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
+            if (_isTestOrder(p)) return false;
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
             // Aceita variações de atendido, concluído, faturado, entregue ou pago (ou provisório)
             const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
@@ -1628,6 +1629,16 @@ export const DashboardApp = (function() {
         return (d && !isNaN(d.getTime())) ? d : null;
     }
 
+    function _isTestOrder(p) {
+        const pDate = _getOrderDate(p);
+        if (!pDate) return false;
+        // Ignorar dados de teste de Janeiro (0) a Abril (3) nos anos 2024 e 2026 (sandbox)
+        if (pDate.getMonth() < 4 && (pDate.getFullYear() === 2024 || pDate.getFullYear() === 2026)) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Helper centralizado para obter o valor total de um pedido de forma consistente.
      */
@@ -1657,6 +1668,7 @@ export const DashboardApp = (function() {
         });
 
         const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
+            if (_isTestOrder(p)) return false;
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
             const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
             return isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
