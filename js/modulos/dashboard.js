@@ -798,7 +798,7 @@ export const DashboardApp = (function() {
             'Estoque - Terceiros': { id: 'Estoque - Terceiros', label: 'Terceiros', total: 0, count: 0, color: '#8b5cf6' },
             'Estoque - Fábrica': { id: 'Estoque - Fábrica', label: 'Fábrica', total: 0, count: 0, color: '#10b981' },
             'Sob Demanda - Fábrica': { id: 'Sob Demanda - Fábrica', label: 'Sob Demanda', total: 0, count: 0, color: '#f59e0b' },
-            'Estoque - Consumo': { id: 'Estoque - Consumo', label: 'Consumo', total: 0, count: 0, color: '#64748b' }
+            'Serviços': { id: 'Serviços', label: 'Serviços', total: 0, count: 0, color: '#ef4444' }
         };
 
         // Filtro de status e Unificação de Fontes (Deduplicado por número do pedido)
@@ -885,7 +885,12 @@ export const DashboardApp = (function() {
                 categoryTotals['all'].count += item.quantidade;
 
                 Object.keys(categoryTotals).forEach(catId => {
-                    if (catId !== 'all' && tags.includes(catId)) {
+                    if (catId === 'Serviços') {
+                        if (cod.startsWith('7') || tags.includes('Serviço')) {
+                            categoryTotals[catId].total += valorTotalItem;
+                            categoryTotals[catId].count += item.quantidade;
+                        }
+                    } else if (catId !== 'all' && tags.includes(catId)) {
                         categoryTotals[catId].total += valorTotalItem;
                         categoryTotals[catId].count += item.quantidade;
                     }
@@ -899,7 +904,13 @@ export const DashboardApp = (function() {
                 if (searchQuery && !desc.includes(searchQuery) && !codigo.includes(searchQuery)) return;
 
                 // Verifica se passa no filtro de categoria atual para a tabela/gráfico
-                if (activeFilter !== 'all' && !tags.includes(activeFilter)) return;
+                if (activeFilter !== 'all') {
+                    if (activeFilter === 'Serviços') {
+                        if (!cod.startsWith('7') && !tags.includes('Serviço')) return;
+                    } else if (!tags.includes(activeFilter)) {
+                        return;
+                    }
+                }
 
                 if (!ranking[cod]) {
                     ranking[cod] = {
