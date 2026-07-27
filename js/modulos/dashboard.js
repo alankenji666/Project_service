@@ -1630,6 +1630,8 @@ export const DashboardApp = (function() {
     }
 
     function _isTestOrder(p) {
+        if (_getNormalizedStoreName(p) !== 'Bling') return false;
+        
         const pDate = _getOrderDate(p);
         if (!pDate) return false;
         // Ignorar dados de teste de Janeiro (0) a Abril (3) nos anos 2024 e 2026 (sandbox)
@@ -1691,7 +1693,7 @@ export const DashboardApp = (function() {
             filteredPedidos = pedidosBase;
         }
 
-        const stores = ['Bling', 'Mercado Livre', 'Loja Integrada'];
+        const stores = ['Bling', 'Loja Integrada'];
         const storeData = stores.map(store => {
             const currentPedidos = filteredPedidos.filter(p => _getNormalizedStoreName(p) === store);
             const total = currentPedidos.reduce((sum, p) => sum + _getOrderValue(p), 0);
@@ -1701,7 +1703,7 @@ export const DashboardApp = (function() {
         const grandTotalVendas = storeData.reduce((sum, store) => sum + store.total, 0);
         const grandTotalVendasCount = storeData.reduce((sum, store) => sum + store.count, 0);
         
-        const colors = { 'bling': 'bg-green-500', 'mercado_livre': 'bg-yellow-500', 'loja_integrada': 'bg-blue-500' };
+        const colors = { 'bling': 'bg-green-500', 'loja_integrada': 'bg-blue-500' };
         let cardsHtml = storeData.map(store => _createSummaryCard(store.id, store.name, "Pedidos", store.count, store.total, colors[store.id])).join('');
         cardsHtml += _createSummaryCard('total', 'Total Vendas (Pedidos)', "Pedidos", grandTotalVendasCount, grandTotalVendas, 'bg-gray-700');
         
@@ -1750,7 +1752,7 @@ export const DashboardApp = (function() {
                 const mEnd = (y === endYear) ? endMonth : 12;
                 for (let m = mStart; m <= mEnd; m++) {
                     const key = `${y}-${String(m).padStart(2, '0')}`;
-                    salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+                    salesByPeriod[key] = { 'Bling': 0, 'Loja Integrada': 0 };
                 }
             }
         }
@@ -1760,7 +1762,7 @@ export const DashboardApp = (function() {
             const date = _getOrderDate(p);
             if (!date) return;
             const key = aggregationLevel === 'day' ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+            if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Loja Integrada': 0 };
             const store = _getNormalizedStoreName(p);
             let value = _getOrderValue(p);
             
@@ -1799,8 +1801,8 @@ export const DashboardApp = (function() {
             return { 
                 label: store, 
                 data: sortedKeys.map(k => (salesByPeriod[k] ? salesByPeriod[k][store] || 0 : 0)), 
-                borderColor: { 'Bling': 'rgba(34, 197, 94, 1)', 'Mercado Livre': 'rgba(234, 179, 8, 1)', 'Loja Integrada': 'rgba(59, 130, 246, 1)' }[store], 
-                backgroundColor: { 'Bling': 'rgba(34, 197, 94, 0.2)', 'Mercado Livre': 'rgba(234, 179, 8, 0.2)', 'Loja Integrada': 'rgba(59, 130, 246, 0.2)' }[store], 
+                borderColor: { 'Bling': 'rgba(34, 197, 94, 1)', 'Loja Integrada': 'rgba(59, 130, 246, 1)' }[store], 
+                backgroundColor: { 'Bling': 'rgba(34, 197, 94, 0.2)', 'Loja Integrada': 'rgba(59, 130, 246, 0.2)' }[store], 
                 fill: true, 
                 tension: 0.1, 
                 hidden: _state.selectedChannel !== 'total' && channelId !== _state.selectedChannel 
@@ -1840,7 +1842,7 @@ export const DashboardApp = (function() {
                 <div id="li-tab-content"></div>`;
             _renderTabContent();
         } else if (_state.selectedChannel !== 'total') {
-            // Para outros canais (Bling, Mercado Livre), mostramos apenas a aba de vendas faturadas sem opção de troca
+            // Para outros canais (Bling), mostramos apenas a aba de vendas faturadas sem opção de troca
             _dom.salesTableContainer.innerHTML = `<div id="li-tab-content" class="mt-6"></div>`;
             _state.activeLiTab = 'vendas';
             _renderTabContent();
@@ -1868,7 +1870,6 @@ export const DashboardApp = (function() {
 
         let currentStoreName = 'Loja Integrada';
         if (_state.selectedChannel === 'bling') currentStoreName = 'Bling';
-        if (_state.selectedChannel === 'mercado_livre') currentStoreName = 'Mercado Livre';
 
         // [DEBUG] Discovery of property names
         if (_allLojaIntegradaOrders.length > 0) {
@@ -1961,7 +1962,7 @@ export const DashboardApp = (function() {
                 const d = _getOrderDate(p);
                 if (!d) return;
                 const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+                if (!salesByPeriod[key]) salesByPeriod[key] = { 'Bling': 0, 'Loja Integrada': 0 };
                 const store = _getNormalizedStoreName(p);
                 if (salesByPeriod[key][store] !== undefined) salesByPeriod[key][store] += _getOrderValue(p);
             });
@@ -2038,21 +2039,21 @@ export const DashboardApp = (function() {
 
     function _getSalesTableHTML(sortedMonths, salesData) {
         const formatCurrency = (v) => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        let totals = { Bling: 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+        let totals = { Bling: 0, 'Loja Integrada': 0 };
 
-        let html = `<div class="bg-white p-4 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Vendas Mensais Detalhadas</h3><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mês/Ano</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bling</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Mercado Livre</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Loja Integrada</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Mês</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+        let html = `<div class="bg-white p-4 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Vendas Mensais Detalhadas</h3><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mês/Ano</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bling</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Loja Integrada</th><th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Mês</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
         
         sortedMonths.forEach(monthKey => {
-            const data = salesData[monthKey] || { 'Bling': 0, 'Mercado Livre': 0, 'Loja Integrada': 0 };
+            const data = salesData[monthKey] || { 'Bling': 0, 'Loja Integrada': 0 };
             Object.keys(totals).forEach(k => totals[k] += data[k]);
-            const monthTotal = data['Bling'] + data['Mercado Livre'] + data['Loja Integrada'];
+            const monthTotal = data['Bling'] + data['Loja Integrada'];
             const [y, m] = monthKey.split('-');
             const label = new Date(y, m - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-            html += `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${label.charAt(0).toUpperCase() + label.slice(1)}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell cursor-pointer hover:bg-gray-50" data-month-key="${monthKey}" data-channel="Bling">${formatCurrency(data['Bling'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell cursor-pointer hover:bg-gray-50" data-month-key="${monthKey}" data-channel="Mercado Livre">${formatCurrency(data['Mercado Livre'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell cursor-pointer hover:bg-gray-50" data-month-key="${monthKey}" data-channel="Loja Integrada">${formatCurrency(data['Loja Integrada'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-right">${formatCurrency(monthTotal)}</td></tr>`;
+            html += `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${label.charAt(0).toUpperCase() + label.slice(1)}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell cursor-pointer hover:bg-gray-50" data-month-key="${monthKey}" data-channel="Bling">${formatCurrency(data['Bling'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right clickable-sales-cell cursor-pointer hover:bg-gray-50" data-month-key="${monthKey}" data-channel="Loja Integrada">${formatCurrency(data['Loja Integrada'])}</td><td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-right">${formatCurrency(monthTotal)}</td></tr>`;
         });
         
-        const grandTotal = totals.Bling + totals['Mercado Livre'] + totals['Loja Integrada'];
-        html += `</tbody><tfoot class="bg-gray-100\"><tr><th class="px-6 py-3 text-left text-sm font-bold text-gray-700 uppercase">Total Período</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700 clickable-sales-cell cursor-pointer hover:bg-gray-200" data-month-key="period-total" data-channel="Bling">${formatCurrency(totals.Bling)}</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700 clickable-sales-cell cursor-pointer hover:bg-gray-200" data-month-key="period-total" data-channel="Mercado Livre">${formatCurrency(totals['Mercado Livre'])}</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700 clickable-sales-cell cursor-pointer hover:bg-gray-200" data-month-key="period-total" data-channel="Loja Integrada">${formatCurrency(totals['Loja Integrada'])}</th><th class="px-6 py-3 text-right text-sm font-extrabold text-gray-900 clickable-sales-cell cursor-pointer hover:bg-gray-200" data-month-key="period-total" data-channel="Total">${formatCurrency(grandTotal)}</th></tr></tfoot></table></div></div>`;
+        const grandTotal = totals.Bling + totals['Loja Integrada'];
+        html += `</tbody><tfoot class="bg-gray-100\"><tr><th class="px-6 py-3 text-left text-sm font-bold text-gray-700 uppercase">Total Período</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700 clickable-sales-cell cursor-pointer hover:bg-gray-200" data-month-key="period-total" data-channel="Bling">${formatCurrency(totals.Bling)}</th><th class="px-6 py-3 text-right text-sm font-bold text-gray-700 clickable-sales-cell cursor-pointer hover:bg-gray-200" data-month-key="period-total" data-channel="Loja Integrada">${formatCurrency(totals['Loja Integrada'])}</th><th class="px-6 py-3 text-right text-sm font-extrabold text-gray-900 clickable-sales-cell cursor-pointer hover:bg-gray-200" data-month-key="period-total" data-channel="Total">${formatCurrency(grandTotal)}</th></tr></tfoot></table></div></div>`;
         return html;
     }
 
