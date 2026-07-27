@@ -37,17 +37,17 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
 
     router.post('/', async (req, res, next) => {
         console.log('--- [WEBHOOK PEDIDO] RECEBIDO ---');
-        
-        // Processamento paralelo para evitar Limites de Timeout (Múltiplas conexões por vez).
-        // A Fila foi removida.
-        {
+        // Responde imediatamente para evitar timeout do Bling
+        res.status(200).send({ status: 'received' });
+
+        (async () => {
             try {
                 const { event, data } = req.body;
                 const pedidoId = data ? data.id : null;
 
                 if (!pedidoId) {
                     console.warn('[Bling Webhook] ID do pedido ausente.');
-                    if (!res.headersSent) res.status(200).send({ status: 'ignored', message: 'No ID provided' });
+                    // if (!res.headersSent) res.status(200).send({ status: 'ignored', message: 'No ID provided' });
                     return;
                 }
 
@@ -222,25 +222,15 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                 }
 
                 console.log(`[Bling Webhook] Sucesso no processamento do pedido ${pedidoId}`);
-                if (!res.headersSent) res.status(200).send({ status: 'success' });
+                // if (!res.headersSent) res.status(200).send({ status: 'success' });
 
                 // Pequeno atraso para respeitar limites
                 await new Promise(resolve => setTimeout(resolve, 500));
 
             } catch (error) {
                 console.error('[Bling Webhook] Erro detectado:', error.message);
-                
-                // Se o erro for um 404 do Bling, ignoramos silenciosamente para o Bling não desativar o webhook
-                const isBling404 = error.message.includes('code 404');
-                
-                if (!res.headersSent) {
-                    res.status(200).send({ 
-                        status: isBling404 ? 'ignored_404' : 'error_logged', 
-                        message: error.message 
-                    });
-                }
             }
-        }
+        })();
     });
 
     return router;

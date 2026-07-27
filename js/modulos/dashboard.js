@@ -2451,6 +2451,9 @@ export const DashboardApp = (function() {
                                 }
                             </div>
                         </th>
+                        <th class="sticky top-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="orcamento">
+                            <div class="flex items-center">Orçamento ${_getSortIcon('orcamento', sort)}</div>
+                        </th>
                         <th class="sticky top-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" data-sales-sort="cliente">
                             <div class="flex items-center">Cliente ${_getSortIcon('cliente', sort)}</div>
                         </th>
@@ -2500,6 +2503,10 @@ export const DashboardApp = (function() {
                     const nfeB_nota = getNfe(b);
                     valA = nfeA_nota ? (parseInt(nfeA_nota.numero_da_nota) || 0) : 0;
                     valB = nfeB_nota ? (parseInt(nfeB_nota.numero_da_nota) || 0) : 0;
+                    break;
+                case 'orcamento':
+                    valA = String(a.orcamento || a.orçamento || a.numero_loja || a.numeroLoja || a.numero_pedido_loja || "").toLowerCase();
+                    valB = String(b.orcamento || b.orçamento || b.numero_loja || b.numeroLoja || b.numero_pedido_loja || "").toLowerCase();
                     break;
                 case 'cliente':
                     valA = String(a.contato_nome || a['contato nome'] || "").toLowerCase();
@@ -2581,6 +2588,7 @@ export const DashboardApp = (function() {
             const checkService = (str) => typeof str === 'string' && (str.includes('(7') || str.includes('( 7'));
             const hasService = checkService(nfe ? nfe.itens : '') || checkService(p.itens || '');
 
+            const orcamentoVal = p.orcamento || p.orçamento || p.numero_loja || p.numeroLoja || p.numero_pedido_loja || '-';
             const rowBgClass = isGarantia ? "bg-[#FBE2D5] hover:bg-[#f0d0bf]" : "hover:bg-gray-50";
 
             html += `
@@ -2594,6 +2602,9 @@ export const DashboardApp = (function() {
                     <div class="text-[10px] mt-0.5">
                         ${hasNfe ? `<a href="${linkDanfe}" target="_blank" class="text-blue-600 hover:underline font-bold" title="Visualizar DANFE">NF: ${numeroDisplay}</a>` : `<span class="text-red-500 font-bold">Sem Nota</span>`}
                     </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
+                    ${orcamentoVal !== '0' ? orcamentoVal : '-'}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap nfe-items-tooltip-trigger cursor-help" 
                     data-itens="${p.itens || itensRaw}" 
@@ -2824,7 +2835,87 @@ export const DashboardApp = (function() {
 
     // --- Event Binding ---
 
+    function _initColumnVisibility() {
+        const menuBtn = document.getElementById('sales-details-columns-button');
+        const dropdown = document.getElementById('sales-details-columns-dropdown');
+        if (!menuBtn || !dropdown) return;
+
+        // Impede que o modal feche ou eventos escapem ao clicar no dropdown
+        dropdown.addEventListener('click', e => e.stopPropagation());
+
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!menuBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        const columns = [
+            { id: 1, name: 'Pedido / Nota' },
+            { id: 2, name: 'Orçamento', defaultVisible: false },
+            { id: 3, name: 'Cliente' },
+            { id: 4, name: 'Data' },
+            { id: 5, name: 'Vendedor' },
+            { id: 6, name: 'Valor' },
+            { id: 7, name: 'Ações' }
+        ];
+
+        let savedState = {};
+        try {
+            const raw = localStorage.getItem('sales_details_col_viz');
+            if (raw) savedState = JSON.parse(raw);
+        } catch (e) {}
+
+        let styleTag = document.getElementById('sales-details-col-style');
+        if (!styleTag) {
+            styleTag = document.createElement('style');
+            styleTag.id = 'sales-details-col-style';
+            document.head.appendChild(styleTag);
+        }
+
+        const updateStyles = () => {
+            let css = '';
+            columns.forEach(col => {
+                const defaultVis = col.defaultVisible !== false;
+                const isVisible = savedState[col.id] !== undefined ? savedState[col.id] : defaultVis;
+                if (!isVisible) {
+                    css += `#sales-details-table th:nth-child(${col.id}), #sales-details-table td:nth-child(${col.id}) { display: none !important; }\n`;
+                }
+            });
+            styleTag.innerHTML = css;
+        };
+
+        // Renderiza os checkboxes apenas uma vez
+        if (!dropdown.querySelector('.col-checkbox-rendered')) {
+            columns.forEach(col => {
+                const defaultVis = col.defaultVisible !== false;
+                const isChecked = savedState[col.id] !== undefined ? savedState[col.id] : defaultVis;
+                const lbl = document.createElement('label');
+                lbl.className = 'flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer col-checkbox-rendered';
+                lbl.innerHTML = `
+                    <input type="checkbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" value="${col.id}" ${isChecked ? 'checked' : ''}>
+                    <span class="text-sm text-gray-700">${col.name}</span>
+                `;
+                const cb = lbl.querySelector('input');
+                cb.addEventListener('change', (e) => {
+                    savedState[col.id] = e.target.checked;
+                    localStorage.setItem('sales_details_col_viz', JSON.stringify(savedState));
+                    updateStyles();
+                });
+                dropdown.appendChild(lbl);
+            });
+        }
+
+        updateStyles();
+    }
+
     function _bindEvents() {
+        _initColumnVisibility();
+        
         _dom.selectVendasBtn?.addEventListener('click', _showSalesDashboard);
         _dom.selectEstoqueBtn?.addEventListener('click', _showEstoqueDashboard);
         _dom.selectRankingBtn?.addEventListener('click', _showRankingDashboard);
@@ -3332,6 +3423,23 @@ export const DashboardApp = (function() {
                 // 2. Se o dashboard de estoque estiver sendo exibido, re-renderiza para atualizar gráficos e tabelas
                 if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
                     console.log('[Dashboard] Re-renderizando dashboard de estoque em tempo real.');
+                    _renderEstoqueDashboard();
+                }
+            }
+        },
+
+        /**
+         * Atualiza os dados de um produto (ex: custo, venda) em tempo real no Dashboard.
+         */
+        updateProductDataRealTime: function(id, data) {
+            const product = _allProducts.find(p => String(p.id) === String(id));
+            if (product) {
+                if (data.novoPrecoCusto !== undefined) product.preco_de_custo = data.novoPrecoCusto;
+                if (data.novoPreco !== undefined) product.preco = data.novoPreco;
+                if (data.novoNome) product.descricao = data.novoNome;
+                
+                if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
+                    console.log(`[Dashboard] Re-renderizando dashboard de estoque devido a atualização do produto ${id}.`);
                     _renderEstoqueDashboard();
                 }
             }

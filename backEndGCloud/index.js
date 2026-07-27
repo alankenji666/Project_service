@@ -787,6 +787,11 @@ const nfeConferenciaRouter = createNfeConferenciaRouter(
 );
 app.use('/nfe/conferencia', nfeConferenciaRouter);
 
+// Roteador de IA (Gemini) para processar observações
+const createParseObservationAiRouter = require('./parse_observation_ai');
+const parseObservationAiRouter = createParseObservationAiRouter();
+app.use('/bling/parse-observation-ai', parseObservationAiRouter);
+
 // Roteador de Estoque
 const createEstoqueRouter = require('./estoque');
 const estoqueRouter = createEstoqueRouter(
@@ -1007,6 +1012,97 @@ app.get('/proxy-pdf', async (req, res, next) => {
 
         response.data.pipe(res);
     } catch (error) {
+        next(error);
+    }
+});
+
+// Rota para Envio de DANFE por E-mail (Gmail + Nodemailer)
+app.post('/proxy-email-danfe', async (req, res, next) => {
+    try {
+        const { chaveAcesso, linkDanfe, toEmail, subject, text, filename } = req.body;
+        
+        if (!toEmail) {
+            const error = new Error('O e-mail do destinatário (toEmail) é obrigatório.');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (!chaveAcesso && !linkDanfe) {
+            const error = new Error('É necessário informar a chaveAcesso ou o linkDanfe para anexar o PDF.');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        let pdfBuffer;
+        const safeFilename = filename ? filename.replace(/[^a-zA-Z0-9.\-_ ]/g, '') : 'DANFE.pdf';
+
+        // Passo 1: Baixar o PDF
+        if (chaveAcesso) {
+            const tokenRes = await axios.get(APPS_SCRIPT_TOKEN_URL);
+            const accessToken = tokenRes.data.access_token || tokenRes.data.accessToken;
+
+            const blingUrl = `${BLING_API_BASE_URL}/nfe/documento/${chaveAcesso}?formato=pdf`;
+            const blingResponse = await axios.get(blingUrl, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            if (!blingResponse.data || !blingResponse.data.data || !blingResponse.data.data[0]) {
+                throw new Error('Conteúdo do PDF não encontrado no retorno da API do Bling.');
+            }
+
+            const base64Data = blingResponse.data.data[0].conteudo;
+            const compressedBuf = Buffer.from(base64Data, 'base64');
+            const zlib = require('zlib');
+            
+            try {
+                pdfBuffer = zlib.gunzipSync(compressedBuf);
+            } catch(e) {
+                pdfBuffer = compressedBuf;
+            }
+        } else if (linkDanfe) {
+            const response = await axios({
+                url: decodeURIComponent(linkDanfe),
+                method: 'GET',
+                responseType: 'arraybuffer'
+            });
+            pdfBuffer = Buffer.from(response.data, 'binary');
+        }
+
+        // Passo 2: Enviar E-mail usando Nodemailer
+        const nodemailer = require('nodemailer');
+        
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: 'alankenji@gmail.com', // Remetente fixo
+                pass: 'riko ejnv gyvu yihi' // Senha de App informada
+            }
+        });
+
+        const mailOptions = {
+            from: '"(MKS Service) - Faturamento" <alankenji@gmail.com>',
+            to: toEmail,
+            subject: subject || 'Nota Fiscal Eletrônica - DANFE',
+            text: text || 'Olá, segue em anexo a Nota Fiscal Eletrônica referente à sua compra.',
+            attachments: [
+                {
+                    filename: safeFilename,
+                    content: pdfBuffer,
+                    contentType: 'application/pdf'
+                }
+            ]
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('E-mail enviado com sucesso:', info.messageId);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'E-mail enviado com sucesso!'
+        });
+
+    } catch (error) {
+        console.error('Erro ao enviar e-mail:', error.message);
         next(error);
     }
 });

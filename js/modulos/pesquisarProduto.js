@@ -254,6 +254,16 @@ export const PesquisarProduto = (function() {
 
                 <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
                     <div>
+                        <p class="text-sm font-medium text-gray-500">Peso (Kg)</p>
+                        <p class="text-lg text-gray-800 font-semibold product-detail-weight">${product.pesoBruto || product.metricas?.peso_bruto || 0}</p>
+                    </div>
+                    <button class="read-only-disable edit-product-weight-btn p-2 rounded-full hover:bg-gray-200 text-blue-600" data-product-id="${product.id}" title="Editar Peso">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
+                    </button>
+                </div>
+
+                <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
+                    <div>
                         <p class="text-sm font-medium text-gray-500">Grupo de Tags</p>
                         <p class="text-lg text-gray-800 font-semibold product-detail-tag-group">${product.grupo_de_tags_tags?.join(', ') || 'N/A'}</p>
                     </div>
@@ -501,6 +511,15 @@ export const PesquisarProduto = (function() {
         }
     }
 
+    async function _handleEditWeight(productId) {
+        if (typeof _config.openProductWeightEditModal === 'function') {
+            _config.openProductWeightEditModal(productId);
+        } else {
+            console.error("[PesquisarProduto] Erro: Função openProductWeightEditModal não foi passada no init.");
+            alert("Erro interno: O modal de edição de peso não está disponível.");
+        }
+    }
+
     async function _handleEditCode(productId) {
         if (typeof _config.openProductCodeEditModal === 'function') {
             _config.openProductCodeEditModal(productId);
@@ -639,6 +658,11 @@ export const PesquisarProduto = (function() {
                     _handleEditLocation(editLocationBtn.dataset.productId, editLocationBtn.dataset.productCodigo);
                 }
 
+                const editWeightBtn = event.target.closest('.edit-product-weight-btn');
+                if (editWeightBtn) {
+                    _handleEditWeight(editWeightBtn.dataset.productId);
+                }
+
                 const editCodeBtn = event.target.closest('.edit-product-code-btn');
                 if (editCodeBtn) {
                     _handleEditCode(editCodeBtn.dataset.productId);
@@ -742,6 +766,26 @@ export const PesquisarProduto = (function() {
         }
     }
 
+    function updateProductWeightDisplay(productId, novoPesoBruto, novoPesoLiquido) {
+        const product = _allProducts.find(p => String(p.id) === String(productId));
+        if (product) {
+            product.pesoBruto = novoPesoBruto;
+            product.pesoLiq = novoPesoLiquido;
+            if (!product.metricas) product.metricas = {};
+            product.metricas.peso_bruto = novoPesoBruto;
+            product.metricas.peso_liquido = novoPesoLiquido;
+        }
+
+        if (String(_activeProductId) === String(productId) && _dom.product_details) {
+            const weightElement = _dom.product_details.querySelector('.product-detail-weight');
+            if (weightElement) {
+                weightElement.textContent = novoPesoBruto || 0;
+                weightElement.classList.add('text-green-600', 'scale-105', 'transition-all', 'duration-300');
+                setTimeout(() => weightElement.classList.remove('text-green-600', 'scale-105'), 2000);
+            }
+        }
+    }
+
     function generateCatalog() {
         const virtualModal = document.getElementById('virtual-catalog-modal');
         if (virtualModal) {
@@ -772,6 +816,7 @@ export const PesquisarProduto = (function() {
         updateProductCostPriceDisplay,
         updateProductPriceDisplay,
         updateProductTagGroupDisplay,
+        updateProductWeightDisplay,
         generateCatalog,
         setAllProducts,
         getAllProducts: () => _allProducts

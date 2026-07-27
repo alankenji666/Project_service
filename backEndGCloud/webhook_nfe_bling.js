@@ -28,6 +28,8 @@ function formatarNumeroNota(numero) {
 }
 
 const cacheVendedores = new Map();
+const nfeLocks = new Set();
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_NAME_NOTAS_FISCAIS, BLING_API_BASE_URL, COLUMNS_NFE, APPS_SCRIPT_TOKEN_URL) {
     const router = express.Router();
@@ -80,7 +82,11 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
 
     router.post('/', async (req, res, next) => {
         console.log('--- [WEBHOOK] PROCESSANDO NOTA ---');
-        try {
+        // Responde imediatamente para evitar timeout do Bling (que desativa o webhook)
+        res.status(200).send({ status: 'received' });
+
+        (async () => {
+            try {
             const { event, data } = req.body;
             const nfeId = data ? data.id : null;
             if (!nfeId) {
@@ -89,8 +95,16 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
                 throw error;
             }
 
-            const tokenRes = await axios.get(APPS_SCRIPT_TOKEN_URL);
-            const token = tokenRes.data.access_token;
+            // Simple Lock mechanism to avoid race conditions (double append)
+            while (nfeLocks.has(nfeId)) {
+                console.log(`[Webhook NF-e] NFe ${nfeId} já está sendo processada. Aguardando liberação do lock...`);
+                await sleep(1000);
+            }
+            nfeLocks.add(nfeId);
+
+            try {
+                const tokenRes = await axios.get(APPS_SCRIPT_TOKEN_URL);
+                const token = tokenRes.data.access_token;
 
             const action = event === 'invoice.deleted' ? 'deleted' : (event === 'invoice.created' ? 'created' : 'updated');
 
@@ -236,17 +250,13 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
                 });
             }
 
-            res.status(200).send({ status: 'success' });
+            } finally {
+                nfeLocks.delete(nfeId);
+            }
         } catch (error) {
             console.error('[Bling NF-e Webhook] Erro detectado:', error.message);
-            
-            if (!res.headersSent) {
-                res.status(200).send({ 
-                    status: 'error_logged', 
-                    message: error.message 
-                });
-            }
         }
+        })();
     });
 
     return router;

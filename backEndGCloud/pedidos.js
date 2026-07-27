@@ -568,114 +568,24 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             const accessToken = await getToken();
             const httpClient = axios || axiosModule;
 
-            let payloadCriacao;
-
-            // Se o corpo da requisição conter o payload editado do frontend
-            if (req.body && Object.keys(req.body).length > 0) {
-                console.log(`[Bling] Usando payload customizado enviado pelo frontend para o pedido ${idPedido}...`);
-                payloadCriacao = req.body;
-                payloadCriacao.tipo = 1; // 1 = Saída
-                payloadCriacao.pedido = { id: parseInt(idPedido) };
-            } else {
-                console.log(`[Bling] Iniciando processo de NF-e padrão para o pedido ${idPedido}...`);
-
-                // 1. Buscar o pedido original para obter dados básicos (contato, natureza, etc.)
-                console.log(`[Bling] Buscando detalhes do pedido ${idPedido}...`);
-                let pedidoBling;
-                try {
-                    const resPedido = await httpClient.get(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    pedidoBling = resPedido.data.data;
-                } catch (err) {
-                    console.warn(`[Bling] Não foi possível obter detalhes do pedido ${idPedido}. Tentando criar nota apenas com o ID.`);
-                }
-
-                // 2. Criar a Nota Fiscal referenciando o Pedido de Venda
-                payloadCriacao = {
-                    tipo: 1, // 1 = Saída
-                    pedido: { id: parseInt(idPedido) }
-                };
-
-                if (pedidoBling) {
-                    if (pedidoBling.contato && pedidoBling.contato.id) {
-                        payloadCriacao.contato = { id: pedidoBling.contato.id };
-                    }
-                    if (pedidoBling.naturezaOperacao && pedidoBling.naturezaOperacao.id) {
-                        payloadCriacao.naturezaOperacao = { id: pedidoBling.naturezaOperacao.id };
-                    }
-                    if (pedidoBling.data) {
-                        payloadCriacao.dataOperacao = pedidoBling.data; // Formato YYYY-MM-DD
-                    }
-                    // Finalidade 1 = NF-e normal
-                    payloadCriacao.finalidade = 1;
-
-                    // Bling V3 exige que os itens da nota sejam passados
-                    if (pedidoBling.itens && Array.isArray(pedidoBling.itens)) {
-                        payloadCriacao.itens = pedidoBling.itens.map(item => ({
-                            codigo: item.codigo || "",
-                            descricao: item.descricao || "",
-                            quantidade: item.quantidade || 1,
-                            valor: item.valor || 0
-                        }));
-                    }
-
-                    // Repassar o frete e informações de volume para a nota fiscal
-                    if (pedidoBling.transporte) {
-                        payloadCriacao.transporte = {
-                            fretePorConta: pedidoBling.transporte.fretePorConta !== undefined ? pedidoBling.transporte.fretePorConta : 0,
-                            frete: pedidoBling.transporte.frete || 0,
-                            quantidadeVolumes: pedidoBling.transporte.quantidadeVolumes || 0,
-                            pesoBruto: pedidoBling.transporte.pesoBruto || 0,
-                            pesoLiquido: pedidoBling.transporte.pesoBruto || 0
-                        };
-                        if (pedidoBling.transporte.contato && pedidoBling.transporte.contato.id) {
-                            payloadCriacao.transporte.contato = { id: pedidoBling.transporte.contato.id };
-                        }
-                    }
-
-                    // Repassar parcelas (pagamento)
-                    if (pedidoBling.parcelas && Array.isArray(pedidoBling.parcelas) && pedidoBling.parcelas.length > 0) {
-                        payloadCriacao.parcelas = pedidoBling.parcelas.map(p => {
-                            const parcelaObj = {
-                                data: p.dataVencimento || payloadCriacao.dataOperacao,
-                                valor: p.valor || 0,
-                                observacoes: p.observacoes || ""
-                            };
-                            if (p.formaPagamento && p.formaPagamento.id) {
-                                parcelaObj.formaPagamento = { id: p.formaPagamento.id };
-                            }
-                            return parcelaObj;
-                        });
-                    }
-
-                    // Repassar o desconto para a nota fiscal
-                    if (pedidoBling.desconto && pedidoBling.desconto.valor > 0) {
-                        payloadCriacao.desconto = {
-                            valor: pedidoBling.desconto.valor,
-                            unidade: pedidoBling.desconto.unidade || 'REAL'
-                        };
-                    }
-                }
-            }
-
-            console.log(`[Bling] Enviando payload para criação de NF-e: ${JSON.stringify(payloadCriacao)}`);
-
             let idNota;
             try {
-                const resCriacao = await httpClient.post(`${BLING_API_BASE_URL}/nfe`, payloadCriacao, {
+                // Chama a API oficial da V3 para gerar NFe A PARTIR do pedido, o que mantém o vínculo perfeitamente
+                const resCriacao = await httpClient.post(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/gerar-nfe`, {}, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
-                idNota = resCriacao.data.data.id;
-                console.log(`[Bling] NF-e criada com sucesso: ID ${idNota}`);
+                
+                // O schema de resposta diz que retorna { idNotaFiscal: 1234 }
+                idNota = resCriacao.data.data.idNotaFiscal || resCriacao.data.data.id;
+                console.log(`[Bling] NF-e gerada a partir do pedido com sucesso: ID ${idNota}`);
             } catch (err) {
                 const errMsg = err.response?.data?.error?.message || err.response?.data?.message || err.message;
                 const errData = err.response?.data;
-                console.error(`[Bling Error] Erro na criação da NF-e:`, errMsg, JSON.stringify(errData));
+                console.error(`[Bling Error] Erro na geração da NF-e via Pedido:`, errMsg, JSON.stringify(errData));
                 
                 return res.status(400).send({ 
                     status: 'error', 
-                    message: `Erro ao criar nota no Bling: ${errMsg}`,
+                    message: `Erro ao gerar nota pelo Bling: ${errMsg}`,
                     details: errData
                 });
             }
@@ -700,18 +610,68 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 });
                 
                 console.log(`[Bling] NF-e ${idNota} enviada para processamento.`);
+
+                // NOVO: Atualizar situação do pedido para "Atendido" (9) após envio da NFe
+                try {
+                    console.log(`[Bling] Atualizando situação do pedido ${idPedido} para Atendido (9) após gerar NFe...`);
+                    await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/situacoes/9`, {}, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    
+                    // Sincroniza a planilha instantaneamente via webhook local
+                    const port = process.env.PORT || 8080;
+                    httpClient.post(`http://localhost:${port}/webhook/pedidos-bling`, {
+                        event: 'situacao.alterada', 
+                        data: { id: idPedido }
+                    }).catch(e => console.log("[Webhook Local] Erro na sync:", e.message));
+
+                } catch (errSituacao) {
+                    console.warn(`[Bling Warning] NFe enviada, mas falha ao alterar situação do pedido para Atendido:`, errSituacao.message);
+                }
+
                 return res.status(200).send({ 
                     status: 'success', 
-                    message: "NF-e gerada e enviada com sucesso!",
+                    message: "NF-e gerada e enviada com sucesso! O pedido foi atualizado para Atendido.",
                     data: { idNota, response: resEnvio.data } 
                 });
             } catch (err) {
                 const errMsg = err.response?.data?.error?.message || err.response?.data?.message || err.message;
                 console.warn(`[Bling Warning] Nota criada (${idNota}) mas falhou ao enviar: ${errMsg}`);
+
+                // Se falhou porque o Bling já auto-emitiu, vamos checar a situação da nota
+                try {
+                    const resVerifica = await httpClient.get(`${BLING_API_BASE_URL}/nfe/${idNota}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    const situacao = resVerifica.data?.data?.situacao;
+                    // Situação 6 = Autorizada, 3 = Emitida DANFE, 1 = Pendente (na fila do auto-emit)
+                    if (situacao === 6 || situacao === 3 || situacao === 1 || errMsg.includes('emitir')) {
+                        console.log(`[Bling] A nota ${idNota} já estava autorizada/emitida ou na fila (situação ${situacao}). Retornando sucesso!`);
+                        
+                        try {
+                            await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/situacoes/9`, {}, {
+                                headers: { 'Authorization': `Bearer ${accessToken}` }
+                            });
+                            const port = process.env.PORT || 8080;
+                            httpClient.post(`http://localhost:${port}/webhook/pedidos-bling`, {
+                                event: 'situacao.alterada', data: { id: idPedido }
+                            }).catch(e => console.log("[Webhook Local] Erro na sync:", e.message));
+                        } catch (e) {}
+
+                        return res.status(200).send({ 
+                            status: 'success', 
+                            message: "NF-e gerada e processada automaticamente pelo Bling com sucesso! O pedido foi atualizado para Atendido.",
+                            data: { idNota, autoEmitted: true } 
+                        });
+                    }
+                } catch (checkErr) {
+                    console.warn(`[Bling Warning] Falha ao verificar situação da nota ${idNota}:`, checkErr.message);
+                }
+
                 return res.status(200).send({ 
                     status: 'partial_success', 
-                    message: `Nota criada com ID ${idNota}, mas o envio automático falhou: ${errMsg}. Você pode tentar enviar manualmente no Bling.`,
-                    data: { idNota } 
+                    message: `Atenção: Nota criada com ID ${idNota}, mas o envio falhou: ${errMsg}. Verifique no Bling.`,
+                    data: { idNota }
                 });
             }
 

@@ -79,20 +79,32 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 console.log(`${Object.keys(vendasMap).length} produtos mapeados com dados de vendas.`);
             }
 
+            const fetchWithRetry = async (apiCall, retries = 3) => {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        return await apiCall();
+                    } catch (error) {
+                        if (i === retries - 1) throw error;
+                        console.warn(`[Google Sheets] Falha temporária (${error.message}). Tentativa ${i + 1}/${retries}... aguardando 2s`);
+                        await sleep(2000);
+                    }
+                }
+            };
+
             // --- PASSO 2: PROCESSAR A ABA 'PRODUTOS' ---
             // Lê os cabeçalhos (Linha 4, Colunas B até BH)
-            const headersResponse = await sheets.spreadsheets.values.get({
+            const headersResponse = await fetchWithRetry(() => sheets.spreadsheets.values.get({
                 spreadsheetId,
                 range: `'${sheetNameProdutos}'!B4:BH4`,
-            });
+            }));
             const headers = headersResponse.data.values[0];
 
             // Lê os dados (Linha 5 até o fim, Colunas B até BH)
-            const dataResponse = await sheets.spreadsheets.values.get({
+            const dataResponse = await fetchWithRetry(() => sheets.spreadsheets.values.get({
                 spreadsheetId,
                 range: `'${sheetNameProdutos}'!B5:BH`,
                 valueRenderOption: 'FORMATTED_VALUE',
-            });
+            }));
             const data = dataResponse.data.values;
 
             if (!data || data.length === 0) {
@@ -208,12 +220,35 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
     });
 
     /**
+     * Rota para buscar um único produto no Bling.
+     * GET /:id
+     */
+    router.get('/:id', async (req, res, next) => {
+        const idProduto = req.params.id;
+        try {
+            const tokenResponse = await axios.get(tokenUrl);
+            const accessToken = tokenResponse.data.access_token;
+            if (!accessToken) throw new Error("Não foi possível obter o token do Bling.");
+
+            const getBlingUrl = `${blingBaseUrl}/produtos/${idProduto}`;
+            const getBlingRes = await axios.get(getBlingUrl, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            res.status(200).json(getBlingRes.data);
+        } catch (error) {
+            console.error(`Erro ao buscar produto ${idProduto}:`, error.message);
+            res.status(500).json({ error: "Erro ao buscar produto." });
+        }
+    });
+
+    /**
      * Rota para atualizar o nome (descrição) ou a localização de um produto.
      * PUT /:id
      */
     router.put('/:id', async (req, res, next) => {
         const idProduto = req.params.id;
-        const { nome, localizacao, codigo, preco_de_custo, preco, grupo_tag_id, imagem_url } = req.body;
+        const { nome, localizacao, codigo, preco_de_custo, preco, grupo_tag_id, imagem_url, peso_bruto, peso_liquido } = req.body;
 
     // Mapa fixo dos IDs de tags para labels legíveis
     // Mapa fixo dos IDs reais de camposCustomizados para labels legíveis (com acentuação correspondente à planilha)
@@ -231,7 +266,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
         if (localizacao !== undefined) console.log(` > Nova Localização: ${localizacao}`);
         if (imagem_url) console.log(` > Nova Imagem URL: ${imagem_url}`);
 
-        if (!nome && localizacao === undefined && !codigo && preco_de_custo === undefined && preco === undefined && grupo_tag_id === undefined && imagem_url === undefined) {
+        if (!nome && localizacao === undefined && !codigo && preco_de_custo === undefined && preco === undefined && grupo_tag_id === undefined && imagem_url === undefined && peso_bruto === undefined && peso_liquido === undefined) {
             return res.status(400).json({ error: "Nenhum campo para atualizar foi informado." });
         }
 
@@ -267,7 +302,9 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                 nome: nome || currentProduct.nome,
                 codigo: codigo || currentProduct.codigo,
                 precoCusto: preco_de_custo !== undefined ? parseFloat(preco_de_custo) : currentProduct.precoCusto,
-                preco: preco !== undefined ? parseFloat(preco) : currentProduct.preco
+                preco: preco !== undefined ? parseFloat(preco) : currentProduct.preco,
+                pesoBruto: peso_bruto !== undefined ? parseFloat(peso_bruto) : currentProduct.pesoBruto,
+                pesoLiquido: peso_liquido !== undefined ? parseFloat(peso_liquido) : currentProduct.pesoLiquido
             };
 
             // REMOÇÃO CRÍTICA: O Bling V3 apaga as imagens se enviarmos o objeto 'midia' de volta no PUT
@@ -282,11 +319,35 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                             imagensURL: links.map(link => ({ link: link }))
                         }
                     };
-                    console.log(`[Bling] Adicionando midia ao payload:`, JSON.stringify(blingPayload.midia));
+                    console.log(`[Bling] Adicionando NOVA midia ao payload:`, JSON.stringify(blingPayload.midia));
                 } else if (blingPayload.midia) {
                     delete blingPayload.midia;
                 }
-            } else if (blingPayload.midia) {
+            } else if (blingPayload.midia && blingPayload.midia.imagens) {
+                // PRESERVAÇÃO DE IMAGENS: Se não enviamos imagem_url, queremos manter as originais.
+                // O Bling V3 exige que passemos as URLs originais no 'imagensURL' no PUT,
+                // caso contrário ele apagará as imagens existentes se enviarmos formato errado ou não enviarmos nada.
+                const existingLinks = [];
+                if (blingPayload.midia.imagens.externas) {
+                    existingLinks.push(...blingPayload.midia.imagens.externas.map(img => img.link));
+                }
+                if (blingPayload.midia.imagens.internas) {
+                    existingLinks.push(...blingPayload.midia.imagens.internas.map(img => img.linkOriginal || img.linkMiniatura || img.link));
+                }
+                
+                const validLinks = existingLinks.filter(url => url && url.startsWith('http'));
+                
+                if (validLinks.length > 0) {
+                    blingPayload.midia = {
+                        imagens: {
+                            imagensURL: validLinks.map(link => ({ link }))
+                        }
+                    };
+                    console.log(`[Bling] Preservando midia existente no payload:`, JSON.stringify(blingPayload.midia));
+                } else {
+                    delete blingPayload.midia;
+                }
+            } else {
                 delete blingPayload.midia;
             }
 
@@ -392,6 +453,8 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             const precoColIndices = getColIndices(h => h === 'preco');
             const grupoTagsColIndices = getColIndices(h => h === 'grupo_de_tags_tags');
             const imagemUrlColIndices = getColIndices(h => h.includes('imagem') || h.includes('imagens') || h.includes('url_formatada') || h.includes('midia'));
+            const pesoBrutoColIndices = getColIndices(h => h === 'peso_bruto');
+            const pesoLiquidoColIndices = getColIndices(h => h === 'peso_liquido');
 
             if (idColIndex === -1) {
                 throw new Error("Coluna 'ID' não encontrada na planilha.");
@@ -501,6 +564,28 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                         });
                     }
                 }
+
+                // NOVO: Atualiza Peso Bruto se houver
+                if (peso_bruto !== undefined && pesoBrutoColIndices.length > 0) {
+                    for (let colIdx of pesoBrutoColIndices) {
+                        const updateWeightRange = `'${sheetNameProdutos}'!${colToA1(colIdx)}${rowIndex}`;
+                        console.log(`[Sheets] Atualizando peso_bruto na linha ${rowIndex}, coluna ${colToA1(colIdx)}`);
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId, range: updateWeightRange, valueInputOption: 'USER_ENTERED', resource: { values: [[peso_bruto]] }
+                        });
+                    }
+                }
+
+                // NOVO: Atualiza Peso Liquido se houver
+                if (peso_liquido !== undefined && pesoLiquidoColIndices.length > 0) {
+                    for (let colIdx of pesoLiquidoColIndices) {
+                        const updateWeightRange = `'${sheetNameProdutos}'!${colToA1(colIdx)}${rowIndex}`;
+                        console.log(`[Sheets] Atualizando peso_liquido na linha ${rowIndex}, coluna ${colToA1(colIdx)}`);
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId, range: updateWeightRange, valueInputOption: 'USER_ENTERED', resource: { values: [[peso_liquido]] }
+                        });
+                    }
+                }
             } else {
                 console.warn(`[Sheets] Produto ID ${idProduto} não encontrado na planilha para atualização.`);
             }
@@ -514,7 +599,9 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                     novoNome: nome || currentProduct.nome || null,
                     novaLocalizacao: localizacao !== undefined ? localizacao : (currentProduct.estoque?.localizacao ?? null),
                     novoPrecoCusto: preco_de_custo !== undefined ? preco_de_custo : (currentProduct.precoCusto ?? currentProduct.fornecedor?.precoCusto ?? null),
-                    novoPreco: preco !== undefined ? preco : (currentProduct.preco ?? null)
+                    novoPreco: preco !== undefined ? preco : (currentProduct.preco ?? null),
+                    novoPesoBruto: peso_bruto !== undefined ? peso_bruto : (currentProduct.pesoBruto ?? null),
+                    novoPesoLiquido: peso_liquido !== undefined ? peso_liquido : (currentProduct.pesoLiquido ?? null)
                 };
                 
                 if (grupo_tag_id !== undefined) {

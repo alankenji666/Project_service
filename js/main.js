@@ -14,7 +14,7 @@
         import { EstoqueApp } from './modulos/estoque.js?v=2';
         import { SaidaItens } from './modulos/saidaItens.js?v=2';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=2';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=5';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=2';
         import { TransportadorasApp } from './modulos/transportadoras.js?v=2';
@@ -141,6 +141,10 @@
                                 if (data.novoPrecoCusto !== undefined) PesquisarProduto.updateProductCostPriceDisplay(data.id, data.novoPrecoCusto);
                                 if (data.novoPreco !== undefined) PesquisarProduto.updateProductPriceDisplay(data.id, data.novoPreco);
                                 if (data.novoGrupoTags !== undefined) PesquisarProduto.updateProductTagGroupDisplay(data.id, data.novoGrupoTags || 'N/A');
+                            }
+                            
+                            if (typeof DashboardApp !== 'undefined' && typeof DashboardApp.updateProductDataRealTime === 'function') {
+                                DashboardApp.updateProductDataRealTime(data.id, data);
                             }
                             
                             if (data.novoNome) {
@@ -772,6 +776,7 @@
             let _productReportModal, _openProductReportModalBtn, _closeProductReportModalBtn, _cancelProductReportBtn, _generateProductReportBtn;
             let _productNameEditModal, _closeProductNameEditModalBtn, _productNameEditInfo, _productNameEditInput, _productNameEditLoading, _productNameEditSuccess, _cancelProductNameEditBtn, _confirmProductNameEditBtn;
             let _productLocationEditModal, _closeProductLocationEditModalBtn, _productLocationEditInfo, _productLocationEditInput, _productLocationEditLoading, _productLocationEditSuccess, _cancelProductLocationEditBtn, _confirmProductLocationEditBtn;
+            let _productWeightEditModal, _closeProductWeightEditModalBtn, _productWeightEditInfo, _productWeightBrutoInput, _productWeightLiquidoInput, _productWeightEditLoading, _productWeightEditSuccess, _cancelProductWeightEditBtn, _confirmProductWeightEditBtn;
             let _productImageEditModal, _closeProductImageEditModalBtn, _productImageEditInfo, _productImageEditInput, _productImageEditLoading, _productImageEditSuccess, _cancelProductImageEditBtn, _confirmProductImageEditBtn;
             let _productCodeEditModal, _closeProductCodeEditModalBtn, _productCodeEditInfo, _productCodeEditInput, _productCodeEditLoading, _productCodeEditSuccess, _cancelProductCodeEditBtn, _confirmProductCodeEditBtn;
             let _productCostPriceEditModal, _closeProductCostPriceEditModalBtn, _productCostPriceEditInfo, _productCostPriceEditInput, _productCostPriceEditLoading, _productCostPriceEditSuccess, _cancelProductCostPriceEditBtn, _confirmProductCostPriceEditBtn;
@@ -2099,6 +2104,7 @@ const data = filteredProducts.map(product => {
                         if (Array.isArray(dataArray)) {
                             _allProducts.length = 0;
                             Array.prototype.push.apply(_allProducts, dataArray);
+                            window._allProducts = _allProducts; // EXPOR PARA OUTROS MÓDULOS
                             console.log(`[DEBUG] ${_allProducts.length} produtos carregados.`);
                         }
                     } else {
@@ -4622,6 +4628,17 @@ _productLocationEditSuccess = document.getElementById('product-location-edit-suc
 _cancelProductLocationEditBtn = document.getElementById('cancel-product-location-edit-btn');
 _confirmProductLocationEditBtn = document.getElementById('confirm-product-location-edit-btn');
 
+// NOVO: Cache dos elementos do modal de edição de peso
+_productWeightEditModal = document.getElementById('product-weight-edit-modal');
+_closeProductWeightEditModalBtn = document.getElementById('close-product-weight-edit-modal-btn');
+_productWeightEditInfo = document.getElementById('product-weight-edit-info');
+_productWeightBrutoInput = document.getElementById('product-weight-bruto-input');
+_productWeightLiquidoInput = document.getElementById('product-weight-liquido-input');
+_productWeightEditLoading = document.getElementById('product-weight-edit-loading');
+_productWeightEditSuccess = document.getElementById('product-weight-edit-success');
+_cancelProductWeightEditBtn = document.getElementById('cancel-product-weight-edit-btn');
+_confirmProductWeightEditBtn = document.getElementById('confirm-product-weight-edit-btn');
+
 // NOVO: Cache dos elementos do modal de edição de imagem do produto
 _productImageEditModal = document.getElementById('product-image-edit-modal');
 _closeProductImageEditModalBtn = document.getElementById('close-product-image-edit-modal-btn');
@@ -4689,6 +4706,21 @@ function _bindProductCodeEditModalEvents() {
 }
 
 /**
+* NOVO: Vincula os eventos dos botões do modal de edição de peso.
+*/
+function _bindProductWeightEditModalEvents() {
+    if (_closeProductWeightEditModalBtn) {
+        _closeProductWeightEditModalBtn.addEventListener('click', () => _productWeightEditModal.classList.add('hidden'));
+    }
+    if (_cancelProductWeightEditBtn) {
+        _cancelProductWeightEditBtn.addEventListener('click', () => _productWeightEditModal.classList.add('hidden'));
+    }
+    if (_confirmProductWeightEditBtn) {
+        _confirmProductWeightEditBtn.addEventListener('click', _saveProductWeightEdit);
+    }
+}
+
+/**
 * NOVO: Abre o modal para editar o código (SKU) do produto.
 */
 function _openProductCodeEditModal(productId) {
@@ -4710,6 +4742,92 @@ function _openProductCodeEditModal(productId) {
 
         _productCodeEditModal.classList.remove('hidden');
         if (_productCodeEditInput) _productCodeEditInput.focus();
+    }
+}
+
+/**
+* NOVO: Salva a edição da localização (PUT para o backend que atualiza Bling e Planilha)
+*/
+async function _saveProductLocationEdit() {
+    const productId = _productLocationEditModal.dataset.productId;
+    const novaLocalizacao = _productLocationEditInput.value.trim();
+
+    if (_productLocationEditLoading) _productLocationEditLoading.classList.remove('hidden');
+    if (_productLocationEditSuccess) _productLocationEditSuccess.classList.add('hidden');
+    if (_confirmProductLocationEditBtn) _confirmProductLocationEditBtn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_URLS.PRODUCTS}/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ localizacao: novaLocalizacao })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            if (_productLocationEditSuccess) _productLocationEditSuccess.classList.remove('hidden');
+            if (_productLocationEditLoading) _productLocationEditLoading.classList.add('hidden');
+            
+            setTimeout(() => {
+                _productLocationEditModal.classList.add('hidden');
+                if (typeof PesquisarProduto !== 'undefined') {
+                    PesquisarProduto.updateProductLocationDisplay(productId, novaLocalizacao);
+                }
+            }, 1000);
+        } else {
+            throw new Error(data.error || "Erro desconhecido ao atualizar localização.");
+        }
+    } catch (error) {
+        console.error("[App] Erro ao editar localização:", error);
+        if (_productLocationEditLoading) _productLocationEditLoading.classList.add('hidden');
+        if (_confirmProductLocationEditBtn) _confirmProductLocationEditBtn.disabled = false;
+        _showMessageModal("Erro", "Ocorreu um erro ao atualizar a localização: " + error.message);
+    }
+}
+
+/**
+* NOVO: Salva a edição do peso
+*/
+async function _saveProductWeightEdit() {
+    const productId = _productWeightEditModal.dataset.productId;
+    const pesoBruto = parseFloat(_productWeightBrutoInput.value);
+    const pesoLiquido = parseFloat(_productWeightLiquidoInput.value);
+
+    if (isNaN(pesoBruto) || isNaN(pesoLiquido) || pesoBruto < 0 || pesoLiquido < 0) {
+        _showMessageModal("Aviso", "Por favor, insira valores válidos para o peso.");
+        return;
+    }
+
+    if (_productWeightEditLoading) _productWeightEditLoading.classList.remove('hidden');
+    if (_productWeightEditSuccess) _productWeightEditSuccess.classList.add('hidden');
+    if (_confirmProductWeightEditBtn) _confirmProductWeightEditBtn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_URLS.PRODUCTS}/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ peso_bruto: pesoBruto, peso_liquido: pesoLiquido })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            if (_productWeightEditSuccess) _productWeightEditSuccess.classList.remove('hidden');
+            if (_productWeightEditLoading) _productWeightEditLoading.classList.add('hidden');
+            
+            setTimeout(() => {
+                _productWeightEditModal.classList.add('hidden');
+                if (typeof PesquisarProduto !== 'undefined') {
+                    PesquisarProduto.updateProductWeightDisplay(productId, pesoBruto, pesoLiquido);
+                }
+            }, 1000);
+        } else {
+            throw new Error(data.error || "Erro desconhecido ao atualizar peso.");
+        }
+    } catch (error) {
+        console.error("[App] Erro ao editar peso:", error);
+        if (_productWeightEditLoading) _productWeightEditLoading.classList.add('hidden');
+        if (_confirmProductWeightEditBtn) _confirmProductWeightEditBtn.disabled = false;
+        _showMessageModal("Erro", "Ocorreu um erro ao atualizar o peso: " + error.message);
     }
 }
 
@@ -4840,26 +4958,51 @@ if (_confirmProductPriceEditBtn) {
 * NOVO: Abre o modal para editar a localização do produto.
 */
 function _openProductLocationEditModal(productId) {
-const product = _allProducts.find(p => String(p.id) === String(productId));
-if (!product) {
-    _showMessageModal("Erro", "Produto não encontrado para editar a localização.");
-    return;
+    const product = _allProducts.find(p => String(p.id) === String(productId));
+    if (!product) {
+        _showMessageModal("Erro", "Produto não encontrado para editar a localização.");
+        return;
+    }
+
+    if (_productLocationEditModal) {
+        _productLocationEditModal.dataset.productId = product.id;
+        _productLocationEditModal.dataset.codigo = product.codigo;
+        if (_productLocationEditInfo) _productLocationEditInfo.innerHTML = `Editando localização do produto código: <b>${product.codigo}</b>`;
+        if (_productLocationEditInput) _productLocationEditInput.value = product.localizacao || "";
+
+        // Reseta estados de feedback
+        if (_productLocationEditLoading) _productLocationEditLoading.classList.add('hidden');
+        if (_productLocationEditSuccess) _productLocationEditSuccess.classList.add('hidden');
+        if (_confirmProductLocationEditBtn) _confirmProductLocationEditBtn.disabled = false;
+
+        _productLocationEditModal.classList.remove('hidden');
+        if (_productLocationEditInput) _productLocationEditInput.focus();
+    }
 }
 
-if (_productLocationEditModal) {
-    _productLocationEditModal.dataset.productId = product.id;
-    _productLocationEditModal.dataset.codigo = product.codigo;
-    if (_productLocationEditInfo) _productLocationEditInfo.innerHTML = `Editando localização do produto código: <b>${product.codigo}</b>`;
-    if (_productLocationEditInput) _productLocationEditInput.value = product.localizacao || "";
+/**
+* NOVO: Abre o modal para editar o peso do produto.
+*/
+function _openProductWeightEditModal(productId) {
+    const product = _allProducts.find(p => String(p.id) === String(productId));
+    if (!product) {
+        _showMessageModal("Erro", "Produto não encontrado para editar o peso.");
+        return;
+    }
 
-    // Reseta estados de feedback
-    if (_productLocationEditLoading) _productLocationEditLoading.classList.add('hidden');
-    if (_productLocationEditSuccess) _productLocationEditSuccess.classList.add('hidden');
-    if (_confirmProductLocationEditBtn) _confirmProductLocationEditBtn.disabled = false;
+    if (_productWeightEditModal) {
+        _productWeightEditModal.dataset.productId = product.id;
+        if (_productWeightEditInfo) _productWeightEditInfo.innerHTML = `Editando peso do produto código: <b>${product.codigo}</b> - ${product.descricao}`;
+        if (_productWeightBrutoInput) _productWeightBrutoInput.value = product.pesoBruto || product.metricas?.peso_bruto || "";
+        if (_productWeightLiquidoInput) _productWeightLiquidoInput.value = product.pesoLiq || product.metricas?.peso_liquido || "";
 
-    _productLocationEditModal.classList.remove('hidden');
-    if (_productLocationEditInput) _productLocationEditInput.focus();
-}
+        if (_productWeightEditLoading) _productWeightEditLoading.classList.add('hidden');
+        if (_productWeightEditSuccess) _productWeightEditSuccess.classList.add('hidden');
+        if (_confirmProductWeightEditBtn) _confirmProductWeightEditBtn.disabled = false;
+
+        _productWeightEditModal.classList.remove('hidden');
+        if (_productWeightBrutoInput) _productWeightBrutoInput.focus();
+    }
 }
 
 /**
@@ -5382,6 +5525,7 @@ async function _saveProductTagGroupEdit() {
                     _bindStockAdjustmentModalEvents(); // NOVO
                     _bindProductNameEditModalEvents(); // NOVO
                     _bindProductLocationEditModalEvents(); // NOVO
+                    _bindProductWeightEditModalEvents(); // NOVO
                     _bindProductImageEditModalEvents(); // NOVO
                     _bindProductCodeEditModalEvents(); // NOVO
                     _bindProductCostPriceEditModalEvents(); // NOVO
@@ -5459,6 +5603,7 @@ async function _saveProductTagGroupEdit() {
                             openStockAdjustmentModal: _openStockAdjustmentModal,
                             openProductNameEditModal: _openProductNameEditModal,
                             openProductLocationEditModal: _openProductLocationEditModal,
+                            openProductWeightEditModal: _openProductWeightEditModal,
                             openProductCodeEditModal: _openProductCodeEditModal,
                             openProductCostPriceEditModal: _openProductCostPriceEditModal,
                             openProductPriceEditModal: _openProductPriceEditModal,

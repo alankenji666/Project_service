@@ -1,0 +1,12 @@
+const axios = require('axios');
+
+async function test() {
+    try {
+        const getRes = await axios.get('https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos/vendas/26341835107');
+        const order = getRes.data.data;
+        console.log("Original Order Item 0:", JSON.stringify(order.itens[0], null, 2));
+    } catch (e) {
+        console.log("GET Error:", e.message);
+    }
+}
+test();

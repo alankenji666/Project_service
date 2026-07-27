@@ -42,7 +42,7 @@ export const GerenciarPedidosApp = (function () {
         { id: '6220057', nome: 'Conta a receber/pagar' },
     ];
 
-    const FORMA_PAGAMENTO_PADRAO = '6220056'; // Dinheiro
+    const FORMA_PAGAMENTO_PADRAO = '6220057'; // Conta a receber/pagar
 
     function _buildFormasPagamentoOptions(selectedId) {
         const efectiveId = String(selectedId || FORMA_PAGAMENTO_PADRAO);
@@ -217,10 +217,12 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeEditPesoLiquido = document.getElementById('nfe-edit-peso-liquido');
         _state.nfeEditDesconto = document.getElementById('nfe-edit-desconto');
         _state.nfeEditDescontoContainer = document.getElementById('nfe-edit-desconto-container');
+        _state.nfeEditOutrasDespesas = document.getElementById('nfe-edit-outras-despesas');
         _state.nfeEditObservacoes = document.getElementById('nfe-edit-observacoes');
         _state.nfeEditObservacoesOriginal = document.getElementById('nfe-edit-observacoes-original');
         _state.nfeEditAddParcelaBtn = document.getElementById('nfe-edit-add-parcela-btn');
         _state.nfeEditAutoParcelasBtn = document.getElementById('nfe-edit-auto-parcelas-btn');
+        _state.nfeEditAiParseBtn = document.getElementById('nfe-edit-ai-parse-btn');
         _state.nfeEditParcelasTbody = document.getElementById('nfe-edit-parcelas-tbody');
         _state.nfeEditSpinner = document.getElementById('nfe-edit-spinner');
         _state.draftNfeEditBtn = document.getElementById('draft-nfe-edit-btn');
@@ -419,6 +421,9 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditAutoParcelasBtn) {
             _state.nfeEditAutoParcelasBtn.addEventListener('click', _handleAutoAdjustParcelas);
         }
+        if (_state.nfeEditAiParseBtn) {
+            _state.nfeEditAiParseBtn.addEventListener('click', _handleAiParseObservation);
+        }
         
         // NOVO: Bind do botão manual de parcelas
         _state.nfeEditManualParcelasBtn = document.getElementById('nfe-edit-manual-parcelas-btn');
@@ -438,7 +443,7 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditModal) {
             _state.nfeEditModal.addEventListener('click', (e) => {
                 if (e.target === _state.nfeEditModal) {
-                    _closeNfeEditModal();
+                    // _closeNfeEditModal(); // Desativado a pedido do usuário para evitar fechamento acidental
                 }
             });
         }
@@ -500,6 +505,18 @@ export const GerenciarPedidosApp = (function () {
 
         if (_state.nfeEditFrete) _formatCurrencyInput(_state.nfeEditFrete);
         if (_state.nfeEditDesconto) _formatCurrencyInput(_state.nfeEditDesconto);
+        if (_state.nfeEditOutrasDespesas) _formatCurrencyInput(_state.nfeEditOutrasDespesas);
+
+        // Recalcular totais sempre que frete ou desconto ou outras despesas mudar
+        if (_state.nfeEditFrete) {
+            _state.nfeEditFrete.addEventListener('input', _calculateTotals);
+        }
+        if (_state.nfeEditDesconto) {
+            _state.nfeEditDesconto.addEventListener('input', _calculateTotals);
+        }
+        if (_state.nfeEditOutrasDespesas) {
+            _state.nfeEditOutrasDespesas.addEventListener('input', _calculateTotals);
+        }
 
         // Listener para Frete por Conta - ocultar/mostrar campos de transporte
         if (_state.nfeEditFretePorConta) {
@@ -820,13 +837,17 @@ export const GerenciarPedidosApp = (function () {
                         <span class="block text-[10px] font-bold text-green-500 uppercase tracking-wider">Nota Fiscal Eletrônica (Emitida)</span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="block text-sm text-green-800 font-bold">Nº ${numeroNota} (Série ${serieNota})</span>
+                        <span id="modal-nfe-numero-display" class="block text-sm text-green-800 font-bold">Nº ${numeroNota} (Série ${serieNota})</span>
                         <div class="flex items-center gap-2">
                             ${baixarBtnHtml}
                             ${linkDanfe !== '#' ? `
                                 <a href="${linkDanfe}" target="_blank" class="flex items-center gap-1.5 text-[10px] bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors font-bold uppercase shadow-sm">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                                     Visualizar DANFE
+                                </a>
+                                <a href="#" onclick="event.preventDefault(); window.openEmailDanfeModal('${baixarPdfUrl}', '${finalChaveAcesso || ''}', '${linkDanfe || ''}', '${safeFilenameForDownload.replace(/'/g, "\\'")}', '${pedido.email || pedido.contato_email || pedido['e-mail'] || ''}', '${numeroNota}', '${safeClientName}', '${numero}', '${orcValue}', '${vendedorName.replace(/'/g, "\\'")}')" class="flex items-center gap-1.5 text-[10px] bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors font-bold uppercase shadow-sm">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                                    Enviar E-mail
                                 </a>
                             ` : ''}
                         </div>
@@ -1536,9 +1557,9 @@ export const GerenciarPedidosApp = (function () {
         }
         
         const defaultDate = new Date().toISOString().substring(0, 10);
-        if (_state.nfeEditData) _state.nfeEditData.value = pedidoBling.data || defaultDate;
-        if (_state.nfeEditDataSaida) _state.nfeEditDataSaida.value = pedidoBling.dataSaida || pedidoBling.data || defaultDate;
-        if (_state.nfeEditDataPrevista) _state.nfeEditDataPrevista.value = pedidoBling.dataPrevista || pedidoBling.data || defaultDate;
+        if (_state.nfeEditData) _state.nfeEditData.value = defaultDate;
+        if (_state.nfeEditDataSaida) _state.nfeEditDataSaida.value = defaultDate;
+        if (_state.nfeEditDataPrevista) _state.nfeEditDataPrevista.value = defaultDate;
         
         _updateAllDateWarnings();
         if (_state.nfeEditObservacoesOriginal) _state.nfeEditObservacoesOriginal.value = pedidoBling.observacoes || '';
@@ -1583,13 +1604,20 @@ export const GerenciarPedidosApp = (function () {
             const num = parseFloat(pedidoBling.transporte?.frete) || 0;
             _state.nfeEditFrete.value = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
         }
-        if (_state.nfeEditFretePorConta) _state.nfeEditFretePorConta.value = 9; // Força "9 - Sem Transporte" como padrão
+        if (_state.nfeEditFretePorConta) {
+            const currentFreteConta = pedidoBling.transporte?.fretePorConta !== undefined && pedidoBling.transporte?.fretePorConta !== null ? parseInt(pedidoBling.transporte.fretePorConta) : 9;
+            _state.nfeEditFretePorConta.value = currentFreteConta;
+        }
         if (_state.nfeEditVolumes) _state.nfeEditVolumes.value = pedidoBling.transporte?.quantidadeVolumes || 0;
         if (_state.nfeEditPesoBruto) _state.nfeEditPesoBruto.value = pedidoBling.transporte?.pesoBruto || 0;
         if (_state.nfeEditPesoLiquido) _state.nfeEditPesoLiquido.value = pedidoBling.transporte?.pesoLiquido || pedidoBling.transporte?.pesoBruto || 0;
         if (_state.nfeEditDesconto) {
             const num = parseFloat(pedidoBling.desconto?.valor) || 0;
             _state.nfeEditDesconto.value = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+        }
+        if (_state.nfeEditOutrasDespesas) {
+            const num = pedidoBling.outrasDespesas ? parseFloat(pedidoBling.outrasDespesas) : 0;
+            _state.nfeEditOutrasDespesas.value = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
         }
 
         // Limpar e carregar itens
@@ -1643,6 +1671,25 @@ export const GerenciarPedidosApp = (function () {
         const tr = document.createElement('tr');
         tr.className = 'nfe-edit-item-row';
         if (item.id) tr.dataset.itemId = item.id; // NOVO: Armazena o ID interno do item
+
+        let itemPeso = item.pesoBruto !== undefined ? item.pesoBruto : (item.peso !== undefined ? item.peso : null);
+        
+        // Se a venda não trouxe o peso, tentamos buscar do cadastro de produtos carregado globalmente
+        if (!itemPeso || itemPeso === 0) {
+            if (window._allProducts) {
+                const prod = window._allProducts.find(p => String(p.id) === String(item.produto?.id || item.id) || String(p.codigo) === String(item.codigo));
+                if (prod) {
+                    console.log(`[DEBUG Peso] Produto ${prod.codigo} encontrado no _allProducts:`, prod);
+                    itemPeso = parseFloat(prod.pesoBruto) || parseFloat(prod.pesoLiquido) || 
+                               parseFloat(prod.metricas?.peso_bruto) || parseFloat(prod.metricas?.peso_liquido) || 0;
+                } else {
+                    console.warn(`[DEBUG Peso] Produto NÃO encontrado no _allProducts! Procurado: ID ${item.produto?.id || item.id} / Codigo ${item.codigo}`);
+                }
+            } else {
+                console.warn(`[DEBUG Peso] window._allProducts não existe no momento!`);
+            }
+        }
+        if (!itemPeso) itemPeso = 0;
         
         tr.innerHTML = `
             <td class="px-4 py-2">
@@ -1653,6 +1700,14 @@ export const GerenciarPedidosApp = (function () {
             </td>
             <td class="px-4 py-2 text-center">
                 <input type="number" step="1" min="1" class="nfe-edit-item-quantidade w-full px-2 py-1 text-sm border border-gray-300 rounded text-center focus:ring-1 focus:ring-blue-500" value="${item.quantidade || 1}">
+            </td>
+            <td class="px-4 py-2">
+                <div class="flex items-center gap-2 justify-center">
+                    <input type="number" step="0.001" min="0" class="nfe-edit-item-peso w-20 px-2 py-1 text-sm border border-gray-300 rounded text-center focus:ring-1 focus:ring-blue-500" value="${itemPeso}">
+                    <button type="button" class="nfe-edit-item-sync-peso-btn flex-shrink-0 p-1 text-blue-500 hover:text-blue-700 bg-white rounded shadow-sm border border-gray-200 hidden transition-all" title="Salvar novo peso no cadastro do produto" data-original-peso="${itemPeso}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    </button>
+                </div>
             </td>
             <td class="px-4 py-2 text-right">
                 <input type="text" class="nfe-edit-item-valor w-full px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-1 focus:ring-blue-500" value="${item.valor || 0}">
@@ -1680,6 +1735,76 @@ export const GerenciarPedidosApp = (function () {
         
         const qtdInput = tr.querySelector('.nfe-edit-item-quantidade');
         if (qtdInput) qtdInput.addEventListener('input', _calculateTotals);
+
+        const pesoInput = tr.querySelector('.nfe-edit-item-peso');
+        const syncPesoBtn = tr.querySelector('.nfe-edit-item-sync-peso-btn');
+        if (pesoInput && syncPesoBtn) {
+            pesoInput.addEventListener('input', () => {
+                const originalPeso = parseFloat(syncPesoBtn.dataset.originalPeso) || 0;
+                const currentPeso = parseFloat(pesoInput.value) || 0;
+                if (currentPeso !== originalPeso) {
+                    syncPesoBtn.classList.remove('hidden');
+                } else {
+                    syncPesoBtn.classList.add('hidden');
+                }
+            });
+
+            syncPesoBtn.addEventListener('click', async () => {
+                const currentPeso = parseFloat(pesoInput.value) || 0;
+                const originalBtnHtml = syncPesoBtn.innerHTML;
+                
+                syncPesoBtn.innerHTML = `<svg class="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+                syncPesoBtn.disabled = true;
+
+                try {
+                    let productIdToUpdate = null;
+                    if (window._allProducts) {
+                        const p = window._allProducts.find(x => String(x.codigo) === String(item.codigo));
+                        if (p) productIdToUpdate = p.id;
+                    }
+
+                    if (productIdToUpdate) {
+                        await fetch(`${API_URLS.PRODUCTS}/${productIdToUpdate}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ peso_bruto: currentPeso, peso_liquido: currentPeso })
+                        });
+                        
+                        if (window._allProducts) {
+                            const p = window._allProducts.find(x => String(x.id) === String(productIdToUpdate));
+                            if (p) {
+                                p.pesoBruto = currentPeso;
+                                p.pesoLiq = currentPeso;
+                                if (!p.metricas) p.metricas = {};
+                                p.metricas.peso_bruto = currentPeso;
+                                p.metricas.peso_liquido = currentPeso;
+                            }
+                        }
+                        if (typeof PesquisarProduto !== 'undefined') {
+                            PesquisarProduto.updateProductWeightDisplay(productIdToUpdate, currentPeso, currentPeso);
+                        }
+
+                        syncPesoBtn.dataset.originalPeso = currentPeso;
+                        syncPesoBtn.innerHTML = `<svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+                        setTimeout(() => {
+                            syncPesoBtn.classList.add('hidden');
+                            syncPesoBtn.innerHTML = originalBtnHtml;
+                            syncPesoBtn.disabled = false;
+                        }, 1500);
+
+                    } else {
+                        alert(`Produto ${item.codigo} não encontrado no catálogo local.`);
+                        syncPesoBtn.innerHTML = originalBtnHtml;
+                        syncPesoBtn.disabled = false;
+                    }
+                } catch (e) {
+                    console.error("Erro ao sincronizar peso", e);
+                    alert("Erro ao sincronizar peso: " + e.message);
+                    syncPesoBtn.innerHTML = originalBtnHtml;
+                    syncPesoBtn.disabled = false;
+                }
+            });
+        }
 
         const codigoInput = tr.querySelector('.nfe-edit-item-codigo');
         if (codigoInput) codigoInput.addEventListener('input', _calculateTotals);
@@ -2023,8 +2148,20 @@ export const GerenciarPedidosApp = (function () {
             desconto = parseFloat(descontoStr) || 0;
         }
 
+        let outrasDespesas = 0;
+        if (_state.nfeEditOutrasDespesas) {
+            let outrasDespesasStr = _state.nfeEditOutrasDespesas.value.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
+            outrasDespesas = parseFloat(outrasDespesasStr) || 0;
+        }
+
+        // Recuperar IPI do pedido original (se houver), pois ele compõe o total da nota no Bling
+        let totalIPI = 0;
+        if (_state.currentPedidoBlingBruto && _state.currentPedidoBlingBruto.tributacao && _state.currentPedidoBlingBruto.tributacao.totalIPI) {
+            totalIPI = parseFloat(_state.currentPedidoBlingBruto.tributacao.totalIPI) || 0;
+        }
+
         totalPecas += frete;
-        const totalPedido = totalPecas + totalServicos - desconto;
+        const totalPedido = totalPecas + totalServicos + outrasDespesas + totalIPI - desconto;
 
         // Atualizar UI
         const formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -2080,7 +2217,14 @@ export const GerenciarPedidosApp = (function () {
         }
         const frete = _state.nfeEditFrete ? _parseNumber(_state.nfeEditFrete.value) : 0;
         const descontoVal = _state.nfeEditDesconto ? _parseNumber(_state.nfeEditDesconto.value) : 0;
-        const totalNota = Math.round((totalItens + frete - descontoVal) * 100) / 100;
+        const outrasDespesasVal = _state.nfeEditOutrasDespesas ? _parseNumber(_state.nfeEditOutrasDespesas.value) : 0;
+        
+        let totalIPI = 0;
+        if (_state.currentPedidoBlingBruto && _state.currentPedidoBlingBruto.tributacao && _state.currentPedidoBlingBruto.tributacao.totalIPI) {
+            totalIPI = parseFloat(_state.currentPedidoBlingBruto.tributacao.totalIPI) || 0;
+        }
+
+        const totalNota = Math.round((totalItens + frete + outrasDespesasVal + totalIPI - descontoVal) * 100) / 100;
 
         if (totalNota <= 0) {
             alert('O valor total líquido calculado para a nota é R$ 0.00 ou menor. Adicione itens com valores antes de ajustar as parcelas.');
@@ -2141,6 +2285,104 @@ export const GerenciarPedidosApp = (function () {
         }
     }
 
+    async function _handleAiParseObservation() {
+        const obsText = _state.nfeEditObservacoesOriginal ? _state.nfeEditObservacoesOriginal.value : '';
+        if (!obsText.trim()) {
+            alert('Não há observação original para analisar.');
+            return;
+        }
+
+        const btn = _state.nfeEditAiParseBtn;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<svg class="animate-spin -ml-1 mr-1 h-3 w-3 inline text-purple-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processando...`;
+        btn.disabled = true;
+
+        try {
+            const backendUrl = window.API_URLS && window.API_URLS.ORDERS_BLING 
+                ? window.API_URLS.ORDERS_BLING.replace('/pedidos', '')
+                : "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
+            
+            const response = await fetch(`${backendUrl}/bling/parse-observation-ai`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: obsText })
+            });
+
+            if (!response.ok) throw new Error('Falha ao processar IA');
+            const result = await response.json();
+            const data = result.data;
+
+            if (data.volume !== null && data.volume !== undefined) {
+                const volInput = document.getElementById('nfe-edit-volumes');
+                if (volInput) volInput.value = data.volume;
+            }
+
+            if (data.peso !== null && data.peso !== undefined) {
+                const pesoBruto = document.getElementById('nfe-edit-peso-bruto');
+                const pesoLiq = document.getElementById('nfe-edit-peso-liquido');
+                if (pesoBruto) pesoBruto.value = data.peso;
+                if (pesoLiq) pesoLiq.value = data.peso;
+            }
+
+            if (data.parcelas && Array.isArray(data.parcelas) && data.parcelas.length > 0) {
+                _generateParcelasWithDays(data.parcelas);
+            }
+
+            if (data.freteConta !== null && data.freteConta !== undefined) {
+                const freteContaSelect = _state.nfeEditFretePorConta;
+                if (freteContaSelect) {
+                    freteContaSelect.value = data.freteConta;
+                    freteContaSelect.dispatchEvent(new Event('change'));
+                }
+            }
+
+            if (data.transportadora) {
+                const freteContaSelect = _state.nfeEditFretePorConta;
+                if (freteContaSelect && parseInt(freteContaSelect.value) === 9) {
+                    freteContaSelect.value = 0;
+                    freteContaSelect.dispatchEvent(new Event('change'));
+                }
+
+                if (!_state.transportadorasLoaded) {
+                    await _loadNfeTransportadorasBling(_state.nfeEditCurrentTranspId, _state.nfeEditCurrentTranspNome);
+                }
+
+                const transpSelect = _state.nfeEditTransportadora;
+                if (transpSelect) {
+                    const nome = String(data.transportadora).toUpperCase();
+                    if (nome === 'RETIRADA' || nome === 'CLIENTE RETIRA') {
+                        const opt = Array.from(transpSelect.options).find(o => o.text.toUpperCase().includes('RETIRADA'));
+                        if (opt) transpSelect.value = opt.value;
+                    } else {
+                        const opt = Array.from(transpSelect.options).find(o => o.text.toUpperCase().includes(nome) || nome.includes(o.text.toUpperCase()) && o.text.trim() !== '' && o.text.trim().toUpperCase() !== 'SELECIONE A TRANSPORTADORA');
+                        if (opt) {
+                            transpSelect.value = opt.value;
+                        } else {
+                            transpSelect.value = '';
+                        }
+                    }
+                }
+            }
+
+            if (window.Toastify) {
+                Toastify({
+                    text: "Dados extraídos pela IA e preenchidos!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: 'center',
+                    style: { background: 'linear-gradient(to right, #9333ea, #7e22ce)' }
+                }).showToast();
+            }
+
+        } catch (error) {
+            console.error('Erro ao chamar IA:', error);
+            alert('Erro ao processar dados com IA. Verifique se o backend está atualizado.');
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+
     function _handleAutoAdjustParcelas() {
         const obsText = _state.nfeEditObservacoesOriginal ? _state.nfeEditObservacoesOriginal.value : '';
         let days = _parseDaysFromObservacoes(obsText);
@@ -2177,7 +2419,7 @@ export const GerenciarPedidosApp = (function () {
         inputEl.value = '';
     }
 
-    async function _saveOrderEdit() {
+    async function _saveOrderEdit(silent = false, skipConfirm = false) {
         const idPedido = _currentModalPedidoId;
         if (!idPedido) return;
         if (!_state.currentPedidoBlingBruto) {
@@ -2211,6 +2453,7 @@ export const GerenciarPedidosApp = (function () {
         const pesoBruto = _state.nfeEditPesoBruto ? parseFloat(_state.nfeEditPesoBruto.value) || 0 : 0;
         const pesoLiquido = _state.nfeEditPesoLiquido ? parseFloat(_state.nfeEditPesoLiquido.value) || 0 : 0;
         const descontoVal = _state.nfeEditDesconto ? _parseNumber(_state.nfeEditDesconto.value) : 0;
+        const outrasDespesasVal = _state.nfeEditOutrasDespesas ? _parseNumber(_state.nfeEditOutrasDespesas.value) : 0;
 
         // Validações básicas
         if (!contatoIdStr) { alert('Por favor, informe o ID do cliente.'); return; }
@@ -2224,13 +2467,15 @@ export const GerenciarPedidosApp = (function () {
                 const codigo = row.querySelector('.nfe-edit-item-codigo').value.trim();
                 const descricao = row.querySelector('.nfe-edit-item-descricao').value.trim();
                 const quantidade = parseInt(row.querySelector('.nfe-edit-item-quantidade').value) || 0;
+                const pesoInput = row.querySelector('.nfe-edit-item-peso');
+                const peso = pesoInput ? (parseFloat(pesoInput.value) || 0) : 0;
                 const valor = _parseNumber(row.querySelector('.nfe-edit-item-valor').value);
 
                 const idItem = row.dataset.itemId || null;
 
                 if (!descricao) { alert('Todas as linhas de item devem conter uma descrição.'); return; }
                 if (quantidade <= 0) { alert(`O item "${descricao}" deve ter quantidade maior que zero.`); return; }
-                items.push({ codigo, descricao, quantidade, valor, idItem });
+                items.push({ codigo, descricao, quantidade, peso, valor, idItem });
             }
         }
         if (items.length === 0) { alert('A nota fiscal deve possuir ao menos 1 item.'); return; }
@@ -2256,7 +2501,9 @@ export const GerenciarPedidosApp = (function () {
             }
         }
 
-        if (!confirm('Tem certeza de que deseja atualizar este pedido no Bling com as informações preenchidas?')) return;
+        if (!skipConfirm) {
+            if (!confirm('Tem certeza de que deseja atualizar este pedido no Bling com as informações preenchidas?')) return { success: false, error: "Cancelado pelo usuário" };
+        }
 
         // Para evitar que o Bling apague o endereço do cliente no pedido (já que o GET não traz o endereço dentro de contato),
         // passamos apenas o ID. As alterações no contato serão salvas via PUT na API de contatos logo abaixo.
@@ -2284,6 +2531,8 @@ export const GerenciarPedidosApp = (function () {
                     codigo: i.codigo,
                     descricao: i.descricao,
                     quantidade: i.quantidade,
+                    pesoBruto: i.peso,
+                    pesoLiquido: i.peso,
                     valor: i.valor
                 };
             } else {
@@ -2292,6 +2541,8 @@ export const GerenciarPedidosApp = (function () {
                     codigo: i.codigo,
                     descricao: i.descricao,
                     quantidade: i.quantidade,
+                    pesoBruto: i.peso,
+                    pesoLiquido: i.peso,
                     valor: i.valor
                 };
             }
@@ -2315,6 +2566,12 @@ export const GerenciarPedidosApp = (function () {
             payloadUpdate.desconto = { valor: descontoVal, unidade: 'REAL' };
         } else {
             payloadUpdate.desconto = { valor: 0, unidade: 'REAL' };
+        }
+
+        if (outrasDespesasVal > 0) {
+            payloadUpdate.outrasDespesas = outrasDespesasVal;
+        } else {
+            payloadUpdate.outrasDespesas = 0;
         }
 
         if (parcelas.length > 0) {
@@ -2373,6 +2630,35 @@ export const GerenciarPedidosApp = (function () {
 
             if (!res.ok) {
                 const errorResult = await res.json().catch(() => ({}));
+                
+                // Tratar caso em que o usuário tenta salvar os mesmos dados (Bling retorna Cód 3)
+                let isIdenticalError = false;
+                if (errorResult.details && errorResult.details.error && errorResult.details.error.fields) {
+                    isIdenticalError = errorResult.details.error.fields.some(f => 
+                        String(f.code) === '3' || 
+                        (f.msg && f.msg.toLowerCase().includes('idêntica')) ||
+                        (f.message && f.message.toLowerCase().includes('idêntica'))
+                    );
+                }
+
+                if (isIdenticalError) {
+                    console.log("[Salvar Pedido] Bling reportou informações idênticas (Cód 3). Tratando como sucesso.");
+                    if (!silent) {
+                        if (typeof Toastify !== 'undefined') {
+                            Toastify({
+                                text: '✅ Pedido já está atualizado no Bling com estes dados!',
+                                duration: 3500,
+                                gravity: 'top',
+                                position: 'center',
+                                style: { background: '#3b82f6' }
+                            }).showToast();
+                        } else {
+                            alert('Pedido já está atualizado no Bling com estes dados!');
+                        }
+                    }
+                    return { success: true };
+                }
+
                 console.error("Erro completo retornado pelo backend:", errorResult);
                 
                 let errMsg = errorResult.message || 'Falha ao atualizar pedido no Bling.';
@@ -2384,22 +2670,28 @@ export const GerenciarPedidosApp = (function () {
                 throw new Error(errMsg);
             }
 
-            if (typeof Toastify !== 'undefined') {
-                Toastify({
-                    text: '✅ Pedido atualizado com sucesso no Bling!',
-                    duration: 3500,
-                    gravity: 'top',
-                    position: 'center',
-                    style: { background: '#10b981' }
-                }).showToast();
-            } else {
-                alert('Pedido atualizado com sucesso no Bling!');
+            if (!silent) {
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({
+                        text: '✅ Pedido atualizado com sucesso no Bling!',
+                        duration: 3500,
+                        gravity: 'top',
+                        position: 'center',
+                        style: { background: '#10b981' }
+                    }).showToast();
+                } else {
+                    alert('Pedido atualizado com sucesso no Bling!');
+                }
             }
             
-            _closeNfeEditModal();
+            // O modal permanece aberto após salvar com sucesso.
+            return { success: true };
         } catch (err) {
             console.error('[Salvar Pedido] Erro ao atualizar pedido:', err);
-            alert('Erro ao atualizar pedido: ' + err.message);
+            if (!silent) {
+                alert('Erro ao atualizar pedido: ' + err.message);
+            }
+            return { success: false, error: err.message };
         } finally {
             if (btn) btn.disabled = false;
             if (spinner) spinner.classList.add('hidden');
@@ -2434,6 +2726,7 @@ export const GerenciarPedidosApp = (function () {
         const pesoBruto = _state.nfeEditPesoBruto ? parseFloat(_state.nfeEditPesoBruto.value) || 0 : 0;
         const pesoLiquido = _state.nfeEditPesoLiquido ? parseFloat(_state.nfeEditPesoLiquido.value) || 0 : 0;
         const descontoVal = _state.nfeEditDesconto ? _parseNumber(_state.nfeEditDesconto.value) : 0;
+        const outrasDespesasVal = _state.nfeEditOutrasDespesas ? _parseNumber(_state.nfeEditOutrasDespesas.value) : 0;
 
         // Validações básicas
         if (!contatoIdStr) {
@@ -2543,7 +2836,7 @@ export const GerenciarPedidosApp = (function () {
         // Validação da soma das parcelas vs valor total da nota
         let totalItens = 0;
         items.forEach(it => { totalItens += it.quantidade * it.valor; });
-        const totalNotaCalculado = Math.round((totalItens + frete - descontoVal) * 100) / 100;
+        const totalNotaCalculado = Math.round((totalItens + frete + outrasDespesasVal - descontoVal) * 100) / 100;
 
         if (parcelas.length > 0) {
             let totalParcelas = 0;
@@ -2557,10 +2850,61 @@ export const GerenciarPedidosApp = (function () {
             }
         }
 
-        if (somenteGerar) {
-            if (!confirm('Criar a NF-e no Bling SEM enviar para a SEFAZ?\n\nA nota ficará como rascunho e poderá ser conferida e enviada manualmente no Bling.')) return;
+        // Validação de Peso dos Produtos antes da Emissão Automática
+        if (!somenteGerar) {
+            let allZeroWeight = true;
+            let hasValidProducts = false;
+            const confirmBtn = _state.confirmNfeEditBtn;
+            const btnOriginalText = confirmBtn ? confirmBtn.innerHTML : '';
+            
+            try {
+                if (confirmBtn) {
+                    confirmBtn.disabled = true;
+                    confirmBtn.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> Verificando pesos...';
+                }
+
+                // Extrair IDs dos produtos do pedido bruto
+                const productIds = [];
+                if (_state.currentPedidoBlingBruto && _state.currentPedidoBlingBruto.itens) {
+                    _state.currentPedidoBlingBruto.itens.forEach(it => {
+                        if (it.produto && it.produto.id) productIds.push(it.produto.id);
+                    });
+                }
+
+                if (productIds.length > 0) {
+                    hasValidProducts = true;
+                    // Checar apenas os 3 primeiros para não demorar muito (rate limit)
+                    for (const pid of productIds.slice(0, 3)) {
+                        const resProd = await fetch(`${API_URLS.PRODUCTS}/${pid}`);
+                        if (resProd.ok) {
+                            const pData = await resProd.json();
+                            const product = pData.data;
+                            const pesoBruto = parseFloat(product.pesoBruto) || 0;
+                            if (pesoBruto > 0) {
+                                allZeroWeight = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("Erro ao checar pesos dos produtos:", e);
+            } finally {
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = btnOriginalText;
+                }
+            }
+
+            if (hasValidProducts && allZeroWeight) {
+                if (!confirm('⚠️ ALERTA DE PESO ZERO ⚠️\n\nOs produtos deste pedido estão com PESO ZERO no cadastro do Bling!\nComo o Bling ignora o peso manual e usa o peso dos produtos para gerar a NF-e, ela sairá zerada e a transportadora poderá rejeitar!\n\nRecomendamos usar o botão "Criar Rascunho", ou cadastrar o peso nos produtos.\n\nDeseja forçar o envio automático mesmo assim?')) {
+                    return;
+                }
+            } else {
+                if (!confirm('Confirmar a emissão da Nota Fiscal com os dados editados? Esta ação enviará a nota para a SEFAZ.')) return;
+            }
         } else {
-            if (!confirm('Confirmar a emissão da Nota Fiscal com os dados editados? Esta ação enviará a nota para a SEFAZ.')) return;
+            if (!confirm('Criar a NF-e no Bling SEM enviar para a SEFAZ?\n\nA nota ficará como rascunho e poderá ser conferida e enviada manualmente no Bling.')) return;
         }
 
         // Preparar payload customizado. 
@@ -2644,10 +2988,11 @@ export const GerenciarPedidosApp = (function () {
         }
 
         if (descontoVal > 0) {
-            payload.desconto = {
-                valor: descontoVal,
-                unidade: 'REAL'
-            };
+            payload.desconto = descontoVal;
+        }
+
+        if (outrasDespesasVal > 0) {
+            payload.outrasDespesas = outrasDespesasVal;
         }
 
         if (parcelas.length > 0) {
@@ -2665,47 +3010,17 @@ export const GerenciarPedidosApp = (function () {
             if (cancelBtn) cancelBtn.disabled = true;
             if (spinner) spinner.classList.remove('hidden');
 
-            // Atualiza os dados fiscais diretamente no cadastro do contato primeiro
-            if (_state.nfeEditCurrentContatoBruto && contatoId) {
-                const contatoPayload = {
-                    ..._state.nfeEditCurrentContatoBruto,
-                    nome: contatoNome,
-                    tipo: contatoTipo, // Corrigido de tipoPessoa para tipo, conforme API v3 de Contatos
-                    numeroDocumento: contatoCnpj,
-                    ie: contatoIe,
-                    indicadorIe: contatoContribuinte
-                };
-
-                // O Bling V3 muitas vezes retorna dataNascimento: "0000-00-00" no GET, mas se enviarmos isso de volta no PUT ele rejeita com erro de validação.
-                if (contatoPayload.dadosAdicionais && contatoPayload.dadosAdicionais.dataNascimento === '0000-00-00') {
-                    contatoPayload.dadosAdicionais.dataNascimento = '';
-                }
-                
-                try {
-                    const putReq = await fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(contatoPayload)
-                    });
-                    
-                    if (!putReq.ok) {
-                        const errData = await putReq.json().catch(() => ({}));
-                        console.error('[NFe Emit] Detalhes do erro ao atualizar contato:', errData);
-                        let errMsg = errData.message || 'Erro desconhecido ao atualizar contato';
-                        if (errData.details && errData.details.error && errData.details.error.fields) {
-                            errMsg += ': ' + errData.details.error.fields.map(f => f.msg || f.message).join(', ');
-                        }
-                        throw new Error(`Falha ao atualizar cliente no Bling antes da nota. Motivo: ${errMsg}`);
-                    }
-                } catch (cErr) {
-                    throw cErr; // Interrompe a emissão da nota e vai para o catch principal
-                }
+            // 1. Salvar os dados editados no Pedido de Venda primeiro (Bling V3)
+            const saveResult = await _saveOrderEdit(true, true);
+            if (!saveResult || !saveResult.success) {
+                throw new Error("Falha ao salvar edições no pedido: " + (saveResult?.error || "Erro desconhecido"));
             }
 
+            // 2. Chamar o backend para gerar a NFe através do pedido
             const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${idPedido}/gerar-nfe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...payload, somenteGerar })
+                body: JSON.stringify({ somenteGerar })
             });
 
             const result = await res.json();
@@ -2747,9 +3062,9 @@ export const GerenciarPedidosApp = (function () {
             if (pedidoLocal) {
                 const idNota = result.data?.idNota || result.idNota || result.data?.idNotaFiscal || result.idNotaFiscal || '';
                 if (idNota) {
-                    if (pedidoLocal.id_nota !== undefined) pedidoLocal.id_nota = idNota;
-                    if (pedidoLocal['id nota'] !== undefined) pedidoLocal['id nota'] = idNota;
-                    if (pedidoLocal['idnotafiscal'] !== undefined) pedidoLocal['idnotafiscal'] = idNota;
+                    pedidoLocal.id_nota = idNota;
+                    pedidoLocal['id nota'] = idNota;
+                    pedidoLocal['idnotafiscal'] = idNota;
                     
                     // Injeta a NFe provisória no cache para o frontend já exibir que está em processamento
                     if (window._allNFeData) {
@@ -2768,8 +3083,8 @@ export const GerenciarPedidosApp = (function () {
                     }
                 }
                 const atendidoLabel = 'Atendido';
-                if (pedidoLocal.situação !== undefined) pedidoLocal.situação = atendidoLabel;
-                if (pedidoLocal.situacao !== undefined) pedidoLocal.situacao = atendidoLabel;
+                pedidoLocal.situação = atendidoLabel;
+                pedidoLocal.situacao = atendidoLabel;
             }
 
             // Fechar modal de edição
@@ -3035,7 +3350,7 @@ export const GerenciarPedidosApp = (function () {
         printWindow.document.close();
     }
 
-    function _handlePrintMarker() {
+    async function _handlePrintMarker() {
         const modal = document.getElementById('order-details-modal');
         if (!modal) return;
         const orderNumber = modal.dataset.currentOrderNumber;
@@ -3044,11 +3359,92 @@ export const GerenciarPedidosApp = (function () {
         const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
         if (!pedido) return;
 
+        const printWindow = window.open('', '_blank', 'width=850,height=750');
+        if (!printWindow) {
+            alert('Por favor, permita pop-ups no seu navegador para imprimir.');
+            return;
+        }
+        printWindow.document.write('<html><body style="font-family:sans-serif;text-align:center;padding:50px;"><h2>Carregando informações da transportadora...</h2></body></html>');
+
         const cliente = (pedido.contato_nome || pedido['contato nome'] || pedido.cliente || '-').toUpperCase();
-        const vendedor = _getVendedorName(pedido.vendedor || '');
+        const vendedorFull = _getVendedorName(pedido.vendedor || '');
+        const vendedor = vendedorFull.split(' ')[0];
         const now = new Date().toLocaleString('pt-BR');
 
-        const printWindow = window.open('', '_blank', 'width=850,height=750');
+        let nfeNum = '';
+        const pedidoId = pedido.id || pedido.numero || '';
+        const numPedido = pedido.numero || pedido.número || '';
+        const idNota = pedido.id_nota || pedido['id nota'] || pedido.idnotafiscal || '';
+        
+        const nfeObj = (window._allNFeData || []).find(n => 
+            String(n.id_pedido || n.idPedido || '') === String(pedidoId) ||
+            String(n.numero_pedido || '') === String(numPedido) ||
+            (idNota && String(n.id_nota || '') === String(idNota)) ||
+            (idNota && String(n.id || '') === String(idNota))
+        );
+        
+        if (nfeObj) {
+            const num = nfeObj.numero || nfeObj.numero_da_nota || '';
+            if (num && num !== 'SEFAZ...') {
+                nfeNum = num;
+            }
+        }
+
+        // Tenta pegar direto da interface gráfica (DOM) como garantia 100%
+        const nfeDisplayEl = document.getElementById('modal-nfe-numero-display');
+        if (!nfeNum && nfeDisplayEl && nfeDisplayEl.innerText) {
+            const match = nfeDisplayEl.innerText.match(/Nº\s*(\d+)/i);
+            if (match && match[1]) {
+                nfeNum = match[1];
+            }
+        }
+
+        // Tentar obter a Transportadora
+        let transpNome = '';
+        if (pedido.transportadora) transpNome = String(pedido.transportadora);
+        else if (pedido.transporte) transpNome = String(pedido.transporte);
+        else if (nfeObj && nfeObj.transportadora) transpNome = String(nfeObj.transportadora);
+        else if (nfeObj && nfeObj.transporte) transpNome = String(nfeObj.transporte);
+
+        if (!transpNome && _state.currentPedidoBlingBruto && _state.currentPedidoBlingBruto.transporte && _state.currentPedidoBlingBruto.transporte.contato) {
+            transpNome = _state.currentPedidoBlingBruto.transporte.contato.nome || '';
+        }
+
+        const selectTransp = document.getElementById('nfe-edit-transportadora');
+        if (selectTransp && selectTransp.selectedIndex > 0) {
+            const optText = selectTransp.options[selectTransp.selectedIndex].text;
+            if (optText && !optText.toUpperCase().includes('SELECIONE') && !optText.toUpperCase().includes('CARREGANDO')) {
+                transpNome = optText;
+            }
+        }
+
+        if (!transpNome) {
+            try {
+                const fetchId = pedido.id || pedido.id_pedido || pedido['id pedido'] || orderNumber;
+                const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${fetchId}`);
+                if (res.ok) {
+                    const result = await res.json();
+                    if (result && result.data && result.data.transporte && result.data.transporte.contato) {
+                        transpNome = result.data.transporte.contato.nome || '';
+                    } else if (result && result.data && result.data.transporte && result.data.transporte.etiqueta) {
+                        transpNome = result.data.transporte.etiqueta.nome || '';
+                    } else if (result && result.data && result.data.transportadora) {
+                        transpNome = result.data.transportadora;
+                    }
+                }
+            } catch(e) {
+                console.error("Erro ao buscar transportadora no Bling para o marcador:", e);
+            }
+        }
+
+        if (transpNome) {
+            transpNome = transpNome.trim().toUpperCase();
+            if (transpNome === 'RETIRADA NA LOJA' || transpNome === 'BALCAO' || transpNome === 'BALCÃO' || transpNome.includes('RETIRADA')) {
+                transpNome = ''; 
+            }
+        }
+
+        printWindow.document.open();
         printWindow.document.write(`<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -3129,7 +3525,8 @@ export const GerenciarPedidosApp = (function () {
         <div class="company-name" id="company-name">${cliente}</div>
         <div class="mks-service">MKS - Service</div>
         <br>
-        <div class="vendedor">Vendedor: ${vendedor}</div>
+        <div class="vendedor" style="font-size: 38px;">Vendedor: ${vendedor}${nfeNum ? ` | <strong>NF-e: ${nfeNum}</strong>` : ''}</div>
+        ${transpNome ? `<div class="vendedor" style="margin-top: 15px; font-size: 38px;">Transportadora: <strong>${transpNome}</strong></div>` : ''}
     </div>
     <div class="footer">Gerado em ${now}</div>
     <script>
@@ -3757,12 +4154,20 @@ export const GerenciarPedidosApp = (function () {
                 else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento')) badgeClass = 'bg-yellow-100 text-yellow-800';
                 else if (sitLower.includes('produ')) badgeClass = 'bg-blue-100 text-blue-800';
 
-                // Verificação de Pedido Novo
+                // Verificação de Pedido Novo e Pedido de outro mês
                 const isNewOrder = newOrders.includes(String(numero)) || newOrders.includes(String(p.id));
-                const rowClass = isNewOrder 
-                    ? 'bg-blue-50 transition-colors hover:bg-blue-100'
-                    : 'hover:bg-gray-50 transition-colors';
-                const firstTdClass = isNewOrder ? 'border-l-4 border-blue-500' : 'border-l-4 border-transparent';
+                
+                const now = new Date();
+                const isOutdated = pDate && !isNaN(pDate) && (pDate.getMonth() !== now.getMonth() || pDate.getFullYear() !== now.getFullYear());
+
+                let rowClass = 'hover:bg-gray-50 transition-colors';
+                if (isNewOrder) {
+                    rowClass = 'bg-blue-50 transition-colors hover:bg-blue-100';
+                } else if (isOutdated) {
+                    rowClass = 'bg-yellow-50 transition-colors hover:bg-yellow-100';
+                }
+
+                const firstTdClass = isNewOrder ? 'border-l-4 border-blue-500' : (isOutdated ? 'border-l-4 border-yellow-500' : 'border-l-4 border-transparent');
 
                 return `
                     <tr id="pedido-row-${numero}" data-order-number="${numero}" class="${rowClass}">
@@ -4921,4 +5326,124 @@ window.saveChaveAcessoManual = async function(idNota, btn) {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
     }
+};
+
+window.openEmailDanfeModal = function(baixarPdfUrl, chaveAcesso, linkDanfe, filename, contatoEmail, numeroNota, cliente, numeroBling, orcamento, vendedor) {
+    const modal = document.getElementById('email-danfe-modal');
+    if (!modal) return;
+
+    document.getElementById('email-danfe-to').value = contatoEmail || '';
+    
+    const primeiroNomeVendedor = (vendedor && vendedor !== '-') ? vendedor.split(' ')[0] : 'Vendedor';
+    const orcStr = orcamento ? ` - Orç.: ${orcamento}` : '';
+    document.getElementById('email-danfe-subject').value = `${primeiroNomeVendedor} - Pedido N.: ${numeroBling || ''} - NFe.: ${numeroNota || ''}${orcStr}`;
+    
+    const hour = new Date().getHours();
+    let saudacaoStr = 'Bom dia';
+    if (hour >= 12 && hour < 18) saudacaoStr = 'Boa tarde';
+    else if (hour >= 18) saudacaoStr = 'Boa noite';
+    const saudacao = `${saudacaoStr} ${primeiroNomeVendedor}`;
+    
+    let displayFilename = filename || 'DANFE';
+    if (displayFilename.startsWith('DANFE - ')) {
+        displayFilename = displayFilename.substring(8); // Remove "DANFE - "
+    }
+    if (displayFilename.toLowerCase().endsWith('.pdf')) {
+        displayFilename = displayFilename.substring(0, displayFilename.length - 4); // Remove ".pdf"
+    }
+
+    document.getElementById('email-danfe-message').value = `${saudacao},\n\nSegue a NFe.: ${displayFilename}\n\natt.:`;
+    
+    document.getElementById('email-danfe-filename').innerText = filename || 'DANFE.pdf';
+
+    const dragArea = document.getElementById('email-danfe-drag-area');
+    if (dragArea) {
+        dragArea.ondragstart = function(event) {
+            let absoluteUrl = baixarPdfUrl;
+            if (absoluteUrl && !absoluteUrl.startsWith('http')) {
+                // Monta a URL completa, assumindo que baixarPdfUrl é um caminho absoluto do backEndGCloud
+                absoluteUrl = API_URLS.WEBHOOK_LAUNCH + (absoluteUrl.startsWith('/') ? absoluteUrl : '/' + absoluteUrl);
+            }
+            // Chrome/Edge "DownloadURL" syntax: mime_type:file_name:absolute_url
+            const safeFileName = (filename || 'DANFE.pdf').replace(/:/g, '_'); // Evita conflito na sintaxe do Chrome
+            event.dataTransfer.setData('DownloadURL', `application/pdf:${safeFileName}:${absoluteUrl}`);
+            event.dataTransfer.effectAllowed = 'copy';
+        };
+    }
+
+    const downloadBtn = document.getElementById('email-danfe-download-btn');
+    if (downloadBtn) {
+        downloadBtn.onclick = function() {
+            let absoluteUrl = baixarPdfUrl;
+            if (absoluteUrl && !absoluteUrl.startsWith('http')) {
+                absoluteUrl = API_URLS.WEBHOOK_LAUNCH + (absoluteUrl.startsWith('/') ? absoluteUrl : '/' + absoluteUrl);
+            }
+            window.open(absoluteUrl, '_blank');
+        };
+    }
+
+    if (!window.copyToClipboard) {
+        window.copyToClipboard = function(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.select();
+                document.execCommand('copy');
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({ text: '✅ Texto copiado!', duration: 2000, gravity: 'bottom', position: 'center', style: { background: '#4f46e5', borderRadius: '8px' } }).showToast();
+                }
+            }
+        };
+    }
+
+    const confirmBtn = document.getElementById('email-danfe-confirm-btn');
+    confirmBtn.onclick = async function() {
+        const toEmail = document.getElementById('email-danfe-to').value.trim();
+        const subject = document.getElementById('email-danfe-subject').value.trim();
+        const message = document.getElementById('email-danfe-message').value.trim();
+
+        if (!toEmail) {
+            alert('Por favor, informe ao menos um e-mail de destino.');
+            return;
+        }
+
+        const spinner = document.getElementById('email-danfe-spinner');
+        spinner.classList.remove('hidden');
+        confirmBtn.disabled = true;
+
+        try {
+            const res = await fetch(`${API_URLS.WEBHOOK_LAUNCH}/proxy-email-danfe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chaveAcesso: chaveAcesso,
+                    linkDanfe: linkDanfe,
+                    toEmail: toEmail,
+                    subject: subject,
+                    text: message,
+                    filename: filename
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Erro ao enviar e-mail.');
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: '✅ E-mail enviado com sucesso!',
+                    duration: 3000,
+                    gravity: 'top',
+                    position: 'center',
+                    style: { background: '#10b981' }
+                }).showToast();
+            }
+            modal.classList.add('hidden');
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            spinner.classList.add('hidden');
+            confirmBtn.disabled = false;
+        }
+    };
+
+    modal.classList.remove('hidden');
 };
