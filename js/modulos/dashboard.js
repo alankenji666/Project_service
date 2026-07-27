@@ -3378,6 +3378,8 @@ export const DashboardApp = (function() {
                     _renderSalesView();
                 } else if (_dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
                     _renderEstoqueDashboard();
+                } else if (_dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
+                    _renderRankingDashboard();
                 }
             } else {
                 _showSelector();

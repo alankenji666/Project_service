@@ -2194,7 +2194,22 @@ const data = filteredProducts.map(product => {
                     if (typeof EstoqueApp !== 'undefined') { EstoqueApp.updateSelectedCountDisplay(); }
                     if (!_pageOverviewRequisitions.classList.contains('hidden')) _renderRequisitionOverviewPage();
                     if (!_pageGerenciarSaida.classList.contains('hidden')) _renderNFeOverviewPage();
-                    if (!_pageDashboards.classList.contains('hidden')) _renderDashboardsPage(); // Adicione outras renderizações de página aqui se necessário
+                    if (!_pageDashboards.classList.contains('hidden')) {
+                        if (typeof DashboardApp !== 'undefined') {
+                            DashboardApp.init({
+                                allNFeData: _allNFeData,
+                                allLojaIntegradaOrders: _allLojaIntegradaOrders,
+                                allPedidosBling: (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [], 
+                                allProducts: _allProducts,
+                                parsePtBrDate: _parsePtBrDate,
+                                showMessageModal: _showMessageModal,
+                                positionTooltip: typeof positionTooltip !== 'undefined' ? positionTooltip : undefined,
+                                openOrderObservationModal: _openOrderObservationModal,
+                                formatCnpjCpf: typeof formatCnpjCpf !== 'undefined' ? formatCnpjCpf : undefined
+                            });
+                            DashboardApp.start(_allNFeData, _allLojaIntegradaOrders, (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.getAllPedidos() : [], _allProducts);
+                        }
+                    }
 
                 } catch (error) {
                     let userFacingErrorMessage = `Falha ao carregar dados: ${error.message}.`;

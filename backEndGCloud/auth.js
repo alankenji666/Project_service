@@ -37,7 +37,13 @@ const createAuthRouter = (getSheetsClient, spreadsheetId, sheetNameEmpresa, shee
             if (emailIndex === -1 || senhaIndex === -1) {
                 throw new Error('Erro de configuração do sistema de autenticação.');
             }
-            const userRow = rows.slice(1).find(row => row[emailIndex] && row[emailIndex].toLowerCase() === email.toLowerCase());
+            const userRow = rows.slice(1).find(row => {
+                if (!row[emailIndex]) return false;
+                const cellEmail = row[emailIndex].toLowerCase().trim();
+                const cellUsername = cellEmail.split('@')[0];
+                const inputEmail = email.toLowerCase().trim();
+                return cellEmail === inputEmail || cellUsername === inputEmail;
+            });
             if (!userRow) {
                 console.warn(`Tentativa de login falhou: Email "${email}" não encontrado.`);
                 const error = new Error('Credenciais inválidas.');
