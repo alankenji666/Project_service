@@ -737,14 +737,21 @@
                         <h1 class="text-4xl font-bold text-gray-800 mb-1">Dashboard de Estoque</h1>
                         <p class="text-lg text-gray-600">Análise de valor e distribuição de produtos.</p>
                     </div>
-                    <!-- Flip Switch para Estoque Bruto/Líquido -->
-                    <div class="ml-auto flex items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
-                        <span class="mr-3 text-sm font-bold text-gray-600">Preço de Venda (Bruto)</span>
-                        <label for="estoque-type-toggle" class="inline-flex relative items-center cursor-pointer">
-                            <input type="checkbox" id="estoque-type-toggle" class="sr-only peer">
-                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                        </label>
-                        <span class="ml-3 text-sm font-bold text-gray-600">Preço de Custo (Líquido)</span>
+                    <div class="ml-auto flex items-center gap-4">
+                        <button id="btn-estoque-tabela-precos" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded-lg shadow transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Tabela de Preços
+                        </button>
+                        
+                        <!-- Flip Switch para Estoque Bruto/Líquido -->
+                        <div class="flex items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                            <span class="mr-3 text-sm font-bold text-gray-600">Preço de Venda (Bruto)</span>
+                            <label for="estoque-type-toggle" class="inline-flex relative items-center cursor-pointer">
+                                <input type="checkbox" id="estoque-type-toggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                            </label>
+                            <span class="ml-3 text-sm font-bold text-gray-600">Preço de Custo (Líquido)</span>
+                        </div>
                     </div>
                 </div>
 
@@ -3012,6 +3019,46 @@
                     </svg>
                     Enviar E-mail
                 </button>
+            </div>
+        </div>
+    </div>
+    <!-- Modal de Tabela de Preços (Estoque) -->
+    <div id="estoque-tabela-precos-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full h-[85vh] flex flex-col relative">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Tabela de Preços
+                </h3>
+                <div class="flex items-center gap-4">
+                    <input type="text" id="tabela-precos-search" placeholder="Buscar produto ou código..." class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm w-64 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <button id="btn-export-tabela-precos" class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Baixar Excel (CSV)
+                    </button>
+                    <button id="close-tabela-precos-modal-btn" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors ml-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto bg-gray-50 p-6">
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200" id="tabela-precos-table">
+                        <thead class="bg-gray-100 sticky top-0 z-10">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cód. Item</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Produto</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Quantidade</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Preço Custo</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Preço Venda</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-precos-tbody" class="bg-white divide-y divide-gray-200">
+                            <!-- Preenchido via JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

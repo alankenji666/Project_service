@@ -305,6 +305,14 @@ export const DashboardApp = (function() {
         _dom.estoqueTypeToggle = document.getElementById('estoque-type-toggle');
         _dom.estoqueTopLimitSelect = document.getElementById('estoque-top-limit-select');
 
+        // Modal Tabela de Preços (Estoque)
+        _dom.btnEstoqueTabelaPrecos = document.getElementById('btn-estoque-tabela-precos');
+        _dom.estoqueTabelaPrecosModal = document.getElementById('estoque-tabela-precos-modal');
+        _dom.closeTabelaPrecosModalBtn = document.getElementById('close-tabela-precos-modal-btn');
+        _dom.tabelaPrecosSearch = document.getElementById('tabela-precos-search');
+        _dom.btnExportTabelaPrecos = document.getElementById('btn-export-tabela-precos');
+        _dom.tabelaPrecosTbody = document.getElementById('tabela-precos-tbody');
+
         _dom.rankingContainer = document.getElementById('dashboard-ranking-container');
         _dom.selectRankingBtn = document.getElementById('select-ranking-dashboard');
         _dom.backToSelectorFromRankingBtn = document.getElementById('back-to-selector-from-ranking-btn');
@@ -2937,6 +2945,18 @@ export const DashboardApp = (function() {
         _dom.backToSelectorFromEstoqueBtn?.addEventListener('click', _showSelector);
         _dom.backToSelectorFromRankingBtn?.addEventListener('click', _showSelector);
 
+        // Modal de Tabela de Preços (Estoque)
+        _dom.btnEstoqueTabelaPrecos?.addEventListener('click', _openTabelaPrecosModal);
+        _dom.closeTabelaPrecosModalBtn?.addEventListener('click', () => _dom.estoqueTabelaPrecosModal?.classList.add('hidden'));
+        _dom.tabelaPrecosSearch?.addEventListener('input', _renderTabelaPrecosModal);
+        _dom.btnExportTabelaPrecos?.addEventListener('click', _exportTabelaPrecosToCsv);
+        
+        _dom.estoqueTabelaPrecosModal?.addEventListener('click', (e) => {
+            if (e.target === _dom.estoqueTabelaPrecosModal) {
+                _dom.estoqueTabelaPrecosModal.classList.add('hidden');
+            }
+        });
+
         _dom.rankingSummaryCards?.addEventListener('click', e => {
             const card = e.target.closest('[data-ranking-filter]');
             if (card) { 
@@ -3487,11 +3507,102 @@ export const DashboardApp = (function() {
         },
 
         /**
-         * Expõe os pedidos Bling carregados no dashboard para uso por outros módulos (ex: modal de observação).
-         */
-        getAllPedidosBling: function() {
-            return _allPedidosBling;
+    // --- Funções da Tabela de Preços (Estoque) ---
+    function _openTabelaPrecosModal() {
+        if (!_dom.estoqueTabelaPrecosModal) return;
+        if (_dom.tabelaPrecosSearch) _dom.tabelaPrecosSearch.value = '';
+        _renderTabelaPrecosModal();
+        _dom.estoqueTabelaPrecosModal.classList.remove('hidden');
+    }
+
+    function _renderTabelaPrecosModal() {
+        if (!_dom.tabelaPrecosTbody) return;
+        
+        const searchQuery = (_dom.tabelaPrecosSearch?.value || '').toLowerCase().trim();
+        let html = '';
+
+        // Filtrar e ordenar produtos
+        const filteredProducts = _allProducts.filter(p => {
+            if (!p.codigo) return false;
+            if (searchQuery) {
+                const desc = (p.descricao || '').toLowerCase();
+                const cod = (p.codigo || '').toLowerCase();
+                if (!desc.includes(searchQuery) && !cod.includes(searchQuery)) return false;
+            }
+            return true;
+        }).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
+
+        if (filteredProducts.length === 0) {
+            html = `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500 italic">Nenhum produto encontrado.</td></tr>`;
+        } else {
+            filteredProducts.forEach(p => {
+                const estoque = parseFloat(p.estoque) || 0;
+                const precoVenda = _parseCurrencyBRL(p.preco);
+                const precoCusto = _parseCurrencyBRL(p.preco_de_custo);
+
+                html += `
+                    <tr class="hover:bg-blue-50 transition-colors">
+                        <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${p.codigo}</td>
+                        <td class="px-4 py-2 text-sm text-gray-700 max-w-md truncate" title="${(p.descricao || '').replace(/"/g, '&quot;')}">${p.descricao}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-center font-bold ${estoque <= 0 ? 'text-red-500' : 'text-green-600'}">${estoque}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700 text-right">${precoCusto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm font-bold text-gray-900 text-right">${precoVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    </tr>
+                `;
+            });
         }
+
+        _dom.tabelaPrecosTbody.innerHTML = html;
+    }
+
+    function _exportTabelaPrecosToCsv() {
+        if (_allProducts.length === 0) return;
+
+        const headers = ["Cod item", "Produto", "Quantidade", "Preço Custo", "Preço Venda"];
+        const rows = [headers];
+
+        const searchQuery = (_dom.tabelaPrecosSearch?.value || '').toLowerCase().trim();
+        
+        const filteredProducts = _allProducts.filter(p => {
+            if (!p.codigo) return false;
+            if (searchQuery) {
+                const desc = (p.descricao || '').toLowerCase();
+                const cod = (p.codigo || '').toLowerCase();
+                if (!desc.includes(searchQuery) && !cod.includes(searchQuery)) return false;
+            }
+            return true;
+        }).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
+
+        filteredProducts.forEach(p => {
+            const row = [
+                `"${p.codigo}"`,
+                `"${(p.descricao || '').replace(/"/g, '""')}"`,
+                parseFloat(p.estoque) || 0,
+                (_parseCurrencyBRL(p.preco_de_custo) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                (_parseCurrencyBRL(p.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ];
+            rows.push(row);
+        });
+
+        const csvContent = "\uFEFF" + rows.map(e => e.join(";")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `tabela_de_precos_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    return {
+        init: init,
+        start: start,
+        updateNFeData: updateNFeData,
+        updateProductData: updateProductData,
+        updateProductName: updateProductName,
+        resetToSelector: resetToSelector,
+        getAllPedidosBling: getAllPedidosBling
     };
 })();
 
