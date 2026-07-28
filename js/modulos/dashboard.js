@@ -640,10 +640,12 @@ export const DashboardApp = (function() {
         const limit = _state.estoqueTopLimit;
 
         // Cards
+        const totalItemsCount = data.categories.reduce((acc, cat) => acc + cat.count, 0);
         let cardsHtml = `
             <div data-filter="all" class="cursor-pointer transition-all duration-200 transform hover:scale-105 ${activeFilter === 'all' ? 'ring-4 ring-blue-300 shadow-lg' : ''} bg-blue-600 text-white p-4 rounded-xl shadow-md">
-                <p class="text-xs font-bold uppercase opacity-80">Valor Total (${data.isLiquido ? 'Líquido' : 'Bruto'})</p>
+                <p class="text-xs font-bold uppercase opacity-80">${data.isLiquido ? 'Valor Total de Custo' : 'Valor Total de Venda'}</p>
                 <p class="text-xl font-black">${data.totalGeralValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                <p class="text-[10px] text-blue-200 font-medium">${totalItemsCount} itens com saldo</p>
             </div>
         `;
 
