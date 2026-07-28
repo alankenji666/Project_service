@@ -56,8 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const [permissionKey, elementId] of Object.entries(permissionMap)) {
             const element = document.getElementById(elementId);
             if (element) {
-                // A permissão é "1" (string) para acesso permitido.
-                const hasAccess = permissions[permissionKey] === '1';
+                // A permissão '1' ou '1-X,X,X' garante o acesso ao menu principal
+                const val = String(permissions[permissionKey] || '0');
+                const hasAccess = val === '1' || val.startsWith('1-');
                 element.classList.toggle('hidden', !hasAccess);
             }
         }
@@ -189,12 +190,13 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function isUserAdmin(user) {
         if (!user) return false;
+        const dashAccess = String(user['acesso (dashboards)'] || '0');
         return (
             user['acesso (pesquisar produto)'] === '1' &&
             user['acesso (gerenciar entrada)'] === '1' &&
             user['acesso (gerenciar saida)'] === '1' &&
             user['acesso (gerenciar pedidos)'] === '1' &&
-            user['acesso (dashboards)'] === '1' &&
+            (dashAccess === '1' || dashAccess.startsWith('1-')) &&
             user['acesso (whatsapp)'] === '1' &&
             user['configurações'] === '1' &&
             user['somente visualizar dados?'] === '0'

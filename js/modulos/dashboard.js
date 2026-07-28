@@ -530,6 +530,31 @@ export const DashboardApp = (function() {
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
+
+        try {
+            const userInfoStr = localStorage.getItem('userInfo');
+            if (userInfoStr) {
+                const user = JSON.parse(userInfoStr);
+                const dashAccess = String(user['acesso (dashboards)'] || '0');
+                
+                let showVendas = true;
+                let showEstoque = true;
+                let showRanking = true;
+                
+                if (dashAccess.startsWith('1-')) {
+                    const parts = dashAccess.split('-')[1].split(',');
+                    showVendas = parts[0] === '1';
+                    showEstoque = parts[1] === '1';
+                    showRanking = parts[2] === '1';
+                }
+                
+                if (_dom.selectVendasBtn) _dom.selectVendasBtn.classList.toggle('hidden', !showVendas);
+                if (_dom.selectEstoqueBtn) _dom.selectEstoqueBtn.classList.toggle('hidden', !showEstoque);
+                if (_dom.selectRankingBtn) _dom.selectRankingBtn.classList.toggle('hidden', !showRanking);
+            }
+        } catch (e) {
+            console.error("Erro ao aplicar permissões granulares dos dashboards:", e);
+        }
     }
 
     // --- Inventory Dashboard Logic ---
