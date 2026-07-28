@@ -5635,8 +5635,9 @@ async function _saveProductTagGroupEdit() {
                     if (userInfoString) {
                         try {
                             const userInfo = JSON.parse(userInfoString);
+                            const dashAccess = String(userInfo['acesso (dashboards)'] || '0');
                             if (userInfo['acesso (pesquisar produto)'] === '1') defaultPage = 'pesquisar';
-                            else if (userInfo['acesso (dashboards)'] === '1') defaultPage = 'dashboards';
+                            else if (dashAccess === '1' || dashAccess.startsWith('1-')) defaultPage = 'dashboards';
                             else if (userInfo['acesso (gerenciar pedidos)'] === '1') defaultPage = 'gerenciar-pedidos';
                             else if (userInfo['acesso (gerenciar entrada)'] === '1') defaultPage = 'estoque';
                             else if (userInfo['acesso (gerenciar saida)'] === '1') defaultPage = 'gerenciar-saida';
