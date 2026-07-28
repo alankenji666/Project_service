@@ -8,7 +8,7 @@ echo 📦 1. Construindo imagem no Cloud Build...
 call %GCLOUD_PATH% builds submit --tag gcr.io/bling-integracao-463115/bling-proxy-api backEndGCloud
 
 echo 🚢 2. Fazendo deploy para o Cloud Run...
-call %GCLOUD_PATH% run deploy bling-proxy-api --image gcr.io/bling-integracao-463115/bling-proxy-api --region southamerica-east1 --platform managed --no-cpu-throttling --quiet
+call %GCLOUD_PATH% run deploy bling-proxy-api --image gcr.io/bling-integracao-463115/bling-proxy-api --region southamerica-east1 --platform managed --cpu-throttling --quiet
 
 echo 🎉 Deploy concluído com sucesso!
 pause
