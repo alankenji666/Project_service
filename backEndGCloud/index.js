@@ -938,7 +938,10 @@ const createTransportadorasRouter = require('./transportadoras.js');
 const transportadorasRouter = createTransportadorasRouter(
     getInitializedSheetsClient,
     SPREADSHEET_ID_ESTOQUE,
-    SHEET_NAME_TRANSPORTADORAS
+    SHEET_NAME_TRANSPORTADORAS,
+    axios,
+    APPS_SCRIPT_TOKEN_URL,
+    BLING_API_BASE_URL
 );
 app.use('/transportadoras', transportadorasRouter);
 

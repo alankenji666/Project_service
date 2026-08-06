@@ -62,13 +62,14 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
             const producaoMap = {};
             if (producaoRows && producaoRows.length > 1) {
-                const pHeaders = producaoRows[0].map(h => (h || '').toLowerCase().trim());
+                const pHeaders = producaoRows[0].map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, ""));
                 const hId = pHeaders.indexOf('pedidoid');
                 const hIdx = pHeaders.indexOf('itemindex');
                 const hSt = pHeaders.indexOf('status');
                 const hDesc = pHeaders.indexOf('descricaocomplementar');
                 const hQty = pHeaders.indexOf('quantidade');
                 const hDate = pHeaders.indexOf('data');
+                const hResp = pHeaders.indexOf('responsavel');
 
                 producaoRows.slice(1).forEach(row => {
                     const pid = String(row[hId] || '').trim();
@@ -78,7 +79,8 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                             status: hSt !== -1 ? (row[hSt] || 'OK') : 'OK',
                             descricao: hDesc !== -1 ? (row[hDesc] || '') : '',
                             quantidade: hQty !== -1 ? (row[hQty] || '') : '',
-                            data: hDate !== -1 ? (row[hDate] || '') : ''
+                            data: hDate !== -1 ? (row[hDate] || '') : '',
+                            responsavel: hResp !== -1 ? (row[hResp] || '') : ''
                         };
                     }
                 });
@@ -108,7 +110,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
     router.post('/update-item-status', async (req, res, next) => {
         try {
-            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, numeroPedido, quantidade } = req.body;
+            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, responsavel, numeroPedido, quantidade } = req.body;
             const idParaPlanilha = numeroPedido || pedidoId;
             if (!idParaPlanilha) throw new Error("Identificação do pedido é obrigatória.");
 
@@ -128,11 +130,15 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                     pHeaders.push('data');
                     changed = true;
                 }
+                if (pHeaders.indexOf('responsavel') === -1) {
+                    pHeaders.push('responsavel');
+                    changed = true;
+                }
                 if (changed) {
                     await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeaders] } });
                 }
             } else {
-                pHeaders = ['pedidoid', 'sku', 'itemindex', 'status', 'quantidade', 'data', 'descricaocomplementar'];
+                pHeaders = ['pedidoid', 'sku', 'itemindex', 'status', 'quantidade', 'data', 'descricaocomplementar', 'responsavel'];
                 await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeaders] } });
                 pRows = [pHeaders];
             }
@@ -144,6 +150,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             const hSku = pHeaders.indexOf('sku');
             const hQty = pHeaders.indexOf('quantidade');
             const hDate = pHeaders.indexOf('data');
+            const hResp = pHeaders.indexOf('responsavel');
 
             let foundIdx = -1;
             for (let i = 1; i < pRows.length; i++) {
@@ -156,12 +163,14 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             const { dataPedido } = req.body;
             let finalStatus = newStatus;
             let finalDesc = newDescription;
+            let finalResp = responsavel;
             let finalQty = quantidade;
             let finalDate = dataPedido;
 
             if (foundIdx !== -1) {
                 if (finalStatus === undefined && hSt !== -1) finalStatus = pRows[foundIdx][hSt];
                 if (finalDesc === undefined && hDesc !== -1) finalDesc = pRows[foundIdx][hDesc];
+                if (finalResp === undefined && hResp !== -1) finalResp = pRows[foundIdx][hResp];
                 if (finalQty === undefined && hQty !== -1) finalQty = pRows[foundIdx][hQty];
                 if (finalDate === undefined && hDate !== -1) finalDate = pRows[foundIdx][hDate];
             }
@@ -174,6 +183,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             if (hQty !== -1) rowData[hQty] = finalQty || '';
             if (hDate !== -1) rowData[hDate] = finalDate || '';
             if (hDesc !== -1) rowData[hDesc] = finalDesc || '';
+            if (hResp !== -1) rowData[hResp] = finalResp || '';
 
             if (foundIdx !== -1) {
                 await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A${foundIdx + 1}`, valueInputOption: 'RAW', resource: { values: [rowData] } });
@@ -215,7 +225,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                     }
                 }
             }
-            if (typeof notifySync === 'function') notifySync('orderItemStatusUpdated', { pedidoId, itemCodigo, newStatus: finalStatus, newDescription: finalDesc, itemIndex, quantidade: finalQty, dataPedido: finalDate });
+            if (typeof notifySync === 'function') notifySync('orderItemStatusUpdated', { pedidoId, itemCodigo, newStatus: finalStatus, newDescription: finalDesc, itemIndex, quantidade: finalQty, dataPedido: finalDate, responsavel: finalResp });
             res.status(200).send({ status: 'success' });
         } catch (error) { next(error); }
     });

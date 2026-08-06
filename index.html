@@ -46,7 +46,12 @@
                 <path
                     d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
             </svg>
-            <p class="text-white text-lg mt-4">Atualizando dados...</p>
+            <p class="text-white text-lg mt-4 font-bold tracking-wide">Atualizando dados...</p>
+            <div class="mt-5 w-80 bg-gray-900 bg-opacity-80 rounded-xl p-4 shadow-2xl border border-gray-700 backdrop-blur-sm flex flex-col space-y-1.5 text-xs text-gray-300 font-mono">
+                <div id="loading-details" class="flex flex-col w-full h-[120px] overflow-hidden justify-end">
+                    <!-- Logs aparecerão aqui -->
+                </div>
+            </div>
         </div>
     </div>
 
@@ -592,7 +597,7 @@
                                     <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
                                 </svg>
                             </div>
-                            <input type="text" id="pedidos-search-input" class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Buscar por cliente, número...">
+                            <input type="text" id="pedidos-search-input" class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Buscar por cliente, pedido, orç, NF-e...">
                         </div>
                     </div>
 
@@ -738,6 +743,10 @@
                         <p class="text-lg text-gray-600">Análise de valor e distribuição de produtos.</p>
                     </div>
                     <div class="ml-auto flex items-center gap-4">
+                        <button id="btn-requisicao-estimada" class="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold py-2 px-4 rounded-lg shadow transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Requisição Estimada
+                        </button>
                         <button id="btn-estoque-tabela-precos" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded-lg shadow transition-colors">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             Tabela de Preços
@@ -1160,7 +1169,11 @@
                             </button>
                             <button id="modal-print-marker-btn" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2">
                                 <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z"></path></svg>
-                                Imprimir Marcador
+                                Imprimir Marcador (Grande)
+                            </button>
+                            <button id="modal-print-marker-small-btn" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z"></path></svg>
+                                Imprimir Marcador (Pequeno)
                             </button>
                             <div class="border-t border-gray-100 mt-1"></div>
                             <button id="modal-print-nfe-btn" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors flex items-center gap-2">
@@ -1528,6 +1541,25 @@
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                     🚀 Salvar e Emitir NF-e
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-confirm-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full text-center relative transform transition-all">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+                <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+            </div>
+            <h3 id="app-confirm-modal-title" class="text-xl font-bold mb-2 text-gray-900">Confirmação</h3>
+            <p id="app-confirm-modal-content" class="text-gray-600 mb-6 font-medium"></p>
+            <div class="flex justify-center gap-3">
+                <button id="app-confirm-modal-cancel-btn" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg transition-colors focus:outline-none">
+                    Cancelar
+                </button>
+                <button id="app-confirm-modal-ok-btn" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-sm focus:outline-none flex items-center gap-2">
+                    <span id="app-confirm-modal-ok-text">Confirmar</span>
+                    <svg id="app-confirm-modal-spinner" class="animate-spin h-4 w-4 hidden" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                 </button>
             </div>
         </div>
@@ -2462,11 +2494,18 @@
                 <p id="edit-item-desc-complement-text" class="text-sm text-blue-700 font-medium italic"></p>
             </div>
 
-            <div class="mb-5">
+            <div class="mb-4">
                 <label for="edit-item-desc-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Nova Descrição / Variação</label>
                 <textarea id="edit-item-desc-input" rows="3"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                     placeholder="Digite a variação para a fabricação..."></textarea>
+            </div>
+            
+            <div class="mb-5">
+                <label for="edit-item-responsavel-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Responsável pela Produção</label>
+                <input type="text" id="edit-item-responsavel-input" 
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nome de quem vai produzir (Ex: Kenji, João, etc)">
             </div>
             <div class="flex justify-end space-x-3">
                 <button id="cancel-edit-item-desc-btn" class="px-5 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors">Cancelar</button>
@@ -2792,11 +2831,18 @@
             <!-- Header -->
             <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center shrink-0">
                 <h2 class="text-2xl font-bold text-white">Gerenciar Transportadoras</h2>
-                <button id="transportadoras-btn-fechar" class="text-white hover:bg-blue-500 p-2 rounded-full transition">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button id="transportadoras-btn-sync" class="text-white hover:bg-blue-500 p-2 rounded-full transition" title="Sincronizar com Bling">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                    </button>
+                    <button id="transportadoras-btn-fechar" class="text-white hover:bg-blue-500 p-2 rounded-full transition" title="Fechar">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <!-- Conteúdo -->
@@ -2941,6 +2987,13 @@
                     <p class="text-sm text-gray-500">Itens agregados de todos os pedidos "Em Produção"</p>
                 </div>
                 <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 mr-2">
+                        <label for="filter-responsavel-lp" class="text-sm font-bold text-gray-600">Responsável:</label>
+                        <select id="filter-responsavel-lp" class="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors">
+                            <option value="TODOS">Todos</option>
+                            <option value="SEM_RESP">Sem Responsável</option>
+                        </select>
+                    </div>
                     <button id="print-production-line-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-all shadow-md">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                         Imprimir
@@ -3066,6 +3119,49 @@
             </div>
         </div>
     </div>
+    <!-- Modal de Requisição Estimada -->
+    <div id="requisicao-estimada-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-6xl w-full h-[85vh] flex flex-col relative">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Requisição Estimada (Projeção Baseada em 365 dias)
+                    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 text-xs font-bold cursor-help ml-2 border border-red-200" title="Técnica: Média Móvel Anual (365 dias) com Trava de Frequência.&#10;&#10;Cálculo: Somamos todas as vendas do ano, dividimos por 12 (Média/Mês) e multiplicamos por 2 para projetar a necessidade de estoque para os próximos 60 dias.&#10;&#10;Regra Anti-Encalhe: Se 70% ou mais do volume de um item foi vendido em um único pedido (venda atípica), o sistema corta a projeção desse item pela metade automaticamente por segurança.">!</span>
+                </h3>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700 font-medium">
+                        <input type="checkbox" id="requisicao-estimada-zerados-cb" class="rounded text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer" checked>
+                        Mostrar todos os produtos
+                    </label>
+                    <input type="text" id="requisicao-estimada-search" placeholder="Buscar produto ou código..." class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm w-64 focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                    <button id="close-requisicao-estimada-modal-btn" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors ml-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto bg-gray-50 p-6">
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200" id="requisicao-estimada-table">
+                        <thead class="bg-gray-100 sticky top-0 z-10 select-none">
+                            <tr>
+                                <th scope="col" data-sort="codigo" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors">Cód. Item <span class="sort-icon inline-block w-3"></span></th>
+                                <th scope="col" data-sort="descricao" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors">Produto <span class="sort-icon inline-block w-3"></span></th>
+                                <th scope="col" data-sort="estoque" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors">Estoque Atual <span class="sort-icon inline-block w-3"></span></th>
+                                <th scope="col" data-sort="vendido365d" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors">Vendido (365D) <span class="sort-icon inline-block w-3"></span></th>
+                                <th scope="col" data-sort="numPedidos" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors" title="Número de pedidos únicos nestes 365 dias">Pedidos (365D) <span class="sort-icon inline-block w-3"></span></th>
+                                <th scope="col" data-sort="mediaMensal" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors">Média/Mês <span class="sort-icon inline-block w-3"></span></th>
+                                <th scope="col" data-sort="projecao60d" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors">Projeção (60D) <span class="sort-icon inline-block w-3"></span></th>
+                                <th scope="col" data-sort="requisicao" class="px-4 py-3 text-center text-xs font-bold text-purple-600 uppercase tracking-wider cursor-pointer hover:bg-purple-100 transition-colors bg-purple-50">A Requisitar <span class="sort-icon inline-block w-3">▼</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="requisicao-estimada-tbody" class="bg-white divide-y divide-gray-200">
+                            <!-- Preenchido via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
-
 </html>

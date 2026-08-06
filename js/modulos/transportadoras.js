@@ -258,6 +258,53 @@ export const TransportadorasApp = (function() {
     }
 
     /**
+     * Sincroniza com Bling
+     */
+    async function _syncBling() {
+        const btnSync = document.querySelector('#transportadoras-btn-sync');
+        if (!btnSync) return;
+
+        const originalHtml = btnSync.innerHTML;
+        btnSync.innerHTML = `<svg class="w-5 h-5 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+        btnSync.disabled = true;
+
+        if (typeof Toastify !== 'undefined') {
+            Toastify({
+                text: "Sincronizando com Bling... Isso pode levar alguns segundos.",
+                duration: 3000,
+                style: { background: "#3b82f6" }
+            }).showToast();
+        }
+
+        try {
+            const url = API_URLS.TRANSPORTADORAS_SYNC;
+            const response = await fetch(url, { method: 'POST' });
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Erro ao sincronizar');
+            }
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: `Sincronização concluída! ${result.novos} novas, ${result.atualizados} atualizadas.`,
+                    duration: 4000,
+                    style: { background: "#10b981" }
+                }).showToast();
+            }
+
+            _loadTransportadoras();
+
+        } catch (error) {
+            console.error('Erro na sincronização:', error);
+            alert('Falha na sincronização: ' + error.message);
+        } finally {
+            btnSync.innerHTML = originalHtml;
+            btnSync.disabled = false;
+        }
+    }
+
+    /**
      * Anexa event listeners
      */
     function _attachEventListeners() {
@@ -265,11 +312,13 @@ export const TransportadorasApp = (function() {
         const btnSalvar = document.querySelector('#transportadoras-btn-salvar');
         const btnCancelar = document.querySelector('#transportadoras-btn-cancelar');
         const btnFechar = document.querySelector('#transportadoras-btn-fechar');
+        const btnSync = document.querySelector('#transportadoras-btn-sync');
 
         if (btnNova) btnNova.addEventListener('click', _openNewForm);
         if (btnSalvar) btnSalvar.addEventListener('click', _salvarTransportadora);
         if (btnCancelar) btnCancelar.addEventListener('click', _cancelarForm);
         if (btnFechar) btnFechar.addEventListener('click', _closeModal);
+        if (btnSync) btnSync.addEventListener('click', _syncBling);
     }
 
     // API Pública

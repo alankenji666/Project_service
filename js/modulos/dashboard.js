@@ -73,7 +73,9 @@ export const DashboardApp = (function() {
         rankingProductSort: { key: 'data', direction: 'desc' },
         rankingProductContext: { codigo: '', descricao: '' },
         selectedRankingItems: [], // Novo: Itens selecionados no ranking para o relatório
-        tempContabilizados: new Set() // Novo: Pedidos contabilizados provisoriamente
+        tempContabilizados: new Set(), // Novo: Pedidos contabilizados provisoriamente
+        requisicaoEstimadaSort: { key: 'requisicao', direction: 'desc' },
+        requisicaoEstimadaShowZerados: true
     };
 
     let _dom = {}; // Cache for DOM elements
@@ -311,11 +313,20 @@ export const DashboardApp = (function() {
         _dom.btnEstoqueTabelaPrecos = document.getElementById('btn-estoque-tabela-precos');
         _dom.estoqueTabelaPrecosModal = document.getElementById('estoque-tabela-precos-modal');
         _dom.closeTabelaPrecosModalBtn = document.getElementById('close-tabela-precos-modal-btn');
+        _dom.tabelaPrecosTbody = document.getElementById('tabela-precos-tbody');
         _dom.tabelaPrecosSearch = document.getElementById('tabela-precos-search');
+        _dom.tabelaPrecosHeaders = document.querySelectorAll('#tabela-precos-table th[data-sort]');
         _dom.tabelaPrecosZeradosCb = document.getElementById('tabela-precos-zerados-cb');
         _dom.btnExportTabelaPrecos = document.getElementById('btn-export-tabela-precos');
-        _dom.tabelaPrecosTbody = document.getElementById('tabela-precos-tbody');
-        _dom.tabelaPrecosHeaders = document.querySelectorAll('#tabela-precos-table th[data-sort]');
+
+        // Modal de Requisição Estimada
+        _dom.btnRequisicaoEstimada = document.getElementById('btn-requisicao-estimada');
+        _dom.requisicaoEstimadaModal = document.getElementById('requisicao-estimada-modal');
+        _dom.closeRequisicaoEstimadaModalBtn = document.getElementById('close-requisicao-estimada-modal-btn');
+        _dom.requisicaoEstimadaTbody = document.getElementById('requisicao-estimada-tbody');
+        _dom.requisicaoEstimadaSearch = document.getElementById('requisicao-estimada-search');
+        _dom.requisicaoEstimadaHeaders = document.querySelectorAll('#requisicao-estimada-table th[data-sort]');
+        _dom.requisicaoEstimadaZeradosCb = document.getElementById('requisicao-estimada-zerados-cb');
 
         _dom.rankingContainer = document.getElementById('dashboard-ranking-container');
         _dom.selectRankingBtn = document.getElementById('select-ranking-dashboard');
@@ -3038,6 +3049,39 @@ export const DashboardApp = (function() {
             }
         });
 
+        // Modal de Requisição Estimada
+        _dom.btnRequisicaoEstimada?.addEventListener('click', _openRequisicaoEstimadaModal);
+        _dom.closeRequisicaoEstimadaModalBtn?.addEventListener('click', () => _dom.requisicaoEstimadaModal?.classList.add('hidden'));
+        _dom.requisicaoEstimadaSearch?.addEventListener('input', _renderRequisicaoEstimadaModal);
+        
+        if (_dom.requisicaoEstimadaZeradosCb) {
+            _dom.requisicaoEstimadaZeradosCb.addEventListener('change', (e) => {
+                _state.requisicaoEstimadaShowZerados = e.target.checked;
+                _renderRequisicaoEstimadaModal();
+            });
+        }
+        
+        if (_dom.requisicaoEstimadaHeaders) {
+            _dom.requisicaoEstimadaHeaders.forEach(th => {
+                th.addEventListener('click', () => {
+                    const key = th.dataset.sort;
+                    if (_state.requisicaoEstimadaSort.key === key) {
+                        _state.requisicaoEstimadaSort.direction = _state.requisicaoEstimadaSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        _state.requisicaoEstimadaSort.key = key;
+                        _state.requisicaoEstimadaSort.direction = 'asc';
+                    }
+                    _renderRequisicaoEstimadaModal();
+                });
+            });
+        }
+        
+        _dom.requisicaoEstimadaModal?.addEventListener('click', (e) => {
+            if (e.target === _dom.requisicaoEstimadaModal) {
+                _dom.requisicaoEstimadaModal.classList.add('hidden');
+            }
+        });
+
         _dom.rankingSummaryCards?.addEventListener('click', e => {
             const card = e.target.closest('[data-ranking-filter]');
             if (card) { 
@@ -3451,6 +3495,202 @@ export const DashboardApp = (function() {
                 closeMonthlySummaryModal();
             }
         });
+    }
+
+    // --- Funções de Requisição Estimada ---
+    function _openRequisicaoEstimadaModal() {
+        if (!_dom.requisicaoEstimadaModal) return;
+        if (_dom.requisicaoEstimadaSearch) _dom.requisicaoEstimadaSearch.value = '';
+        if (_dom.requisicaoEstimadaZeradosCb) {
+            _dom.requisicaoEstimadaZeradosCb.checked = _state.requisicaoEstimadaShowZerados;
+        }
+        _renderRequisicaoEstimadaModal();
+        _dom.requisicaoEstimadaModal.classList.remove('hidden');
+    }
+
+    function _calculateRequisicaoEstimada() {
+        // Filtrar pedidos dos últimos 90 dias
+        const allSources = [..._allPedidosBling, ..._allNFeData];
+        const uniqueOrdersMap = new Map();
+        allSources.forEach(p => {
+            const num = String(p.numero || p.número || p.id || p.id_pedido || '');
+            if (num && (!uniqueOrdersMap.has(num) || (!uniqueOrdersMap.get(num).itens && p.itens))) uniqueOrdersMap.set(num, p);
+        });
+
+        const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
+            const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
+            const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
+            return isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
+        });
+
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 365);
+
+        const filteredPedidos = pedidosBase.filter(p => {
+            const rawDate = p.data || p.data_saida || p.data_faturamento || p.data_emissao || p.data_criacao || p.data_pedido || p['data pedido'] || "";
+            let pDate = null;
+            if (rawDate) {
+                if (String(rawDate).includes('-')) pDate = new Date(rawDate + 'T00:00:00');
+                else pDate = _utils.parsePtBrDate(rawDate);
+            }
+            if (!pDate || isNaN(pDate.getTime())) return false;
+            return pDate >= startDate;
+        });
+
+        // Somar itens vendidos e calcular volume por pedido
+        const salesByProduct = {};
+        filteredPedidos.forEach(p => {
+            const items = _parseNfeItemsString(p.itens || p.Itens || '');
+            const pedidoId = String(p.numero || p.id || '');
+            items.forEach(it => {
+                if (!salesByProduct[it.codigo]) salesByProduct[it.codigo] = { qtd: 0, pedidosDict: {} };
+                salesByProduct[it.codigo].qtd += it.quantidade;
+                if (pedidoId) {
+                    if (!salesByProduct[it.codigo].pedidosDict[pedidoId]) {
+                        salesByProduct[it.codigo].pedidosDict[pedidoId] = 0;
+                    }
+                    salesByProduct[it.codigo].pedidosDict[pedidoId] += it.quantidade;
+                }
+            });
+        });
+
+        // Montar array final
+        const projectedData = [];
+        _allProducts.forEach(p => {
+            const tags = p.grupo_de_tags_tags || [];
+            // Ignorar itens sem tag de estoque/demanda ou produtos que são consumo
+            const hasValidTag = tags.includes('Estoque - Terceiros') || tags.includes('Estoque - Fábrica') || tags.includes('Sob Demanda - Fábrica');
+            
+            if (!hasValidTag) return;
+
+            const estoque = parseFloat(p.estoque) || 0;
+            const salesInfo = salesByProduct[p.codigo] || { qtd: 0, pedidosDict: {} };
+            const vendido365d = salesInfo.qtd;
+            
+            const pedidosKeys = Object.keys(salesInfo.pedidosDict);
+            const numPedidos = pedidosKeys.length;
+            
+            let maxOrderQtd = 0;
+            pedidosKeys.forEach(k => {
+                if (salesInfo.pedidosDict[k] > maxOrderQtd) {
+                    maxOrderQtd = salesInfo.pedidosDict[k];
+                }
+            });
+            
+            const mediaMensal = vendido365d / 12;
+            let projecao60d = Math.ceil(mediaMensal * 2);
+            
+            let penalidadeFrequencia = false;
+            // Upgrade Técnica B: Filtro de Pico de Venda (Outlier)
+            // Se o maior pedido sozinho representou 70% ou mais das vendas, 
+            // e o volume total for maior que 5, consideramos um evento atípico.
+            if (vendido365d > 5 && maxOrderQtd > 0) {
+                const concentracao = maxOrderQtd / vendido365d;
+                if (concentracao >= 0.70) {
+                    projecao60d = Math.ceil(projecao60d / 2); // Corta a projeção pela metade para reduzir o risco do outlier
+                    penalidadeFrequencia = true;
+                }
+            } else if (numPedidos === 1 && vendido365d > 2) {
+                // Fallback para caso de 1 único pedido
+                projecao60d = Math.ceil(projecao60d / 2); 
+                penalidadeFrequencia = true;
+            }
+            
+            let requisicao = projecao60d - estoque;
+            if (requisicao < 0) requisicao = 0;
+
+            projectedData.push({
+                codigo: p.codigo || '',
+                descricao: p.descricao || '',
+                estoque: estoque,
+                vendido365d: vendido365d,
+                numPedidos: numPedidos, // Nova propriedade
+                mediaMensal: mediaMensal,
+                projecao60d: projecao60d,
+                requisicao: requisicao,
+                penalidadeFrequencia: penalidadeFrequencia
+            });
+        });
+
+        return projectedData;
+    }
+
+    function _renderRequisicaoEstimadaModal() {
+        if (!_dom.requisicaoEstimadaTbody) return;
+        
+        const searchQuery = (_dom.requisicaoEstimadaSearch?.value || '').toLowerCase().trim();
+        const showAll = _state.requisicaoEstimadaShowZerados;
+        
+        // Atualizar ícones de ordenação
+        if (_dom.requisicaoEstimadaHeaders) {
+            _dom.requisicaoEstimadaHeaders.forEach(th => {
+                const icon = th.querySelector('.sort-icon');
+                if (icon) {
+                    if (th.dataset.sort === _state.requisicaoEstimadaSort.key) {
+                        icon.innerHTML = _state.requisicaoEstimadaSort.direction === 'asc' ? '▲' : '▼';
+                    } else {
+                        icon.innerHTML = '';
+                    }
+                }
+            });
+        }
+
+        const data = _calculateRequisicaoEstimada();
+        
+        let filtered = data.filter(item => {
+            const matchesSearch = !searchQuery || 
+                item.codigo.toLowerCase().includes(searchQuery) || 
+                item.descricao.toLowerCase().includes(searchQuery);
+            
+            const matchesZero = showAll || item.requisicao > 0;
+            
+            return matchesSearch && matchesZero;
+        });
+
+        // Ordenação
+        const sortKey = _state.requisicaoEstimadaSort.key;
+        const sortDir = _state.requisicaoEstimadaSort.direction;
+        
+        filtered.sort((a, b) => {
+            let valA = a[sortKey];
+            let valB = b[sortKey];
+            
+            if (typeof valA === 'string') {
+                return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            return sortDir === 'asc' ? valA - valB : valB - valA;
+        });
+
+        let html = '';
+        if (filtered.length === 0) {
+            html = `<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">Nenhum produto encontrado para requisição.</td></tr>`;
+        } else {
+            filtered.forEach(item => {
+                const isUrgent = item.requisicao > 0;
+                const rowClass = isUrgent ? 'bg-purple-50/30' : '';
+                const reqClass = isUrgent ? 'text-purple-700 font-bold' : 'text-gray-500';
+                
+                let projecaoDisplay = item.projecao60d.toLocaleString('pt-BR');
+                if (item.penalidadeFrequencia) {
+                    projecaoDisplay += ` <span class="text-orange-500 font-bold cursor-help" title="Projeção cortada pela metade: Detectamos que mais de 70% desse volume saiu em apenas 1 único pedido (Venda Atípica de Alto Risco).">⚠️</span>`;
+                }
+                
+                html += `
+                    <tr class="hover:bg-gray-50 transition-colors ${rowClass}">
+                        <td class="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">${item.codigo}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900 font-medium">${item.descricao}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500 text-center">${item.estoque.toLocaleString('pt-BR')}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500 text-center">${item.vendido365d.toLocaleString('pt-BR')}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500 text-center font-semibold">${item.numPedidos}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500 text-center">${item.mediaMensal.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500 text-center">${projecaoDisplay}</td>
+                        <td class="px-4 py-3 text-sm text-center ${reqClass}">${item.requisicao.toLocaleString('pt-BR')}</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        _dom.requisicaoEstimadaTbody.innerHTML = html;
     }
 
     // --- Public API ---

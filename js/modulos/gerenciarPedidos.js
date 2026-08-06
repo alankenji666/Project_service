@@ -155,6 +155,7 @@ export const GerenciarPedidosApp = (function () {
         _state.linhaProducaoContent = document.getElementById('production-line-modal-content');
         _state.linhaProducaoCloseBtn = document.getElementById('close-production-line-modal-btn');
         _state.linhaProducaoPrintBtn = document.getElementById('print-production-line-btn');
+        _state.linhaProducaoFilterResp = document.getElementById('filter-responsavel-lp');
 
         // Elementos do Modal de Detalhes do Pedido
         _state.modalStatusCurrentText = document.getElementById('modal-status-current-text');
@@ -373,7 +374,15 @@ export const GerenciarPedidosApp = (function () {
         if (printMarkerBtn) {
             printMarkerBtn.addEventListener('click', () => {
                 printDropdownMenu.classList.add('hidden');
-                _handlePrintMarker();
+                _handlePrintMarker(false);
+            });
+        }
+        
+        const printMarkerSmallBtn = document.getElementById('modal-print-marker-small-btn');
+        if (printMarkerSmallBtn) {
+            printMarkerSmallBtn.addEventListener('click', () => {
+                printDropdownMenu.classList.add('hidden');
+                _handlePrintMarker(true);
             });
         }
 
@@ -439,7 +448,10 @@ export const GerenciarPedidosApp = (function () {
         
         if (_state.confirmNfeEditBtn) _state.confirmNfeEditBtn.addEventListener('click', () => _confirmCustomEmitirNfe(false));
         if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.addEventListener('click', () => _confirmCustomEmitirNfe(true));
-        if (_state.saveOrderEditBtn) _state.saveOrderEditBtn.addEventListener('click', _saveOrderEdit);
+        if (_state.saveOrderEditBtn) _state.saveOrderEditBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            _saveOrderEdit(false, false);
+        });
         if (_state.nfeEditModal) {
             _state.nfeEditModal.addEventListener('click', (e) => {
                 if (e.target === _state.nfeEditModal) {
@@ -574,6 +586,7 @@ export const GerenciarPedidosApp = (function () {
         if (_state.linhaProducaoBtn) _state.linhaProducaoBtn.addEventListener('click', _showProductionLine);
         if (_state.linhaProducaoCloseBtn) _state.linhaProducaoCloseBtn.addEventListener('click', () => _state.linhaProducaoModal.classList.add('hidden'));
         if (_state.linhaProducaoPrintBtn) _state.linhaProducaoPrintBtn.addEventListener('click', _printProductionLine);
+        if (_state.linhaProducaoFilterResp) _state.linhaProducaoFilterResp.addEventListener('change', _showProductionLine);
     }
 
     function _handleSelectAllToggle(e) {
@@ -1021,6 +1034,7 @@ export const GerenciarPedidosApp = (function () {
                     status: (extra && extra.status) ? extra.status : status,
                     descricaoPersonalizada: (extra && extra.descricao) ? extra.descricao : '',
                     dataProducao: (extra && extra.data) ? extra.data : '', // Pegando a data da aba de produção
+                    responsavel: (extra && extra.responsavel) ? extra.responsavel : '', // Novo campo de Responsável
                     index: index // Adicionando o índice original
                 });
             }
@@ -1376,8 +1390,14 @@ export const GerenciarPedidosApp = (function () {
 
             if (result.status === 'partial_success' && result.data.erros.length > 0) {
                 const erro = result.data.erros[0].erro;
-                console.error("Erro no Bling:", erro);
-                throw new Error(`Bling recusou a mudança: ${erro}`);
+                // Se o erro for genérico de situação, vamos dar uma dica melhor para o usuário (ex: Falta de Estoque)
+                if (erro.toLowerCase().includes('não foi possível alterar') || erro.toLowerCase().includes('nao foi possivel alterar')) {
+                    console.error("Erro no Bling ao alterar situação:", erro);
+                    throw new Error(`Bling recusou a mudança. Isso geralmente ocorre por duas razões:\n1. O pedido já está nessa situação.\n2. Falta de Estoque (Se o Bling estiver configurado para baixar estoque ao Atender, ele bloqueia se algum item estiver esgotado).`);
+                } else {
+                    console.error("Erro no Bling:", erro);
+                    throw new Error(`Bling recusou a mudança: ${erro}`);
+                }
             }
 
             // Atualizar localmente o pedido em memória para manter consistência no UI
@@ -2502,7 +2522,11 @@ export const GerenciarPedidosApp = (function () {
         }
 
         if (!skipConfirm) {
-            if (!confirm('Tem certeza de que deseja atualizar este pedido no Bling com as informações preenchidas?')) return { success: false, error: "Cancelado pelo usuário" };
+            const confirmed = await _showCustomConfirm(
+                'Atualizar Pedido no Bling',
+                'Tem certeza de que deseja atualizar este pedido no Bling com as informações preenchidas?'
+            );
+            if (!confirmed) return { success: false, error: "Cancelado pelo usuário" };
         }
 
         // Para evitar que o Bling apague o endereço do cliente no pedido (já que o GET não traz o endereço dentro de contato),
@@ -2695,6 +2719,8 @@ export const GerenciarPedidosApp = (function () {
         } finally {
             if (btn) btn.disabled = false;
             if (spinner) spinner.classList.add('hidden');
+            const confirmModal = document.getElementById('app-confirm-modal');
+            if (confirmModal) confirmModal.classList.add('hidden');
         }
     }
 
@@ -3350,7 +3376,7 @@ export const GerenciarPedidosApp = (function () {
         printWindow.document.close();
     }
 
-    async function _handlePrintMarker() {
+    async function _handlePrintMarker(smallMarker = false) {
         const modal = document.getElementById('order-details-modal');
         if (!modal) return;
         const orderNumber = modal.dataset.currentOrderNumber;
@@ -3445,6 +3471,13 @@ export const GerenciarPedidosApp = (function () {
         }
 
         printWindow.document.open();
+        
+        const pageMedia = smallMarker ? '@page { size: A6 portrait; margin: 0; }' : '@page { size: A4 landscape; margin: 0; }';
+        const nameFontSize = smallMarker ? '70px' : '180px';
+        const serviceFontSize = smallMarker ? '26px' : '52px';
+        const detailsFontSize = smallMarker ? '18px' : '34px';
+        const detailsLargeSize = smallMarker ? '20px' : '38px';
+        
         printWindow.document.write(`<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -3476,7 +3509,7 @@ export const GerenciarPedidosApp = (function () {
         }
 
         .company-name { 
-            font-size: 180px; 
+            font-size: ${nameFontSize}; 
             font-weight: 900; 
             color: #000; 
             line-height: 0.95;
@@ -3487,7 +3520,7 @@ export const GerenciarPedidosApp = (function () {
         }
 
         .mks-service { 
-            font-size: 52px; 
+            font-size: ${serviceFontSize}; 
             font-weight: normal; 
             color: #000; 
             margin-bottom: 10px;
@@ -3499,7 +3532,7 @@ export const GerenciarPedidosApp = (function () {
         }
 
         .vendedor { 
-            font-size: 34px; 
+            font-size: ${detailsFontSize}; 
             color: #333; 
             font-family: Arial, sans-serif;
             font-weight: normal;
@@ -3516,7 +3549,7 @@ export const GerenciarPedidosApp = (function () {
 
         @media print {
             body { padding: 0; margin: 0; height: 100vh; width: 100vw; }
-            @page { size: A4 landscape; margin: 0; }
+            ${pageMedia}
         }
     </style>
 </head>
@@ -3525,8 +3558,8 @@ export const GerenciarPedidosApp = (function () {
         <div class="company-name" id="company-name">${cliente}</div>
         <div class="mks-service">MKS - Service</div>
         <br>
-        <div class="vendedor" style="font-size: 38px;">Vendedor: ${vendedor}${nfeNum ? ` | <strong>NF-e: ${nfeNum}</strong>` : ''}</div>
-        ${transpNome ? `<div class="vendedor" style="margin-top: 15px; font-size: 38px;">Transportadora: <strong>${transpNome}</strong></div>` : ''}
+        <div class="vendedor" style="font-size: ${detailsLargeSize};">Vendedor: ${vendedor}${nfeNum ? ` | <strong>NF-e: ${nfeNum}</strong>` : ''}</div>
+        ${transpNome ? `<div class="vendedor" style="margin-top: 15px; font-size: ${detailsLargeSize};">Transportadora: <strong>${transpNome}</strong></div>` : ''}
     </div>
     <div class="footer">Gerado em ${now}</div>
     <script>
@@ -3534,7 +3567,7 @@ export const GerenciarPedidosApp = (function () {
             const el = document.getElementById('company-name');
             const container = document.getElementById('print-container');
             
-            let fontSize = 180; 
+            let fontSize = ${smallMarker ? '70' : '180'}; 
             el.style.fontSize = fontSize + 'px';
             
             // Verifica se a altura do container (conteúdo) passa da altura da janela
@@ -4054,7 +4087,31 @@ export const GerenciarPedidosApp = (function () {
 
             const vendedor = _getVendedorName(p.vendedor || '').toLowerCase();
             const orcamento = String(p.orcamento || p['orcamento'] || p.orçamento || '').toLowerCase();
-            const termMatch = numero.includes(term) || cliente.includes(term) || vendedor.includes(term) || orcamento.includes(term);
+            const numeroLoja = String(p.numero_loja || p.numeroLoja || '').toLowerCase();
+            
+            // Busca dados da NFe vinculada para filtro
+            let numeroNota = '';
+            let chaveNota = '';
+            if (window._allNFeData) {
+                const nfe = window._allNFeData.find(n => 
+                    String(n.id_pedido || n.idPedido || '') === String(p.id) ||
+                    String(n.numero_pedido || '') === String(p.número || p.numero) ||
+                    String(n.id_nota || '') === String(p.id_nota || p['id nota'] || p.idnotafiscal || p.id_nota_fiscal || p['id nota fiscal'])
+                );
+                if (nfe) {
+                    numeroNota = String(nfe.numero || nfe.numero_da_nota || '').toLowerCase();
+                    chaveNota = String(nfe.chaveAcesso || nfe.chave_acesso || '').toLowerCase();
+                }
+            }
+
+            const termMatch = numero.includes(term) || 
+                              cliente.includes(term) || 
+                              vendedor.includes(term) || 
+                              orcamento.includes(term) || 
+                              numeroLoja.includes(term) ||
+                              (numeroNota && numeroNota.includes(term)) ||
+                              (chaveNota && chaveNota.includes(term));
+
             return dateMatch && statusMatch && yearMatch && termMatch;
         });
 
@@ -4321,7 +4378,7 @@ export const GerenciarPedidosApp = (function () {
 
             parsedItens.forEach(item => {
                 const s = String(item.status || 'OK').toUpperCase().trim();
-                const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
+                const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO' || s === 'FINALIZADO';
 
                 if (isProducao) {
                     const codigo = String(item.codigo).trim();
@@ -4341,7 +4398,9 @@ export const GerenciarPedidosApp = (function () {
                             numeroPedido: numeroPedido,
                             pedidoId: finalId,
                             itemIndex: item.index,
-                            descricaoPersonalizada: item.descricaoPersonalizada
+                            descricaoPersonalizada: item.descricaoPersonalizada,
+                            status: item.status || 'EM PRODUÇÃO',
+                            responsavel: item.responsavel || ''
                         };
                     }
                     aggregatedItems[key].quantidadeTotal += (parseFloat(item.quantidade) || 0);
@@ -4349,7 +4408,41 @@ export const GerenciarPedidosApp = (function () {
             });
         });
 
-        const itemsArray = Object.values(aggregatedItems);
+        let itemsArray = Object.values(aggregatedItems);
+
+        // Extrair responsáveis únicos para o filtro
+        const responsaveisSet = new Set();
+        itemsArray.forEach(item => {
+            if (item.responsavel && item.responsavel.trim() !== '') {
+                responsaveisSet.add(item.responsavel.trim());
+            }
+        });
+        const responsaveis = Array.from(responsaveisSet).sort();
+
+        // Atualizar options do select de filtro mantendo a seleção atual
+        if (_state.linhaProducaoFilterResp) {
+            const currentSelection = _state.linhaProducaoFilterResp.value || 'TODOS';
+            let optionsHTML = '<option value="TODOS">Todos</option><option value="SEM_RESP">Sem Responsável</option>';
+            responsaveis.forEach(resp => {
+                optionsHTML += `<option value="${resp}">${resp}</option>`;
+            });
+            _state.linhaProducaoFilterResp.innerHTML = optionsHTML;
+            if (currentSelection === 'SEM_RESP' || responsaveis.includes(currentSelection)) {
+                _state.linhaProducaoFilterResp.value = currentSelection;
+            } else {
+                _state.linhaProducaoFilterResp.value = 'TODOS';
+            }
+        }
+
+        // Aplicar o filtro se não for TODOS
+        if (_state.linhaProducaoFilterResp && _state.linhaProducaoFilterResp.value !== 'TODOS') {
+            const activeFilter = _state.linhaProducaoFilterResp.value;
+            if (activeFilter === 'SEM_RESP') {
+                itemsArray = itemsArray.filter(item => !item.responsavel || item.responsavel.trim() === '');
+            } else {
+                itemsArray = itemsArray.filter(item => item.responsavel && item.responsavel.trim() === activeFilter);
+            }
+        }
 
         // Ordenar por data (Mais antigos primeiro)
         itemsArray.sort((a, b) => {
@@ -4385,7 +4478,7 @@ export const GerenciarPedidosApp = (function () {
                         <tr>
                             <th class="px-6 py-4 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Produto</th>
                             <th class="px-6 py-4 text-center text-xs font-black text-gray-400 uppercase tracking-wider">Data</th>
-                            <th class="px-6 py-4 text-center text-xs font-black text-gray-400 uppercase tracking-wider">Qtd Total</th>
+                            <th class="px-6 py-4 text-center text-xs font-black text-gray-400 uppercase tracking-wider">Qtd / Sit. / Resp.</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-100">
@@ -4442,9 +4535,43 @@ export const GerenciarPedidosApp = (function () {
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 text-center">
-                                    <span class="inline-flex items-center justify-center min-w-[40px] h-10 px-3 bg-blue-100 text-blue-700 rounded-xl font-black text-lg">
-                                        ${item.quantidadeTotal}
-                                    </span>
+                                    <div class="flex flex-col items-center gap-2">
+                                        <div class="flex flex-col items-center">
+                                            <span class="inline-flex items-center justify-center min-w-[36px] h-9 px-2 bg-blue-100 text-blue-700 rounded-lg font-black text-base border border-blue-200">
+                                                ${item.quantidadeTotal}
+                                            </span>
+                                        </div>
+                                        <div class="flex flex-col items-center pt-1.5 border-t border-gray-100 w-full">
+                                            <div class="flex items-center justify-center relative w-fit">
+                                                <span class="text-[10px] font-black px-2 py-1 ${item.status.toUpperCase() === 'FINALIZADO' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-orange-50 text-orange-600 border-orange-200'} rounded-md whitespace-nowrap uppercase tracking-wider border">
+                                                    ${item.status}
+                                                </span>
+                                                <button onclick="GerenciarPedidosApp.handleQuickProductionStatus('${item.pedidoId}', '${item.codigo}', ${item.itemIndex}, '${item.numeroPedido}', '${item.status.toUpperCase() === 'FINALIZADO' ? 'EM PRODUÇÃO' : 'FINALIZADO'}', event)" class="absolute -right-7 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Alternar Status">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-col items-center pt-1.5 border-t border-gray-100 w-full">
+                                        ${item.responsavel ? 
+                                            `<div class="flex items-center justify-center relative w-fit group">
+                                                <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 text-gray-700 border border-gray-200 rounded-md">
+                                                    <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                                    <span class="text-[10px] font-black uppercase tracking-wider whitespace-nowrap leading-none">${item.responsavel}</span>
+                                                </div>
+                                                <button onclick="GerenciarPedidosApp.handleEditItemDescription('${item.pedidoId}', '${item.codigo}', ${item.itemIndex}, event)" class="absolute -right-6 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors opacity-0 group-hover:opacity-100" title="Editar Responsável">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                                </button>
+                                            </div>` 
+                                            : 
+                                            `<div class="flex items-center justify-center relative w-fit group">
+                                                <span class="text-[9px] font-bold px-2 py-0.5 text-gray-400 border border-dashed border-gray-300 rounded whitespace-nowrap">SEM RESP.</span>
+                                                <button onclick="GerenciarPedidosApp.handleEditItemDescription('${item.pedidoId}', '${item.codigo}', ${item.itemIndex}, event)" class="absolute -right-6 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Adicionar Responsável">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                                </button>
+                                            </div>`
+                                        }
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                             `;
@@ -4586,6 +4713,7 @@ export const GerenciarPedidosApp = (function () {
             const complementContainer = document.getElementById('edit-item-desc-complement-container');
             const complementText = document.getElementById('edit-item-desc-complement-text');
             const inputEl = document.getElementById('edit-item-desc-input');
+            const respEl = document.getElementById('edit-item-responsavel-input');
             const saveBtn = document.getElementById('save-edit-item-desc-btn');
 
             if (!modal || !currentDescEl || !inputEl || !saveBtn) return;
@@ -4609,6 +4737,7 @@ export const GerenciarPedidosApp = (function () {
             }
             
             inputEl.value = currentPersonalized;
+            if (respEl) respEl.value = item.responsavel || '';
             modal.classList.remove('hidden');
             
             setTimeout(() => {
@@ -4625,6 +4754,7 @@ export const GerenciarPedidosApp = (function () {
             // Salvar
             saveBtn.onclick = async () => {
                 const novaDesc = inputEl.value.trim();
+                const novoResp = respEl ? respEl.value.trim() : '';
                 saveBtn.disabled = true;
                 saveBtn.innerHTML = '<svg class="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Salvando...';
 
@@ -4636,6 +4766,7 @@ export const GerenciarPedidosApp = (function () {
                             pedidoId: finalPedidoId,
                             itemCodigo,
                             newDescription: novaDesc,
+                            responsavel: novoResp,
                             itemIndex: index,
                             numeroPedido: finalNumPedido,
                             newStatus: item.status || 'OK',
@@ -4656,7 +4787,8 @@ export const GerenciarPedidosApp = (function () {
                         const key = `${pedidoId}-${index}`;
                         pedido.detalhesProducao[key] = {
                             status: pedido.detalhesProducao[key]?.status || 'OK',
-                            descricao: novaDesc
+                            descricao: novaDesc,
+                            responsavel: novoResp
                         };
                         
                         // Atualiza a visualização no modal sem fechar
@@ -4815,6 +4947,98 @@ export const GerenciarPedidosApp = (function () {
                         searchInput.focus();
                     }
                 }, 150);
+            }
+        },
+        handleQuickProductionStatus: async function(pedidoId, itemCodigo, index, numeroPedido, explicitStatus, event) {
+            let btn = null;
+            let originalHtml = '';
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.currentTarget) {
+                    btn = event.currentTarget;
+                    originalHtml = btn.innerHTML;
+                    btn.innerHTML = `<svg class="w-4 h-4 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+                    btn.disabled = true;
+                }
+            }
+
+            // Busca o pedido no cache
+            const pCache = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+            
+            try {
+                // Pega a descrição e o responsavel atual do cache para não perder
+                let currentDesc = '';
+                let currentResp = '';
+                if (pCache && pCache.detalhesProducao) {
+                    const keyId = `${pedidoId}-${index}`;
+                    const keyNum = `${pCache.numero || pCache.numero_pedido}-${index}`;
+                    const extra = pCache.detalhesProducao[keyId] || pCache.detalhesProducao[keyNum];
+                    if (extra) {
+                        currentDesc = extra.descricao || '';
+                        currentResp = extra.responsavel || '';
+                    }
+                }
+
+                // Se não houver descrição complementar, usa a descrição original do produto como fallback
+                if (!currentDesc) {
+                    const prod = _enrichedProductsMap[itemCodigo];
+                    if (prod && prod.descricao) currentDesc = prod.descricao;
+                }
+
+                const url = API_URLS.UPDATE_ITEM_STATUS;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pedidoId,
+                        itemCodigo,
+                        newStatus: explicitStatus,
+                        itemIndex: index,
+                        newDescription: currentDesc,
+                        responsavel: currentResp,
+                        numeroPedido: pCache ? (pCache.numero || pCache.numero_pedido || '') : numeroPedido,
+                        quantidade: index !== undefined ? (_parseItens(pCache?.itens, pCache?.detalhesProducao || {}, pedidoId)[index]?.quantidade || 1) : 1,
+                        dataPedido: pCache ? (pCache.data || pCache.data_criacao || '') : ''
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Erro ao atualizar status do item');
+                }
+
+                // ATUALIZAÇÃO DO CACHE LOCAL
+                if (pCache) {
+                    if (!pCache.detalhesProducao) pCache.detalhesProducao = {};
+                    const keyId = `${pedidoId}-${index}`;
+                    const keyNum = `${pCache.numero || pCache.numero_pedido}-${index}`;
+                    pCache.detalhesProducao[keyId] = {
+                        status: explicitStatus,
+                        descricao: currentDesc,
+                        responsavel: currentResp
+                    };
+                    pCache.detalhesProducao[keyNum] = pCache.detalhesProducao[keyId];
+                }
+
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({
+                        text: `Item marcado como ${explicitStatus}`,
+                        duration: 2500,
+                        style: { background: "#10b981" }
+                    }).showToast();
+                }
+
+                // Recarrega o modal da linha de produção visualmente
+                _showProductionLine();
+
+            } catch (error) {
+                console.error("Erro ao alterar status:", error);
+                _showCustomAlert('Erro', error.message, false);
+                if (btn) {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
             }
         },
         handleToggleItemStatus: async function(pedidoId, itemCodigo, currentStatus, index, event) {
@@ -4983,8 +5207,8 @@ export const GerenciarPedidosApp = (function () {
             }
         },
         updateOrderItemStatusRealTime: function(data) {
-            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, dataPedido } = data;
-            console.log(`[GerenciarPedidos] Sincronizando status/data do item ${itemCodigo} no pedido ${pedidoId}`);
+            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, dataPedido, responsavel } = data;
+            console.log(`[GerenciarPedidos] Sincronizando status/data/resp do item ${itemCodigo} no pedido ${pedidoId}`);
 
             // 1. Atualizar no cache local
             const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
@@ -4994,7 +5218,8 @@ export const GerenciarPedidosApp = (function () {
                 pedido.detalhesProducao[key] = {
                     status: newStatus || pedido.detalhesProducao[key]?.status || 'OK',
                     descricao: newDescription !== undefined ? newDescription : (pedido.detalhesProducao[key]?.descricao || ''),
-                    data: dataPedido !== undefined ? dataPedido : (pedido.detalhesProducao[key]?.data || '')
+                    data: dataPedido !== undefined ? dataPedido : (pedido.detalhesProducao[key]?.data || ''),
+                    responsavel: responsavel !== undefined ? responsavel : (pedido.detalhesProducao[key]?.responsavel || '')
                 };
             }
 
@@ -5447,3 +5672,48 @@ window.openEmailDanfeModal = function(baixarPdfUrl, chaveAcesso, linkDanfe, file
 
     modal.classList.remove('hidden');
 };
+
+function _showCustomConfirm(title, text) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('app-confirm-modal');
+        const titleEl = document.getElementById('app-confirm-modal-title');
+        const textEl = document.getElementById('app-confirm-modal-content');
+        const cancelBtn = document.getElementById('app-confirm-modal-cancel-btn');
+        const okBtn = document.getElementById('app-confirm-modal-ok-btn');
+        const spinner = document.getElementById('app-confirm-modal-spinner');
+        const okText = document.getElementById('app-confirm-modal-ok-text');
+        
+        if(!modal) return resolve(confirm(text));
+
+        titleEl.textContent = title;
+        textEl.innerHTML = text;
+        
+        spinner.classList.add('hidden');
+        okBtn.disabled = false;
+        cancelBtn.disabled = false;
+        okText.textContent = 'Confirmar';
+        
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            cancelBtn.removeEventListener('click', onCancel);
+            okBtn.removeEventListener('click', onConfirm);
+        };
+        
+        const onCancel = () => { cleanup(); resolve(false); };
+        
+        const onConfirm = () => { 
+            spinner.classList.remove('hidden');
+            okText.textContent = 'Salvando...';
+            okBtn.disabled = true;
+            cancelBtn.disabled = true;
+            cancelBtn.removeEventListener('click', onCancel);
+            okBtn.removeEventListener('click', onConfirm);
+            resolve(true); 
+        };
+        
+        cancelBtn.addEventListener('click', onCancel);
+        okBtn.addEventListener('click', onConfirm);
+        
+        modal.classList.remove('hidden');
+    });
+}

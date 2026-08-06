@@ -53,4 +53,5 @@
 
           // Gestão de Transportadoras
           TRANSPORTADORAS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/transportadoras",
+          TRANSPORTADORAS_SYNC: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/transportadoras/sync",
       };

@@ -7,7 +7,7 @@
 
 const express = require('express');
 
-function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, sheetName) {
+function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, sheetName, axiosModule, APPS_SCRIPT_TOKEN_URL, BLING_API_BASE_URL) {
     const router = express.Router();
 
     // Mapeamento de colunas para índices
@@ -411,6 +411,181 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
         } catch (err) {
             console.error('Erro ao deletar transportadora:', err);
             res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Helper para obter token do Bling
+    let _cachedToken = null;
+    let _tokenExpiresAt = 0;
+    async function getToken() {
+        if (_cachedToken && Date.now() < _tokenExpiresAt) return _cachedToken;
+        for (let i = 0; i < 3; i++) {
+            try {
+                const response = await axiosModule.get(APPS_SCRIPT_TOKEN_URL);
+                const token = response.data.access_token || response.data.accessToken;
+                if (token) {
+                    _cachedToken = token;
+                    _tokenExpiresAt = Date.now() + (1000 * 60 * 30);
+                    return token;
+                }
+            } catch (e) {
+                if (i === 2) throw e;
+                await new Promise(r => setTimeout(r, 1500));
+            }
+        }
+        throw new Error("Falha ao obter token de acesso do Bling.");
+    }
+
+    /**
+     * POST /transportadoras/sync
+     * Sincroniza as transportadoras do Bling com a planilha
+     */
+    router.post('/sync', async (req, res) => {
+        try {
+            console.log('[Transportadoras] Iniciando sincronização com Bling...');
+            const sheetsClient = await getInitializedSheetsClient();
+            await ensureHeadersExist(sheetsClient);
+
+            // 1. Busca Token e Lista de Transportadoras do Bling
+            const token = await getToken();
+            const blingUrl = `${BLING_API_BASE_URL || 'https://www.bling.com.br/Api/v3'}/contatos?idTipoContato=14578222406&limite=100`;
+            const blingRes = await axiosModule.get(blingUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+            const contatosBlingList = blingRes.data.data || [];
+            
+            console.log(`[Transportadoras] Encontrados ${contatosBlingList.length} contatos tipo T no Bling. Buscando detalhes...`);
+
+            // 2. Busca detalhes completos (para pegar endereço e fantasia)
+            const contatosCompletos = [];
+            for (const c of contatosBlingList) {
+                try {
+                    const detailRes = await axiosModule.get(`${BLING_API_BASE_URL || 'https://www.bling.com.br/Api/v3'}/contatos/${c.id}`, { 
+                        headers: { 'Authorization': `Bearer ${token}` } 
+                    });
+                    contatosCompletos.push(detailRes.data.data);
+                } catch (err) {
+                    console.error(`[Transportadoras] Erro ao buscar detalhes de ${c.id}:`, err.message);
+                }
+                // Rate limit (3 por segundo = ~333ms)
+                await new Promise(r => setTimeout(r, 350));
+            }
+
+            // 3. Busca transportadoras na Planilha
+            const sheetsResponse = await sheetsClient.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A:T`
+            });
+            const rows = sheetsResponse.data.values || [];
+            const headerRow = rows[0] || HEADERS;
+            
+            const existingInSheets = rows.slice(1).map((r, i) => ({
+                row: r,
+                rowIndex: i + 2, // 1 for header + 1 for 0-index
+                codigo: r[COLUMNS.CODIGO],
+                cnpj: r[COLUMNS.CNPJ] ? r[COLUMNS.CNPJ].replace(/\D/g, '') : '',
+                nome: (r[COLUMNS.NOME] || '').toLowerCase().trim()
+            })).filter(r => r.codigo);
+
+            const updates = []; // Array of updates for batch
+            const newRows = []; // Rows to append
+
+            // 4. Compara e Mescla
+            for (const b of contatosCompletos) {
+                const bCnpj = b.numeroDocumento ? b.numeroDocumento.replace(/\D/g, '') : '';
+                const bNome = (b.nome || '').toLowerCase().trim();
+                
+                // Match por CNPJ (se existir) ou por Nome
+                const match = existingInSheets.find(s => 
+                    (bCnpj && s.cnpj === bCnpj) || (s.nome === bNome)
+                );
+
+                const dataAtual = new Date().toISOString();
+                
+                // Montar nova linha com dados do Bling
+                const end = (b.endereco && b.endereco.geral) ? b.endereco.geral : {};
+                const mappedRow = [];
+                mappedRow[COLUMNS.CODIGO] = String(b.id || '');
+                mappedRow[COLUMNS.NOME] = b.nome || '';
+                mappedRow[COLUMNS.FANTASIA] = b.fantasia || '';
+                mappedRow[COLUMNS.ENDERECO] = end.endereco || '';
+                mappedRow[COLUMNS.NUMERO] = end.numero || '';
+                mappedRow[COLUMNS.COMPLEMENTO] = end.complemento || '';
+                mappedRow[COLUMNS.BAIRRO] = end.bairro || '';
+                mappedRow[COLUMNS.CIDADE] = end.municipio || '';
+                mappedRow[COLUMNS.ESTADO] = end.uf || '';
+                mappedRow[COLUMNS.CEP] = end.cep || '';
+                mappedRow[COLUMNS.CNPJ] = b.numeroDocumento || '';
+                mappedRow[COLUMNS.INSCRICAO_ESTADUAL] = b.ie || '';
+                mappedRow[COLUMNS.TELEFONE] = b.telefone || b.celular || '';
+                mappedRow[COLUMNS.EMAIL] = b.email || '';
+                mappedRow[COLUMNS.WEBSITE] = ''; // Bling não tem ou não mapeado
+                mappedRow[COLUMNS.CONTATO] = (b.pessoasContato && b.pessoasContato[0] && b.pessoasContato[0].nome) ? b.pessoasContato[0].nome : '';
+                mappedRow[COLUMNS.TIPO] = 'Transportadora';
+                mappedRow[COLUMNS.ATIVO] = (b.situacao === 'A') ? 'Sim' : 'Não';
+                mappedRow[COLUMNS.FAZ_COLETA] = 'Sim'; // default
+                
+                if (match) {
+                    // Atualizar linha existente
+                    // Preservar alguns campos se estiverem vazios no Bling
+                    for (let i = 0; i < 20; i++) {
+                        if (!mappedRow[i]) mappedRow[i] = match.row[i] || '';
+                    }
+                    mappedRow[COLUMNS.DATA_INCLUSAO] = match.row[COLUMNS.DATA_INCLUSAO] || dataAtual;
+                    
+                    updates.push({
+                        range: `${sheetName}!A${match.rowIndex}:T${match.rowIndex}`,
+                        values: [mappedRow]
+                    });
+                } else {
+                    // Inserir nova linha
+                    mappedRow[COLUMNS.DATA_INCLUSAO] = dataAtual;
+                    for (let i = 0; i < 20; i++) {
+                        if (mappedRow[i] === undefined) mappedRow[i] = '';
+                    }
+                    newRows.push(mappedRow);
+                }
+            }
+
+            // 5. Aplicar atualizações em lote (Batch Update)
+            if (updates.length > 0) {
+                console.log(`[Transportadoras] Atualizando ${updates.length} transportadoras existentes...`);
+                await sheetsClient.spreadsheets.values.batchUpdate({
+                    spreadsheetId,
+                    resource: {
+                        valueInputOption: 'RAW',
+                        data: updates
+                    }
+                });
+            }
+
+            // 6. Aplicar inserções (Append)
+            if (newRows.length > 0) {
+                console.log(`[Transportadoras] Inserindo ${newRows.length} novas transportadoras...`);
+                await sheetsClient.spreadsheets.values.append({
+                    spreadsheetId,
+                    range: `${sheetName}!A:T`,
+                    valueInputOption: 'RAW',
+                    insertDataOption: 'INSERT_ROWS',
+                    resource: { values: newRows }
+                });
+            }
+
+            // Notificar frontend via Firestore
+            if (req.notifySync) {
+                await req.notifySync('transportadorasUpdated', {
+                    action: 'synced',
+                    timestamp: new Date()
+                });
+            }
+
+            res.json({ 
+                message: 'Sincronização concluída com sucesso', 
+                atualizados: updates.length, 
+                novos: newRows.length 
+            });
+
+        } catch (err) {
+            console.error('[Transportadoras] Erro na sincronização:', err.response ? err.response.data : err.message);
+            res.status(500).json({ error: 'Erro ao sincronizar transportadoras' });
         }
     });
 

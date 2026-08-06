@@ -2070,6 +2070,33 @@ const data = filteredProducts.map(product => {
                 return Array.from(saidasMap.values());
             }
 
+            function _logLoading(msg, type = 'info') {
+                const container = document.getElementById('loading-details');
+                if (container) {
+                    const span = document.createElement('div');
+                    span.className = "flex items-center gap-2 mb-1 w-full";
+                    
+                    let icon = `<span class="text-blue-400">⏳</span>`;
+                    let textClass = "text-gray-300 animate-pulse";
+
+                    if (type === 'success') {
+                        icon = `<span class="text-green-400">✔</span>`;
+                        textClass = "text-green-400 font-bold";
+                    } else if (type === 'error') {
+                        icon = `<span class="text-red-400">✖</span>`;
+                        textClass = "text-red-400 font-bold";
+                    }
+
+                    span.innerHTML = `${icon} <span class="${textClass} truncate">${msg}</span>`;
+                    
+                    container.appendChild(span);
+                    // Manter só as últimas 6 mensagens
+                    if (container.childNodes.length > 6) {
+                        container.removeChild(container.firstChild);
+                    }
+                }
+            }
+
             async function _fetchData() {
                 console.log('[App] _fetchData: Iniciando busca de dados...');
                 
@@ -2079,18 +2106,35 @@ const data = filteredProducts.map(product => {
                     _refreshButton.classList.add('animate-spin', 'opacity-50');
                 }
                 
+                const container = document.getElementById('loading-details');
+                if (container) container.innerHTML = ''; // Limpa logs anteriores
+
                 _loadingOverlay.classList.remove('hidden');
+                _logLoading('Iniciando sincronização...');
+
                 try {
+                    const trackFetch = async (promise, name) => {
+                        _logLoading(`Buscando ${name}...`, 'info');
+                        try {
+                            const res = await promise;
+                            _logLoading(`${name} carregado.`, 'success');
+                            return res;
+                        } catch (e) {
+                            _logLoading(`Erro em ${name}.`, 'error');
+                            throw e;
+                        }
+                    };
+
                     // Executa todas as buscas em paralelo, mas trata cada uma individualmente para evitar que uma falha trave tudo
                     const results = await Promise.allSettled([
-                        fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`, { mode: 'cors' }),
-                        fetch(`${API_URLS.ORDERS_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }),
-                        fetch(API_URLS.ORDERS_FABRICA, { mode: 'cors' }),
-                        fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' }),
-                        fetch(`${API_URLS.SAIDAS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }),
-                        fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }),
-                        LojaIntegradaApp.fetchOrders(),
-                        (typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.fetchPedidos(true) : Promise.resolve()
+                        trackFetch(fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Produtos (Cache)'),
+                        trackFetch(fetch(`${API_URLS.ORDERS_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Pedidos Terceiros'),
+                        trackFetch(fetch(API_URLS.ORDERS_FABRICA, { mode: 'cors' }), 'Pedidos Fábrica'),
+                        trackFetch(fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Pedidos NFE/Bling'),
+                        trackFetch(fetch(`${API_URLS.SAIDAS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Saídas Fábrica'),
+                        trackFetch(fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Saídas Garantia'),
+                        trackFetch(LojaIntegradaApp.fetchOrders(), 'Loja Integrada'),
+                        trackFetch((typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.fetchPedidos(true) : Promise.resolve(), 'Gerenciar Pedidos')
                     ]);
 
                     const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasFabricaRes, saidasGarantiaRes, lojaIntegradaData] = results;
