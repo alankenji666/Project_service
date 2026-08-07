@@ -44,4 +44,7 @@ export const API_URLS = {
     // API de Pedidos Bling e Observações
     ORDERS_BLING: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos",
     ORDER_OBSERVATION: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos/observacao",
+    
+    // Edição de Status de Item de Pedido
+    UPDATE_ITEM_STATUS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos/update-item-status",
 };

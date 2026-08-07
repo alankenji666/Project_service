@@ -118,39 +118,33 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             const pResp = await sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A:Z` });
             let pRows = pResp.data.values || [];
             
-            let pHeaders = [];
+            let pHeadersRaw = [];
+            let pHeadersNorm = [];
             if (pRows.length > 0) {
-                pHeaders = pRows[0].map(h => (h || '').toLowerCase().trim());
+                pHeadersRaw = pRows[0];
+                pHeadersNorm = pHeadersRaw.map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_'));
                 let changed = false;
-                if (pHeaders.indexOf('quantidade') === -1) {
-                    pHeaders.push('quantidade');
-                    changed = true;
-                }
-                if (pHeaders.indexOf('data') === -1) {
-                    pHeaders.push('data');
-                    changed = true;
-                }
-                if (pHeaders.indexOf('responsavel') === -1) {
-                    pHeaders.push('responsavel');
-                    changed = true;
-                }
+                if (pHeadersNorm.indexOf('quantidade') === -1) { pHeadersRaw.push('quantidade'); pHeadersNorm.push('quantidade'); changed = true; }
+                if (pHeadersNorm.indexOf('data') === -1) { pHeadersRaw.push('data'); pHeadersNorm.push('data'); changed = true; }
+                if (pHeadersNorm.indexOf('responsavel') === -1) { pHeadersRaw.push('responsavel'); pHeadersNorm.push('responsavel'); changed = true; }
                 if (changed) {
-                    await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeaders] } });
+                    await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeadersRaw] } });
                 }
             } else {
-                pHeaders = ['pedidoid', 'sku', 'itemindex', 'status', 'quantidade', 'data', 'descricaocomplementar', 'responsavel'];
-                await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeaders] } });
-                pRows = [pHeaders];
+                pHeadersRaw = ['pedido_id', 'sku', 'item_index', 'status', 'quantidade', 'data', 'descricao', 'responsavel'];
+                pHeadersNorm = ['pedido_id', 'sku', 'item_index', 'status', 'quantidade', 'data', 'descricao', 'responsavel'];
+                await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeadersRaw] } });
+                pRows = [pHeadersRaw];
             }
 
-            const hId = pHeaders.indexOf('pedidoid');
-            const hIdx = pHeaders.indexOf('itemindex');
-            const hDesc = pHeaders.indexOf('descricaocomplementar');
-            const hSt = pHeaders.indexOf('status');
-            const hSku = pHeaders.indexOf('sku');
-            const hQty = pHeaders.indexOf('quantidade');
-            const hDate = pHeaders.indexOf('data');
-            const hResp = pHeaders.indexOf('responsavel');
+            const hId = pHeadersNorm.indexOf('pedido_id') !== -1 ? pHeadersNorm.indexOf('pedido_id') : pHeadersNorm.indexOf('id_pedido') !== -1 ? pHeadersNorm.indexOf('id_pedido') : pHeadersNorm.indexOf('pedidoid');
+            const hIdx = pHeadersNorm.indexOf('item_index') !== -1 ? pHeadersNorm.indexOf('item_index') : pHeadersNorm.indexOf('index') !== -1 ? pHeadersNorm.indexOf('index') : pHeadersNorm.indexOf('itemindex');
+            const hDesc = pHeadersNorm.indexOf('descricao_complementar') !== -1 ? pHeadersNorm.indexOf('descricao_complementar') : pHeadersNorm.indexOf('descricao') !== -1 ? pHeadersNorm.indexOf('descricao') : pHeadersNorm.indexOf('descricaocomplementar');
+            const hSt = pHeadersNorm.indexOf('status');
+            const hSku = pHeadersNorm.indexOf('sku') !== -1 ? pHeadersNorm.indexOf('sku') : pHeadersNorm.indexOf('codigo');
+            const hQty = pHeadersNorm.indexOf('quantidade');
+            const hDate = pHeadersNorm.indexOf('data');
+            const hResp = pHeadersNorm.indexOf('responsavel');
 
             let foundIdx = -1;
             for (let i = 1; i < pRows.length; i++) {
@@ -175,7 +169,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 if (finalDate === undefined && hDate !== -1) finalDate = pRows[foundIdx][hDate];
             }
 
-            const rowData = new Array(pHeaders.length).fill('');
+            const rowData = new Array(pHeadersRaw.length).fill('');
             if (hId !== -1) rowData[hId] = idParaPlanilha;
             if (hSku !== -1) rowData[hSku] = itemCodigo;
             if (hIdx !== -1) rowData[hIdx] = itemIndex;

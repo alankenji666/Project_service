@@ -4356,16 +4356,10 @@ export const GerenciarPedidosApp = (function () {
     function _showProductionLine() {
         if (!_state.linhaProducaoModal || !_state.linhaProducaoContent) return;
 
-        // 1. Filtrar pedidos em produção
-        const pedidosEmProducao = _allPedidos.filter(p => {
-            const sit = _getStatusLabel(p.situação || p.situacao || '').toLowerCase();
-            return sit.includes('produ');
-        });
-
-        // 2. Extrair e agrupar itens com status individual "Em Produção"
+        // Varre TODOS os pedidos, pois o status individual dos itens (detalhesProducao) é o que importa
         const aggregatedItems = {};
 
-        pedidosEmProducao.forEach(p => {
+        _allPedidos.forEach(p => {
             const numeroPedido = p.numero || p.número || 'N/A';
             const finalId = p.id_pedido || p.id || '';
             const itensRaw = p.itens || p.Itens || '';
@@ -4378,7 +4372,7 @@ export const GerenciarPedidosApp = (function () {
 
             parsedItens.forEach(item => {
                 const s = String(item.status || 'OK').toUpperCase().trim();
-                const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO' || s === 'FINALIZADO';
+                const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO' || s === 'AGUARDANDO RETIRADA' || s === 'FINALIZADO';
 
                 if (isProducao) {
                     const codigo = String(item.codigo).trim();
@@ -4543,10 +4537,10 @@ export const GerenciarPedidosApp = (function () {
                                         </div>
                                         <div class="flex flex-col items-center pt-1.5 border-t border-gray-100 w-full">
                                             <div class="flex items-center justify-center relative w-fit">
-                                                <span class="text-[10px] font-black px-2 py-1 ${item.status.toUpperCase() === 'FINALIZADO' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-orange-50 text-orange-600 border-orange-200'} rounded-md whitespace-nowrap uppercase tracking-wider border">
+                                                <span class="text-[10px] font-black px-2 py-1 ${item.status.toUpperCase() === 'FINALIZADO' ? 'bg-green-100 text-green-700 border-green-200' : item.status.toUpperCase() === 'AGUARDANDO RETIRADA' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 'bg-orange-50 text-orange-600 border-orange-200'} rounded-md whitespace-nowrap uppercase tracking-wider border">
                                                     ${item.status}
                                                 </span>
-                                                <button onclick="GerenciarPedidosApp.handleQuickProductionStatus('${item.pedidoId}', '${item.codigo}', ${item.itemIndex}, '${item.numeroPedido}', '${item.status.toUpperCase() === 'FINALIZADO' ? 'EM PRODUÇÃO' : 'FINALIZADO'}', event)" class="absolute -right-7 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Alternar Status">
+                                                <button onclick="GerenciarPedidosApp.handleQuickProductionStatus('${item.pedidoId}', '${item.codigo}', ${item.itemIndex}, '${item.numeroPedido}', '${item.status.toUpperCase() === 'FINALIZADO' ? 'EM PRODUÇÃO' : item.status.toUpperCase() === 'AGUARDANDO RETIRADA' ? 'FINALIZADO' : 'AGUARDANDO RETIRADA'}', event)" class="absolute -right-7 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Avançar Status">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                                                 </button>
                                             </div>

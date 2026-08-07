@@ -55,6 +55,10 @@
                 <button id="go-to-pedidos-btn" class="w-full bg-orange-600 text-white font-bold py-4 px-4 rounded-lg shadow-lg hover:bg-orange-700 transition-all duration-200 text-lg">
                     Opção 4: Pedidos
                 </button>
+                <button id="go-to-producao-btn" class="w-full bg-cyan-600 text-white font-bold py-4 px-4 rounded-lg shadow-lg hover:bg-cyan-700 transition-all duration-200 text-lg flex flex-col items-center justify-center">
+                    <span>Opção 5: Produção</span>
+                    <span class="text-xs font-normal">Em Produção / Finalizados</span>
+                </button>
             </div>
         </div>
 
@@ -234,6 +238,57 @@
             <div id="pedidos-list-container" class="space-y-3 pb-8">
                 <!-- Cards de pedidos serão inseridos aqui -->
                 <p class="text-gray-500 text-center py-8">Carregando pedidos...</p>
+            </div>
+        </div>
+
+        <!-- TELA DE PRODUÇÃO -->
+        <div id="producao-view" class="hidden">
+            <div class="bg-white p-4 rounded-lg shadow-md mb-4 flex items-center relative">
+                <button id="producao-back-to-menu-btn" class="absolute left-4 text-cyan-600 hover:text-cyan-800">
+                    <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                </button>
+                <div class="flex-grow text-center">
+                    <div class="flex items-center justify-center gap-2">
+                        <h1 class="text-2xl font-bold text-gray-800">Linha de Produção</h1>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Abas (Tabs) -->
+            <div class="flex bg-gray-200 rounded-lg p-1 mb-4 shadow-inner">
+                <button id="tab-em-producao" class="flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-md bg-white text-cyan-700 shadow-sm transition-all duration-200">
+                    Produção
+                </button>
+                <button id="tab-aguardando" class="flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all duration-200">
+                    Aguardando
+                </button>
+                <button id="tab-finalizados" class="flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all duration-200">
+                    Finalizados
+                </button>
+            </div>
+
+            <!-- Filtros -->
+            <div class="space-y-3 mb-4">
+                <div class="flex space-x-2">
+                    <select id="producao-responsavel-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 bg-white text-sm">
+                        <option value="TODOS">Todos os Responsáveis</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Lista de Produção -->
+            <div id="producao-list-container" class="space-y-3 pb-8">
+                <p class="text-gray-500 text-center py-8">Buscando itens...</p>
+            </div>
+            
+            <!-- Lista de Aguardando Retirada -->
+            <div id="aguardando-list-container" class="space-y-3 pb-8 hidden">
+                <p class="text-gray-500 text-center py-8">Nenhum item aguardando retirada.</p>
+            </div>
+
+            <!-- Lista de Finalizados -->
+            <div id="finalizados-list-container" class="space-y-3 pb-8 hidden">
+                <p class="text-gray-500 text-center py-8">Nenhum item finalizado.</p>
             </div>
         </div>
     </div>
