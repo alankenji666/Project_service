@@ -1747,8 +1747,19 @@ export const DashboardApp = (function() {
         const grandTotalVendasCount = storeData.reduce((sum, store) => sum + store.count, 0);
         
         const colors = { 'bling': 'bg-green-500', 'loja_integrada': 'bg-blue-500' };
-        let cardsHtml = storeData.map(store => _createSummaryCard(store.id, store.name, "Pedidos", store.count, store.total, colors[store.id])).join('');
-        cardsHtml += _createSummaryCard('total', 'Total Vendas (Pedidos)', "Pedidos", grandTotalVendasCount, grandTotalVendas, 'bg-gray-700');
+        
+        // Ordena para garantir que Bling apareça antes da Loja Integrada
+        storeData.sort((a, b) => {
+            if (a.id === 'bling') return -1;
+            if (b.id === 'bling') return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        // 1. Total Vendas primeiro
+        let cardsHtml = _createSummaryCard('total', 'Total Vendas (Pedidos)', "Pedidos", grandTotalVendasCount, grandTotalVendas, 'bg-gray-700');
+        
+        // 2. Lojas depois
+        cardsHtml += storeData.map(store => _createSummaryCard(store.id, store.name, "Pedidos", store.count, store.total, colors[store.id] || 'bg-gray-500')).join('');
         
         if (_dom.summaryCards) _dom.summaryCards.innerHTML = cardsHtml;
 

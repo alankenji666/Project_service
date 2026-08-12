@@ -110,9 +110,22 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
 
             let n;
             if (action !== 'deleted') {
-                const blingRes = await axios.get(`${BLING_API_BASE_URL}/nfe/${nfeId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                let blingRes;
+                try {
+                    blingRes = await axios.get(`${BLING_API_BASE_URL}/nfe/${nfeId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } catch (err) {
+                    if (err.response && err.response.status === 404) {
+                        console.log(`[Webhook NF-e] Nota ${nfeId} retornou 404. Aguardando 3s e tentando novamente...`);
+                        await sleep(3000);
+                        blingRes = await axios.get(`${BLING_API_BASE_URL}/nfe/${nfeId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                    } else {
+                        throw err;
+                    }
+                }
                 n = blingRes.data.data;
                 if (!n) {
                     const error = new Error("Nota não encontrada no Bling.");

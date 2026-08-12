@@ -98,6 +98,20 @@ let currentProducaoTab = 'EM_PRODUCAO';
 let allProducts = [];
 let allPedidos = [];
 let filteredPedidos = [];
+
+// --- Helper Functions ---
+function _getStatusLabel(situacao) {
+    if (!situacao) return '-';
+    let s = String(situacao).trim();
+    if (s.includes('ID:')) s = s.replace('ID:', '').trim();
+    if (s === '447331') return 'Em Produção';
+    if (s === '6') return 'Em Aberto';
+    if (s === '9') return 'Atendido';
+    if (s === '15') return 'Em Andamento';
+    if (s === '12') return 'Cancelado';
+    if (s === '37589') return 'Atendido P.';
+    return situacao;
+}
 let adjustSelectedProduct = null;
 let requisitionItems = [];
 let adjustScanner, reqScanner, entradaScanner;
@@ -831,7 +845,7 @@ function filterPedidos() {
         
         let statusMatch = true;
         if (statusFilter !== 'all') {
-            const sitLower = (p.situação || p.situacao || '').toLowerCase();
+            const sitLower = _getStatusLabel(p.situação || p.situacao || '').toLowerCase();
             if (statusFilter === 'atendido') {
                 statusMatch = (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu'));
             } else if (statusFilter === 'aberto') {
@@ -868,7 +882,7 @@ function renderPedidosList() {
     sorted.forEach(p => {
         const numero = p.número || p.numero || '-';
         const cliente = p.contato_nome || p['contato nome'] || p.cliente || '-';
-        const situacao = p.situação || p.situacao || '-';
+        const situacao = _getStatusLabel(p.situação || p.situacao || '-');
         const totalVal = parseFloat(p.total_pedido || p['total pedido'] || p.total || 0);
         const totalFmt = formatCurrency(totalVal);
         const dataStr = p.data || p.data_criacao || '';
@@ -929,7 +943,7 @@ function openOrderDetailsModal(orderId) {
     
     const numero = order.numero || '-';
     const cliente = order.contato_nome || order['contato nome'] || order.cliente || '-';
-    const situacao = order.situação || order.situacao || '-';
+    const situacao = _getStatusLabel(order.situação || order.situacao || '-');
     const total = formatCurrency(parseFloat(order.total_pedido || order['total pedido'] || order.total || 0));
     
     // Header
@@ -1216,15 +1230,6 @@ function _parseItens(raw, producaoData = {}, pedidoId = '') {
     return results;
 }
 
-function _getStatusLabel(sit) {
-    if (!sit) return 'ABERTO';
-    const s = String(sit).toLowerCase().trim();
-    if (s.includes('atendid') || s.includes('entregue') || s.includes('conclu')) return 'ATENDIDO';
-    if (s.includes('produ')) return 'EM PRODUÇÃO';
-    if (s.includes('cancel')) return 'CANCELADO';
-    return 'ABERTO';
-}
-
 function renderProducaoView() {
     producaoListContainer.innerHTML = '';
     aguardandoListContainer.innerHTML = '';
@@ -1258,7 +1263,8 @@ function renderProducaoView() {
                         pedidoId: finalId,
                         itemIndex: item.index,
                         status: item.status || 'EM PRODUÇÃO',
-                        responsavel: item.responsavel || ''
+                        responsavel: item.responsavel || '',
+                        orcamento: p.orcamento || p.orçamento || ''
                     };
                 }
                 aggregatedItems[key].quantidadeTotal += (parseFloat(item.quantidade) || 0);
@@ -1301,6 +1307,10 @@ function renderProducaoView() {
     const aguardandoItems = itemsArray.filter(i => i.status.toUpperCase() === 'AGUARDANDO RETIRADA');
     const finalizadosItems = itemsArray.filter(i => i.status.toUpperCase() === 'FINALIZADO');
 
+    document.getElementById('tab-em-producao').innerText = `Produção (${emProducaoItems.length})`;
+    document.getElementById('tab-aguardando').innerText = `Aguardando (${aguardandoItems.length})`;
+    document.getElementById('tab-finalizados').innerText = `Finalizados (${finalizadosItems.length})`;
+
     if (emProducaoItems.length === 0) {
         producaoListContainer.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum item em produção.</p>';
     } else {
@@ -1334,19 +1344,19 @@ function _generateProducaoCardHtml(item) {
     
     if (isFinalizado) {
         cardClass = 'border-green-300 bg-green-50';
-        statusBadge = '<span class="px-2 py-0.5 bg-green-100 text-green-800 text-[10px] font-bold rounded-full ml-2">FINALIZADO</span>';
+        statusBadge = '<span class="px-2 py-0.5 bg-green-100 text-green-800 text-[10px] font-bold rounded-full">FINALIZADO</span>';
         nextStatus = 'EM PRODUÇÃO'; // Botão volta pra produção
         btnClass = 'bg-green-100 text-green-600 hover:bg-green-200';
         btnIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>'; // Seta de voltar
     } else if (isAguardando) {
         cardClass = 'border-yellow-300 bg-yellow-50';
-        statusBadge = '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-[10px] font-bold rounded-full ml-2">AGUARDANDO RETIRADA</span>';
+        statusBadge = '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-[10px] font-bold rounded-full">AGUARDANDO RETIRADA</span>';
         nextStatus = 'FINALIZADO';
         btnClass = 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200';
         btnIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>'; // Check final
     } else {
         cardClass = 'border-cyan-200 bg-white';
-        statusBadge = '<span class="px-2 py-0.5 bg-cyan-100 text-cyan-800 text-[10px] font-bold rounded-full ml-2">EM PRODUÇÃO</span>';
+        statusBadge = '<span class="px-2 py-0.5 bg-cyan-100 text-cyan-800 text-[10px] font-bold rounded-full">EM PRODUÇÃO</span>';
         nextStatus = 'AGUARDANDO RETIRADA';
         btnClass = 'bg-gray-100 text-gray-400 hover:bg-cyan-100 hover:text-cyan-600';
         btnIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>'; // Seta de avanço
@@ -1354,8 +1364,9 @@ function _generateProducaoCardHtml(item) {
         
     return `
         <div class="border ${cardClass} p-4 rounded-xl shadow-sm relative overflow-hidden transition-all duration-300">
-            <div class="flex justify-between items-start mb-2 pr-10">
-                <div class="font-bold text-gray-800 text-sm break-all">${item.descricao} ${statusBadge}</div>
+            <div class="mb-2 pr-10">
+                <div class="mb-2 inline-block">${statusBadge}</div>
+                <div class="font-bold text-gray-800 text-sm break-all">${item.descricao}</div>
             </div>
             
             <div class="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-2">
@@ -1367,9 +1378,13 @@ function _generateProducaoCardHtml(item) {
                     <span class="font-semibold text-gray-400 block text-[10px] uppercase">Quantidade</span>
                     <span class="font-bold text-gray-900">${item.quantidadeTotal}</span>
                 </div>
-                <div class="col-span-2">
-                    <span class="font-semibold text-gray-400 block text-[10px] uppercase">Cliente / Pedido</span>
-                    <span class="truncate block">${item.empresa} - Pedido ${item.numeroPedido}</span>
+                <div class="col-span-2 bg-gray-50 p-2 rounded-lg mt-1 border border-gray-100">
+                    <span class="font-bold text-gray-400 block text-[10px] uppercase mb-1">Cliente / Pedido / Orçamento</span>
+                    <div class="text-[11px] space-y-0.5">
+                        <div class="truncate"><span class="font-semibold text-gray-500">Cliente:</span> <span class="text-gray-800">${item.empresa}</span></div>
+                        <div><span class="font-semibold text-gray-500">Pedido:</span> <span class="text-gray-800">${item.numeroPedido}</span></div>
+                        ${item.orcamento ? `<div><span class="font-semibold text-gray-500">Orçamento:</span> <span class="text-gray-800">${item.orcamento}</span></div>` : ''}
+                    </div>
                 </div>
             </div>
             

@@ -272,6 +272,7 @@ const createEstoqueRouter = (
                         const statusCol = headers.indexOf(normalizeString('situação'));
                         const deliveryDateCol = headers.indexOf(normalizeString('data entrega')); 
                         const diasCorridosCol = headers.indexOf(normalizeString('dias corridos')); 
+                        const qtdPedidoCol = headers.indexOf(normalizeString('qtd. pedido')) !== -1 ? headers.indexOf(normalizeString('qtd. pedido')) : headers.indexOf(normalizeString('qtd pedido'));
                         
                         if (orderCodeCol === -1 || itemCodeCol === -1 || statusCol === -1) {
                              console.error(`[TAREFA 2 - ERRO] Colunas essenciais não encontradas em ${reqSheetName} após normalização.`);
@@ -292,7 +293,7 @@ const createEstoqueRouter = (
                                     const currentStatus = normalizeString(row[statusCol]).toUpperCase(); 
                                     
                                     if (sheetOrderCode === orderCodeToFind && sheetItemCode === itemCodeToFind) {
-                                        if (currentStatus === 'PENDENTE') {
+                                        if (currentStatus === 'PENDENTE' || currentStatus === '') {
                                             rowIndexToUpdate = headerRowIndex + 1 + i;
                                             break;
                                         }
@@ -302,18 +303,28 @@ const createEstoqueRouter = (
 
                             if (rowIndexToUpdate !== -1) {
                                 const updates = [];
-                                const statusRange = `${reqSheetName}!${String.fromCharCode(65 + statusCol)}${rowIndexToUpdate}`;
-                                updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: statusRange, valueInputOption: 'RAW', resource: { values: [[newStatus]] }}));
-
-                                if (newStatus.toLowerCase() === 'ok' && deliveryDateCol !== -1) {
-                                    const dateRange = `${reqSheetName}!${String.fromCharCode(65 + deliveryDateCol)}${rowIndexToUpdate}`;
-                                    const finalDate = dataEntrega || new Date().toLocaleDateString('pt-BR');
-                                    updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: dateRange, valueInputOption: 'RAW', resource: { values: [[finalDate]] }}));
-                                }
+                                const isPartial = req.body.isPartial;
+                                const quantidadeRestante = req.body.quantidadeRestante;
                                 
-                                if (diasCorridosCol !== -1 && diasCorridos) {
-                                    const diasRange = `${reqSheetName}!${String.fromCharCode(65 + diasCorridosCol)}${rowIndexToUpdate}`;
-                                    updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: diasRange, valueInputOption: 'RAW', resource: { values: [[diasCorridos]] }}));
+                                if (isPartial && qtdPedidoCol !== -1) {
+                                    console.log(`[TAREFA 2] Recebimento PARCIAL. Atualizando quantidade restante para ${quantidadeRestante}.`);
+                                    const qtdRange = `${reqSheetName}!${String.fromCharCode(65 + qtdPedidoCol)}${rowIndexToUpdate}`;
+                                    updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: qtdRange, valueInputOption: 'RAW', resource: { values: [[quantidadeRestante]] }}));
+                                } else {
+                                    console.log(`[TAREFA 2] Recebimento TOTAL. Atualizando status para ${newStatus}.`);
+                                    const statusRange = `${reqSheetName}!${String.fromCharCode(65 + statusCol)}${rowIndexToUpdate}`;
+                                    updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: statusRange, valueInputOption: 'RAW', resource: { values: [[newStatus]] }}));
+
+                                    if (newStatus.toLowerCase() === 'ok' && deliveryDateCol !== -1) {
+                                        const dateRange = `${reqSheetName}!${String.fromCharCode(65 + deliveryDateCol)}${rowIndexToUpdate}`;
+                                        const finalDate = req.body.dataEntrega || new Date().toLocaleDateString('pt-BR');
+                                        updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: dateRange, valueInputOption: 'RAW', resource: { values: [[finalDate]] }}));
+                                    }
+                                    
+                                    if (diasCorridosCol !== -1 && req.body.diasCorridos) {
+                                        const diasRange = `${reqSheetName}!${String.fromCharCode(65 + diasCorridosCol)}${rowIndexToUpdate}`;
+                                        updates.push(sheets.spreadsheets.values.update({ spreadsheetId: reqSheetId, range: diasRange, valueInputOption: 'RAW', resource: { values: [[req.body.diasCorridos]] }}));
+                                    }
                                 }
                                 
                                 await Promise.all(updates);

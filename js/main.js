@@ -2920,15 +2920,17 @@ const data = filteredProducts.map(product => {
 
                 const originalQuantity = item.quantidadePedido || 1;
                 let confirmationTitle = isSaida ? "Confirmar Devolução / Consumo" : "Confirmar Entrega";
-                let confirmationMessage = isSaida
-                    ? `
-                    <p>Confirme a quantidade que <strong>retornou</strong> ao estoque. Se o item foi totalmente consumido, digite <strong>0</strong>.</p>
+                
+                let confirmationMessage = isSaida 
+                    ? `<p>Confirme a quantidade que <strong>retornou</strong> ao estoque. Se o item foi totalmente consumido, digite <strong>0</strong>.</p>`
+                    : `<p>Confirme a quantidade que está sendo <strong>recebida</strong> no estoque. Se não recebeu nada, digite <strong>0</strong>.</p>`;
+
+                confirmationMessage += `
                     <div class="mt-4 text-left">
-                        <label for="devolucao-quantity-input" class="block text-sm font-bold text-gray-700">Quantidade Devolvida:</label>
-                        <input type="number" id="devolucao-quantity-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" value="${originalQuantity}" min="0">
+                        <label for="modal-quantity-input" class="block text-sm font-bold text-gray-700">Quantidade:</label>
+                        <input type="number" id="modal-quantity-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" value="${originalQuantity}" min="0">
                     </div>
-                `
-                    : "Deseja marcar o item como 'Entregue' (OK)?";
+                `;
 
 
                 const confirmed = await _showConfirmationModal(confirmationTitle, confirmationMessage);
@@ -2961,17 +2963,11 @@ const data = filteredProducts.map(product => {
                     // 3. Troca a vírgula decimal por ponto.
                     // 4. Converte para número.
                     // ETAPA 1: Determinar a quantidade do movimento
-                    // CORREÇÃO DEFINITIVA: Lógica unificada para criar sempre o payload completo.
-                    let quantidadeMovimento;
-                    if (isSaida) {
-                        const inputQtyElem = document.getElementById('devolucao-quantity-input');
-                        const inputQty = inputQtyElem ? inputQtyElem.value : '0';
-                        // Garante que a quantidade seja um número, tratando vírgula decimal
-                        quantidadeMovimento = parseFloat(String(inputQty || '0').replace(',', '.')) || 0;
-                    } else {
-                        // Para recebimento de compra, a quantidade é sempre a do pedido
-                        quantidadeMovimento = parseFloat(String(item.quantidadePedido || '0').replace(',', '.')) || 0;
-                    }
+                    // CORREÇÃO DEFINITIVA: Lógica unificada para criar sempre o payload completo lendo do input do modal.
+                    const inputQtyElem = document.getElementById('modal-quantity-input');
+                    const inputQty = inputQtyElem ? inputQtyElem.value : String(item.quantidadePedido || '0');
+                    // Garante que a quantidade seja um número, tratando vírgula decimal
+                    const quantidadeMovimento = parseFloat(String(inputQty || '0').replace(',', '.')) || 0;
 
                     // Calcula o estoque final. Se quantidadeMovimento for 0, o estoque final será igual ao atual.
                     const estoqueAtual = parseFloat(String(product.estoque || '0').replace(',', '.')) || 0;
@@ -3014,7 +3010,9 @@ const data = filteredProducts.map(product => {
                         newStatus: 'OK',
                         requisitionType: requisitionType,
                         dataEntrega: formattedDate,
-                        diasCorridos: item?.diasCorridosRaw || '0'
+                        diasCorridos: item?.diasCorridosRaw || '0',
+                        isPartial: quantidadeMovimento < originalQuantity && quantidadeMovimento > 0,
+                        quantidadeRestante: Math.max(0, originalQuantity - quantidadeMovimento)
                     };
 
 
@@ -3035,21 +3033,26 @@ const data = filteredProducts.map(product => {
 
                     // 4. Atualizar os dados locais e a interface
                     if (item) {
-                        item.situacao = 'ok';
-                        item.dataConclusao = formattedDate;
+                        const isPartial = quantidadeMovimento < originalQuantity && quantidadeMovimento > 0;
+                        if (isPartial) {
+                            item.quantidadePedido = Math.max(0, originalQuantity - quantidadeMovimento);
+                        } else {
+                            item.situacao = 'ok';
+                            item.dataConclusao = formattedDate;
 
-                        // ATUALIZAÇÃO: Encontra o pedido pai e ajusta os contadores de itens pendentes/atendidos.
-                        let ordersArray;
-                        if (requisitionType === 'terceiros') ordersArray = _allOrdersTerceiros;
-                        else if (requisitionType === 'fabrica') ordersArray = _allOrdersFabrica;
-                        else if (requisitionType === 'saidas-fabrica') ordersArray = _allSaidasFabrica;
-                        else if (requisitionType === 'saidas-garantia') ordersArray = _allSaidasGarantia;
-                        else ordersArray = [];
+                            // ATUALIZAÇÃO: Encontra o pedido pai e ajusta os contadores de itens pendentes/atendidos.
+                            let ordersArray;
+                            if (requisitionType === 'terceiros') ordersArray = _allOrdersTerceiros;
+                            else if (requisitionType === 'fabrica') ordersArray = _allOrdersFabrica;
+                            else if (requisitionType === 'saidas-fabrica') ordersArray = _allSaidasFabrica;
+                            else if (requisitionType === 'saidas-garantia') ordersArray = _allSaidasGarantia;
+                            else ordersArray = [];
 
-                        const order = ordersArray.find(o => o.orderCode === orderCode);
-                        if (order) {
-                            order.totalPendente = Math.max(0, order.totalPendente - 1);
-                            order.totalAtendido++;
+                            const order = ordersArray.find(o => o.orderCode === orderCode);
+                            if (order) {
+                                order.totalPendente = Math.max(0, order.totalPendente - 1);
+                                order.totalAtendido++;
+                            }
                         }
                     }
                     if (product) { product.estoque = quantidadeFinal; }

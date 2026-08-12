@@ -5547,9 +5547,44 @@ window.saveChaveAcessoManual = async function(idNota, btn) {
     }
 };
 
+window.toggleDanfeModalTab = function(tabName) {
+    const tabEmail = document.getElementById('tab-content-email');
+    const tabColeta = document.getElementById('tab-content-coleta');
+    const btnEmail = document.getElementById('tab-btn-email');
+    const btnColeta = document.getElementById('tab-btn-coleta');
+    const emailBtnText = document.getElementById('email-btn-text');
+
+    if (tabName === 'email') {
+        tabEmail.classList.remove('hidden');
+        tabColeta.classList.add('hidden');
+        
+        btnEmail.classList.add('border-indigo-600', 'text-indigo-600');
+        btnEmail.classList.remove('border-transparent', 'text-gray-500');
+        
+        btnColeta.classList.remove('border-indigo-600', 'text-indigo-600');
+        btnColeta.classList.add('border-transparent', 'text-gray-500');
+        
+        if(emailBtnText) emailBtnText.innerText = 'Enviar E-mail';
+    } else {
+        tabEmail.classList.add('hidden');
+        tabColeta.classList.remove('hidden');
+        
+        btnColeta.classList.add('border-indigo-600', 'text-indigo-600');
+        btnColeta.classList.remove('border-transparent', 'text-gray-500');
+        
+        btnEmail.classList.remove('border-indigo-600', 'text-indigo-600');
+        btnEmail.classList.add('border-transparent', 'text-gray-500');
+        
+        if(emailBtnText) emailBtnText.innerText = 'Solicitar Coleta';
+        if (window._fetchColetaData) window._fetchColetaData();
+    }
+};
+
 window.openEmailDanfeModal = function(baixarPdfUrl, chaveAcesso, linkDanfe, filename, contatoEmail, numeroNota, cliente, numeroBling, orcamento, vendedor) {
     const modal = document.getElementById('email-danfe-modal');
     if (!modal) return;
+
+    if (window.toggleDanfeModalTab) window.toggleDanfeModalTab('email');
 
     document.getElementById('email-danfe-to').value = contatoEmail || '';
     
@@ -5574,6 +5609,223 @@ window.openEmailDanfeModal = function(baixarPdfUrl, chaveAcesso, linkDanfe, file
     document.getElementById('email-danfe-message').value = `${saudacao},\n\nSegue a NFe.: ${displayFilename}\n\natt.:`;
     
     document.getElementById('email-danfe-filename').innerText = filename || 'DANFE.pdf';
+
+    // Aba 2 (Solicitar Coleta)
+    let pedido = null;
+    if (window._allPedidos) {
+        pedido = window._allPedidos.find(p => String(p.numero || p.número || '') === String(numeroBling));
+    }
+    
+    const freteMap = { 0: "CIF", 1: "FOB", 2: "Terceiros", 9: "Sem Frete" };
+    let nomeCliente = cliente || '';
+    let cnpj = '';
+    let enderecoStr = '';
+    let cidadeUf = '';
+    let cep = '';
+    let modalidadeFrete = 'FOB';
+    let volumes = '1';
+    let pesoTotal = '0';
+
+    if (pedido) {
+        nomeCliente = pedido.contato?.nome || pedido.contato_nome || pedido['contato nome'] || pedido.cliente || cliente || '';
+        cnpj = pedido.contato?.numeroDocumento || pedido.cpf_cnpj || pedido['cpf cnpj'] || pedido['cpf/cnpj'] || '';
+
+        const end = pedido.transporte?.enderecoEntrega;
+        if (end) {
+            enderecoStr = `${end.endereco || ''}, ${end.numero || ''} ${end.complemento ? ' - ' + end.complemento : ''} - ${end.bairro || ''}`;
+            cidadeUf = `${end.municipio || ''} - ${end.uf || ''}`;
+            cep = end.cep || '';
+        } else if (pedido.endereço || pedido.endereco || pedido.cidade || pedido.bairro) {
+            enderecoStr = `${pedido.endereço || pedido.endereco || ''} ${pedido.numero ? ', ' + pedido.numero : ''} ${pedido.bairro ? '- ' + pedido.bairro : ''}`.trim();
+            cidadeUf = `${pedido.cidade || ''} ${pedido.uf ? '- ' + pedido.uf : ''}`.trim();
+            cep = pedido.cep || '';
+        }
+
+        const fretePorConta = pedido.transporte?.fretePorConta;
+        if (fretePorConta !== undefined) {
+            modalidadeFrete = freteMap[fretePorConta] || 'FOB';
+        }
+
+        const vols = pedido.transporte?.volumes;
+        if (vols && vols.length > 0) {
+            volumes = vols.reduce((sum, v) => sum + (parseFloat(v.quantidade) || 0), 0);
+            pesoTotal = vols.reduce((sum, v) => sum + (parseFloat(v.pesoBruto) || 0), 0).toFixed(1);
+        }
+    }
+
+    // Se não encontrou o CNPJ na venda, tenta achar na NF-e vinculada
+    if (!cnpj && numeroNota && window._allNFeData) {
+        if (window._allNFeData.length > 0) {
+            console.log("[Coleta Debug] Chaves da primeira NFe na planilha:", Object.keys(window._allNFeData[0]));
+        }
+        console.log("[Coleta Debug] Procurando NFe numeroNota:", numeroNota, "em", window._allNFeData.length, "notas");
+        const nfe = window._allNFeData.find(n => {
+            const numNfePlanilha = n.numero || n.numero_da_nota || n.numero_nota || '';
+            return Number(numNfePlanilha) === Number(numeroNota);
+        });
+        console.log("[Coleta Debug] NFe encontrada:", nfe);
+        if (nfe) {
+            cnpj = nfe.cnpjcpf_cliente || nfe.cnpj_cpf_cliente || nfe['cnpj/cpf cliente'] || nfe.cnpj || nfe.cpf_cnpj || '';
+            // Se nomeCliente for 'Cliente', permite substituir pelo nome que está na NFe
+            if (!nomeCliente || nomeCliente === 'Cliente') {
+                nomeCliente = nfe.nome_do_cliente || nfe.nome_cliente || nfe.cliente || nfe.contato_nome || '';
+            }
+        }
+    }
+
+    const updateColetaText = (nc, c, e, cid, ce, mf, v, pt, email = '') => {
+        const coletaTemplate = `Boa tarde, tudo bem?
+
+Gostaria de agendar uma coleta conforme as informações abaixo:
+
+REMETENTE (Local de Coleta):
+Razão Social: Marksell
+CNPJ: 21.331.638/0001-85
+Endereço: Rua João Dias Ribeiro, 409 - Térreo, Sala 01, Polo Industrial
+Cidade/UF: Itapevi - SP
+CEP: 06693-810
+
+DESTINATÁRIO / PAGADOR DO FRETE:
+Razão Social: ${nc}
+CNPJ: ${c}
+Endereço: ${e.trim()}
+Cidade/UF: ${cid.trim()}
+CEP: ${ce}
+
+DADOS DA CARGA E FRETE:
+Nota Fiscal: ${numeroNota || ''} (arquivo em anexo)
+Modalidade de Frete: ${mf} (Pago pelo Destinatário - ${nc})
+Volumes: ${v}
+Dimensões (L x C x A): 32 cm x 68 cm x 15 cm
+Peso Total: ${pt} kg
+
+Ficamos no aguardo da confirmação.
+Obrigado!`;
+
+        const txtArea = document.getElementById('email-coleta-message');
+        if (txtArea) txtArea.value = coletaTemplate;
+
+        const emailField = document.getElementById('email-coleta-to');
+        if (emailField && email && !emailField.value) {
+            emailField.value = email;
+        }
+    };
+
+    document.getElementById('email-coleta-to').value = ''; // Transportadora
+    document.getElementById('email-coleta-subject').value = `Solicitação de Coleta - NFe ${numeroNota || ''} - Marksell / Itapevi-SP`;
+
+    // Preenche imediatamente com o que encontrou em memória (Planilha ou cache)
+    updateColetaText(nomeCliente, cnpj, enderecoStr, cidadeUf, cep, modalidadeFrete, volumes, pesoTotal);
+
+    window._fetchColetaData = function() {
+        if (window._coletaDataFetched) return;
+        window._coletaDataFetched = true;
+        
+        // Se estiver faltando informações cruciais (como Endereço completo ou Peso), busca no backend via Bling
+        if (!enderecoStr || pesoTotal === '0' || !cnpj) {
+            const txtArea = document.getElementById('email-coleta-message');
+            if (txtArea) txtArea.value = "Buscando dados complementares do pedido (Endereço, CNPJ, Peso...) no Bling...\nPor favor, aguarde uns segundos...";
+            
+            // Usa o ID interno resolvido pelo modal principal para evitar 400 Bad Request
+            const fetchId = window._currentModalPedidoId || (pedido ? (pedido.id || pedido.id_pedido || pedido['id pedido'] || numeroBling) : numeroBling);
+            
+            if (fetchId && API_URLS.ORDERS_BLING) {
+                fetch(`${API_URLS.ORDERS_BLING}/vendas/${fetchId}`)
+                    .then(r => {
+                        if (!r.ok) throw new Error('Falha Venda');
+                        return r.json();
+                    })
+                    .then(data => {
+                        const bPedido = data.data;
+                        if (bPedido) {
+                            if (!enderecoStr) {
+                                const end = bPedido.transporte?.enderecoEntrega;
+                                if (end) {
+                                    enderecoStr = `${end.endereco || ''}, ${end.numero || ''} ${end.complemento ? ' - ' + end.complemento : ''} - ${end.bairro || ''}`;
+                                    cidadeUf = `${end.municipio || ''} - ${end.uf || ''}`;
+                                    cep = end.cep || '';
+                                } else if (bPedido.contato?.endereco?.endereco) {
+                                    const end = bPedido.contato.endereco;
+                                    enderecoStr = `${end.endereco || ''}, ${end.numero || ''} ${end.complemento ? ' - ' + end.complemento : ''} - ${end.bairro || ''}`;
+                                    cidadeUf = `${end.municipio || ''} - ${end.uf || ''}`;
+                                    cep = end.cep || '';
+                                }
+                            }
+                            if (pesoTotal === '0' && bPedido.transporte?.volumes) {
+                                pesoTotal = bPedido.transporte.volumes.reduce((sum, v) => sum + (parseFloat(v.pesoBruto) || 0), 0).toFixed(1);
+                                volumes = bPedido.transporte.volumes.reduce((sum, v) => sum + (parseFloat(v.quantidade) || 0), 0).toString();
+                            }
+                            if (!cnpj) {
+                                cnpj = bPedido.contato?.numeroDocumento || '';
+                            }
+                            updateColetaText(nomeCliente, cnpj, enderecoStr, cidadeUf, cep, modalidadeFrete, volumes, pesoTotal);
+                        } else {
+                            throw new Error('Sem Venda');
+                        }
+                    })
+                    .catch(err => {
+                        console.warn("[Coleta] Erro ao buscar venda, tentando contato pelo CNPJ...", err.message);
+                        console.log("[Coleta Debug] Estado atual -> CNPJ:", cnpj, "| nomeCliente:", nomeCliente);
+                        
+                        if (cnpj && API_URLS.ORDERS_BLING) {
+                            const cleanCnpj = String(cnpj).replace(/\D/g, '');
+                            if (cleanCnpj) {
+                                console.log("[Coleta Debug] Disparando fetch para contatos com CNPJ limpo:", cleanCnpj);
+                                fetch(`${API_URLS.ORDERS_BLING}/contatos?numeroDocumento=${cleanCnpj}`)
+                                    .then(rc => rc.ok ? rc.json() : null)
+                                    .then(dataC => {
+                                        // Formata o CNPJ para exibição se for apenas números
+                                        let displayCnpj = String(cnpj);
+                                        if (displayCnpj.length === 14 && !displayCnpj.includes('.')) {
+                                            displayCnpj = displayCnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+                                        }
+
+                                        if (dataC && dataC.data && dataC.data.length > 0) {
+                                            const contatoId = dataC.data[0].id;
+                                            console.log("[Coleta Debug] Contato listado! ID:", contatoId, ". Buscando detalhes...");
+                                            fetch(`${API_URLS.ORDERS_BLING}/contatos/${contatoId}`)
+                                                .then(async rId => {
+                                                    if (!rId.ok) {
+                                                        const errText = await rId.text();
+                                                        throw new Error(`Erro 400: ${errText}`);
+                                                    }
+                                                    return rId.json();
+                                                })
+                                                .then(detalhesC => {
+                                                    console.log("[Coleta Debug] Detalhes do contato retornados:", detalhesC);
+                                                    const c = detalhesC?.data || {};
+                                                    const e = (c.endereco && c.endereco.geral) ? c.endereco.geral : (c.enderecoGeral || {});
+                                                    const endStr = `${e.endereco || ''}, ${e.numero || ''} ${e.complemento ? ' - ' + e.complemento : ''} - ${e.bairro || ''}`.replace(/^, | - $|, $/g, '').trim();
+                                                    const cid = `${e.municipio || ''} - ${e.uf || ''}`.replace(/^- | - $/g, '').trim();
+                                                    const cepVal = e.cep || '';
+                                                    const emailContato = c.email || '';
+                                                    console.log("[Coleta Debug] Sucesso ao buscar detalhes! Atualizando texto...");
+                                                    updateColetaText(nomeCliente, displayCnpj, endStr, cid, cepVal, modalidadeFrete, volumes, pesoTotal, emailContato);
+                                                })
+                                                .catch(errDetalhes => {
+                                                    console.error("[Coleta] Erro ao buscar detalhes do contato:", errDetalhes);
+                                                    updateColetaText(nomeCliente, displayCnpj, enderecoStr, cidadeUf, cep, modalidadeFrete, volumes, pesoTotal);
+                                                });
+                                        } else {
+                                            console.log("[Coleta Debug] Contato não retornado. Atualizando com dados vazios...");
+                                            updateColetaText(nomeCliente, displayCnpj, enderecoStr, cidadeUf, cep, modalidadeFrete, volumes, pesoTotal);
+                                        }
+                                    })
+                                    .catch(e2 => {
+                                        console.error("[Coleta] Erro ao buscar contato pelo CNPJ:", e2);
+                                        updateColetaText(nomeCliente, String(cnpj), enderecoStr, cidadeUf, cep, modalidadeFrete, volumes, pesoTotal);
+                                    });
+                                return;
+                            }
+                        }
+                        updateColetaText(nomeCliente, cnpj, enderecoStr, cidadeUf, cep, modalidadeFrete, volumes, pesoTotal);
+                    });
+            } else {
+                updateColetaText(nomeCliente, cnpj, enderecoStr, cidadeUf, cep, modalidadeFrete, volumes, pesoTotal);
+            }
+        }
+    };
+    window._coletaDataFetched = false;
 
     const dragArea = document.getElementById('email-danfe-drag-area');
     if (dragArea) {
@@ -5616,9 +5868,11 @@ window.openEmailDanfeModal = function(baixarPdfUrl, chaveAcesso, linkDanfe, file
 
     const confirmBtn = document.getElementById('email-danfe-confirm-btn');
     confirmBtn.onclick = async function() {
-        const toEmail = document.getElementById('email-danfe-to').value.trim();
-        const subject = document.getElementById('email-danfe-subject').value.trim();
-        const message = document.getElementById('email-danfe-message').value.trim();
+        const isColeta = !document.getElementById('tab-content-coleta').classList.contains('hidden');
+        
+        const toEmail = isColeta ? document.getElementById('email-coleta-to').value.trim() : document.getElementById('email-danfe-to').value.trim();
+        const subject = isColeta ? document.getElementById('email-coleta-subject').value.trim() : document.getElementById('email-danfe-subject').value.trim();
+        const message = isColeta ? document.getElementById('email-coleta-message').value.trim() : document.getElementById('email-danfe-message').value.trim();
 
         if (!toEmail) {
             alert('Por favor, informe ao menos um e-mail de destino.');
