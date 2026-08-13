@@ -1435,6 +1435,41 @@ export const GerenciarPedidosApp = (function () {
         }
     }
 
+    function _printNfeConsoleLog(message, status = 'loading') {
+        const detailsDiv = document.getElementById('nfe-emission-details');
+        if (!detailsDiv) return;
+
+        let icon = '';
+        if (status === 'loading') {
+            icon = '<span class="text-yellow-400 animate-pulse">[...]</span>';
+        } else if (status === 'success') {
+            icon = '<span class="text-green-500 font-bold">[OK]</span>';
+        } else if (status === 'error') {
+            icon = '<span class="text-red-500 font-bold">[ERRO]</span>';
+        } else if (status === 'info') {
+            icon = '<span class="text-blue-400 font-bold">[INFO]</span>';
+        }
+
+        const logLine = document.createElement('div');
+        logLine.className = 'flex space-x-2';
+        logLine.innerHTML = `<span>></span><span>${message}</span><span class="ml-auto">${icon}</span>`;
+        detailsDiv.appendChild(logLine);
+        detailsDiv.scrollTop = detailsDiv.scrollHeight;
+        return logLine;
+    }
+
+    function _updateNfeConsoleLog(logLineEl, status) {
+        if (!logLineEl) return;
+        let icon = '';
+        if (status === 'success') icon = '<span class="text-green-500 font-bold">[OK]</span>';
+        else if (status === 'error') icon = '<span class="text-red-500 font-bold">[ERRO]</span>';
+        else if (status === 'loading') icon = '<span class="text-yellow-400 animate-pulse">[...]</span>';
+        else if (status === 'info') icon = '<span class="text-blue-400 font-bold">[INFO]</span>';
+        
+        const lastChild = logLineEl.lastElementChild;
+        if (lastChild) lastChild.innerHTML = icon;
+    }
+
     async function _handleEmitirNfe() {
         const idPedido = _currentModalPedidoId;
         if (!idPedido) return;
@@ -3034,15 +3069,40 @@ export const GerenciarPedidosApp = (function () {
             if (confirmBtn) confirmBtn.disabled = true;
             if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.disabled = true;
             if (cancelBtn) cancelBtn.disabled = true;
-            if (spinner) spinner.classList.remove('hidden');
 
-            // 1. Salvar os dados editados no Pedido de Venda primeiro (Bling V3)
-            const saveResult = await _saveOrderEdit(true, true);
-            if (!saveResult || !saveResult.success) {
-                throw new Error("Falha ao salvar edições no pedido: " + (saveResult?.error || "Erro desconhecido"));
+            // Abrir o Console Modal
+            const consoleOverlay = document.getElementById('nfe-emission-overlay');
+            const consoleDetails = document.getElementById('nfe-emission-details');
+            const consoleOkBtn = document.getElementById('nfe-emission-ok-btn');
+            
+            if (consoleOverlay) consoleOverlay.classList.remove('hidden');
+            if (consoleDetails) consoleDetails.innerHTML = ''; // Limpar logs antigos
+            if (consoleOkBtn) {
+                consoleOkBtn.classList.add('hidden'); // Ocultar botão OK no início
+                // Remover listeners antigos para evitar duplicidade
+                const novoOkBtn = consoleOkBtn.cloneNode(true);
+                consoleOkBtn.parentNode.replaceChild(novoOkBtn, consoleOkBtn);
+                
+                novoOkBtn.addEventListener('click', () => {
+                    document.getElementById('nfe-emission-overlay').classList.add('hidden');
+                    _closeNfeEditModal();
+                    _filterPedidos();
+                    _openOrderDetailsModal(idPedido);
+                });
             }
 
+            // 1. Salvar os dados editados no Pedido de Venda primeiro (Bling V3)
+            let stepSave = _printNfeConsoleLog('Salvando alterações do pedido no Bling...');
+            const saveResult = await _saveOrderEdit(true, true);
+            if (!saveResult || !saveResult.success) {
+                _updateNfeConsoleLog(stepSave, 'error');
+                _printNfeConsoleLog(`Erro ao salvar pedido: ${saveResult?.error || 'Erro desconhecido'}`, 'error');
+                throw new Error("Falha ao salvar edições no pedido");
+            }
+            _updateNfeConsoleLog(stepSave, 'success');
+
             // 2. Chamar o backend para gerar a NFe através do pedido
+            let stepGenerate = _printNfeConsoleLog('Enviando comando de geração de NF-e...');
             const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${idPedido}/gerar-nfe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -3052,35 +3112,51 @@ export const GerenciarPedidosApp = (function () {
             const result = await res.json();
 
             if (!res.ok) {
+                _updateNfeConsoleLog(stepGenerate, 'error');
                 const errorMsg = result.message || 'Falha ao gerar NF-e.';
                 const details = result.details ? ` (Detalhes: ${JSON.stringify(result.details)})` : '';
-                throw new Error(errorMsg + details);
+                _printNfeConsoleLog(`${errorMsg}${details}`, 'error');
+                throw new Error("Falha na API");
+            }
+            _updateNfeConsoleLog(stepGenerate, 'success');
+
+            let stepSefaz = null;
+            if (!somenteGerar) {
+                stepSefaz = _printNfeConsoleLog('Aguardando resposta da SEFAZ...');
             }
 
             if (result.status === 'partial_success' || result.status === 'draft_success') {
+                if (stepSefaz) _updateNfeConsoleLog(stepSefaz, 'error');
+                
                 // Nota criada mas não enviada (rascunho ou falha no envio)
                 const toastText = result.status === 'draft_success'
-                    ? `✅ Rascunho criado no Bling! ID da Nota: ${result.data?.idNota || ''}. Confira e envie manualmente pelo Bling.`
-                    : 'Atenção: ' + result.message;
+                    ? `Rascunho criado! ID da Nota: ${result.data?.idNota || ''}.`
+                    : 'Nota criada, mas o envio falhou: ' + result.message;
+                
+                _printNfeConsoleLog(toastText, result.status === 'draft_success' ? 'info' : 'error');
+                
                 if (typeof Toastify !== 'undefined') {
                     Toastify({
-                        text: toastText,
+                        text: result.status === 'draft_success' ? '✅ Rascunho criado no Bling!' : 'Atenção: Falha ao enviar para SEFAZ',
                         duration: 7000,
                         gravity: 'top',
                         position: 'center',
                         style: { background: 'linear-gradient(to right, #f59e0b, #d97706)' }
                     }).showToast();
-                } else {
-                    alert(toastText);
                 }
-            } else if (typeof Toastify !== 'undefined') {
-                Toastify({
-                    text: '🚀 NF-e Gerada com Sucesso!',
-                    duration: 4000,
-                    gravity: 'top',
-                    position: 'center',
-                    style: { background: 'linear-gradient(to right, #00b09b, #96c93d)' }
-                }).showToast();
+            } else {
+                if (stepSefaz) _updateNfeConsoleLog(stepSefaz, 'success');
+                _printNfeConsoleLog(`🚀 NF-e Gerada e Autorizada com Sucesso! (ID: ${result.data?.idNota || ''})`, 'success');
+                
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({
+                        text: '🚀 NF-e Gerada com Sucesso!',
+                        duration: 4000,
+                        gravity: 'top',
+                        position: 'center',
+                        style: { background: 'linear-gradient(to right, #00b09b, #96c93d)' }
+                    }).showToast();
+                }
             }
 
             // Atualizar localmente o pedido com o novo ID da nota e status "Atendido"
@@ -3113,19 +3189,17 @@ export const GerenciarPedidosApp = (function () {
                 pedidoLocal.situacao = atendidoLabel;
             }
 
-            // Fechar modal de edição
-            _closeNfeEditModal();
-            _filterPedidos();
-            _openOrderDetailsModal(idPedido);
-
         } catch (err) {
             console.error('[EmitirNFe Customizada] Erro:', err);
-            alert('Erro ao emitir nota com dados customizados: ' + err.message);
+            // Mostrar botão ok para o usuário fechar o modal mesmo com erro
         } finally {
             if (confirmBtn) confirmBtn.disabled = false;
             if (_state.draftNfeEditBtn) _state.draftNfeEditBtn.disabled = false;
             if (cancelBtn) cancelBtn.disabled = false;
-            if (spinner) spinner.classList.add('hidden');
+            
+            // Exibir o botão OK para fechar o console
+            const novoOkBtn = document.getElementById('nfe-emission-ok-btn');
+            if (novoOkBtn) novoOkBtn.classList.remove('hidden');
         }
     }
 
