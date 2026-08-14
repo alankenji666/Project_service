@@ -6,7 +6,7 @@
 
         // URLs das suas APIs do Google Apps Script
         // ATENÇÃO: Substitua estas URLs pelas URLs de IMPLANTAÇÃO dos seus respectivos scripts
-        import { API_URLS } from './apiConfig.js?v=2';
+        import { API_URLS } from './apiConfig.js?v=3';
         import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=2';
         window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js?v=2';
@@ -2094,8 +2094,8 @@ const data = filteredProducts.map(product => {
                     span.innerHTML = `${icon} <span class="${textClass} truncate">${msg}</span>`;
                     
                     container.appendChild(span);
-                    // Manter só as últimas 6 mensagens
-                    if (container.childNodes.length > 6) {
+                    // Manter até 10 mensagens para garantir que as buscas lentas não sumam da tela
+                    if (container.childNodes.length > 10) {
                         container.removeChild(container.firstChild);
                     }
                 }
@@ -2135,13 +2135,12 @@ const data = filteredProducts.map(product => {
                         trackFetch(fetch(`${API_URLS.ORDERS_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Pedidos Terceiros'),
                         trackFetch(fetch(API_URLS.ORDERS_FABRICA, { mode: 'cors' }), 'Pedidos Fábrica'),
                         trackFetch(fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Pedidos NFE/Bling'),
-                        trackFetch(fetch(`${API_URLS.SAIDAS_FABRICA}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Saídas Fábrica'),
-                        trackFetch(fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Saídas Garantia'),
+                        trackFetch(fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Saídas (Fábrica e Garantia)'),
                         trackFetch(LojaIntegradaApp.fetchOrders(), 'Loja Integrada'),
                         trackFetch((typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.fetchPedidos(true) : Promise.resolve(), 'Gerenciar Pedidos')
                     ]);
 
-                    const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasFabricaRes, saidasGarantiaRes, lojaIntegradaData] = results;
+                    const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasRes, lojaIntegradaData, gerenciarPedidosRes] = results;
 
                     console.log('[DEBUG] Respostas das APIs recebidas.');
 
@@ -2197,30 +2196,32 @@ const data = filteredProducts.map(product => {
                         console.warn("Aviso: Falha ao carregar dados de NF-e.");
                     }
 
-                    // --- 5. Processa Saídas Fábrica ---
-                    if (saidasFabricaRes.status === 'fulfilled' && saidasFabricaRes.value.ok) {
-                        const saidasFabricaData = await saidasFabricaRes.value.json();
-                        const dataArray = saidasFabricaData.data || saidasFabricaData;
+                    // --- 5. Processa Saídas (Fábrica e Garantia juntas) ---
+                    if (saidasRes.status === 'fulfilled' && saidasRes.value.ok) {
+                        const saidasData = await saidasRes.value.json();
+                        const dataArray = saidasData.data || saidasData;
                         if (Array.isArray(dataArray)) {
-                            const freshSaidasFabrica = _processRawSaidasData(dataArray, 'saidas-fabrica');
+                            // Filtra pelo tipo (coluna "Tipo" da planilha)
+                            const dataFabrica = dataArray.filter(item => {
+                                return String(item.Tipo || item.tipo || '').toLowerCase().trim() === 'fábrica';
+                            });
+                            
+                            const dataGarantia = dataArray.filter(item => {
+                                return String(item.Tipo || item.tipo || '').toLowerCase().trim() === 'garantia';
+                            });
+
+                            // Processa Fábrica
+                            const freshSaidasFabrica = _processRawSaidasData(dataFabrica, 'saidas-fabrica');
                             _allSaidasFabrica.length = 0;
                             Array.prototype.push.apply(_allSaidasFabrica, freshSaidasFabrica);
-                        }
-                    } else {
-                        console.warn("Aviso: Falha ao carregar Saídas Fábrica.");
-                    }
 
-                    // --- 6. Processa Saídas Garantia ---
-                    if (saidasGarantiaRes.status === 'fulfilled' && saidasGarantiaRes.value.ok) {
-                        const saidasGarantiaData = await saidasGarantiaRes.value.json();
-                        const dataArray = saidasGarantiaData.data || saidasGarantiaData;
-                        if (Array.isArray(dataArray)) {
-                            const freshSaidasGarantia = _processRawSaidasData(dataArray, 'saidas-garantia');
+                            // Processa Garantia
+                            const freshSaidasGarantia = _processRawSaidasData(dataGarantia, 'saidas-garantia');
                             _allSaidasGarantia.length = 0;
                             Array.prototype.push.apply(_allSaidasGarantia, freshSaidasGarantia);
                         }
                     } else {
-                        console.warn("Aviso: Falha ao carregar Saídas Garantia.");
+                        console.warn("Aviso: Falha ao carregar Saídas (Fábrica e Garantia).");
                     }
 
                     // Loja Integrada: Processa e atribui os dados (corrigido para usar .value)

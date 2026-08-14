@@ -1435,6 +1435,57 @@ export const GerenciarPedidosApp = (function () {
         }
     }
 
+    window.customConfirm = function(message, title = 'Confirmação', type = 'info') {
+        return new Promise((resolve) => {
+            const overlay = document.getElementById('custom-confirm-overlay');
+            const titleEl = document.getElementById('custom-confirm-title');
+            const messageEl = document.getElementById('custom-confirm-message');
+            const iconEl = document.getElementById('custom-confirm-icon');
+            const cancelBtn = document.getElementById('custom-confirm-cancel-btn');
+            const confirmBtn = document.getElementById('custom-confirm-confirm-btn');
+
+            if (!overlay) {
+                // Se não achar o HTML, fallback para o nativo
+                resolve(window.confirm(message));
+                return;
+            }
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+
+            // Configurar tipo (cores e ícone)
+            if (type === 'danger' || type === 'warning') {
+                confirmBtn.className = 'px-5 py-2 rounded-lg text-sm font-bold bg-red-600 text-white hover:bg-red-500 transition-colors';
+                iconEl.innerHTML = '<svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+            } else {
+                confirmBtn.className = 'px-5 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors';
+                iconEl.innerHTML = '<svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+            }
+
+            // Mostrar modal
+            overlay.classList.remove('hidden');
+
+            const cleanup = () => {
+                overlay.classList.add('hidden');
+                cancelBtn.removeEventListener('click', handleCancel);
+                confirmBtn.removeEventListener('click', handleConfirm);
+            };
+
+            const handleCancel = () => {
+                cleanup();
+                resolve(false);
+            };
+
+            const handleConfirm = () => {
+                cleanup();
+                resolve(true);
+            };
+
+            cancelBtn.addEventListener('click', handleCancel);
+            confirmBtn.addEventListener('click', handleConfirm);
+        });
+    };
+
     function _printNfeConsoleLog(message, status = 'loading') {
         const detailsDiv = document.getElementById('nfe-emission-details');
         if (!detailsDiv) return;
@@ -2905,7 +2956,9 @@ export const GerenciarPedidosApp = (function () {
             totalParcelas = Math.round(totalParcelas * 100) / 100;
 
             if (Math.abs(totalNotaCalculado - totalParcelas) > 0.05) {
-                if (!confirm(`Aviso: A soma das parcelas (R$ ${totalParcelas.toFixed(2)}) é diferente do total líquido calculado da nota (R$ ${totalNotaCalculado.toFixed(2)}).\n\nDeseja continuar assim mesmo? (Nota: Caso prossiga, a SEFAZ ou o Bling podem rejeitar a nota por inconsistência de valores)`)) {
+                const msg = `Aviso: A soma das parcelas (R$ ${totalParcelas.toFixed(2)}) é diferente do total líquido calculado da nota (R$ ${totalNotaCalculado.toFixed(2)}).\n\nDeseja continuar assim mesmo? (Nota: Caso prossiga, a SEFAZ ou o Bling podem rejeitar a nota por inconsistência de valores)`;
+                const confirmed = await window.customConfirm(msg, 'Inconsistência de Valores', 'warning');
+                if (!confirmed) {
                     return;
                 }
             }
@@ -2958,14 +3011,18 @@ export const GerenciarPedidosApp = (function () {
             }
 
             if (hasValidProducts && allZeroWeight) {
-                if (!confirm('⚠️ ALERTA DE PESO ZERO ⚠️\n\nOs produtos deste pedido estão com PESO ZERO no cadastro do Bling!\nComo o Bling ignora o peso manual e usa o peso dos produtos para gerar a NF-e, ela sairá zerada e a transportadora poderá rejeitar!\n\nRecomendamos usar o botão "Criar Rascunho", ou cadastrar o peso nos produtos.\n\nDeseja forçar o envio automático mesmo assim?')) {
+                const msg = 'Os produtos deste pedido estão com PESO ZERO no cadastro do Bling!\nComo o Bling ignora o peso manual e usa o peso dos produtos para gerar a NF-e, ela sairá zerada e a transportadora poderá rejeitar!\n\nRecomendamos usar o botão "Criar Rascunho", ou cadastrar o peso nos produtos.\n\nDeseja forçar o envio automático mesmo assim?';
+                const confirmed = await window.customConfirm(msg, '⚠️ ALERTA DE PESO ZERO ⚠️', 'danger');
+                if (!confirmed) {
                     return;
                 }
             } else {
-                if (!confirm('Confirmar a emissão da Nota Fiscal com os dados editados? Esta ação enviará a nota para a SEFAZ.')) return;
+                const confirmed = await window.customConfirm('Confirmar a emissão da Nota Fiscal com os dados editados?\n\nEsta ação enviará a nota para a SEFAZ.', 'Emissão de NF-e', 'info');
+                if (!confirmed) return;
             }
         } else {
-            if (!confirm('Criar a NF-e no Bling SEM enviar para a SEFAZ?\n\nA nota ficará como rascunho e poderá ser conferida e enviada manualmente no Bling.')) return;
+            const confirmed = await window.customConfirm('Criar a NF-e no Bling SEM enviar para a SEFAZ?\n\nA nota ficará como rascunho e poderá ser conferida e enviada manualmente no Bling.', 'Criar Rascunho', 'info');
+            if (!confirmed) return;
         }
 
         // Preparar payload customizado. 
@@ -4034,12 +4091,16 @@ export const GerenciarPedidosApp = (function () {
         if (_loadingEl) _loadingEl.classList.remove('hidden');
 
         try {
+            console.time('[Desempenho] Busca de Pedidos na API (Bling/Proxy)');
             const url = API_URLS.ORDERS_BLING || "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos";
             const response = await fetch(url + (force ? "?t=" + new Date().getTime() : ""), { mode: 'cors' });
             
             if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
             
             const json = await response.json();
+            console.timeEnd('[Desempenho] Busca de Pedidos na API (Bling/Proxy)');
+            
+            console.time('[Desempenho] Renderização e Filtro da Tabela de Pedidos');
             if (json.status === 'success' && json.data) {
                 _allPedidos = json.data;
                 _populateYearFilter();
@@ -4047,6 +4108,7 @@ export const GerenciarPedidosApp = (function () {
                 _allPedidos = [];
             }
             _filterPedidos();
+            console.timeEnd('[Desempenho] Renderização e Filtro da Tabela de Pedidos');
 
         } catch (error) {
             console.error("Erro ao buscar pedidos Bling:", error);

@@ -48,7 +48,7 @@
             </svg>
             <p class="text-white text-lg mt-4 font-bold tracking-wide">Atualizando dados...</p>
             <div class="mt-5 w-80 bg-gray-900 bg-opacity-80 rounded-xl p-4 shadow-2xl border border-gray-700 backdrop-blur-sm flex flex-col space-y-1.5 text-xs text-gray-300 font-mono">
-                <div id="loading-details" class="flex flex-col w-full h-[120px] overflow-hidden justify-end">
+                <div id="loading-details" class="flex flex-col w-full h-[200px] overflow-hidden justify-end">
                     <!-- Logs aparecerão aqui -->
                 </div>
             </div>
@@ -67,6 +67,26 @@
                 <div class="flex justify-center mt-2 border-t border-gray-700 pt-4">
                     <button id="nfe-emission-ok-btn" class="hidden px-8 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-colors">OK</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONFIRMAÇÃO CUSTOMIZADO -->
+    <div id="custom-confirm-overlay"
+        class="fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[100] backdrop-blur-sm">
+        <div class="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-[90%] max-w-md p-6 transform transition-all text-gray-200 font-mono">
+            <div class="flex items-center space-x-4 mb-4">
+                <div id="custom-confirm-icon" class="flex-shrink-0">
+                    <!-- Icon SVG injected via JS -->
+                </div>
+                <h3 id="custom-confirm-title" class="text-lg font-bold text-white tracking-wide">Confirmação</h3>
+            </div>
+            <div class="mb-6">
+                <p id="custom-confirm-message" class="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed"></p>
+            </div>
+            <div class="flex justify-end space-x-3 border-t border-gray-800 pt-4">
+                <button id="custom-confirm-cancel-btn" class="px-5 py-2 rounded-lg text-sm font-bold bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">Cancelar</button>
+                <button id="custom-confirm-confirm-btn" class="px-5 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors">Confirmar</button>
             </div>
         </div>
     </div>
@@ -2992,7 +3012,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script type="module" src="js/main.js?v=7"></script>
+    <script type="module" src="js/main.js?v=8"></script>
     <!-- MODAL LINHA DE PRODUÇÃO -->
     <div id="production-line-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
         <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden">

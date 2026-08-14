@@ -19,8 +19,8 @@
           LOJA_INTEGRADA_ORDERS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/loja-integrada/orders",
           ORDERS_BLING: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos",
           NFE: "https://script.google.com/macros/s/AKfycbwetL7dn2Zmsr6ZPlE6x6B2JTahGOyhfENK6AoL-2HwEvffyTejBuHvIp7S_kgHI3_t/exec",
-          SAIDAS_FABRICA: "https://script.google.com/macros/s/AKfycbxEJwbvF9f0NBQ_ueTsXSSXxeOrr7AiGl58v6UKgJQ1NGI9ZOwrpS8vXYkwgRWe285n/exec", // URL fictícia para Saídas Fábrica
-          SAIDAS_GARANTIA: "https://script.google.com/macros/s/AKfycbz5szPRjcuugJ3JZjGozdXMhcUiYzmKnAMqoqvOywWCpm7935YH6p-Fay-M0CZPni89sQ/exec", // URL fictícia para Saídas Garantia
+          SAIDAS_FABRICA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saidas-estoque", // Agora usa a mesma planilha de Garantia
+          SAIDAS_GARANTIA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saidas-estoque",
       
           // APIs de Ações (Cloud Functions)
           WEBHOOK_LAUNCH: "https://bling-proxy-api-255108547424.southamerica-east1.run.app",

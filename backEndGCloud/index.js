@@ -846,6 +846,15 @@ const saidaGarantiaRouter = createSaidaGarantiaRouter(
 );
 app.use('/saida-garantia', saidaGarantiaRouter);
 
+// Roteador para Leitura de Saídas de Estoque (Fábrica e Garantia juntas)
+const createSaidasEstoqueReadRouter = require('./saidas_estoque_read');
+const saidasEstoqueReadRouter = createSaidasEstoqueReadRouter(
+    getInitializedSheetsClient,
+    SPREADSHEET_ID_SAIDA_FABRICA,
+    SHEET_NAME_SAIDA_FABRICA // Usa a variável que tem o nome exato da aba ('Dados Sistemas - Fabrica 1')
+);
+app.use('/saidas-estoque', saidasEstoqueReadRouter);
+
 const createAuthRouter = require('./auth');
 app.use('/auth', createAuthRouter(getInitializedSheetsClient, SPREADSHEET_ID_CONTAS, SHEET_NAME_CONTA_EMPRESA, SHEET_NAME_CONTA_USUARIO));
 
