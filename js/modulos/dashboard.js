@@ -1673,14 +1673,8 @@ export const DashboardApp = (function() {
     }
 
     function _isTestOrder(p) {
-        if (_getNormalizedStoreName(p) !== 'Bling') return false;
-        
-        const pDate = _getOrderDate(p);
-        if (!pDate) return false;
-        // Ignorar dados de teste de Janeiro (0) a Abril (3) nos anos 2024 e 2026 (sandbox)
-        if (pDate.getMonth() < 4 && (pDate.getFullYear() === 2024 || pDate.getFullYear() === 2026)) {
-            return true;
-        }
+        // A trava de datas antigas foi removida a pedido do usuário.
+        // Todos os pedidos (mesmo anteriores a maio) agora são processados normalmente.
         return false;
     }
 
