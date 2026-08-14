@@ -3327,6 +3327,8 @@ export const DashboardApp = (function() {
             _state.selectedYearFilter = e.target.value;
             if (_dom.startDateInput) _dom.startDateInput.value = '';
             if (_dom.endDateInput) _dom.endDateInput.value = '';
+            const rAll = document.querySelector('[name="date-range"][value="all"]');
+            if (rAll) rAll.checked = true;
             _setDateRange('all');
         });
 
@@ -3335,8 +3337,18 @@ export const DashboardApp = (function() {
             _renderSalesView();
         });
 
-        _dom.startDateInput?.addEventListener('change', () => { _state.currentDateFilterValue = 'custom'; _refreshActiveDashboard(); });
-        _dom.endDateInput?.addEventListener('change', () => { _state.currentDateFilterValue = 'custom'; _refreshActiveDashboard(); });
+        _dom.startDateInput?.addEventListener('change', e => { 
+            _state.currentDateFilterValue = 'custom'; 
+            _state.startDate = e.target.value;
+            _dom.filterBar?.querySelectorAll('[name="date-range"]').forEach(r => r.checked = false);
+            _refreshActiveDashboard(); 
+        });
+        _dom.endDateInput?.addEventListener('change', e => { 
+            _state.currentDateFilterValue = 'custom'; 
+            _state.endDate = e.target.value;
+            _dom.filterBar?.querySelectorAll('[name="date-range"]').forEach(r => r.checked = false);
+            _refreshActiveDashboard(); 
+        });
         _dom.clearFiltersBtn?.addEventListener('click', () => {
             _state.selectedYearFilter = new Date().getFullYear().toString();
             if (_dom.yearFilter) _dom.yearFilter.value = _state.selectedYearFilter;

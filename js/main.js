@@ -10,7 +10,7 @@
         import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=2';
         window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js?v=2';
-        import { DashboardApp } from './modulos/dashboard.js?v=2';
+        import { DashboardApp } from './modulos/dashboard.js?v=3';
         import { EstoqueApp } from './modulos/estoque.js?v=2';
         import { SaidaItens } from './modulos/saidaItens.js?v=2';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
