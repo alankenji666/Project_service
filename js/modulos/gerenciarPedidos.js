@@ -1977,8 +1977,12 @@ export const GerenciarPedidosApp = (function () {
         if (!cnpjInput || !btn) return;
 
         let cnpj = cnpjInput.value.replace(/\D/g, '');
+        if (cnpj.length === 11) {
+            alert("Você digitou um CPF.\nA busca automática de dados (como Endereço e IE) funciona apenas para CNPJ.\n\nVocê pode preencher os dados do cliente manualmente e prosseguir com a emissão da nota sem problemas!");
+            return;
+        }
         if (cnpj.length !== 14) {
-            alert("Por favor, informe um CNPJ válido com 14 dígitos.");
+            alert("Por favor, informe um CNPJ válido com 14 dígitos para a busca automática.");
             return;
         }
 
@@ -2468,6 +2472,28 @@ export const GerenciarPedidosApp = (function () {
                         }
                     }
                 }
+            }
+
+            // Limpar Observação da Nota mantendo apenas Orçamento e Vendedor (Primeiro Nome)
+            const currentObs = _state.nfeEditObservacoes ? _state.nfeEditObservacoes.value : '';
+            const orcMatch = currentObs.match(/Orçamento:\s*([^\n]+)/i); // Pega a linha do orçamento
+            const orcamento = orcMatch ? orcMatch[1].trim() : '';
+
+            let vendedorNome = '';
+            if (_state.currentPedidoBlingBruto && _state.currentPedidoBlingBruto.vendedor) {
+                const v = _state.currentPedidoBlingBruto.vendedor;
+                const rawVendedor = typeof v === 'object' && v.nome ? v.nome : (typeof v === 'object' && v.id ? v.id : v);
+                const fullVendedor = _getVendedorName(rawVendedor);
+                if (fullVendedor && fullVendedor !== '-') {
+                    vendedorNome = fullVendedor.split(' ')[0];
+                }
+            }
+
+            if (_state.nfeEditObservacoes) {
+                let novaObs = '';
+                if (orcamento) novaObs += `Orçamento: ${orcamento}\n`;
+                if (vendedorNome) novaObs += `Vendedor: ${vendedorNome}\n`;
+                _state.nfeEditObservacoes.value = novaObs.trim();
             }
 
             if (window.Toastify) {

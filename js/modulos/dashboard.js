@@ -349,6 +349,7 @@ export const DashboardApp = (function() {
         _dom.closeRankingReportModalBtn = document.getElementById('close-ranking-report-modal-btn');
         _dom.rankingReportCancelBtn = document.getElementById('ranking-report-cancel-btn');
         _dom.printRankingReportBtn = document.getElementById('print-ranking-report-btn');
+        _dom.downloadRankingCsvBtn = document.getElementById('download-ranking-csv-btn');
         _dom.rankingReportModalContent = document.getElementById('ranking-report-modal-content');
         _dom.clearRankingSelectionBtn = document.getElementById('clear-ranking-selection-btn');
         _dom.reportBtn = document.getElementById('open-product-report-modal-btn');
@@ -838,10 +839,10 @@ export const DashboardApp = (function() {
     // --- Sales Dashboard Logic ---
 
     // --- Ranking Dashboard Logic ---
-    function _calculateRankingData() {
+    function _calculateRankingData(ignoreFilters = false) {
         const ranking = {};
-        const activeFilter = _state.activeRankingFilter;
-        const searchQuery = (_state.rankingSearchQuery || '').toLowerCase().trim();
+        const activeFilter = ignoreFilters ? 'all' : _state.activeRankingFilter;
+        const searchQuery = ignoreFilters ? '' : (_state.rankingSearchQuery || '').toLowerCase().trim();
 
         const categoryTotals = {
             'all': { id: 'all', label: 'Geral', total: 0, count: 0, color: '#2563eb' },
@@ -850,6 +851,10 @@ export const DashboardApp = (function() {
             'Sob Demanda - Fábrica': { id: 'Sob Demanda - Fábrica', label: 'Sob Demanda', total: 0, count: 0, color: '#f59e0b' },
             'Serviços': { id: 'Serviços', label: 'Serviços', total: 0, count: 0, color: '#ef4444' }
         };
+
+        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+        const selectedYear = parseInt(_state.selectedYearFilter, 10);
 
         // Filtro de status e Unificação de Fontes (Deduplicado por número do pedido)
         const allSources = [..._allPedidosBling, ..._allNFeData];
@@ -873,12 +878,7 @@ export const DashboardApp = (function() {
         });
 
         // FILTRAGEM DE DATA (CORREÇÃO): Prioriza intervalo específico se existir
-        let filteredPedidos;
-        const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
-        const endDate = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
-        const selectedYear = parseInt(_state.selectedYearFilter, 10);
-
-        filteredPedidos = pedidosBase.filter(p => {
+        let filteredPedidos = pedidosBase.filter(p => {
             // Busca data em múltiplos campos possíveis para garantir captura
             const rawDate = p.data || p.data_saida || p.data_faturamento || p.data_emissao || p.data_criacao || p.data_pedido || p['data pedido'] || "";
             let pDate = null;
@@ -1419,8 +1419,8 @@ export const DashboardApp = (function() {
         const selectedCodes = _state.selectedRankingItems;
         if (selectedCodes.length === 0) return;
 
-        // Recupera todos os dados do ranking para obter as descrições/imagens
-        const allData = _calculateRankingData();
+        // Recupera todos os dados do ranking para obter as descrições/imagens ignorando os filtros de pesquisa atuais
+        const allData = _calculateRankingData(true);
         const rankingMap = {};
         allData.ranking.forEach(item => { rankingMap[item.codigo] = item; });
 
@@ -1515,6 +1515,175 @@ export const DashboardApp = (function() {
         if (_dom.rankingReportModalContent) _dom.rankingReportModalContent.innerHTML = reportHtml;
         if (_dom.rankingReportModal) _dom.rankingReportModal.classList.remove('hidden');
     }
+
+    function _downloadRankingExcel() {
+        if (typeof XLSX === 'undefined') {
+            _utils.showMessageModal?.("Erro", "Biblioteca de exportação não carregada.");
+            return;
+        }
+
+        const selectedCodes = _state.selectedRankingItems;
+        if (selectedCodes.length === 0) {
+            _utils.showMessageModal?.("Erro", "Selecione ao menos um item da tabela para gerar o relatório.");
+            return;
+        }
+
+        const allData = _calculateRankingData(true);
+        const rankingMap = {};
+        allData.ranking.forEach(item => { rankingMap[item.codigo] = item; });
+
+        // aggregatedData format: { "mes (e.g. ago-26)": { "codigo": { descricao, quantidade } } }
+        const aggregatedData = {};
+        const monthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+        selectedCodes.forEach(codigo => {
+            const itemBase = rankingMap[codigo];
+            if (!itemBase) return;
+
+            const productInfo = _allProducts.find(p => p.codigo === codigo);
+            const custoUnitario = productInfo ? (_parseCurrencyBRL(productInfo.preco_de_custo) || 0) : 0;
+
+            const sales = _getProductSalesDetails(codigo);
+            if (sales.length === 0) return;
+
+            sales.forEach(s => {
+                let mes = "N/A";
+                let monthStr = "";
+                let yearStr = "";
+                
+                if (s.data && s.data.includes('/')) {
+                    const parts = s.data.split('/');
+                    if (parts.length >= 3) { monthStr = parts[1]; yearStr = parts[2].slice(-2); }
+                } else if (s.data && s.data.includes('-')) {
+                    const parts = s.data.split('-');
+                    if (parts.length >= 3) { monthStr = parts[1]; yearStr = parts[0].slice(-2); }
+                }
+                
+                if (monthStr && yearStr) {
+                    const mIdx = parseInt(monthStr) - 1;
+                    if (mIdx >= 0 && mIdx < 12) {
+                        mes = `${monthNames[mIdx]}-${yearStr}`;
+                    }
+                }
+
+                if (!aggregatedData[mes]) aggregatedData[mes] = {};
+                
+                if (!aggregatedData[mes][codigo]) {
+                    aggregatedData[mes][codigo] = {
+                        codigo: codigo,
+                        descricao: itemBase.descricao,
+                        quantidade: 0,
+                        valorTotal: 0,
+                        custoTotal: 0
+                    };
+                }
+                const qtd = parseFloat(s.quantidade) || 0;
+                aggregatedData[mes][codigo].quantidade += qtd;
+                aggregatedData[mes][codigo].valorTotal += (parseFloat(s.valorTotal) || 0);
+                aggregatedData[mes][codigo].custoTotal += qtd * custoUnitario;
+            });
+        });
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+
+        // Ordenar os meses para criar as abas de forma cronológica (mais antigo primeiro)
+        const sortedMonths = Object.keys(aggregatedData).sort((a, b) => {
+            if (a === "N/A") return 1;
+            if (b === "N/A") return -1;
+            const [mA, yA] = a.split('-');
+            const [mB, yB] = b.split('-');
+            const idxA = monthNames.indexOf(mA);
+            const idxB = monthNames.indexOf(mB);
+            const dateA = new Date(parseInt("20" + yA), idxA);
+            const dateB = new Date(parseInt("20" + yB), idxB);
+            return dateA - dateB;
+        });
+
+        sortedMonths.forEach(mes => {
+            const itemsInMonth = aggregatedData[mes];
+            const rows = [];
+            
+            // Transformar os códigos do mês em linhas ordenadas por quantidade
+            const sortedCodes = Object.keys(itemsInMonth).sort((a, b) => itemsInMonth[b].quantidade - itemsInMonth[a].quantidade);
+            
+            let sumQtd = 0;
+            let sumVendas = 0;
+            let sumCusto = 0;
+            let sumLucro = 0;
+
+            const formatMoney = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const formatPercent = (val) => val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+            
+            sortedCodes.forEach(codigo => {
+                const row = itemsInMonth[codigo];
+                const lucro = row.valorTotal - row.custoTotal;
+                const margem = row.valorTotal > 0 ? (lucro / row.valorTotal) * 100 : 0;
+                
+                sumQtd += row.quantidade;
+                sumVendas += row.valorTotal;
+                sumCusto += row.custoTotal;
+                sumLucro += lucro;
+                
+                rows.push({
+                    "CÓDIGO DO ITEM": row.codigo,
+                    "DESCRIÇÃO": row.descricao || '',
+                    "QUANTIDADE": row.quantidade,
+                    "VALOR TOTAL (VENDAS)": formatMoney(row.valorTotal),
+                    "CUSTO TOTAL BASE (S/ IMPOSTOS)": formatMoney(row.custoTotal),
+                    "LUCRO BRUTO ESTIMADO (R$)": formatMoney(lucro),
+                    "MARGEM ESTIMADA (%)": formatPercent(margem)
+                });
+            });
+
+            const avgMargem = sumVendas > 0 ? (sumLucro / sumVendas) * 100 : 0;
+            rows.push({
+                "CÓDIGO DO ITEM": "TOTAL GERAL",
+                "DESCRIÇÃO": "",
+                "QUANTIDADE": sumQtd,
+                "VALOR TOTAL (VENDAS)": formatMoney(sumVendas),
+                "CUSTO TOTAL BASE (S/ IMPOSTOS)": formatMoney(sumCusto),
+                "LUCRO BRUTO ESTIMADO (R$)": formatMoney(sumLucro),
+                "MARGEM ESTIMADA (%)": formatPercent(avgMargem)
+            });
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+
+            // Ajustar largura das colunas
+            ws['!cols'] = [
+                { wch: 22 }, // Código
+                { wch: 70 }, // Descrição
+                { wch: 15 }, // Quantidade
+                { wch: 25 }, // Vendas
+                { wch: 35 }, // Custo
+                { wch: 30 }, // Lucro
+                { wch: 25 }  // Margem
+            ];
+
+            // Adicionar estilos (negrito) nos títulos (linha 1) e na última linha (Totais)
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                // Títulos em negrito (linha 0)
+                const headerCell = ws[XLSX.utils.encode_cell({ r: 0, c: C })];
+                if (headerCell) {
+                    headerCell.s = { font: { bold: true } };
+                }
+                
+                // Totais em negrito (última linha)
+                const totalCell = ws[XLSX.utils.encode_cell({ r: range.e.r, c: C })];
+                if (totalCell) {
+                    totalCell.s = { font: { bold: true } };
+                }
+            }
+            // Adicionar aba (sheet name max length é 31)
+            let sheetName = mes.replace(/\//g, '-').substring(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        });
+
+        const filename = `relatorio_itens_selecionados_${new Date().toISOString().slice(0,10)}.xlsx`;
+        XLSX.writeFile(wb, filename);
+    }
+
 
     function _populateYearFilter() {
         if (!_dom.yearFilter) return;
@@ -3154,17 +3323,20 @@ export const DashboardApp = (function() {
         // NOVO: Registro de Checkboxes no Ranking
         _dom.rankingTableContainer?.addEventListener('change', e => {
             if (e.target.id === 'ranking-select-all') {
-                const checkboxes = _dom.rankingTableContainer.querySelectorAll('.ranking-item-checkbox');
-                checkboxes.forEach(cb => {
-                    cb.checked = e.target.checked;
-                    const codigo = cb.dataset.codigo;
-                    if (e.target.checked) {
-                        if (!_state.selectedRankingItems.includes(codigo)) _state.selectedRankingItems.push(codigo);
-                    } else {
-                        _state.selectedRankingItems = _state.selectedRankingItems.filter(id => id !== codigo);
-                    }
-                });
-                _renderRankingDashboard(); // Para atualizar cores das linhas
+                const isChecked = e.target.checked;
+                const allRankingData = _calculateRankingData().ranking;
+                
+                if (isChecked) {
+                    allRankingData.forEach(item => {
+                        if (!_state.selectedRankingItems.includes(item.codigo)) {
+                            _state.selectedRankingItems.push(item.codigo);
+                        }
+                    });
+                } else {
+                    _state.selectedRankingItems = [];
+                }
+                
+                _renderRankingDashboard(); // Para atualizar cores das linhas e checkboxes
                 return;
             }
 
@@ -3208,18 +3380,20 @@ export const DashboardApp = (function() {
                         <script src="https://cdn.tailwindcss.com"></script>
                         <style>
                             @media print {
-                                .page-break-avoid { page-break-inside: avoid; }
-                                body { padding: 0; margin: 0; }
-                                .no-print { display: none; }
+                                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 20px; }
+                                .page-break-avoid { break-inside: avoid; page-break-inside: avoid; }
+                                button { display: none; }
                             }
                         </style>
                     </head>
-                    <body class="p-8 bg-white">
-                        <div class="mb-8 border-b-2 border-blue-600 pb-4">
-                            <h1 class="text-3xl font-black">MKS SERVICE</h1>
-                            <p class="text-sm text-gray-500 uppercase font-bold">Relatório de Ranking de Saídas - ${new Date().toLocaleDateString('pt-BR')}</p>
+                    <body class="bg-white" onload="window.print(); window.close();">
+                        <div class="max-w-4xl mx-auto">
+                            <div class="text-center mb-8 border-b pb-4">
+                                <h1 class="text-2xl font-black text-gray-800">Relatório de Itens Selecionados (Ranking)</h1>
+                                <p class="text-gray-500">Impresso em ${new Date().toLocaleString('pt-BR')}</p>
+                            </div>
+                            ${printContent}
                         </div>
-                        ${printContent}
                     </body>
                 </html>
             `);
@@ -3230,6 +3404,10 @@ export const DashboardApp = (function() {
                 printWindow.print();
                 printWindow.close();
             }, 1000);
+        });
+
+        _dom.downloadRankingCsvBtn?.addEventListener('click', () => {
+            _downloadRankingExcel();
         });
 
         _dom.clearRankingSelectionBtn?.addEventListener('click', () => {

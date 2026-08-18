@@ -14,11 +14,11 @@
       
           // APIs de Dados (Google Apps Script)
           PRODUCTS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/produtos",
-          ORDERS_TERCEIROS: "https://script.google.com/macros/s/AKfycbwYWSPrgMdA5IGVYnH5EVJ3FLnU1THcI6SQa8opOHkjN_CZO-G2S7JJDuTqZQDd0Y2s/exec",
-          ORDERS_FABRICA: "https://script.google.com/macros/s/AKfycbwKsLHoAhfLxEcq6nyu9lCHybh3EOGqEku-shgdoomSg8SAyL9VcUsWWjzVPmvcSkvOTA/exec",
+          ORDERS_TERCEIROS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos-terceiros",
+          ORDERS_FABRICA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos-fabrica",
           LOJA_INTEGRADA_ORDERS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/loja-integrada/orders",
           ORDERS_BLING: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos",
-          NFE: "https://script.google.com/macros/s/AKfycbwetL7dn2Zmsr6ZPlE6x6B2JTahGOyhfENK6AoL-2HwEvffyTejBuHvIp7S_kgHI3_t/exec",
+          NFE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/nfe-lista",
           SAIDAS_FABRICA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saidas-estoque", // Agora usa a mesma planilha de Garantia
           SAIDAS_GARANTIA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saidas-estoque",
       

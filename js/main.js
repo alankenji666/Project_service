@@ -6,15 +6,15 @@
 
         // URLs das suas APIs do Google Apps Script
         // ATENÇÃO: Substitua estas URLs pelas URLs de IMPLANTAÇÃO dos seus respectivos scripts
-        import { API_URLS } from './apiConfig.js?v=3';
+        import { API_URLS } from './apiConfig.js?v=5';
         import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=2';
         window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js?v=2';
-        import { DashboardApp } from './modulos/dashboard.js?v=3';
+        import { DashboardApp } from './modulos/dashboard.js?v=16';
         import { EstoqueApp } from './modulos/estoque.js?v=2';
         import { SaidaItens } from './modulos/saidaItens.js?v=2';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=5';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=8';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=2';
         import { TransportadorasApp } from './modulos/transportadoras.js?v=2';
@@ -2074,11 +2074,16 @@ const data = filteredProducts.map(product => {
                 return Array.from(saidasMap.values());
             }
 
-            function _logLoading(msg, type = 'info') {
+            function _logLoading(msg, type = 'info', id = null) {
                 const container = document.getElementById('loading-details');
                 if (container) {
-                    const span = document.createElement('div');
-                    span.className = "flex items-center gap-2 mb-1 w-full";
+                    let span = id ? document.getElementById(`log-${id}`) : null;
+                    if (!span) {
+                        span = document.createElement('div');
+                        if (id) span.id = `log-${id}`;
+                        span.className = "flex items-center gap-2 mb-1 w-full text-sm";
+                        container.appendChild(span);
+                    }
                     
                     let icon = `<span class="text-blue-400">⏳</span>`;
                     let textClass = "text-gray-300 animate-pulse";
@@ -2092,12 +2097,6 @@ const data = filteredProducts.map(product => {
                     }
 
                     span.innerHTML = `${icon} <span class="${textClass} truncate">${msg}</span>`;
-                    
-                    container.appendChild(span);
-                    // Manter até 10 mensagens para garantir que as buscas lentas não sumam da tela
-                    if (container.childNodes.length > 10) {
-                        container.removeChild(container.firstChild);
-                    }
                 }
             }
 
@@ -2117,27 +2116,32 @@ const data = filteredProducts.map(product => {
                 _logLoading('Iniciando sincronização...');
 
                 try {
-                    const trackFetch = async (promise, name) => {
-                        _logLoading(`Buscando ${name}...`, 'info');
+                    const trackFetch = async (promise, name, idName) => {
+                        _logLoading(`Buscando ${name}...`, 'info', idName);
                         try {
                             const res = await promise;
-                            _logLoading(`${name} carregado.`, 'success');
+                            _logLoading(`${name} carregado.`, 'success', idName);
                             return res;
                         } catch (e) {
-                            _logLoading(`Erro em ${name}.`, 'error');
+                            _logLoading(`Erro em ${name}.`, 'error', idName);
                             throw e;
                         }
                     };
 
                     // Executa todas as buscas em paralelo, mas trata cada uma individualmente para evitar que uma falha trave tudo
                     const results = await Promise.allSettled([
-                        trackFetch(fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Produtos (Cache)'),
-                        trackFetch(fetch(`${API_URLS.ORDERS_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Pedidos Terceiros'),
-                        trackFetch(fetch(API_URLS.ORDERS_FABRICA, { mode: 'cors' }), 'Pedidos Fábrica'),
-                        trackFetch(fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Pedidos NFE/Bling'),
-                        trackFetch(fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Saídas (Fábrica e Garantia)'),
-                        trackFetch(LojaIntegradaApp.fetchOrders(), 'Loja Integrada'),
-                        trackFetch((typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.fetchPedidos(true) : Promise.resolve(), 'Gerenciar Pedidos')
+                        trackFetch(fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Produtos (Cache)', 'produtos'),
+                        trackFetch(fetch(`${API_URLS.ORDERS_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Pedidos Terceiros', 'terceiros'),
+                        trackFetch(fetch(API_URLS.ORDERS_FABRICA, { mode: 'cors' }), 'Pedidos Fábrica', 'fabrica'),
+                        trackFetch((async () => {
+                            console.time('[Desempenho] Busca de NFE no Cloud Run');
+                            const res = await fetch(`${API_URLS.NFE}?t=${new Date().getTime()}`, { mode: 'cors' });
+                            console.timeEnd('[Desempenho] Busca de NFE no Cloud Run');
+                            return res;
+                        })(), 'Pedidos NFE/Bling', 'nfe'),
+                        trackFetch(fetch(`${API_URLS.SAIDAS_GARANTIA}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Saídas (Fábrica e Garantia)', 'saidas'),
+                        trackFetch(LojaIntegradaApp.fetchOrders(), 'Loja Integrada', 'loja'),
+                        trackFetch((typeof GerenciarPedidosApp !== 'undefined') ? GerenciarPedidosApp.fetchPedidos(true) : Promise.resolve(), 'Gerenciar Pedidos', 'gerenciar')
                     ]);
 
                     const [productsRes, ordersTerceirosRes, ordersFabricaRes, nfeRes, saidasRes, lojaIntegradaData, gerenciarPedidosRes] = results;

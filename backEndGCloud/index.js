@@ -149,6 +149,7 @@ const COLUMNS_NFE = {
     ORIGEM_LOJA: 15,
     LINK_DANFE: 16,
     OBSERVACAO: 17,
+    ITENS: 18,
     NATUREZA: 19  // Coluna T — Natureza de Operação (col S = índice 18 é Itens)
 };
 
@@ -953,6 +954,32 @@ const transportadorasRouter = createTransportadorasRouter(
     BLING_API_BASE_URL
 );
 app.use('/transportadoras', transportadorasRouter);
+
+// Roteador de Lista NFE (Migração do Apps Script)
+const createNfeListaRouter = require('./nfe_lista.js');
+const nfeListaRouter = createNfeListaRouter(
+    getInitializedSheetsClient,
+    SPREADSHEET_ID_NFE,
+    SHEET_NAME_NOTAS_FISCAIS,
+    COLUMNS_NFE
+);
+app.use('/nfe-lista', nfeListaRouter);
+
+// Roteador de Lista de Requisições (Migração do Apps Script)
+const createRequisicoesListaRouter = require('./requisicoes_lista.js');
+const pedidosTerceirosRouter = createRequisicoesListaRouter(
+    getInitializedSheetsClient,
+    SPREADSHEET_ID_REQUISICAO_GERAL_TERCEIROS,
+    SHEET_NAME_REQUISICAO_GERAL_TERCEIROS // Se der problema, pode ser que a aba real seja 'Requisição'
+);
+app.use('/pedidos-terceiros', pedidosTerceirosRouter);
+
+const pedidosFabricaRouter = createRequisicoesListaRouter(
+    getInitializedSheetsClient,
+    SPREADSHEET_ID_REQUISICAO_FABRICA,
+    SHEET_NAME_REQUISICAO_FABRICA // Se der problema, pode ser que a aba real seja 'Requisição'
+);
+app.use('/pedidos-fabrica', pedidosFabricaRouter);
 
 // Proxy DANFE PDF em Base64 direto do Bling V3
 app.get('/proxy-danfe', async (req, res, next) => {

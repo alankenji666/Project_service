@@ -33,7 +33,7 @@ ${text}
             while (retries > 0) {
                 try {
                     response = await axios.post(GROQ_API_URL, {
-                        model: 'llama-3.1-8b-instant',
+                        model: 'openai/gpt-oss-20b',
                         messages: [
                             { role: 'system', content: 'You are a precise data extraction API that only outputs valid JSON.' },
                             { role: 'user', content: prompt }

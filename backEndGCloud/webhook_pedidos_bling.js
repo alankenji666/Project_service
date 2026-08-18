@@ -35,6 +35,8 @@ function extrairOrcamentoCRM(texto) {
 module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME, BLING_API_BASE_URL, COLUMNS, APPS_SCRIPT_TOKEN_URL) {
     const router = express.Router();
 
+    const processingLocks = new Set();
+
     router.post('/', async (req, res, next) => {
         console.log('--- [WEBHOOK PEDIDO] RECEBIDO ---');
         // Responde imediatamente para evitar timeout do Bling
@@ -47,9 +49,15 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
 
                 if (!pedidoId) {
                     console.warn('[Bling Webhook] ID do pedido ausente.');
-                    // if (!res.headersSent) res.status(200).send({ status: 'ignored', message: 'No ID provided' });
                     return;
                 }
+
+                // Bloqueio simples em memória para evitar Race Condition (duplicidade) de webhooks simultâneos
+                if (processingLocks.has(pedidoId)) {
+                    console.log(`[Bling Webhook] Pedido ${pedidoId} já está sendo processado por outra requisição simultânea. Ignorando esta para evitar duplicidade.`);
+                    return;
+                }
+                processingLocks.add(pedidoId);
 
                 const action = event.split('.')[1] || 'unknown'; // created, updated, deleted
                 
@@ -229,6 +237,8 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
 
             } catch (error) {
                 console.error('[Bling Webhook] Erro detectado:', error.message);
+            } finally {
+                processingLocks.delete(pedidoId);
             }
         })();
     });
