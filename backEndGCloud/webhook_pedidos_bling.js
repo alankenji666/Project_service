@@ -43,9 +43,10 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
         res.status(200).send({ status: 'received' });
 
         (async () => {
+            let pedidoId = null;
             try {
                 const { event, data } = req.body;
-                const pedidoId = data ? data.id : null;
+                pedidoId = data ? data.id : null;
 
                 if (!pedidoId) {
                     console.warn('[Bling Webhook] ID do pedido ausente.');

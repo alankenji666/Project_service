@@ -18,7 +18,7 @@ module.exports = function() {
 Sua tarefa é extrair os seguintes dados da nota, preenchendo um JSON estrito:
 1. "volume": Inteiro (ex: 1, 2). Encontre "X VOLUME" ou "X VOL".
 2. "peso": Float (ex: 14.5). Encontre "PESO X KG".
-3. "parcelas": Array de inteiros. Extraia das condições de pagamento (ex: "FATURADO 28/42 DDL" -> [28, 42]). "DDL" ou "DIAS" significam dias. Se for "À vista", retorne [0].
+3. "parcelas": Array de inteiros. Extraia os prazos em dias (ex: "FATURADO 28/42 DDL" -> [28, 42], "30/45/60/75" -> [30, 45, 60, 75]). "DDL" ou "DIAS" significam dias. Se for "À vista", retorne [0]. ATENÇÃO: Nunca junte os números! Se houver barras (30/60), você deve separar em um array de números independentes [30, 60].
 4. "freteConta": Inteiro. 0 se CIF (por conta do remetente), 1 se FOB (por conta do destinatário/cliente). Se omitido, retorne null.
 5. "transportadora": String com o nome limpo da transportadora (ex: "Bauer", "Jamef", "Correios"). Se for "CLIENTE RETIRA" ou "RETIRADA", retorne "Retirada".
 

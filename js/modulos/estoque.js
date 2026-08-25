@@ -116,7 +116,12 @@ export const EstoqueApp = (function() {
         const paginatedProducts = statusFilteredProducts.slice(startIndex, endIndex);
 
         let html = `
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex items-center gap-4 mb-6">
+            <button id="back-to-gerenciar-produtos-btn" class="p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-600 flex-shrink-0" title="Voltar para Gerenciar Produtos">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+            </button>
             <h1 class="text-3xl font-bold text-gray-800">Diagnóstico de Estoque</h1>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
@@ -230,6 +235,14 @@ export const EstoqueApp = (function() {
             }
             _utils.applyGlobalFilters();
         }));
+
+        const backBtn = _dom.pageEstoque.querySelector('#back-to-gerenciar-produtos-btn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                if (_utils && _utils.showPage) _utils.showPage('gerenciar-produtos');
+            });
+        }
+
         
         const prevBtn = _dom.pageEstoque.querySelector('#prev-page-btn');
         const nextBtn = _dom.pageEstoque.querySelector('#next-page-btn');
@@ -557,6 +570,7 @@ export const EstoqueApp = (function() {
         _utils.showProductTooltip = config.utils.showProductTooltip;
         _utils.hideProductTooltip = config.utils.hideProductTooltip;
         _utils.applyGlobalFilters = config.utils.applyGlobalFilters;
+        _utils.showPage = config.utils.showPage;
     }
 
     function render(productsToRender) {

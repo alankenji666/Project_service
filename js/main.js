@@ -10,14 +10,14 @@
         import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=2';
         window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js?v=2';
-        import { DashboardApp } from './modulos/dashboard.js?v=16';
+        import { DashboardApp } from './modulos/dashboard.js?v=18';
         import { EstoqueApp } from './modulos/estoque.js?v=2';
-        import { SaidaItens } from './modulos/saidaItens.js?v=2';
+        import { SaidaItens } from './modulos/saidaItens.js?v=4';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=8';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=12';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=2';
-        import { TransportadorasApp } from './modulos/transportadoras.js?v=2';
+        import { TransportadorasApp } from './modulos/transportadoras.js?v=4';
         window.TransportadorasApp = TransportadorasApp;
         import * as AjusteEstoque from './modulos/ajusteEstoque.js?v=2';
 
@@ -746,9 +746,12 @@
             let _currentPrintModalType = '';
 
             // --- REFERÊNCIAS PRIVADAS A ELEMENTOS DO DOM ---
-            let _navPesquisar, _navEstoque, _navGerenciarSaida, _navGerenciarPedidos, _navDashboards, _navAtendimento, _navTransportadoras;
+            let _navPesquisar, _navGerenciarProdutos, _navGerenciarPedidos, _navDashboards, _navAtendimento, _navTransportadoras;
+            // Mantendo antigas variaveis para retrocompatibilidade se necessario
+            let _navEstoque, _navGerenciarSaida;
             let _refreshButton, _loadingOverlay;
             let _globalFilterBar, _pedidosFilterBar, _dashboardFilterBar, _globalSearchInput, _globalFilterButton, _globalFilterDropdown, _globalCategoryCheckboxesContainer, _selectedItemsCountDisplay, _generateReportButton, _stockActionsContainer, _globalFilterButtonLabel, _globalFilterMenuContainer;
+            let _pageGerenciarProdutos, _btnCardGerenciarEntrada, _btnCardGerenciarSaida;
             let _product_list_container, _product_details_container, _details_placeholder, _product_details, _requisitionOverviewCardsContainer, _saidaOverviewCards, _ordersTableTitle, _ordersTableContent, _noOrdersMessage, _noOrdersMessageModal, _ordersSearchInput;
             let _saidaActionsContainer, _selectedSaidaItemsCount, _clearSaidaSelectionBtn, _viewSaidasBtn, _createSaidaBtn;
             let _ordersTableActionsMenuContainer, _ordersTableActionsButton, _ordersTableActionsDropdown, _ordersTableActionPrintGeneric, _ordersTableActionPrintList, _ordersTableActionPrintSolicitation, _ordersTableActionPrintGarantia, _ordersTableActionExcel;
@@ -1822,6 +1825,7 @@ const data = filteredProducts.map(product => {
                 if (_navPesquisar) _navPesquisar.classList.remove('active');
                 if (_navEstoque) _navEstoque.classList.remove('active');
                 if (_navGerenciarSaida) _navGerenciarSaida.classList.remove('active');
+                if (_navGerenciarProdutos) _navGerenciarProdutos.classList.remove('active'); // NOVO
                 if (_navGerenciarPedidos) _navGerenciarPedidos.classList.remove('active');
                 if (_navDashboards) _navDashboards.classList.remove('active');
                 if (_navAtendimento) _navAtendimento.classList.remove('active');
@@ -1829,6 +1833,7 @@ const data = filteredProducts.map(product => {
 
                 _pagePesquisar.classList.add('hidden');
                 _pageEstoque.classList.add('hidden');
+                if (_pageGerenciarProdutos) _pageGerenciarProdutos.classList.add('hidden'); // NOVO
                 _pageOverviewSaidas.classList.add('hidden');
                 _pageOverviewRequisitions.classList.add('hidden');
                 _pageSaidaReport.classList.add('hidden');
@@ -1861,9 +1866,12 @@ const data = filteredProducts.map(product => {
                         _saidaActionsContainer.classList.add('hidden');
                         if (_generateCatalogBtn) _generateCatalogBtn.classList.remove('hidden');
                     }
+                } else if (pageId === 'gerenciar-produtos') {
+                    if (_pageGerenciarProdutos) _pageGerenciarProdutos.classList.remove('hidden');
+                    if (_navGerenciarProdutos) _navGerenciarProdutos.classList.add('active');
                 } else if (pageId === 'estoque') {
                     _pageEstoque.classList.remove('hidden');
-                    _navEstoque.classList.add('active');
+                    if (_navGerenciarProdutos) _navGerenciarProdutos.classList.add('active');
                     if (_globalFilterBar) {
                         _globalFilterBar.classList.remove('hidden');
                         _globalSearchInput.classList.remove('hidden');
@@ -1891,7 +1899,7 @@ const data = filteredProducts.map(product => {
                     _pageGerenciarSaida.classList.remove('hidden');
                     _pageOverviewSaidas.classList.add('hidden');
                     _pageGerenciarSaida.classList.remove('hidden');
-                    _navGerenciarSaida.classList.add('active');
+                    if (_navGerenciarProdutos) _navGerenciarProdutos.classList.add('active');
                     if (_globalFilterBar) {
                         _globalFilterBar.classList.remove('hidden');
                         _globalSearchInput.classList.remove('hidden');
@@ -2116,21 +2124,40 @@ const data = filteredProducts.map(product => {
                 _logLoading('Iniciando sincronização...');
 
                 try {
+                    const fetchWithRetry = async (url, options = {}, retries = 2, delay = 2000) => {
+                        for (let i = 0; i <= retries; i++) {
+                            try {
+                                const res = await fetch(url, options);
+                                if (res.ok) return res;
+                                if (i === retries) return res;
+                                console.warn(`[API] Erro ${res.status} ao buscar ${url}. Retentando...`);
+                            } catch (e) {
+                                if (i === retries) throw e;
+                                console.warn(`[API] Falha de rede ao buscar ${url}. Retentando...`);
+                            }
+                            await new Promise(r => setTimeout(r, delay));
+                        }
+                    };
+
                     const trackFetch = async (promise, name, idName) => {
                         _logLoading(`Buscando ${name}...`, 'info', idName);
                         try {
                             const res = await promise;
+                            if (res && res.ok === false) {
+                                _logLoading(`Erro no servidor para ${name}.`, 'error', idName);
+                                return res;
+                            }
                             _logLoading(`${name} carregado.`, 'success', idName);
                             return res;
                         } catch (e) {
-                            _logLoading(`Erro em ${name}.`, 'error', idName);
+                            _logLoading(`Falha na rede em ${name}.`, 'error', idName);
                             throw e;
                         }
                     };
 
                     // Executa todas as buscas em paralelo, mas trata cada uma individualmente para evitar que uma falha trave tudo
                     const results = await Promise.allSettled([
-                        trackFetch(fetch(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Produtos (Cache)', 'produtos'),
+                        trackFetch(fetchWithRetry(`${API_URLS.PRODUCTS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Produtos (Cache)', 'produtos'),
                         trackFetch(fetch(`${API_URLS.ORDERS_TERCEIROS}?t=${new Date().getTime()}`, { mode: 'cors' }), 'Pedidos Terceiros', 'terceiros'),
                         trackFetch(fetch(API_URLS.ORDERS_FABRICA, { mode: 'cors' }), 'Pedidos Fábrica', 'fabrica'),
                         trackFetch((async () => {
@@ -2207,7 +2234,8 @@ const data = filteredProducts.map(product => {
                         if (Array.isArray(dataArray)) {
                             // Filtra pelo tipo (coluna "Tipo" da planilha)
                             const dataFabrica = dataArray.filter(item => {
-                                return String(item.Tipo || item.tipo || '').toLowerCase().trim() === 'fábrica';
+                                const t = String(item.Tipo || item.tipo || '').toLowerCase().trim();
+                                return t === 'fábrica' || t === 'fabrica';
                             });
                             
                             const dataGarantia = dataArray.filter(item => {
@@ -2218,6 +2246,7 @@ const data = filteredProducts.map(product => {
                             const freshSaidasFabrica = _processRawSaidasData(dataFabrica, 'saidas-fabrica');
                             _allSaidasFabrica.length = 0;
                             Array.prototype.push.apply(_allSaidasFabrica, freshSaidasFabrica);
+                            console.log('[DEBUG] _allSaidasFabrica atualizado:', _allSaidasFabrica);
 
                             // Processa Garantia
                             const freshSaidasGarantia = _processRawSaidasData(dataGarantia, 'saidas-garantia');
@@ -4267,6 +4296,9 @@ const data = filteredProducts.map(product => {
                 if (_navPesquisar) _navPesquisar.addEventListener('click', (e) => { e.preventDefault(); _showPage('pesquisar'); });
                 if (_navEstoque) _navEstoque.addEventListener('click', (e) => { e.preventDefault(); _showPage('estoque'); });
                 if (_navGerenciarSaida) _navGerenciarSaida.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-saida'); });
+                if (_navGerenciarProdutos) _navGerenciarProdutos.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-produtos'); }); // NOVO
+                if (_btnCardGerenciarEntrada) _btnCardGerenciarEntrada.addEventListener('click', (e) => { e.preventDefault(); _showPage('estoque'); }); // NOVO
+                if (_btnCardGerenciarSaida) _btnCardGerenciarSaida.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-saida'); }); // NOVO
                 if (_navGerenciarPedidos) _navGerenciarPedidos.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-pedidos'); });
                 if (_navDashboards) _navDashboards.addEventListener('click', (e) => { e.preventDefault(); _showPage('dashboards'); });
                 if (_viewRequisitionsBtn) _viewRequisitionsBtn.addEventListener('click', (e) => { e.preventDefault(); _showPage('overview-requisitions'); });
@@ -4513,6 +4545,9 @@ if (_generateProductReportBtn) {
                 _navAtendimento = document.getElementById('nav-atendimento');
                 _pagePesquisar = document.getElementById('page-pesquisar-produto');
                 _pageEstoque = document.getElementById('page-gerenciar-estoque');
+                _pageGerenciarProdutos = document.getElementById('page-gerenciar-produtos'); // NOVO
+                _btnCardGerenciarEntrada = document.getElementById('btn-card-gerenciar-entrada'); // NOVO
+                _btnCardGerenciarSaida = document.getElementById('btn-card-gerenciar-saida'); // NOVO
                 _pageOverviewSaidas = document.getElementById('page-overview-saidas');
                 _pageOverviewRequisitions = document.getElementById('page-overview-requisitions');
                 _pageSaidaReport = document.getElementById('page-saida-report');
@@ -4521,8 +4556,9 @@ if (_generateProductReportBtn) {
                 _pageGerenciarPedidos = document.getElementById('page-gerenciar-pedidos');
                 _pageDashboards = document.getElementById('page-dashboards');
                 _navPesquisar = document.getElementById('nav-pesquisar');
-                _navEstoque = document.getElementById('nav-estoque');
-                _navGerenciarSaida = document.getElementById('nav-gerenciar-saida');
+                _navEstoque = document.getElementById('nav-estoque'); // Mantido se existir no html original ainda, mas foi substituido
+                _navGerenciarSaida = document.getElementById('nav-gerenciar-saida'); // Mantido
+                _navGerenciarProdutos = document.getElementById('nav-gerenciar-produtos'); // NOVO
                 _navGerenciarPedidos = document.getElementById('nav-gerenciar-pedidos');
                 _navDashboards = document.getElementById('nav-dashboards');
                 _navAtendimento = document.getElementById('nav-atendimento');
@@ -5627,9 +5663,16 @@ async function _saveProductTagGroupEdit() {
                                 showConfirmationModal: _showConfirmationModal,
                                 showPage: _showPage,
                                 parsePtBrDate: _parsePtBrDate,
-                                toggleLoading: (isLoading) => {
+                                toggleLoading: (isLoading, message = 'Aguarde...') => {
                                     _loadingOverlay.classList.toggle('hidden', !isLoading);
-                                }
+                                    if (isLoading) {
+                                        const p = _loadingOverlay.querySelector('p');
+                                        if (p) p.textContent = message;
+                                        const detailsBox = _loadingOverlay.querySelector('.bg-gray-900');
+                                        if (detailsBox) detailsBox.classList.toggle('hidden', message !== 'Atualizando dados...');
+                                    }
+                                },
+                                renderSaidaOverviewPage: _renderSaidaOverviewPage
                             }
                         });
                     }
@@ -5650,7 +5693,8 @@ async function _saveProductTagGroupEdit() {
                             utils: {
                                 showProductTooltip: _showProductTooltip,
                                 hideProductTooltip: _hideProductTooltip,
-                                applyGlobalFilters: _applyGlobalFilters
+                                applyGlobalFilters: _applyGlobalFilters,
+                                showPage: _showPage
                             }
                         });
                     }
@@ -5707,7 +5751,15 @@ async function _saveProductTagGroupEdit() {
                             apiUrls: API_URLS,
                             utils: {
                                 showMessageModal: _showMessageModal,
-                                toggleLoading: (isLoading) => _loadingOverlay.classList.toggle('hidden', !isLoading),
+                                toggleLoading: (isLoading, message = 'Aguarde...') => {
+                                    _loadingOverlay.classList.toggle('hidden', !isLoading);
+                                    if (isLoading) {
+                                        const p = _loadingOverlay.querySelector('p');
+                                        if (p) p.textContent = message;
+                                        const detailsBox = _loadingOverlay.querySelector('.bg-gray-900');
+                                        if (detailsBox) detailsBox.classList.toggle('hidden', message !== 'Atualizando dados...');
+                                    }
+                                },
                                 fetchData: _fetchData
                             }
                         });

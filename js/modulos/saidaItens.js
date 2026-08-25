@@ -117,10 +117,10 @@ export const SaidaItens = (function() {
             const payloadData = itemsToLaunch.map(item => ({
                 requisicao: requisitionCode, codigo_service: item.product.codigo || '', codigo_mks_equipamentos: '',
                 descricao: item.product.descricao || '', localizacao: item.product.localizacao || '', quantidade: item.quantity,
-                situacao: 'Pendente', data_pedido: todayForPayload, data_envio: '', observacao: [], responsavel: responsavel
+                situacao: 'Pendente', data_pedido: todayForPayload, tipo: type === 'garantia' ? 'Garantia' : 'Fábrica', data_envio: '', observacao: [], responsavel: responsavel
             }));
 
-            _utils.toggleLoading(true);
+            _utils.toggleLoading(true, "Processando lançamento...");
             try {
                 const response = await fetch(apiUrl, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: payloadData }) });
                 if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
@@ -229,10 +229,10 @@ export const SaidaItens = (function() {
             const payloadData = itemsToLaunch.map(item => ({
                 requisicao: requisitionCode, codigo_service: item.product.codigo || '', codigo_mks_equipamentos: '',
                 descricao: item.product.descricao || '', localizacao: item.product.localizacao || '', quantidade: item.quantity,
-                situacao: 'Pendente', data_pedido: todayForPayload, data_envio: '', observacao: [], responsavel: responsavel
+                situacao: 'Pendente', data_pedido: todayForPayload, tipo: type === 'garantia' ? 'Garantia' : 'Fábrica', data_envio: '', observacao: [], responsavel: responsavel
             }));
 
-            _utils.toggleLoading(true);
+            _utils.toggleLoading(true, "Processando lançamento...");
             try {
                 const response = await fetch(apiUrl, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: payloadData }) });
                 if (!response.ok) { const errorText = await response.text(); throw new Error(`Erro na API (Status: ${response.status}): ${errorText}`); }
@@ -263,6 +263,11 @@ export const SaidaItens = (function() {
                 // 4. Exibir mensagem de sucesso e limpar a seleção
                 _utils.showMessageModal("Sucesso!", `Saída para ${type} lançada com a requisição <b>${requisitionCode}</b>.`);
                 clearSelection(); 
+                
+                // 5. Atualizar a UI do diagnóstico
+                if (typeof _utils.renderSaidaOverviewPage === 'function') {
+                    _utils.renderSaidaOverviewPage();
+                }
                 _saidaReportQuantities.clear();
                 
                 // 5. Mudar para a página de diagnóstico, que será automaticamente atualizada.
@@ -318,7 +323,12 @@ export const SaidaItens = (function() {
         const paginatedProducts = productsToRender.slice(startIndex, endIndex);
         
         let html = `
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex items-center gap-4 mb-6">
+            <button id="back-to-gerenciar-produtos-btn-saida" class="p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-600 flex-shrink-0" title="Voltar para Gerenciar Produtos">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+            </button>
             <h1 class="text-3xl font-bold text-gray-800">Gerenciar Saída de Produtos</h1>
         </div>
         <div class="bg-white rounded-lg shadow-md overflow-hidden">
@@ -386,6 +396,13 @@ export const SaidaItens = (function() {
         }
          _dom.pageGerenciarSaida.addEventListener('mouseover', _utils.showProductTooltip);
         _dom.pageGerenciarSaida.addEventListener('mouseout', _utils.hideProductTooltip);
+        
+        const backBtn = _dom.pageGerenciarSaida.querySelector('#back-to-gerenciar-produtos-btn-saida');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                if (_utils && _utils.showPage) _utils.showPage('gerenciar-produtos');
+            });
+        }
     }
 
     function generateReport() {

@@ -2293,10 +2293,19 @@ export const GerenciarPedidosApp = (function () {
             return [0]; // 0 dias = vencimento hoje
         }
         
-        // Expressão regular para encontrar "Condições Pagto: - FATURADO" ou apenas "FATURADO"
-        const regex = /(?:Condi[çc][õo]es\s+Pagto:\s*-\s*)?FATURADO\s+([0-9\s/,\-a-zA-Z]+)/i;
+        // Expressão regular para encontrar "Condições Pagto: - FATURADO" ou "FATURAMENTO"
+        const regex = /(?:Condi[çc][õo]es\s+Pagto:?\s*-?\s*)?(?:FATURAD[OA]|FATURAMENTO)\s+([0-9\s/,\-a-zA-Z]+)/i;
         const match = obsText.match(regex);
-        if (!match) return null;
+        if (!match) {
+            // Tenta pegar diretamente se houver apenas a condição (ex: 30/45/60)
+            const fallbackRegex = /(?:Condi[çc][õo]es\s+Pagto:?\s*-?\s*)([0-9\s/]+)/i;
+            const fallbackMatch = obsText.match(fallbackRegex);
+            if (!fallbackMatch) return null;
+            
+            const parts = fallbackMatch[1].split(/[^0-9]+/);
+            const days = parts.map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p >= 0);
+            return days.length > 0 ? days : null;
+        }
         
         const rawVal = match[1];
         // Divide o valor extraído em partes numéricas
@@ -2435,7 +2444,24 @@ export const GerenciarPedidosApp = (function () {
             }
 
             if (data.parcelas && Array.isArray(data.parcelas) && data.parcelas.length > 0) {
-                _generateParcelasWithDays(data.parcelas);
+                let parcelasFinais = data.parcelas;
+                
+                // Sanitização: Se a IA falhou e devolveu "30456075" (apenas 1 parcela com número gigante)
+                if (parcelasFinais.length === 1 && parcelasFinais[0] > 1000) {
+                    console.warn('[AI Fallback] IA falhou ao separar as datas. Usando Regex local para parcelas...');
+                    const localDays = _parseDaysFromObservacoes(obsText);
+                    if (localDays && localDays.length > 0) {
+                        parcelasFinais = localDays;
+                    } else {
+                        // Último recurso: dividir a string brutalmente (ex: "304560" -> [30, 45, 60]) se for padrão 2 dígitos
+                        const strVal = String(parcelasFinais[0]);
+                        if (strVal.length % 2 === 0) {
+                            parcelasFinais = strVal.match(/.{1,2}/g).map(Number);
+                        }
+                    }
+                }
+                
+                _generateParcelasWithDays(parcelasFinais);
             }
 
             if (data.freteConta !== null && data.freteConta !== undefined) {
@@ -3186,11 +3212,29 @@ export const GerenciarPedidosApp = (function () {
 
             // 2. Chamar o backend para gerar a NFe através do pedido
             let stepGenerate = _printNfeConsoleLog('Enviando comando de geração de NF-e...');
-            const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${idPedido}/gerar-nfe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ somenteGerar })
-            });
+            let res;
+            try {
+                res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${idPedido}/gerar-nfe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ somenteGerar })
+                });
+            } catch (networkError) {
+                _updateNfeConsoleLog(stepGenerate, 'error');
+                _printNfeConsoleLog(`Tempo limite de conexão excedido ou falha de rede.`, 'error');
+                _printNfeConsoleLog(`⚠️ ATENÇÃO: A NF-e pode ter sido gerada com sucesso no Bling!`, 'info');
+                _printNfeConsoleLog(`A Sefaz pode estar lenta. Verifique diretamente no painel do Bling.`, 'info');
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({
+                        text: 'A conexão caiu, mas a NF-e pode ter sido emitida no Bling. Verifique lá!',
+                        duration: 8000,
+                        gravity: 'top',
+                        position: 'center',
+                        style: { background: 'linear-gradient(to right, #f59e0b, #d97706)' }
+                    }).showToast();
+                }
+                return; // Encerra a função silenciosamente em vez de estourar o erro no console de novo
+            }
 
             const result = await res.json();
 
@@ -5417,7 +5461,11 @@ export const GerenciarPedidosApp = (function () {
             console.log(`[GerenciarPedidos] Sincronizando NF-e ${nfeData.numero} para o pedido ${pedidoId}`);
 
             // 1. Atualizar no cache local
-            const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+            const pedido = _allPedidos.find(p => 
+                String(p.id) === String(pedidoId) || 
+                String(p.numero) === String(pedidoId) || 
+                String(p.numero_loja || p.numeroLoja) === String(pedidoId)
+            );
             if (pedido) {
                 pedido.id_nota = nfeData.id || nfeData.id_nota || nfeData.numero;
                 if (nfeData.chaveAcesso) pedido.chave_acesso = nfeData.chaveAcesso;

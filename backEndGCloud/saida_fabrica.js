@@ -73,6 +73,7 @@ const createSaidaFabricaRouter = (
                 item.quantidade || '',
                 item.situacao || '',
                 item.data_pedido || '',
+                item.tipo || '',
                 item.data_envio || '',
                 Array.isArray(item.observacao) ? item.observacao.join('\n') : (item.observacao || ''),
                 item.responsavel || ''

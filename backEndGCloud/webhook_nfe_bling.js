@@ -86,9 +86,10 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
         res.status(200).send({ status: 'received' });
 
         (async () => {
+            let nfeId = null;
             try {
             const { event, data } = req.body;
-            const nfeId = data ? data.id : null;
+            nfeId = data ? data.id : null;
             if (!nfeId) {
                 const error = new Error('ID da nota ausente no payload.');
                 error.statusCode = 400;

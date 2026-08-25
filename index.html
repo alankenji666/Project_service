@@ -108,12 +108,9 @@
                     <button type="button" id="nav-pesquisar"
                         class="nav-link px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-100 transition-colors">Pesquisar
                         Produto</button>
-                    <button type="button" id="nav-estoque"
+                    <button type="button" id="nav-gerenciar-produtos"
                         class="nav-link px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-100 transition-colors">Gerenciar
-                        Entrada</button>
-                    <button type="button" id="nav-gerenciar-saida"
-                        class="nav-link px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-100 transition-colors">Gerenciar
-                        Saída</button>
+                        Produtos</button>
                     <button type="button" id="nav-gerenciar-pedidos"
                         class="nav-link px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-100 transition-colors">Gerenciar
                         Pedidos</button>
@@ -498,10 +495,7 @@
             </button>
         </div>
         <div class="right-buttons">
-            <button id="launch-saida-garantia-btn"
-                class="read-only-disable px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                Lançar Saída - Garantia
-            </button>
+
             <button id="launch-saida-fabrica-btn"
                 class="read-only-disable px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 Lançar Saída - Fábrica
@@ -558,6 +552,30 @@
         </main>
 
 
+
+        <!-- NOVA PÁGINA: GERENCIAR PRODUTOS -->
+        <main id="page-gerenciar-produtos" class="hidden p-8 h-full overflow-y-auto bg-gray-50 flex flex-col items-center">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Gerenciar Produtos</h1>
+            <p class="text-lg text-gray-600 mb-10">Escolha a operação que deseja realizar:</p>
+            <div class="flex flex-wrap justify-center gap-8 w-full max-w-6xl">
+                <!-- Card Gerenciar Entrada -->
+                <div id="btn-card-gerenciar-entrada" class="w-full md:w-[340px] bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all cursor-pointer border-2 border-transparent hover:border-blue-500 flex flex-col items-center justify-center text-center min-h-[250px] group">
+                    <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-500 transition-colors">
+                        <svg class="w-10 h-10 text-blue-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z"></path></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Gerenciar Entrada</h3>
+                    <p class="text-gray-500">Visualizar estoque, gerar etiquetas e ajustar inventário.</p>
+                </div>
+                <!-- Card Gerenciar Saída -->
+                <div id="btn-card-gerenciar-saida" class="w-full md:w-[340px] bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all cursor-pointer border-2 border-transparent hover:border-green-500 flex flex-col items-center justify-center text-center min-h-[250px] group">
+                    <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-green-500 transition-colors">
+                        <svg class="w-10 h-10 text-green-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Gerenciar Saída</h3>
+                    <p class="text-gray-500">Lançar requisições, garantias, devoluções e registrar saída.</p>
+                </div>
+            </div>
+        </main>
 
         <!-- PÁGINA: GERENCIAR ESTOQUE -->
         <main id="page-gerenciar-estoque" class="hidden p-8 h-full overflow-y-auto"></main>
@@ -810,29 +828,43 @@
                     <div id="estoque-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
                         <!-- Preenchido via JS -->
                     </div>
+
+                    <!-- Campo de Busca -->
+                    <div class="mb-6 max-w-md">
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            </span>
+                            <input type="text" id="estoque-top-search-input" 
+                                class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all" 
+                                placeholder="Buscar por descrição ou código do produto...">
+                        </div>
+                    </div>
                     
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="flex flex-col gap-8">
+                        <!-- Top Itens por Valor -->
+                        <div class="bg-white p-6 rounded-xl shadow-md min-h-[450px] flex flex-col">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 shrink-0">
+                                <h3 class="text-lg font-bold text-gray-700">Itens de Maior Valor em Estoque</h3>
+                                <div class="flex items-center gap-2 w-full sm:w-auto">
+                                    <select id="estoque-top-limit-select" class="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        <option value="all" selected>Todos os itens</option>
+                                        <option value="10">Top 10</option>
+                                        <option value="20">Top 20</option>
+                                        <option value="30">Top 30</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="estoque-top-items-container" class="flex-1 min-h-0 pr-2 pb-2">
+                                <!-- Preenchido via JS -->
+                            </div>
+                        </div>
+
                         <!-- Gráfico de Distribuição por Valor -->
                         <div class="bg-white p-6 rounded-xl shadow-md h-[calc(100vh-300px)] min-h-[450px] flex flex-col">
                             <h3 class="text-lg font-bold text-gray-700 mb-4 shrink-0">Distribuição do Valor em Estoque</h3>
                             <div class="relative flex-grow w-full min-h-0">
                                 <canvas id="estoque-distribution-chart"></canvas>
-                            </div>
-                        </div>
-
-                        <!-- Top Itens por Valor -->
-                        <div class="bg-white p-6 rounded-xl shadow-md h-[calc(100vh-300px)] min-h-[450px] flex flex-col overflow-hidden">
-                            <div class="flex justify-between items-center mb-4 shrink-0">
-                                <h3 class="text-lg font-bold text-gray-700">Itens de Maior Valor em Estoque</h3>
-                                <select id="estoque-top-limit-select" class="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                                    <option value="all" selected>Todos os itens</option>
-                                    <option value="10">Top 10</option>
-                                    <option value="20">Top 20</option>
-                                    <option value="30">Top 30</option>
-                                </select>
-                            </div>
-                            <div id="estoque-top-items-container" class="flex-1 overflow-y-auto min-h-0 pr-2 pb-2">
-                                <!-- Preenchido via JS -->
                             </div>
                         </div>
                     </div>
@@ -2888,6 +2920,17 @@
 
             <!-- Conteúdo -->
             <div class="flex-grow overflow-y-auto bg-gray-50 p-6">
+                <!-- Barra de Busca e Botão Nova -->
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                    <div class="relative w-full sm:w-96">
+                        <input type="text" id="transportadoras-search" placeholder="Buscar por nome, fantasia, código, telefone..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <button id="transportadoras-btn-nova" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition whitespace-nowrap">
+                        + Nova Transportadora
+                    </button>
+                </div>
+
                 <!-- Tabela de Transportadoras -->
                 <div id="transportadoras-table-container" class="bg-white rounded-lg shadow mb-6 overflow-hidden">
                     <div class="overflow-x-auto">
@@ -2909,11 +2952,6 @@
                         </table>
                     </div>
                 </div>
-
-                <!-- Botão Nova Transportadora -->
-                <button id="transportadoras-btn-nova" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition mb-6">
-                    + Nova Transportadora
-                </button>
 
                 <!-- Formulário (inicialmente oculto) -->
                 <div id="transportadoras-form-container" class="hidden bg-white rounded-lg shadow p-6 mb-6">
@@ -3018,7 +3056,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script type="module" src="js/main.js?v=9"></script>
+    <script type="module" src="js/main.js?v=20"></script>
     <!-- MODAL LINHA DE PRODUÇÃO -->
     <div id="production-line-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
         <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden">

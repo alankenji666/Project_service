@@ -58,8 +58,9 @@ export const DashboardApp = (function() {
         chartDisplayMode: 'bruta', // 'bruta' ou 'liquida'
         activeEstoqueFilter: 'all', // Filtro ativo no dashboard de estoque
         estoqueTopLimit: 'all', // Limite de itens no Top Itens (all, 10, 20, 30)
+        estoqueTopSearch: '',
         estoqueCurrentPage: 1, // Página atual da tabela de estoque
-        estoquePageSize: 30, // Itens por página
+        estoquePageSize: 20, // Itens por página
         charts: {}, // Armazena instâncias de outros gráficos (ex: estoque)
         salesSort: {
             key: 'data',
@@ -308,6 +309,7 @@ export const DashboardApp = (function() {
         _dom.backToSelectorFromEstoqueBtn = document.getElementById('back-to-selector-from-estoque-btn');
         _dom.estoqueTypeToggle = document.getElementById('estoque-type-toggle');
         _dom.estoqueTopLimitSelect = document.getElementById('estoque-top-limit-select');
+        _dom.estoqueTopSearchInput = document.getElementById('estoque-top-search-input');
 
         // Modal Tabela de Preços (Estoque)
         _dom.btnEstoqueTabelaPrecos = document.getElementById('btn-estoque-tabela-precos');
@@ -615,6 +617,14 @@ export const DashboardApp = (function() {
 
             const activeFilter = _state.activeEstoqueFilter;
             if (activeFilter === 'all' || tags.includes(activeFilter)) {
+                // Aplica filtro de busca (estoqueTopSearch)
+                if (_state.estoqueTopSearch) {
+                    const searchLower = _state.estoqueTopSearch.toLowerCase();
+                    const descMatch = p.descricao && p.descricao.toLowerCase().includes(searchLower);
+                    const codMatch = p.codigo && p.codigo.toLowerCase().includes(searchLower);
+                    if (!descMatch && !codMatch) return;
+                }
+
                 topItems.push({
                     codigo: p.codigo,
                     descricao: p.descricao,
@@ -1244,7 +1254,12 @@ export const DashboardApp = (function() {
                                                 </div>
                                                 <div>
                                                     <div class="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors">${item.descricao}</div>
-                                                    <div class="text-[10px] text-gray-400 font-mono uppercase">${item.codigo}</div>
+                                                    <div class="text-[10px] text-gray-400 font-mono uppercase flex items-center mt-0.5">
+                                                        <span>${item.codigo}</span>
+                                                        <button class="ml-1.5 text-gray-400 hover:text-blue-600 focus:outline-none copy-codigo-btn" data-codigo="${item.codigo}" title="Copiar Código">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
@@ -3277,6 +3292,41 @@ export const DashboardApp = (function() {
                 return;
             }
 
+            // Copiar Código do Produto
+            const copyBtn = e.target.closest('.copy-codigo-btn');
+            if (copyBtn) {
+                e.stopPropagation(); // Impede que o clique na linha abra os detalhes do produto
+                const codigo = copyBtn.dataset.codigo;
+                if (codigo) {
+                    const fallbackCopy = (text) => {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = text;
+                        textArea.style.position = "fixed";
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        try { document.execCommand('copy'); } catch (err) {}
+                        document.body.removeChild(textArea);
+                    };
+
+                    const copyPromise = (navigator.clipboard && navigator.clipboard.writeText)
+                        ? navigator.clipboard.writeText(codigo)
+                        : new Promise(resolve => { fallbackCopy(codigo); resolve(); });
+
+                    copyPromise.then(() => {
+                        const toast = document.createElement('div');
+                        toast.className = 'fixed bottom-10 left-1/2 transform -translate-x-1/2 z-[9999] bg-green-500 text-white px-6 py-2 rounded-full shadow-lg transition-opacity duration-300 font-bold';
+                        toast.innerText = 'Código copiado: ' + codigo;
+                        document.body.appendChild(toast);
+                        setTimeout(() => {
+                            toast.classList.add('opacity-0');
+                            setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 300);
+                        }, 1500);
+                    }).catch(err => console.error('Erro ao copiar código: ', err));
+                }
+                return;
+            }
+
             // Detalhes do Produto
             const row = e.target.closest('[data-ranking-row]');
             if (row) {
@@ -3464,6 +3514,7 @@ export const DashboardApp = (function() {
 
         _dom.estoqueTypeToggle?.addEventListener('change', () => { _state.estoqueCurrentPage = 1; _renderEstoqueDashboard(); });
         _dom.estoqueTopLimitSelect?.addEventListener('change', e => { _state.estoqueTopLimit = e.target.value; _state.estoqueCurrentPage = 1; _renderEstoqueDashboard(); });
+        _dom.estoqueTopSearchInput?.addEventListener('input', e => { _state.estoqueTopSearch = e.target.value; _state.estoqueCurrentPage = 1; _renderEstoqueDashboard(); });
         
         _dom.estoqueSummaryCards?.addEventListener('click', e => {
             const card = e.target.closest('[data-filter]');
@@ -4147,9 +4198,14 @@ export const DashboardApp = (function() {
                 if (data.novoPreco !== undefined) product.preco = data.novoPreco;
                 if (data.novoNome) product.descricao = data.novoNome;
                 
-                if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
-                    console.log(`[Dashboard] Re-renderizando dashboard de estoque devido a atualização do produto ${id}.`);
-                    _renderEstoqueDashboard();
+                if (_state.isStarted) {
+                    if (_dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
+                        console.log(`[Dashboard] Re-renderizando dashboard de estoque devido a atualização do produto ${id}.`);
+                        _renderEstoqueDashboard();
+                    } else if (_dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
+                        console.log(`[Dashboard] Re-renderizando dashboard de ranking devido a atualização do produto ${id}.`);
+                        _renderRankingDashboard();
+                    }
                 }
             }
         },
@@ -4163,6 +4219,10 @@ export const DashboardApp = (function() {
             const product = _allProducts.find(p => p.codigo === codigo);
             if (product) {
                 product.descricao = novoNome;
+                if (_state.isStarted && _dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
+                    _renderRankingDashboard();
+                }
+
                 console.log(`[Dashboard] Nome do produto ${codigo} atualizado para "${novoNome}" na memória.`);
 
                 // Se o dashboard de estoque estiver sendo exibido, re-renderiza para atualizar os nomes na tabela
