@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitação de Garantia (Sat-G) - MKS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .form-section { background: white; border-radius: 1rem; padding: 2rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); margin-bottom: 1.5rem; }
+        .input-field { width: 100%; border: 1px solid #d1d5db; border-radius: 0.5rem; padding: 0.75rem 1rem; outline: none; transition: border-color 0.2s; margin-top: 0.25rem; }
+        .input-field:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .label-text { font-size: 0.875rem; font-weight: 500; color: #374151; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased min-h-screen py-10 px-4 sm:px-6 lg:px-8">
+
+    <div class="max-w-4xl mx-auto">
+        
+        <!-- Header -->
+        <div class="text-center mb-10">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Solicitação de Garantia</h1>
+            <p class="text-gray-600">Preencha o formulário abaixo para abrir uma nova solicitação Sat-G.</p>
+        </div>
+
+        <form id="satg-form" class="space-y-6">
+            
+            <!-- SEÇÃO 1: Identificação do Cliente -->
+            <div class="form-section">
+                <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    Identificação do Cliente
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="label-text">Razão Social / Nome Completo *</label>
+                        <input type="text" id="cliente" required class="input-field" value="Empresa Teste LTDA" placeholder="Empresa ou Nome">
+                    </div>
+                    <div>
+                        <label class="label-text">CPF / CNPJ *</label>
+                        <input type="text" id="cpf" required class="input-field" value="12.345.678/0001-99" placeholder="000.000.000-00">
+                    </div>
+                    <div>
+                        <label class="label-text">Nome do Contato</label>
+                        <input type="text" id="nomeContato" class="input-field" value="João Silva" placeholder="Nome da pessoa responsável">
+                    </div>
+                    <div>
+                        <label class="label-text">Telefone / WhatsApp *</label>
+                        <input type="text" id="telefone" required class="input-field" value="(11) 98765-4321" placeholder="(00) 00000-0000">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="label-text">Email</label>
+                        <input type="email" id="email" class="input-field" value="contato@empresateste.com.br" placeholder="email@exemplo.com">
+                    </div>
+                    <div>
+                        <label class="label-text">É uma revenda?</label>
+                        <select id="revenda" class="input-field bg-white">
+                            <option value="NÃO">Não</option>
+                            <option value="SIM" selected>Sim</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label-text">Local da Revenda (Se aplicável)</label>
+                        <input type="text" id="localRevenda" class="input-field" value="São Paulo/SP" placeholder="Cidade/Estado">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 2: Dados do Equipamento -->
+            <div class="form-section">
+                <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Dados do Equipamento
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="label-text">Equipamento (Modelo e Ano) *</label>
+                        <input type="text" id="equipamento" required class="input-field" value="MKS 2500 - 2024" placeholder="Ex: MKS 2000 - 2024">
+                    </div>
+                    <div>
+                        <label class="label-text">Número de Série</label>
+                        <input type="text" id="numeroSerie" class="input-field" value="NS-987654321" placeholder="Número de Série">
+                    </div>
+                    <div>
+                        <label class="label-text">Nº Requisição / Pedido Interno</label>
+                        <input type="text" id="numeroRequisicao" class="input-field" value="REQ-2026-001" placeholder="Se houver">
+                    </div>
+                    <div>
+                        <label class="label-text">Nota Fiscal</label>
+                        <input type="text" id="notaFiscal" class="input-field" value="NF-e 123456" placeholder="Número da NF">
+                    </div>
+                    <div>
+                        <label class="label-text">Data da Compra</label>
+                        <input type="date" id="dataCompra" class="input-field" value="2026-01-15">
+                    </div>
+                    <div>
+                        <label class="label-text">Data de Entrega Técnica</label>
+                        <input type="date" id="dataEntregaTecnica" class="input-field" value="2026-02-01">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="label-text">Aplicação / Uso do Equipamento</label>
+                        <input type="text" id="aplicacao" class="input-field" value="Uso industrial em fábrica de peças" placeholder="Como o equipamento é utilizado?">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="label-text">Endereço / Chassi</label>
+                        <input type="text" id="chassiEndereco" class="input-field" value="Avenida das Indústrias, 1000 - Galpão 3">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 3: Problema / Defeito -->
+            <div class="form-section">
+                <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    Problema Relatado
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="label-text">O Equipamento está em operação? *</label>
+                        <select id="emOperacao" class="input-field bg-white">
+                            <option value="SIM">Sim, está funcionando parcialmente</option>
+                            <option value="NÃO" selected>Não, está parado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label-text">Data da Parada (se aplicável)</label>
+                        <input type="date" id="dataParada" class="input-field" value="2026-09-01">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="label-text">Data da Última Manutenção Preventiva</label>
+                        <input type="date" id="dataUltimaPreventiva" class="input-field" value="2026-08-15">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="label-text">Sintoma Apresentado *</label>
+                        <input type="text" id="sintoma" required class="input-field" value="Máquina desligando sozinha" placeholder="O que está acontecendo?">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="label-text">Descrição Detalhada do Problema *</label>
+                        <textarea id="problema" required rows="4" class="input-field resize-none" placeholder="Descreva como e quando o defeito ocorre...">Após 30 minutos de operação contínua, o painel exibe o erro E-04 e desliga o motor principal automaticamente.</textarea>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="label-text">Pré-Diagnóstico (Opcional)</label>
+                        <textarea id="preDiagnostico" rows="3" class="input-field resize-none" placeholder="Suspeita de qual peça está defeituosa?">Suspeita de superaquecimento na placa controladora ou falha no sensor térmico T-12.</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 4: Removida temporariamente -->
+
+            <!-- Ações -->
+            <div class="flex justify-end gap-4 mt-8 pb-10">
+                <button type="submit" id="btn-submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 w-full sm:w-auto flex items-center justify-center">
+                    Enviar Solicitação
+                </button>
+            </div>
+            
+        </form>
+
+        <!-- Tela de Sucesso -->
+        <div id="success-screen" class="hidden text-center py-20">
+            <div class="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h2 class="text-3xl font-bold text-gray-800 mb-4">Solicitação Enviada!</h2>
+            <p class="text-gray-600 mb-8 max-w-md mx-auto">Sua solicitação foi registrada com sucesso. Anote o código abaixo para acompanhamento:</p>
+            <div class="bg-gray-100 rounded-xl py-4 px-8 inline-block mb-8">
+                <span class="text-sm text-gray-500 block mb-1">CÓDIGO SAT-G</span>
+                <strong id="success-code" class="text-2xl text-gray-800 tracking-wider">SAT-G: 0000-00</strong>
+            </div>
+            <div>
+                <button onclick="window.location.reload()" class="text-blue-600 hover:text-blue-800 font-medium">Enviar nova solicitação</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script de envio -->
+    <script src="js/form.js"></script>
+</body>
+</html>

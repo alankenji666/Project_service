@@ -16,6 +16,8 @@
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
         import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=12';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
+        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=1';
+        window.GerenciarGarantiaApp = GerenciarGarantiaApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=2';
         import { TransportadorasApp } from './modulos/transportadoras.js?v=4';
         window.TransportadorasApp = TransportadorasApp;
@@ -236,6 +238,16 @@
                                 if (!document.getElementById('page-dashboards').classList.contains('hidden')) {
                                     DashboardApp.start(_allNFeData, _allLojaIntegradaOrders, GerenciarPedidosApp.getAllPedidos(), _allProducts);
                                 }
+                            }
+                        }
+                        break;
+
+                    case 'garantiaUpdated':
+                        console.log(`[Firestore Sync] Atualização de garantia recebida:`, data);
+                        if (typeof GerenciarGarantiaApp !== 'undefined') {
+                            // Se a tela de garantia estiver aberta, atualiza
+                            if (!document.getElementById('page-gerenciar-garantia').classList.contains('hidden')) {
+                                GerenciarGarantiaApp.refreshSatG(true);
                             }
                         }
                         break;
@@ -746,7 +758,7 @@
             let _currentPrintModalType = '';
 
             // --- REFERÊNCIAS PRIVADAS A ELEMENTOS DO DOM ---
-            let _navPesquisar, _navGerenciarProdutos, _navGerenciarPedidos, _navDashboards, _navAtendimento, _navTransportadoras;
+            let _navPesquisar, _navGerenciarProdutos, _navGerenciarPedidos, _navGerenciarGarantia, _navDashboards, _navAtendimento, _navTransportadoras;
             // Mantendo antigas variaveis para retrocompatibilidade se necessario
             let _navEstoque, _navGerenciarSaida;
             let _refreshButton, _loadingOverlay;
@@ -775,7 +787,7 @@
             let _orderObservationModal, _orderObservationModalInfo, _orderObservationHistory, _orderObservationTextarea, _saveOrderObservationBtn, _cancelOrderObservationBtn, _orderObservationCharCount, _sendNfeEmailBtn; // Modal de Observação de Pedido
             let _requisitionObservationModal, _requisitionObservationModalInfo, _requisitionObservationHistory, _requisitionObservationTextarea, _saveRequisitionObservationBtn, _cancelRequisitionObservationBtn, _requisitionObservationCharCount; // Modal de Observação Requisição
             let _stockAdjustmentModal, _closeStockAdjustmentModalBtn, _stockAdjustmentProductInfo, _stockAdjustmentCurrentStock, _stockAdjustmentNewQuantity, _stockAdjustmentReason, _confirmStockAdjustmentBtn, _cancelStockAdjustmentBtn; // NOVO: Modal de Ajuste de Estoque
-            let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageSaidaReport, _pageReport, _pageGerenciarSaida, _pageGerenciarPedidos, _pageDashboards, _pageAtendimento;
+            let _pagePesquisar, _pageEstoque, _pageOverviewRequisitions, _pageOverviewSaidas, _pageSaidaReport, _pageReport, _pageGerenciarSaida, _pageGerenciarPedidos, _pageGerenciarGarantia, _pageDashboards, _pageAtendimento;
             let _productReportModal, _openProductReportModalBtn, _closeProductReportModalBtn, _cancelProductReportBtn, _generateProductReportBtn;
             let _productNameEditModal, _closeProductNameEditModalBtn, _productNameEditInfo, _productNameEditInput, _productNameEditLoading, _productNameEditSuccess, _cancelProductNameEditBtn, _confirmProductNameEditBtn;
             let _productLocationEditModal, _closeProductLocationEditModalBtn, _productLocationEditInfo, _productLocationEditInput, _productLocationEditLoading, _productLocationEditSuccess, _cancelProductLocationEditBtn, _confirmProductLocationEditBtn;
@@ -1817,6 +1829,8 @@ const data = filteredProducts.map(product => {
                     // Se já estiver na página de Dashboards e clicar novamente, volta para o seletor
                     if (pageId === 'dashboards' && typeof DashboardApp !== 'undefined') {
                         DashboardApp.resetToSelector();
+                    } else if (pageId === 'gerenciar-garantia' && typeof GerenciarGarantiaApp !== 'undefined') {
+                        GerenciarGarantiaApp.resetToSelector();
                     }
                     return;
                 }
@@ -1827,6 +1841,7 @@ const data = filteredProducts.map(product => {
                 if (_navGerenciarSaida) _navGerenciarSaida.classList.remove('active');
                 if (_navGerenciarProdutos) _navGerenciarProdutos.classList.remove('active'); // NOVO
                 if (_navGerenciarPedidos) _navGerenciarPedidos.classList.remove('active');
+                if (_navGerenciarGarantia) _navGerenciarGarantia.classList.remove('active');
                 if (_navDashboards) _navDashboards.classList.remove('active');
                 if (_navAtendimento) _navAtendimento.classList.remove('active');
                 if (typeof _navPecasEquipamento !== 'undefined' && _navPecasEquipamento) _navPecasEquipamento.classList.remove('active');
@@ -1840,6 +1855,7 @@ const data = filteredProducts.map(product => {
                 _pageReport.classList.add('hidden');
                 _pageGerenciarSaida.classList.add('hidden');
                 _pageGerenciarPedidos.classList.add('hidden');
+                if (_pageGerenciarGarantia) _pageGerenciarGarantia.classList.add('hidden');
                 _pageDashboards.classList.add('hidden');
                 _pageAtendimento.classList.add('hidden');
 
@@ -1914,6 +1930,12 @@ const data = filteredProducts.map(product => {
                     _navGerenciarPedidos.classList.add('active');
                     if (typeof GerenciarPedidosApp !== 'undefined') {
                         GerenciarPedidosApp.init({ openOrderObservationModal: _openOrderObservationModal });
+                    }
+                } else if (pageId === 'gerenciar-garantia') {
+                    if (_pageGerenciarGarantia) _pageGerenciarGarantia.classList.remove('hidden');
+                    if (_navGerenciarGarantia) _navGerenciarGarantia.classList.add('active');
+                    if (typeof GerenciarGarantiaApp !== 'undefined') {
+                        GerenciarGarantiaApp.init();
                     }
                 } else if (pageId === 'overview-saidas') {
                     // Esta é a página de diagnóstico, acessada pelo botão "Ver Saídas".
@@ -2222,6 +2244,7 @@ const data = filteredProducts.map(product => {
                         if (Array.isArray(dataArray)) {
                             _allNFeData.length = 0;
                             Array.prototype.push.apply(_allNFeData, dataArray);
+                            window._allNFeData = _allNFeData; // Expose globally for Gerenciar Garantia
                         }
                     } else {
                         console.warn("Aviso: Falha ao carregar dados de NF-e.");
@@ -2347,7 +2370,7 @@ const data = filteredProducts.map(product => {
                 filteredProducts.sort((a, b) => {
                     const descA = a.descricao || '';
                     const descB = b.descricao || '';
-                    return descA.localeCompare(descB, 'pt-BR');
+                    return descA.localeCompare(descB, 'pt-BR', { sensitivity: 'base' });
                 });
 
 
@@ -2981,8 +3004,43 @@ const data = filteredProducts.map(product => {
                 if (parentDiv) parentDiv.insertBefore(spinner, checkboxElement);
 
                 try {
-                    const product = _allProducts.find(p => p.codigo === codigoService);
-                    if (!product) throw new Error("Produto correspondente não encontrado localmente.");
+                    let product = _allProducts.find(p => p.codigo === codigoService);
+                    
+                    if (!product) {
+                        // Remove o spinner para interação do usuário
+                        if (spinner && spinner.parentElement) spinner.parentElement.removeChild(spinner);
+                        checkboxElement.style.display = 'inline-block';
+                        
+                        const msg = `
+                            <p>O produto com código <strong>${codigoService}</strong> não foi encontrado localmente.</p>
+                            <p>Se o código deste item mudou, insira o novo código abaixo:</p>
+                            <div class="mt-4 text-left">
+                                <label for="modal-new-code-input" class="block text-sm font-bold text-gray-700">Novo Código:</label>
+                                <input type="text" id="modal-new-code-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" value="${codigoService}">
+                            </div>
+                        `;
+                        const codeConfirmed = await _showConfirmationModal("Código não encontrado", msg);
+                        if (!codeConfirmed) {
+                            checkboxElement.checked = false;
+                            return; // Usuário cancelou
+                        }
+                        
+                        const newCodeInput = document.getElementById('modal-new-code-input');
+                        if (newCodeInput && newCodeInput.value.trim()) {
+                            let newCode = newCodeInput.value.trim();
+                            product = _allProducts.find(p => p.codigo === newCode);
+                            
+                            if (!product) {
+                                throw new Error(`Produto com código '${newCode}' não encontrado localmente.`);
+                            }
+                        } else {
+                            throw new Error(`Nenhum código fornecido.`);
+                        }
+                        
+                        // Restaura o spinner
+                        checkboxElement.style.display = 'none';
+                        if (parentDiv) parentDiv.insertBefore(spinner, checkboxElement);
+                    }
 
                     // DEBUG: Imprime os valores brutos para análise, conforme solicitado.
                     console.log('--- DEBUG: Valores para cálculo de estoque ---');
@@ -4241,7 +4299,7 @@ const data = filteredProducts.map(product => {
                     }
 
                     // Feedback de Sucesso
-                    _productNameEditLoading.classList.add('hidden');
+                    _productNameEditLoading.classList.remove('hidden');
                     _productNameEditSuccess.classList.remove('hidden');
 
                     // Fecha o modal após um pequeno delay para o usuário ver o sucesso
@@ -4252,7 +4310,7 @@ const data = filteredProducts.map(product => {
 
                 } catch (error) {
                     console.error("[App] Erro ao editar nome:", error);
-                    _productNameEditLoading.classList.add('hidden');
+                    _productNameEditLoading.classList.remove('hidden');
                     _confirmProductNameEditBtn.disabled = false;
                     _showMessageModal("Erro na Atualização", `Falha ao atualizar nome: ${error.message}`);
                 }
@@ -4297,6 +4355,8 @@ const data = filteredProducts.map(product => {
                 if (_navEstoque) _navEstoque.addEventListener('click', (e) => { e.preventDefault(); _showPage('estoque'); });
                 if (_navGerenciarSaida) _navGerenciarSaida.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-saida'); });
                 if (_navGerenciarProdutos) _navGerenciarProdutos.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-produtos'); }); // NOVO
+                if (_navGerenciarPedidos) _navGerenciarPedidos.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-pedidos'); });
+                if (_navGerenciarGarantia) _navGerenciarGarantia.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-garantia'); });
                 if (_btnCardGerenciarEntrada) _btnCardGerenciarEntrada.addEventListener('click', (e) => { e.preventDefault(); _showPage('estoque'); }); // NOVO
                 if (_btnCardGerenciarSaida) _btnCardGerenciarSaida.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-saida'); }); // NOVO
                 if (_navGerenciarPedidos) _navGerenciarPedidos.addEventListener('click', (e) => { e.preventDefault(); _showPage('gerenciar-pedidos'); });
@@ -4554,12 +4614,14 @@ if (_generateProductReportBtn) {
                 _pageReport = document.getElementById('page-report');
                 _pageGerenciarSaida = document.getElementById('page-gerenciar-saida');
                 _pageGerenciarPedidos = document.getElementById('page-gerenciar-pedidos');
+                _pageGerenciarGarantia = document.getElementById('page-gerenciar-garantia');
                 _pageDashboards = document.getElementById('page-dashboards');
                 _navPesquisar = document.getElementById('nav-pesquisar');
                 _navEstoque = document.getElementById('nav-estoque'); // Mantido se existir no html original ainda, mas foi substituido
                 _navGerenciarSaida = document.getElementById('nav-gerenciar-saida'); // Mantido
                 _navGerenciarProdutos = document.getElementById('nav-gerenciar-produtos'); // NOVO
                 _navGerenciarPedidos = document.getElementById('nav-gerenciar-pedidos');
+                _navGerenciarGarantia = document.getElementById('nav-gerenciar-garantia');
                 _navDashboards = document.getElementById('nav-dashboards');
                 _navAtendimento = document.getElementById('nav-atendimento');
                 _navTransportadoras = document.getElementById('nav-transportadoras');
@@ -5739,8 +5801,8 @@ async function _saveProductTagGroupEdit() {
                             if (userInfo['acesso (pesquisar produto)'] === '1') defaultPage = 'pesquisar';
                             else if (dashAccess === '1' || dashAccess.startsWith('1-')) defaultPage = 'dashboards';
                             else if (userInfo['acesso (gerenciar pedidos)'] === '1') defaultPage = 'gerenciar-pedidos';
-                            else if (userInfo['acesso (gerenciar entrada)'] === '1') defaultPage = 'estoque';
-                            else if (userInfo['acesso (gerenciar saida)'] === '1') defaultPage = 'gerenciar-saida';
+                            else if (userInfo['acesso (gerenciar garantia)'] === '1') defaultPage = 'gerenciar-garantia';
+                            else if (userInfo['acesso (gerenciar entrada)'] === '1' || userInfo['acesso (gerenciar saida)'] === '1') defaultPage = 'gerenciar-produtos';
                             else if (userInfo['acesso (whatsapp)'] === '1') defaultPage = 'atendimento';
                         } catch (e) {}
                     }

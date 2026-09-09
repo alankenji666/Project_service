@@ -925,6 +925,11 @@ const pedidosRouter = createPedidosRouter(
 );
 app.use('/pedidos', pedidosRouter);
 
+// --- Rotas de Pedidos de Garantia ---
+const createGarantiaRouter = require('./garantia');
+const garantiaRouter = createGarantiaRouter(getInitializedSheetsClient, SPREADSHEET_ID_SAIDA_FABRICA);
+app.use('/garantia', garantiaRouter);
+
 // Roteador de Entradas de NF (NOVO)
 const createEntradasRouter = require('./entradas.js');
 const entradasRouter = createEntradasRouter(

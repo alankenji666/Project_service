@@ -46,9 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Mapeamento entre a chave de permissão do backend e o ID do elemento no HTML
         const permissionMap = {
             'acesso (pesquisar produto)': 'nav-pesquisar',
-            'acesso (gerenciar entrada)': 'nav-estoque',
-            'acesso (gerenciar saida)': 'nav-gerenciar-saida',
             'acesso (gerenciar pedidos)': 'nav-gerenciar-pedidos',
+            'acesso (gerenciar garantia)': 'nav-gerenciar-garantia',
             'acesso (dashboards)': 'nav-dashboards',
             'acesso (whatsapp)': 'nav-atendimento'
         };
@@ -62,6 +61,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 element.classList.toggle('hidden', !hasAccess);
             }
         }
+        
+        // Regras especiais para a tela combinada "Gerenciar Produtos"
+        const valEntrada = String(permissions['acesso (gerenciar entrada)'] || '0');
+        const hasEntrada = valEntrada === '1' || valEntrada.startsWith('1-');
+        
+        const valSaida = String(permissions['acesso (gerenciar saida)'] || '0');
+        const hasSaida = valSaida === '1' || valSaida.startsWith('1-');
+        
+        // A aba principal aparece se tiver acesso a pelo menos um dos dois
+        const navProdutos = document.getElementById('nav-gerenciar-produtos');
+        if (navProdutos) navProdutos.classList.toggle('hidden', !(hasEntrada || hasSaida));
+        
+        // Os cards dentro da tela aparecem individualmente
+        const cardEntrada = document.getElementById('btn-card-gerenciar-entrada');
+        if (cardEntrada) cardEntrada.classList.toggle('hidden', !hasEntrada);
+        
+        const cardSaida = document.getElementById('btn-card-gerenciar-saida');
+        if (cardSaida) cardSaida.classList.toggle('hidden', !hasSaida);
 
         // Ajustar Estoque: visível apenas para administradores
         const adjustStockBtn = document.getElementById('adjust-stock-menu-btn');
@@ -196,6 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
             user['acesso (gerenciar entrada)'] === '1' &&
             user['acesso (gerenciar saida)'] === '1' &&
             user['acesso (gerenciar pedidos)'] === '1' &&
+            user['acesso (gerenciar garantia)'] === '1' &&
             (dashAccess === '1' || dashAccess.startsWith('1-')) &&
             user['acesso (whatsapp)'] === '1' &&
             user['configurações'] === '1' &&
@@ -346,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const user = JSON.parse(userDataString);
         const permissionKeys = [
             'acesso (pesquisar produto)', 'acesso (gerenciar entrada)', 
-            'acesso (gerenciar saida)', 'acesso (gerenciar pedidos)', 'acesso (dashboards)', 'acesso (whatsapp)', 
+            'acesso (gerenciar saida)', 'acesso (gerenciar pedidos)', 'acesso (gerenciar garantia)', 'acesso (dashboards)', 'acesso (whatsapp)', 
             'configurações', 'somente visualizar dados?'
         ];
 

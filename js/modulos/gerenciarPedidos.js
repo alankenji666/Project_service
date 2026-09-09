@@ -2474,9 +2474,16 @@ export const GerenciarPedidosApp = (function () {
 
             if (data.transportadora) {
                 const freteContaSelect = _state.nfeEditFretePorConta;
-                if (freteContaSelect && parseInt(freteContaSelect.value) === 9) {
-                    freteContaSelect.value = 0;
-                    freteContaSelect.dispatchEvent(new Event('change'));
+                if (freteContaSelect) {
+                    const transpLower = String(data.transportadora).toLowerCase();
+                    // Regra: Se a transportadora for Sedex, forçar CIF (0). Senão, manter 0 se antes era 9.
+                    if (transpLower.includes('sedex')) {
+                        freteContaSelect.value = 0;
+                        freteContaSelect.dispatchEvent(new Event('change'));
+                    } else if (parseInt(freteContaSelect.value) === 9) {
+                        freteContaSelect.value = 0;
+                        freteContaSelect.dispatchEvent(new Event('change'));
+                    }
                 }
 
                 if (!_state.transportadorasLoaded) {
@@ -2489,6 +2496,14 @@ export const GerenciarPedidosApp = (function () {
                     if (nome === 'RETIRADA' || nome === 'CLIENTE RETIRA') {
                         const opt = Array.from(transpSelect.options).find(o => o.text.toUpperCase().includes('RETIRADA'));
                         if (opt) transpSelect.value = opt.value;
+                    } else if (nome.includes('BRASPRESS')) {
+                        const optTambore = Array.from(transpSelect.options).find(o => o.text.toUpperCase().includes('BRASPRESS') && o.text.toUpperCase().includes('TAMBORE'));
+                        if (optTambore) {
+                            transpSelect.value = optTambore.value;
+                        } else {
+                            const opt = Array.from(transpSelect.options).find(o => o.text.toUpperCase().includes('BRASPRESS'));
+                            transpSelect.value = opt ? opt.value : '';
+                        }
                     } else {
                         const opt = Array.from(transpSelect.options).find(o => o.text.toUpperCase().includes(nome) || nome.includes(o.text.toUpperCase()) && o.text.trim() !== '' && o.text.trim().toUpperCase() !== 'SELECIONE A TRANSPORTADORA');
                         if (opt) {
@@ -2516,7 +2531,7 @@ export const GerenciarPedidosApp = (function () {
             }
 
             if (_state.nfeEditObservacoes) {
-                let novaObs = '';
+                let novaObs = 'A venda é realizada com reserva de domínio, nos termos do art. 521 do Código Civil, até a quitação integral. Em caso de mora, a VENDEDORA poderá cobrar os valores em atraso ou requerer a apreensão e depósito judicial do bem.\n\n';
                 if (orcamento) novaObs += `Orçamento: ${orcamento}\n`;
                 if (vendedorNome) novaObs += `Vendedor: ${vendedorNome}\n`;
                 _state.nfeEditObservacoes.value = novaObs.trim();

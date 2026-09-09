@@ -21,6 +21,10 @@
           NFE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/nfe-lista",
           SAIDAS_FABRICA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saidas-estoque", // Agora usa a mesma planilha de Garantia
           SAIDAS_GARANTIA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saidas-estoque",
+          GARANTIA_PEDIDO: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/pedido",
+          GARANTIA_PEDIDO_UPDATE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/pedido/update",
+          GARANTIA_SATG: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/satg",
+          GARANTIA_SATG_UPDATE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/satg/update",
       
           // APIs de Ações (Cloud Functions)
           WEBHOOK_LAUNCH: "https://bling-proxy-api-255108547424.southamerica-east1.run.app",
