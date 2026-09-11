@@ -1224,9 +1224,11 @@ export const GerenciarGarantiaApp = (function () {
                         </button>` 
                         : ''
                     }
-                    <div class="btn-observacao-satg cursor-pointer w-6 h-6 rounded-full ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-700' : 'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'} flex items-center justify-center transition-colors mx-1" title="Histórico de Observações Sat-G">
-                        <span class="font-bold text-xs font-serif italic">i</span>
-                    </div>
+                    <span class="btn-observacao-satg cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block" title="Adicionar/Ver Observação">
+                        <svg class="h-5 w-5 ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
+                        </svg>
+                    </span>
                     <button class="btn-avaliar-satg inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 shadow-sm" title="${statusUpper === 'EM ANALISE' ? 'Avaliar Solicitação' : 'Ver Detalhes'}">
                         ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Detalhes'}
                     </button>
@@ -1717,16 +1719,12 @@ export const GerenciarGarantiaApp = (function () {
                 history = JSON.parse(req.observacaoSatg);
             } else if (req.observacaoSatg && req.observacaoSatg.trim() !== '') {
                 // Legado: era só uma string
-                history = [{
-                    user: 'Sistema',
-                    date: req.data || new Date().toISOString(),
-                    text: req.observacaoSatg
-                }];
+                history = [req.observacaoSatg];
             }
         } catch (e) {
             console.error("Erro ao fazer parse do histórico Sat-G", e);
             if (req.observacaoSatg) {
-                history = [{ user: 'Sistema', date: new Date().toISOString(), text: req.observacaoSatg }];
+                history = [req.observacaoSatg];
             }
         }
 
@@ -1739,44 +1737,77 @@ export const GerenciarGarantiaApp = (function () {
 
     function _renderSatgObservationHistory(history) {
         if (!history || history.length === 0) {
-            _satgObservationHistory.innerHTML = '<p class="text-gray-500 text-center italic py-4">Nenhuma observação registrada.</p>';
+            _satgObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
             return;
         }
 
-        const currentUsername = localStorage.getItem('nome') || 'Usuário Local';
-        let html = '';
+        const chatHtml = history.map((obs, idx) => {
+            let timestamp = '';
+            let message = '';
+            if (typeof obs === 'string') {
+                const parts = obs.split(' - ');
+                timestamp = parts.length > 1 ? parts[0] : '';
+                message = parts.length > 1 ? parts.slice(1).join(' - ') : obs;
+            } else {
+                message = obs.text || '';
+                timestamp = obs.date || '';
+                try {
+                    if (timestamp && timestamp.includes('T')) {
+                        const d = new Date(timestamp);
+                        timestamp = d.toLocaleDateString('pt-BR') + ', ' + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                    }
+                } catch(e) {}
+            }
 
-        history.forEach(obs => {
-            const isMe = obs.user === currentUsername;
-            const alignClass = isMe ? 'justify-end' : 'justify-start';
-            const bgClass = isMe ? 'bg-blue-100 text-blue-900 border-blue-200' : 'bg-white text-gray-800 border-gray-200';
-            const radiusClass = isMe ? 'rounded-l-2xl rounded-tr-2xl rounded-br-sm' : 'rounded-r-2xl rounded-tl-2xl rounded-bl-sm';
-            
-            let dateStr = obs.date;
-            try {
-                if (obs.date && obs.date.includes('T')) {
-                    const d = new Date(obs.date);
-                    dateStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
-                }
-            } catch (e) {}
-
-            html += `
-                <div class="flex ${alignClass} mb-3 group">
-                    <div class="max-w-[85%]">
-                        <div class="flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}">
-                            <span class="text-xs font-bold text-gray-700">${obs.user || 'Sistema'}</span>
-                            <span class="text-[10px] text-gray-400 font-medium">${dateStr}</span>
-                        </div>
-                        <div class="${bgClass} ${radiusClass} border shadow-sm px-4 py-2.5 text-[13px] whitespace-pre-wrap leading-relaxed">${obs.text}</div>
-                    </div>
+            return `
+            <div class="relative group p-3 rounded-lg bg-blue-100 text-gray-800 max-w-md self-start mb-3">
+                <button class="delete-obs-satg-btn absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded-full bg-red-100 hover:bg-red-200 text-red-500 hover:text-red-700" 
+                    data-obs-index="${idx}" title="Excluir esta observação">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                        <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
+                    </svg>
+                </button>
+                <p class="text-sm whitespace-pre-wrap pr-4">${message}</p>
+                <div class="flex items-center justify-end mt-1">
+                    <span class="text-xs text-gray-500 mr-1">${timestamp}</span>
+                    <span title="Salvo"><svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></span>
                 </div>
-            `;
-        });
+            </div>`;
+        }).join('');
+        _satgObservationHistory.innerHTML = chatHtml;
+        _satgObservationHistory.scrollTop = _satgObservationHistory.scrollHeight;
 
-        _satgObservationHistory.innerHTML = html;
-        setTimeout(() => {
-            _satgObservationHistory.scrollTop = _satgObservationHistory.scrollHeight;
-        }, 10);
+        _satgObservationHistory.querySelectorAll('.delete-obs-satg-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const idx = parseInt(btn.dataset.obsIndex, 10);
+                const rowIndex = _satgObservationModal.dataset.rowIndex;
+                const req = _satgData.find(d => String(d.rowIndex) === String(rowIndex));
+                if (req) {
+                    let currHistory = [];
+                    try {
+                        currHistory = JSON.parse(req.observacaoSatg);
+                        if (Array.isArray(currHistory)) {
+                            currHistory.splice(idx, 1);
+                            const newObservacaoJSON = currHistory.length > 0 ? JSON.stringify(currHistory) : '';
+                            
+                            try {
+                                const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, observacaoSatg: newObservacaoJSON })
+                                });
+                                if (!res.ok) throw new Error();
+                                req.observacaoSatg = newObservacaoJSON;
+                                _openSatgObservationModal(req); // reload modal
+                                _fetchSatGData();
+                            } catch (err) {
+                                alert("Erro ao excluir observação");
+                            }
+                        }
+                    } catch (err) {}
+                }
+            });
+        });
     }
 
     async function _saveSatgObservation() {
@@ -1793,20 +1824,14 @@ export const GerenciarGarantiaApp = (function () {
             if (req.observacaoSatg && req.observacaoSatg.startsWith('[')) {
                 history = JSON.parse(req.observacaoSatg);
             } else if (req.observacaoSatg && req.observacaoSatg.trim() !== '') {
-                history = [{
-                    user: 'Sistema',
-                    date: req.data || new Date().toISOString(),
-                    text: req.observacaoSatg
-                }];
+                history = [req.observacaoSatg]; // fallback for legacy strings
             }
         } catch (e) {}
 
-        const currentUsername = localStorage.getItem('nome') || 'Usuário Local';
-        history.push({
-            user: currentUsername,
-            date: new Date().toISOString(),
-            text: newText
-        });
+        const d = new Date();
+        const timestampStr = d.toLocaleDateString('pt-BR') + ', ' + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+        const newMsgStr = `${timestampStr} - ${newText}`;
+        history.push(newMsgStr);
 
         const newObservacaoJSON = JSON.stringify(history);
 
