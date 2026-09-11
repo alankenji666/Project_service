@@ -292,7 +292,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:AB` // Até AB (coluna 28)
+                range: `${sheetName}!A2:AD` // Até AD (coluna 30)
             });
 
             const rows = response.data.values || [];
@@ -327,7 +327,9 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     status: row[24] || 'EM ANALISE', // Y
                     acaoPecas: row[25] || '',                  // Z
                     observacao: row[26] || '',                 // AA (Avaliação Interna)
-                    idPedido: row[27] || ''                    // AB (Pedido Vinculado)
+                    idPedido: row[27] || '',                   // AB (Pedido Vinculado)
+                    retornoItem: row[28] || 'PENDENTE',        // AC (Retorno Item)
+                    observacaoSatg: row[29] || ''              // AD (Observação SatG)
                 };
             });
 
@@ -411,12 +413,14 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 'EM ANALISE',                               // Y: Status Padrão
                 '',                                         // Z: Acao Pecas
                 '',                                         // AA: Observacao interna
-                ''                                          // AB: ID Pedido Vinculado
+                '',                                         // AB: ID Pedido Vinculado
+                'PENDENTE',                                 // AC: Retorno Item
+                ''                                          // AD: Observação Sat-G
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: `${sheetName}!A:AB`,
+                range: `${sheetName}!A:AD`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
@@ -440,7 +444,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
     // Atualiza o Status e Observação de um pedido na SatG
     router.post('/satg/update', async (req, res, next) => {
         try {
-            const { rowIndex, status, observacao, idPedido } = req.body;
+            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg } = req.body;
             
             if (!rowIndex) {
                 return res.status(400).json({ error: true, message: 'rowIndex é obrigatório.' });
@@ -450,6 +454,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             const sheetName = 'SatG';
             
             // Status fica na Coluna Y (25), Observação na Coluna AA (27), ID Pedido na Coluna AB (28)
+            // Retorno Item na AC (29), Observação SATG na AD (30)
             if (status) {
                 await sheets.spreadsheets.values.update({
                     spreadsheetId,
@@ -474,6 +479,24 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     range: `${sheetName}!AB${rowIndex}`,
                     valueInputOption: 'USER_ENTERED',
                     resource: { values: [[idPedido]] }
+                });
+            }
+
+            if (retornoItem !== undefined) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!AC${rowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[retornoItem]] }
+                });
+            }
+
+            if (observacaoSatg !== undefined) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!AD${rowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[observacaoSatg]] }
                 });
             }
 

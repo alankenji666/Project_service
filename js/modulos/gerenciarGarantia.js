@@ -287,7 +287,7 @@ export const GerenciarGarantiaApp = (function () {
         // Fechar dropdowns customizados ao clicar fora
         document.addEventListener('click', (e) => {
             if (!e.target.closest('[data-dropdown-container]')) {
-                document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+                document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
             }
         });
 
@@ -1132,6 +1132,27 @@ export const GerenciarGarantiaApp = (function () {
                 }
             }
 
+            const retornoStatus = (req.retornoItem || 'PENDENTE').toUpperCase();
+            let retornoBadgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
+            if (retornoStatus === 'PENDENTE') retornoBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            else if (retornoStatus === 'SOLICITADO') retornoBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
+            else if (retornoStatus === 'FINALIZADO') retornoBadgeClass = 'bg-green-100 text-green-800 border-green-200';
+            else if (retornoStatus === 'NÃO RETORNADO' || retornoStatus === 'NAO RETORNADO') retornoBadgeClass = 'bg-red-100 text-red-800 border-red-200';
+
+            const retornoDropdownHtml = `
+            <div class="relative inline-block text-left" data-dropdown-container>
+                <button type="button" class="retorno-custom-dropdown-btn px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${retornoBadgeClass} min-w-[130px] transition-all hover:shadow-sm">
+                    <span class="flex-1 text-center">${retornoStatus}</span>
+                    <svg class="w-3.5 h-3.5 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="retorno-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
+                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-yellow-50 transition-colors flex items-center gap-2" data-value="PENDENTE"><span class="w-2 h-2 rounded-full bg-yellow-400"></span>PENDENTE</button>
+                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2" data-value="SOLICITADO"><span class="w-2 h-2 rounded-full bg-blue-400"></span>SOLICITADO</button>
+                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2" data-value="FINALIZADO"><span class="w-2 h-2 rounded-full bg-green-500"></span>FINALIZADO</button>
+                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2" data-value="NÃO RETORNADO"><span class="w-2 h-2 rounded-full bg-red-500"></span>NÃO RETORNADO</button>
+                </div>
+            </div>`;
+
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
                     <div class="font-bold text-gray-800">${req.codigo || '-'}</div>
@@ -1157,6 +1178,9 @@ export const GerenciarGarantiaApp = (function () {
                 <td class="px-6 py-4 whitespace-nowrap text-center">
                     ${pedidoStatusBadge}
                 </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                    ${retornoDropdownHtml}
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-end gap-2">
                     ${req.idPedido ? 
                         `<button class="btn-ver-pedido inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm" title="Ver Pedido Vinculado: ${req.idPedido}" data-id="${req.idPedido}">
@@ -1165,6 +1189,9 @@ export const GerenciarGarantiaApp = (function () {
                         </button>` 
                         : ''
                     }
+                    <button class="btn-observacao-satg inline-flex items-center justify-center w-8 h-8 ${req.observacaoSatg ? 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100 hover:text-gray-600'} rounded-lg transition-colors border shadow-sm" title="Observação Sat-G">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </button>
                     <button class="btn-avaliar-satg inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 shadow-sm" title="${statusUpper === 'EM ANALISE' ? 'Avaliar Solicitação' : 'Ver Detalhes'}">
                         ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Detalhes'}
                     </button>
@@ -1177,7 +1204,7 @@ export const GerenciarGarantiaApp = (function () {
             if (garBtn && garMenu) {
                 garBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden)').forEach(m => {
+                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden)').forEach(m => {
                         if (m !== garMenu) m.classList.add('hidden');
                     });
                     garMenu.classList.toggle('hidden');
@@ -1212,7 +1239,7 @@ export const GerenciarGarantiaApp = (function () {
             if (pedBtn && pedMenu && req.idPedido) {
                 pedBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden)').forEach(m => {
+                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden)').forEach(m => {
                         if (m !== pedMenu) m.classList.add('hidden');
                     });
                     pedMenu.classList.toggle('hidden');
@@ -1245,6 +1272,94 @@ export const GerenciarGarantiaApp = (function () {
                 });
             }
             
+            const retBtn = tr.querySelector('.retorno-custom-dropdown-btn');
+            const retMenu = tr.querySelector('.retorno-custom-dropdown-menu');
+            if (retBtn && retMenu) {
+                retBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden)').forEach(m => {
+                        if (m !== retMenu) m.classList.add('hidden');
+                    });
+                    retMenu.classList.toggle('hidden');
+                });
+                retMenu.querySelectorAll('button').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        retMenu.classList.add('hidden');
+                        const newRetorno = btn.dataset.value;
+                        if (newRetorno === retornoStatus) return;
+                        
+                        retBtn.classList.add('animate-pulse', 'opacity-50');
+                        retBtn.disabled = true;
+                        try {
+                            const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ rowIndex: req.rowIndex, retornoItem: newRetorno })
+                            });
+                            if (!res.ok) throw new Error();
+                            _fetchSatGData();
+                        } catch (err) {
+                            alert('Erro ao atualizar Retorno de Item');
+                            _fetchSatGData();
+                        }
+                    });
+                });
+            }
+
+            const btnObs = tr.querySelector('.btn-observacao-satg');
+            if (btnObs) {
+                btnObs.onclick = async (e) => {
+                    e.stopPropagation();
+                    if (typeof Swal !== 'undefined') {
+                        const { value: text } = await Swal.fire({
+                            title: 'Observação SAT-G',
+                            input: 'textarea',
+                            inputLabel: 'Anotações sobre a logística, defeito ou detalhes',
+                            inputValue: req.observacaoSatg || '',
+                            showCancelButton: true,
+                            confirmButtonText: 'Salvar',
+                            cancelButtonText: 'Cancelar',
+                            confirmButtonColor: '#10b981',
+                            cancelButtonColor: '#d1d5db'
+                        });
+
+                        if (text !== undefined && text !== (req.observacaoSatg || '')) {
+                            try {
+                                btnObs.classList.add('animate-spin');
+                                const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, observacaoSatg: text })
+                                });
+                                if (!res.ok) throw new Error();
+                                _fetchSatGData();
+                            } catch (err) {
+                                alert('Erro ao salvar observação');
+                                _fetchSatGData();
+                            }
+                        }
+                    } else {
+                        const text = prompt('Observação SAT-G:', req.observacaoSatg || '');
+                        if (text !== null && text !== (req.observacaoSatg || '')) {
+                            try {
+                                btnObs.innerHTML = '...';
+                                const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, observacaoSatg: text })
+                                });
+                                if (!res.ok) throw new Error();
+                                _fetchSatGData();
+                            } catch (err) {
+                                alert('Erro ao salvar observação');
+                                _fetchSatGData();
+                            }
+                        }
+                    }
+                };
+            }
+
             const btnAvaliar = tr.querySelector('.btn-avaliar-satg');
             if (btnAvaliar) btnAvaliar.onclick = () => _openSatgModal(req);
 
