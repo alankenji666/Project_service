@@ -1735,6 +1735,37 @@ export const GerenciarGarantiaApp = (function () {
         _satgObservationTextarea.focus();
     }
 
+    function _showConfirmation(title, message) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('confirmation-modal');
+            const titleEl = document.getElementById('confirmation-modal-title');
+            const contentEl = document.getElementById('confirmation-modal-content');
+            const yesBtn = document.getElementById('confirm-yes-btn');
+            const noBtn = document.getElementById('confirm-no-btn');
+
+            if (titleEl) titleEl.textContent = title;
+            if (contentEl) contentEl.innerHTML = message;
+            if (modal) modal.classList.remove('hidden');
+
+            const onConfirm = () => {
+                if (yesBtn) yesBtn.removeEventListener('click', onConfirm);
+                if (noBtn) noBtn.removeEventListener('click', onCancel);
+                if (modal) modal.classList.add('hidden');
+                resolve(true);
+            };
+
+            const onCancel = () => {
+                if (yesBtn) yesBtn.removeEventListener('click', onConfirm);
+                if (noBtn) noBtn.removeEventListener('click', onCancel);
+                if (modal) modal.classList.add('hidden');
+                resolve(false);
+            };
+
+            if (yesBtn) yesBtn.addEventListener('click', onConfirm, { once: true });
+            if (noBtn) noBtn.addEventListener('click', onCancel, { once: true });
+        });
+    }
+
     function _renderSatgObservationHistory(history) {
         if (!history || history.length === 0) {
             _satgObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
@@ -1779,6 +1810,9 @@ export const GerenciarGarantiaApp = (function () {
 
         _satgObservationHistory.querySelectorAll('.delete-obs-satg-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                const confirmed = await _showConfirmation('Excluir Observação', 'Tem certeza que deseja excluir esta mensagem? Esta ação não pode ser desfeita.');
+                if (!confirmed) return;
+                
                 const idx = parseInt(btn.dataset.obsIndex, 10);
                 const rowIndex = _satgObservationModal.dataset.rowIndex;
                 const req = _satgData.find(d => String(d.rowIndex) === String(rowIndex));
