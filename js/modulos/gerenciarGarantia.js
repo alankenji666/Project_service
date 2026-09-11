@@ -51,6 +51,15 @@ export const GerenciarGarantiaApp = (function () {
     let _satgNoDataMessage;
     let _satgSearchInput;
     let _satgBadgeCount;
+
+    // Referências do DOM - Modal Observação Sat-G
+    let _satgObservationModal;
+    let _satgObservationModalInfo;
+    let _satgObservationHistory;
+    let _satgObservationTextarea;
+    let _satgObservationCharCount;
+    let _saveSatgObservationBtn;
+    let _cancelSatgObservationBtn;
     
     // Referências do DOM - Pedidos Garantia
     let _pedidosGarantiaContainer;
@@ -161,6 +170,13 @@ export const GerenciarGarantiaApp = (function () {
         _satgNoDataMessage = document.getElementById('no-satg-message');
         _satgSearchInput = document.getElementById('garantia-satg-search-input');
         _satgBadgeCount = document.getElementById('satg-badge-count');
+        _satgObservationModal = document.getElementById('satg-observation-modal');
+        _satgObservationModalInfo = document.getElementById('satg-observation-modal-info');
+        _satgObservationHistory = document.getElementById('satg-observation-history');
+        _satgObservationTextarea = document.getElementById('satg-observation-textarea');
+        _satgObservationCharCount = document.getElementById('satg-observation-char-count');
+        _saveSatgObservationBtn = document.getElementById('save-satg-observation-btn');
+        _cancelSatgObservationBtn = document.getElementById('cancel-satg-observation-btn');
         _satgFilterBtn = document.getElementById('btn-satg-filter');
         _satgFilterDropdown = document.getElementById('satg-filter-dropdown');
         _satgFilterText = document.getElementById('satg-filter-text');
@@ -292,6 +308,25 @@ export const GerenciarGarantiaApp = (function () {
         });
 
         if (_btnRecusarSatg) _btnRecusarSatg.onclick = () => _updateSatgStatus('RECUSADO');
+        
+        // Modal Sat-G Observacao
+        if (_cancelSatgObservationBtn) {
+            _cancelSatgObservationBtn.onclick = () => {
+                if (_satgObservationModal) _satgObservationModal.classList.add('hidden');
+            };
+        }
+        if (_satgObservationTextarea) {
+            _satgObservationTextarea.addEventListener('input', () => {
+                if (_satgObservationCharCount) {
+                    _satgObservationCharCount.innerText = _satgObservationTextarea.value.length;
+                }
+            });
+        }
+        if (_saveSatgObservationBtn) {
+            _saveSatgObservationBtn.onclick = async () => {
+                await _saveSatgObservation();
+            };
+        }
         if (_btnSalvarObsSatg) {
             _btnSalvarObsSatg.onclick = () => {
                 const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
@@ -1189,9 +1224,9 @@ export const GerenciarGarantiaApp = (function () {
                         </button>` 
                         : ''
                     }
-                    <button class="btn-observacao-satg inline-flex items-center justify-center w-8 h-8 ${req.observacaoSatg ? 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100 hover:text-gray-600'} rounded-lg transition-colors border shadow-sm" title="Observação Sat-G">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                    </button>
+                    <div class="btn-observacao-satg cursor-pointer w-6 h-6 rounded-full ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-700' : 'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'} flex items-center justify-center transition-colors mx-1" title="Histórico de Observações Sat-G">
+                        <span class="font-bold text-xs font-serif italic">i</span>
+                    </div>
                     <button class="btn-avaliar-satg inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 shadow-sm" title="${statusUpper === 'EM ANALISE' ? 'Avaliar Solicitação' : 'Ver Detalhes'}">
                         ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Detalhes'}
                     </button>
@@ -1309,54 +1344,9 @@ export const GerenciarGarantiaApp = (function () {
 
             const btnObs = tr.querySelector('.btn-observacao-satg');
             if (btnObs) {
-                btnObs.onclick = async (e) => {
+                btnObs.onclick = (e) => {
                     e.stopPropagation();
-                    if (typeof Swal !== 'undefined') {
-                        const { value: text } = await Swal.fire({
-                            title: 'Observação SAT-G',
-                            input: 'textarea',
-                            inputLabel: 'Anotações sobre a logística, defeito ou detalhes',
-                            inputValue: req.observacaoSatg || '',
-                            showCancelButton: true,
-                            confirmButtonText: 'Salvar',
-                            cancelButtonText: 'Cancelar',
-                            confirmButtonColor: '#10b981',
-                            cancelButtonColor: '#d1d5db'
-                        });
-
-                        if (text !== undefined && text !== (req.observacaoSatg || '')) {
-                            try {
-                                btnObs.classList.add('animate-spin');
-                                const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ rowIndex: req.rowIndex, observacaoSatg: text })
-                                });
-                                if (!res.ok) throw new Error();
-                                _fetchSatGData();
-                            } catch (err) {
-                                alert('Erro ao salvar observação');
-                                _fetchSatGData();
-                            }
-                        }
-                    } else {
-                        const text = prompt('Observação SAT-G:', req.observacaoSatg || '');
-                        if (text !== null && text !== (req.observacaoSatg || '')) {
-                            try {
-                                btnObs.innerHTML = '...';
-                                const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ rowIndex: req.rowIndex, observacaoSatg: text })
-                                });
-                                if (!res.ok) throw new Error();
-                                _fetchSatGData();
-                            } catch (err) {
-                                alert('Erro ao salvar observação');
-                                _fetchSatGData();
-                            }
-                        }
-                    }
+                    if (typeof _openSatgObservationModal === 'function') _openSatgObservationModal(req);
                 };
             }
 
@@ -1713,6 +1703,139 @@ export const GerenciarGarantiaApp = (function () {
             </table>
         </div>`;
         return html;
+    }
+
+    function _openSatgObservationModal(req) {
+        if (!_satgObservationModal) return;
+        
+        _satgObservationModal.dataset.rowIndex = req.rowIndex;
+        _satgObservationModalInfo.innerHTML = `Editando observação para SAT-G <b>${req.codigo || 'N/A'}</b> - ${req.cliente || 'N/A'}`;
+        
+        let history = [];
+        try {
+            if (req.observacaoSatg && req.observacaoSatg.startsWith('[')) {
+                history = JSON.parse(req.observacaoSatg);
+            } else if (req.observacaoSatg && req.observacaoSatg.trim() !== '') {
+                // Legado: era só uma string
+                history = [{
+                    user: 'Sistema',
+                    date: req.data || new Date().toISOString(),
+                    text: req.observacaoSatg
+                }];
+            }
+        } catch (e) {
+            console.error("Erro ao fazer parse do histórico Sat-G", e);
+            if (req.observacaoSatg) {
+                history = [{ user: 'Sistema', date: new Date().toISOString(), text: req.observacaoSatg }];
+            }
+        }
+
+        _renderSatgObservationHistory(history);
+        _satgObservationTextarea.value = '';
+        if (_satgObservationCharCount) _satgObservationCharCount.innerText = '0';
+        _satgObservationModal.classList.remove('hidden');
+        _satgObservationTextarea.focus();
+    }
+
+    function _renderSatgObservationHistory(history) {
+        if (!history || history.length === 0) {
+            _satgObservationHistory.innerHTML = '<p class="text-gray-500 text-center italic py-4">Nenhuma observação registrada.</p>';
+            return;
+        }
+
+        const currentUsername = localStorage.getItem('nome') || 'Usuário Local';
+        let html = '';
+
+        history.forEach(obs => {
+            const isMe = obs.user === currentUsername;
+            const alignClass = isMe ? 'justify-end' : 'justify-start';
+            const bgClass = isMe ? 'bg-blue-100 text-blue-900 border-blue-200' : 'bg-white text-gray-800 border-gray-200';
+            const radiusClass = isMe ? 'rounded-l-2xl rounded-tr-2xl rounded-br-sm' : 'rounded-r-2xl rounded-tl-2xl rounded-bl-sm';
+            
+            let dateStr = obs.date;
+            try {
+                if (obs.date && obs.date.includes('T')) {
+                    const d = new Date(obs.date);
+                    dateStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+                }
+            } catch (e) {}
+
+            html += `
+                <div class="flex ${alignClass} mb-3 group">
+                    <div class="max-w-[85%]">
+                        <div class="flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}">
+                            <span class="text-xs font-bold text-gray-700">${obs.user || 'Sistema'}</span>
+                            <span class="text-[10px] text-gray-400 font-medium">${dateStr}</span>
+                        </div>
+                        <div class="${bgClass} ${radiusClass} border shadow-sm px-4 py-2.5 text-[13px] whitespace-pre-wrap leading-relaxed">${obs.text}</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        _satgObservationHistory.innerHTML = html;
+        setTimeout(() => {
+            _satgObservationHistory.scrollTop = _satgObservationHistory.scrollHeight;
+        }, 10);
+    }
+
+    async function _saveSatgObservation() {
+        const rowIndex = _satgObservationModal.dataset.rowIndex;
+        const newText = _satgObservationTextarea.value.trim();
+        if (!rowIndex || !newText) return;
+
+        const req = _satgData.find(d => String(d.rowIndex) === String(rowIndex));
+        if (!req) return;
+
+        // Tenta ler o historico existente
+        let history = [];
+        try {
+            if (req.observacaoSatg && req.observacaoSatg.startsWith('[')) {
+                history = JSON.parse(req.observacaoSatg);
+            } else if (req.observacaoSatg && req.observacaoSatg.trim() !== '') {
+                history = [{
+                    user: 'Sistema',
+                    date: req.data || new Date().toISOString(),
+                    text: req.observacaoSatg
+                }];
+            }
+        } catch (e) {}
+
+        const currentUsername = localStorage.getItem('nome') || 'Usuário Local';
+        history.push({
+            user: currentUsername,
+            date: new Date().toISOString(),
+            text: newText
+        });
+
+        const newObservacaoJSON = JSON.stringify(history);
+
+        const originalBtnText = _saveSatgObservationBtn.innerText;
+        _saveSatgObservationBtn.innerText = 'Salvando...';
+        _saveSatgObservationBtn.disabled = true;
+
+        try {
+            const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rowIndex: req.rowIndex, observacaoSatg: newObservacaoJSON })
+            });
+            if (!res.ok) throw new Error();
+            
+            // Atualizar cache local 
+            req.observacaoSatg = newObservacaoJSON;
+            
+            _satgObservationTextarea.value = '';
+            if (_satgObservationCharCount) _satgObservationCharCount.innerText = '0';
+            _satgObservationModal.classList.add('hidden');
+            
+            _fetchSatGData();
+        } catch (err) {
+            alert('Erro ao salvar observação');
+        } finally {
+            _saveSatgObservationBtn.innerText = originalBtnText;
+            _saveSatgObservationBtn.disabled = false;
+        }
     }
 
     function resetToSelector() {
