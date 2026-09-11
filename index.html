@@ -1059,6 +1059,7 @@
                         <div class="mb-6">
                             <h4 class="font-bold text-gray-700 mb-2 border-b pb-1">Problema Relatado</h4>
                             <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100 mb-3">
+                                <p class="text-gray-900 font-bold mb-2">Onde está o problema: <span id="satg-modal-onde-esta" class="font-normal text-blue-600">-</span></p>
                                 <p class="text-gray-900 font-bold mb-2">Sintoma: <span id="satg-modal-sintoma" class="font-normal">-</span></p>
                                 <p class="text-gray-800 whitespace-pre-line italic text-sm" id="satg-modal-problema">-</p>
                             </div>
@@ -2226,8 +2227,8 @@
             </div>
         </div>
     </div>
-    <div id="confirmation-modal"
-        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+    <div id="confirmation-modal" style="z-index: 9999;"
+        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center">
         <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center relative">
             <h3 id="confirmation-modal-title" class="text-xl font-bold mb-4"></h3>
             <p id="confirmation-modal-content" class="text-gray-700 mb-6"></p>

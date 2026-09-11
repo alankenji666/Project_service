@@ -292,7 +292,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:AD` // Até AD (coluna 30)
+                range: `${sheetName}!A2:AE` // Até AE (coluna 31)
             });
 
             const rows = response.data.values || [];
@@ -328,8 +328,9 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     acaoPecas: row[25] || '',                  // Z
                     observacao: row[26] || '',                 // AA (Avaliação Interna)
                     idPedido: row[27] || '',                   // AB (Pedido Vinculado)
-                    retornoItem: row[28] || 'PENDENTE',        // AC (Retorno Item)
-                    observacaoSatg: row[29] || ''              // AD (Observação SatG)
+                    retornoItem: row[28] || 'EM ANALISE',        // AC (Retorno Item)
+                    observacaoSatg: row[29] || '',             // AD (Observação SatG)
+                    ondeEstaProblema: row[30] || ''            // AE (Onde Está o Problema)
                 };
             });
 
@@ -414,13 +415,14 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 '',                                         // Z: Acao Pecas
                 '',                                         // AA: Observacao interna
                 '',                                         // AB: ID Pedido Vinculado
-                'PENDENTE',                                 // AC: Retorno Item
-                ''                                          // AD: Observação Sat-G
+                'EM ANALISE',                               // AC: Retorno Item
+                '',                                         // AD: Observação Sat-G
+                formData.ondeEstaProblema || ''             // AE: Onde Está o Problema
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: `${sheetName}!A:AD`,
+                range: `${sheetName}!A:AE`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {

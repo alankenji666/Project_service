@@ -1167,9 +1167,9 @@ export const GerenciarGarantiaApp = (function () {
                 }
             }
 
-            const retornoStatus = (req.retornoItem || 'PENDENTE').toUpperCase();
+            const retornoStatus = (req.retornoItem || 'EM ANALISE').toUpperCase();
             let retornoBadgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
-            if (retornoStatus === 'PENDENTE') retornoBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            if (retornoStatus === 'EM ANALISE') retornoBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
             else if (retornoStatus === 'SOLICITADO') retornoBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
             else if (retornoStatus === 'FINALIZADO') retornoBadgeClass = 'bg-green-100 text-green-800 border-green-200';
             else if (retornoStatus === 'NÃO RETORNADO' || retornoStatus === 'NAO RETORNADO') retornoBadgeClass = 'bg-red-100 text-red-800 border-red-200';
@@ -1181,7 +1181,7 @@ export const GerenciarGarantiaApp = (function () {
                     <svg class="w-3.5 h-3.5 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
                 <div class="retorno-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
-                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-yellow-50 transition-colors flex items-center gap-2" data-value="PENDENTE"><span class="w-2 h-2 rounded-full bg-yellow-400"></span>PENDENTE</button>
+                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-yellow-50 transition-colors flex items-center gap-2" data-value="EM ANALISE"><span class="w-2 h-2 rounded-full bg-yellow-400"></span>EM ANALISE</button>
                     <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2" data-value="SOLICITADO"><span class="w-2 h-2 rounded-full bg-blue-400"></span>SOLICITADO</button>
                     <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2" data-value="FINALIZADO"><span class="w-2 h-2 rounded-full bg-green-500"></span>FINALIZADO</button>
                     <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2" data-value="NÃO RETORNADO"><span class="w-2 h-2 rounded-full bg-red-500"></span>NÃO RETORNADO</button>
@@ -1224,14 +1224,14 @@ export const GerenciarGarantiaApp = (function () {
                         </button>` 
                         : ''
                     }
-                    <span class="btn-observacao-satg cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block" title="Adicionar/Ver Observação">
+                    <button class="btn-avaliar-satg inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 shadow-sm" title="${statusUpper === 'EM ANALISE' ? 'Avaliar Solicitação' : 'Ver Detalhes'}">
+                        ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Detalhes'}
+                    </button>
+                    <span class="btn-observacao-satg cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block ml-1" title="Adicionar/Ver Observação">
                         <svg class="h-5 w-5 ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
                         </svg>
                     </span>
-                    <button class="btn-avaliar-satg inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 shadow-sm" title="${statusUpper === 'EM ANALISE' ? 'Avaliar Solicitação' : 'Ver Detalhes'}">
-                        ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Detalhes'}
-                    </button>
                 </td>
             `;
 
@@ -1335,7 +1335,25 @@ export const GerenciarGarantiaApp = (function () {
                                 body: JSON.stringify({ rowIndex: req.rowIndex, retornoItem: newRetorno })
                             });
                             if (!res.ok) throw new Error();
-                            _fetchSatGData();
+                            
+                            req.retornoItem = newRetorno; // Atualiza o objeto atual pra não precisar esperar o fetch pra abrir modal
+                            
+                            _fetchSatGData(); // Atualiza a tabela silenciosamente ao fundo
+                            
+                            // Se marcou como NÃO RETORNADO, abre o modal de observação
+                            if (newRetorno === 'NÃO RETORNADO' || newRetorno === 'NAO RETORNADO') {
+                                if (typeof _openSatgObservationModal === 'function') {
+                                    _openSatgObservationModal(req);
+                                    // Opcional: preencher textarea
+                                    const tx = document.getElementById('satg-observation-textarea');
+                                    if (tx) {
+                                        tx.value = "Motivo do Não Retorno: ";
+                                        tx.focus();
+                                        // coloca cursor no fim
+                                        tx.selectionStart = tx.value.length;
+                                    }
+                                }
+                            }
                         } catch (err) {
                             alert('Erro ao atualizar Retorno de Item');
                             _fetchSatGData();
@@ -1389,6 +1407,7 @@ export const GerenciarGarantiaApp = (function () {
         document.getElementById('satg-modal-parada').innerText = req.dataParada || '-';
         document.getElementById('satg-modal-preventiva').innerText = req.dataUltimaPreventiva || '-';
         
+        document.getElementById('satg-modal-onde-esta').innerText = req.ondeEstaProblema || '-';
         document.getElementById('satg-modal-sintoma').innerText = req.sintoma || '-';
         document.getElementById('satg-modal-problema').innerText = req.problema || '-';
         document.getElementById('satg-modal-prediagnostico').innerText = req.preDiagnostico || '-';

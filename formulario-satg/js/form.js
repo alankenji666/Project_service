@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 emOperacao: document.getElementById('emOperacao').value,
                 dataParada: document.getElementById('dataParada').value,
                 dataUltimaPreventiva: document.getElementById('dataUltimaPreventiva').value,
+                ondeEstaProblema: document.getElementById('ondeEstaProblema').value,
                 sintoma: document.getElementById('sintoma').value,
                 problema: document.getElementById('problema').value,
                 preDiagnostico: document.getElementById('preDiagnostico').value,
