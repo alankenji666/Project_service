@@ -237,7 +237,7 @@ export const GerenciarGarantiaApp = (function () {
         };
         if (_btnShowTable) _btnShowTable.onclick = () => _showView('table');
         if (_btnShowSatg) _btnShowSatg.onclick = () => { _showView('satg'); _fetchSatGData(); };
-        if (_btnShowPedidosGarantia) _btnShowPedidosGarantia.onclick = () => { _showView('pedidosGarantia'); _fetchPedidosGarantiaData(); };
+        if (_btnShowPedidosGarantia) _btnShowPedidosGarantia.onclick = () => { _showView('pedidosGarantia'); _fetchPedidosGarantiaData(); _fetchSatGData(true); };
         
         // Back buttons
         const checkCloseForm = () => {
@@ -735,7 +735,24 @@ export const GerenciarGarantiaApp = (function () {
 
         // Change Title
         const titleEl = document.querySelector('#garantia-form-header h1');
-        if (titleEl) titleEl.innerText = `Editar Pedido: ${idPedido}`;
+        if (titleEl) {
+            // Garante que o H1 consiga jogar elementos pra direita
+            titleEl.className = "text-xl font-bold text-gray-800 m-0 flex-1 flex items-center w-full";
+            // Força o pai a ocupar o espaço
+            titleEl.parentElement.classList.add('w-full');
+            
+            let satgTitleHTML = '';
+            // Buscar com mais flexibilidade (com ou sem GAR-)
+            const cleanRef = refStr.replace('GAR-', '');
+            const satgAssociado = _satgData.find(s => {
+                const sId = String(s.idPedido || '').replace('GAR-', '');
+                return sId === cleanRef && sId !== '';
+            });
+            if (satgAssociado && satgAssociado.codigo) {
+                satgTitleHTML = `<span class="ml-auto text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-sm border border-blue-200">${satgAssociado.codigo}</span>`;
+            }
+            titleEl.innerHTML = `<span>Editar Pedido: <span class="text-gray-500">${idPedido}</span></span>${satgTitleHTML}`;
+        }
 
         const btnSubmit = document.getElementById('btn-submit-garantia');
         if (btnSubmit) btnSubmit.innerHTML = 'Salvar Alterações';
@@ -867,7 +884,7 @@ export const GerenciarGarantiaApp = (function () {
             let badgeClass = "bg-gray-100 text-gray-800 border-gray-200";
             if (situacao.toLowerCase().includes('emitida') || situacao.toLowerCase().includes('autorizada')) badgeClass = "bg-green-100 text-green-800 border-green-200";
             else if (situacao.toLowerCase().includes('cancelada')) badgeClass = "bg-red-100 text-red-800 border-red-200";
-            else if (situacao.toLowerCase().includes('pendente')) badgeClass = "bg-yellow-100 text-yellow-800 border-yellow-200";
+            else if (situacao.toLowerCase().includes('pendente') || situacao.toLowerCase().includes('analise')) badgeClass = "bg-yellow-100 text-yellow-800 border-yellow-200";
 
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
@@ -1079,23 +1096,15 @@ export const GerenciarGarantiaApp = (function () {
                     <div class="text-sm text-gray-600 max-w-[200px] truncate" title="${itensDisplay}">${itensDisplay}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                    <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm" title="Ver no Bling">
-                        Ver
+                    <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm" title="Editar">
+                        Editar
                     </button>
                 </td>
             `;
             
             const btnVer = tr.querySelector('button');
             btnVer.onclick = () => {
-                const navGerenciarPedidos = document.getElementById('nav-gerenciar-pedidos');
-                if (navGerenciarPedidos) navGerenciarPedidos.click();
-                setTimeout(() => {
-                    const searchInput = document.getElementById('pedidos-search');
-                    if (searchInput) {
-                        searchInput.value = numeroDisplay;
-                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                }, 300);
+                _openEditPedidoForm(req.idPedido || req.numero || req.id);
             };
 
             _pedidosGarantiaTableContent.appendChild(tr);
@@ -1124,27 +1133,31 @@ export const GerenciarGarantiaApp = (function () {
             if (statusUpper.includes('APROVADO')) badgeClass = 'bg-green-100 text-green-800 border-green-200';
             else if (statusUpper.includes('RECUSADO')) badgeClass = 'bg-red-100 text-red-800 border-red-200';
             
-            let pedidoStatusBadge = '<span class="text-gray-400 text-sm font-medium italic">-</span>';
+            let pedidoStatusBadge = '<span class="px-2.5 py-1 inline-flex text-[11px] font-bold rounded-full border bg-yellow-100 text-yellow-800 border-yellow-200 uppercase" title="Aguardando vínculo">EM ANALISE</span>';
+            if (statusUpper.includes('RECUSADO')) {
+                pedidoStatusBadge = '<span class="px-2.5 py-1 inline-flex text-[11px] font-bold rounded-full border bg-red-100 text-red-800 border-red-200 uppercase" title="Garantia Recusada">CANCELADO</span>';
+            }
             let pedidoVinculado = null;
             let pBadgeClass = '';
             if (req.idPedido) {
                 pedidoVinculado = _pedidosGarantiaData.find(p => String(p.idPedido || p.numero || p.id || '') === String(req.idPedido));
                 if (pedidoVinculado && pedidoVinculado.situacao) {
                     pBadgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
-                    const pStatus = pedidoVinculado.situacao.toUpperCase();
+                    let pStatus = pedidoVinculado.situacao.toUpperCase();
+                    if (pStatus === 'PENDENTE') pStatus = 'EM ANALISE';
                     if (pStatus.includes('EM ANDAMENTO')) pBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
-                    else if (pStatus.includes('PENDENTE')) pBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                    else if (pStatus.includes('EM ANALISE')) pBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
                     else if (pStatus.includes('AGUARDANDO')) pBadgeClass = 'bg-orange-100 text-orange-800 border-orange-200';
                     else if (pStatus.includes('PRONTO')) pBadgeClass = 'bg-indigo-100 text-indigo-800 border-indigo-200';
                     else if (pStatus.includes('ENVIADO') || pStatus.includes('FINALIZADO')) pBadgeClass = 'bg-green-100 text-green-800 border-green-200';
                     else if (pStatus.includes('CANCELADO')) pBadgeClass = 'bg-red-100 text-red-800 border-red-200';
                     
-                    const pStatusList = ['Pendente', 'Em Andamento', 'Aguardando Peça', 'Pronto Para Envio', 'Enviado', 'Finalizado', 'Cancelado'];
+                    const pStatusList = ['EM ANALISE', 'Em Andamento', 'Aguardando Peça', 'Pronto Para Envio', 'Enviado', 'Finalizado', 'Cancelado'];
                     let dropdownOptions = pStatusList.map(s => {
                         let dotColor = 'bg-gray-400';
                         const su = s.toUpperCase();
                         if (su.includes('EM ANDAMENTO')) dotColor = 'bg-blue-400';
-                        else if (su.includes('PENDENTE')) dotColor = 'bg-yellow-400';
+                        else if (su.includes('EM ANALISE')) dotColor = 'bg-yellow-400';
                         else if (su.includes('AGUARDANDO')) dotColor = 'bg-orange-400';
                         else if (su.includes('PRONTO')) dotColor = 'bg-indigo-400';
                         else if (su.includes('ENVIADO') || su.includes('FINALIZADO')) dotColor = 'bg-green-400';
@@ -1173,8 +1186,9 @@ export const GerenciarGarantiaApp = (function () {
             else if (retornoStatus === 'SOLICITADO') retornoBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
             else if (retornoStatus === 'FINALIZADO') retornoBadgeClass = 'bg-green-100 text-green-800 border-green-200';
             else if (retornoStatus === 'NÃO RETORNADO' || retornoStatus === 'NAO RETORNADO') retornoBadgeClass = 'bg-red-100 text-red-800 border-red-200';
+            else if (retornoStatus === 'CANCELADO') retornoBadgeClass = 'bg-red-100 text-red-800 border-red-200';
 
-            const retornoDropdownHtml = `
+            let retornoDropdownHtml = `
             <div class="relative inline-block text-left" data-dropdown-container>
                 <button type="button" class="retorno-custom-dropdown-btn px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${retornoBadgeClass} min-w-[130px] transition-all hover:shadow-sm">
                     <span class="flex-1 text-center">${retornoStatus}</span>
@@ -1185,8 +1199,13 @@ export const GerenciarGarantiaApp = (function () {
                     <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2" data-value="SOLICITADO"><span class="w-2 h-2 rounded-full bg-blue-400"></span>SOLICITADO</button>
                     <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2" data-value="FINALIZADO"><span class="w-2 h-2 rounded-full bg-green-500"></span>FINALIZADO</button>
                     <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2" data-value="NÃO RETORNADO"><span class="w-2 h-2 rounded-full bg-red-500"></span>NÃO RETORNADO</button>
+                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2" data-value="CANCELADO"><span class="w-2 h-2 rounded-full bg-red-500"></span>CANCELADO</button>
                 </div>
             </div>`;
+
+            if (statusUpper.includes('RECUSADO')) {
+                retornoDropdownHtml = '<span class="px-2.5 py-1 inline-flex text-[11px] font-bold rounded-full border bg-red-100 text-red-800 border-red-200 uppercase" title="Garantia Recusada">CANCELADO</span>';
+            }
 
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
@@ -1216,7 +1235,10 @@ export const GerenciarGarantiaApp = (function () {
                 <td class="px-6 py-4 whitespace-nowrap text-center">
                     ${retornoDropdownHtml}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-end gap-2">
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-end gap-2 items-center">
+                    <button class="btn-avaliar-satg inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 shadow-sm" title="${statusUpper === 'EM ANALISE' ? 'Avaliar Solicitação' : 'Ver Detalhe Sat-G'}">
+                        ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Detalhe Sat-G'}
+                    </button>
                     ${req.idPedido ? 
                         `<button class="btn-ver-pedido inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm" title="Ver Pedido Vinculado: ${req.idPedido}" data-id="${req.idPedido}">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
@@ -1224,9 +1246,6 @@ export const GerenciarGarantiaApp = (function () {
                         </button>` 
                         : ''
                     }
-                    <button class="btn-avaliar-satg inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 shadow-sm" title="${statusUpper === 'EM ANALISE' ? 'Avaliar Solicitação' : 'Ver Detalhes'}">
-                        ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Detalhes'}
-                    </button>
                     <span class="btn-observacao-satg cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block ml-1" title="Adicionar/Ver Observação">
                         <svg class="h-5 w-5 ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
@@ -1289,6 +1308,15 @@ export const GerenciarGarantiaApp = (function () {
                         const pStatus = pedidoVinculado ? pedidoVinculado.situacao.toUpperCase() : '';
                         if (newStatus.toUpperCase() === pStatus) return;
                         
+                        let transportadora = undefined;
+                        if (newStatus.toUpperCase() === 'ENVIADO') {
+                            const transpPrompt = prompt("Informe o nome da Transportadora:");
+                            if (transpPrompt === null) {
+                                return; // Cancelou
+                            }
+                            transportadora = transpPrompt.trim();
+                        }
+                        
                         pedBtn.classList.add('animate-pulse', 'opacity-50');
                         pedBtn.disabled = true;
                         try {
@@ -1296,7 +1324,7 @@ export const GerenciarGarantiaApp = (function () {
                             const res = await fetch(updateUrl, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ idPedido: req.idPedido, situacao: newStatus })
+                                body: JSON.stringify({ idPedido: req.idPedido, situacao: newStatus, transportadora })
                             });
                             if (!res.ok) throw new Error();
                             await _fetchPedidosGarantiaData();
@@ -1386,31 +1414,139 @@ export const GerenciarGarantiaApp = (function () {
         _currentSatgRowIndex = req.rowIndex;
         
         document.getElementById('satg-modal-codigo').innerText = req.codigo;
+
+        function injectEditPencil(elementId, column, key, currentValue) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            
+            // Remove o botão se já existir dentro do próprio elemento
+            el.querySelectorAll('.btn-edit-satg-field').forEach(b => b.remove());
+            
+            // Cria o botão para ficar inline ao lado do texto
+            const btn = document.createElement('button');
+            btn.className = 'btn-edit-satg-field text-blue-600 hover:bg-gray-200 p-1.5 rounded-full transition-colors ml-2 align-middle inline-flex';
+            btn.title = 'Editar Campo';
+            btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>`;
+            
+            btn.onclick = async () => {
+                let labelText = key;
+                const labelEl = el.parentElement.querySelector('p:first-child, span:first-child');
+                if (labelEl && labelEl !== el) {
+                    labelText = labelEl.innerText.replace(':', '');
+                }
+                
+                const newValue = prompt(`Editar ${labelText}:`, currentValue || '');
+                if (newValue !== null && newValue.trim() !== (currentValue || '').trim()) {
+                    el.innerText = 'Salvando...';
+                    try {
+                        const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rowIndex: req.rowIndex,
+                                updates: [ { column: column, value: newValue } ]
+                            })
+                        });
+                        if (!res.ok) throw new Error();
+                        req[key] = newValue; 
+                        el.innerText = newValue;
+                        injectEditPencil(elementId, column, key, newValue);
+                        _fetchSatGData(true); // reload table silencioso no fundo
+                    } catch(err) {
+                        alert('Erro ao salvar edição.');
+                        el.innerText = currentValue || '-';
+                    }
+                }
+            };
+            el.appendChild(btn);
+        }
+
         document.getElementById('satg-modal-cliente').innerText = req.cliente || '-';
+        injectEditPencil('satg-modal-cliente', 'C', 'cliente', req.cliente);
+        
         document.getElementById('satg-modal-cpf').innerText = req.cpf || '-';
+        injectEditPencil('satg-modal-cpf', 'D', 'cpf', req.cpf);
+        
         document.getElementById('satg-modal-telefone').innerText = req.telefone || '-';
+        injectEditPencil('satg-modal-telefone', 'F', 'telefone', req.telefone);
+        
         document.getElementById('satg-modal-email').innerText = req.email || '-';
+        injectEditPencil('satg-modal-email', 'G', 'email', req.email);
+        
         document.getElementById('satg-modal-nf').innerText = req.notaFiscal || '-';
+        injectEditPencil('satg-modal-nf', 'M', 'notaFiscal', req.notaFiscal);
         
         document.getElementById('satg-modal-revenda').innerText = req.revenda || '-';
+        injectEditPencil('satg-modal-revenda', 'H', 'revenda', req.revenda);
+        
         document.getElementById('satg-modal-local-revenda').innerText = req.localRevenda || '-';
+        injectEditPencil('satg-modal-local-revenda', 'I', 'localRevenda', req.localRevenda);
         
         document.getElementById('satg-modal-equipamento').innerText = req.equipamento || req.produto || '-';
+        injectEditPencil('satg-modal-equipamento', 'J', 'equipamento', req.equipamento || req.produto);
+        
         document.getElementById('satg-modal-serie').innerText = req.numeroSerie || '-';
+        injectEditPencil('satg-modal-serie', 'K', 'numeroSerie', req.numeroSerie);
+        
         document.getElementById('satg-modal-pedido').innerText = req.numeroRequisicao || '-';
+        injectEditPencil('satg-modal-pedido', 'L', 'numeroRequisicao', req.numeroRequisicao);
+        
         document.getElementById('satg-modal-data-compra').innerText = req.dataCompra || '-';
+        injectEditPencil('satg-modal-data-compra', 'N', 'dataCompra', req.dataCompra);
+        
         document.getElementById('satg-modal-entrega').innerText = req.dataEntregaTecnica || '-';
+        injectEditPencil('satg-modal-entrega', 'O', 'dataEntregaTecnica', req.dataEntregaTecnica);
+        
+        const tipoSelect = document.getElementById('satg-modal-tipo-equipamento');
+        if (tipoSelect) {
+            tipoSelect.value = req.tipoEquipamento || '';
+            tipoSelect.onchange = async () => {
+                const newValue = tipoSelect.value;
+                try {
+                    const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            rowIndex: req.rowIndex,
+                            updates: [ { column: 'AF', value: newValue } ]
+                        })
+                    });
+                    if (!res.ok) throw new Error();
+                    req.tipoEquipamento = newValue;
+                    _fetchSatGData(true);
+                } catch(err) {
+                    alert('Erro ao salvar tipo de equipamento.');
+                    tipoSelect.value = req.tipoEquipamento || '';
+                }
+            };
+        }
         
         document.getElementById('satg-modal-aplicacao').innerText = req.aplicacao || '-';
+        injectEditPencil('satg-modal-aplicacao', 'P', 'aplicacao', req.aplicacao);
+        
         document.getElementById('satg-modal-chassi').innerText = req.chassiEndereco || '-';
+        injectEditPencil('satg-modal-chassi', 'Q', 'chassiEndereco', req.chassiEndereco);
+        
         document.getElementById('satg-modal-operacao').innerText = req.emOperacao || '-';
+        injectEditPencil('satg-modal-operacao', 'R', 'emOperacao', req.emOperacao);
+        
         document.getElementById('satg-modal-parada').innerText = req.dataParada || '-';
+        injectEditPencil('satg-modal-parada', 'S', 'dataParada', req.dataParada);
+        
         document.getElementById('satg-modal-preventiva').innerText = req.dataUltimaPreventiva || '-';
+        injectEditPencil('satg-modal-preventiva', 'T', 'dataUltimaPreventiva', req.dataUltimaPreventiva);
         
         document.getElementById('satg-modal-onde-esta').innerText = req.ondeEstaProblema || '-';
+        injectEditPencil('satg-modal-onde-esta', 'AE', 'ondeEstaProblema', req.ondeEstaProblema);
+        
         document.getElementById('satg-modal-sintoma').innerText = req.sintoma || '-';
+        injectEditPencil('satg-modal-sintoma', 'U', 'sintoma', req.sintoma);
+        
         document.getElementById('satg-modal-problema').innerText = req.problema || '-';
+        injectEditPencil('satg-modal-problema', 'V', 'problema', req.problema);
+        
         document.getElementById('satg-modal-prediagnostico').innerText = req.preDiagnostico || '-';
+        injectEditPencil('satg-modal-prediagnostico', 'W', 'preDiagnostico', req.preDiagnostico);
         
         const fotosContainer = document.getElementById('satg-modal-fotos-container');
         fotosContainer.innerHTML = '';

@@ -386,6 +386,16 @@ export const GerenciarPedidosApp = (function () {
             });
         }
 
+
+        
+        const printLadosCimaBtn = document.getElementById('modal-print-lados-cima-btn');
+        if (printLadosCimaBtn) {
+            printLadosCimaBtn.addEventListener('click', () => {
+                printDropdownMenu.classList.add('hidden');
+                _handlePrintLadosCima();
+            });
+        }
+
         if (_state.modalPrintNfeBtn) {
             _state.modalPrintNfeBtn.addEventListener('click', () => {
                 printDropdownMenu.classList.add('hidden');
@@ -738,7 +748,7 @@ export const GerenciarPedidosApp = (function () {
         let badge = 'bg-gray-100 text-gray-700';
         if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badge = 'bg-green-100 text-green-700';
         else if (sitLower.includes('cancel')) badge = 'bg-red-100 text-red-700';
-        else if (sitLower.includes('pendent') || sitLower.includes('abert')) badge = 'bg-yellow-100 text-yellow-700';
+        else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('analise')) badge = 'bg-yellow-100 text-yellow-700';
         else if (sitLower.includes('produção') || sitLower.includes('producao') || sitLower.includes('andamento')) badge = 'bg-blue-100 text-blue-700';
 
         // --- Cabeçalho resumido do pedido ---
@@ -3592,6 +3602,101 @@ export const GerenciarPedidosApp = (function () {
         printWindow.document.close();
     }
 
+    function _handlePrintLadosCima() {
+        const win = window.open('', '_blank');
+        if (!win) {
+            alert('Por favor, permita pop-ups para imprimir.');
+            return;
+        }
+
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Lado Para Cima</title>
+                <style>
+                    @page { margin: 10mm; size: A4 landscape; }
+                    * { box-sizing: border-box; }
+                    body { 
+                        margin: 0; 
+                        padding: 0; 
+                        font-family: 'Arial Black', Impact, sans-serif; 
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        background: white;
+                        color: black;
+                    }
+                    .container {
+                        width: 100%;
+                        height: 100%;
+                        border: 20px solid black;
+                        border-radius: 40px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: space-between;
+                        padding: 30px 20px;
+                    }
+                    .arrow-wrapper {
+                        flex: 1;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 15%;
+                        width: 100%;
+                        padding: 20px 0;
+                    }
+                    svg {
+                        width: auto;
+                        height: 100%;
+                        max-height: 55vh;
+                    }
+                    .text-box {
+                        text-align: center;
+                        width: 100%;
+                        padding-bottom: 20px;
+                    }
+                    h1 {
+                        font-size: 80px;
+                        font-weight: 900;
+                        margin: 0;
+                        text-transform: uppercase;
+                        line-height: 1.1;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="arrow-wrapper">
+                        <svg viewBox="0 0 24 24" fill="black">
+                            <path d="M12 1 L1 13 h6 v10 h10 v-10 h6 L12 1 z"/>
+                        </svg>
+                        <svg viewBox="0 0 24 24" fill="black">
+                            <path d="M12 1 L1 13 h6 v10 h10 v-10 h6 L12 1 z"/>
+                        </svg>
+                    </div>
+                    <div class="text-box">
+                        <h1>ESTE LADO PARA CIMA</h1>
+                    </div>
+                </div>
+                <script>
+                    window.onload = function() {
+                        setTimeout(() => {
+                            window.print();
+                            setTimeout(() => window.close(), 500);
+                        }, 250);
+                    };
+                </script>
+            </body>
+            </html>
+        `;
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+    }
+
     async function _handlePrintMarker(smallMarker = false) {
         const modal = document.getElementById('order-details-modal');
         if (!modal) return;
@@ -4429,7 +4534,7 @@ export const GerenciarPedidosApp = (function () {
                 const sitLower = situacao.toLowerCase();
                 if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badgeClass = 'bg-green-100 text-green-800';
                 else if (sitLower.includes('cancel')) badgeClass = 'bg-red-100 text-red-800';
-                else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento')) badgeClass = 'bg-yellow-100 text-yellow-800';
+                else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento') || sitLower.includes('analise')) badgeClass = 'bg-yellow-100 text-yellow-800';
                 else if (sitLower.includes('produ')) badgeClass = 'bg-blue-100 text-blue-800';
 
                 // Verificação de Pedido Novo e Pedido de outro mês

@@ -140,7 +140,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:S` // Busca até a coluna S (Equipamento)
+                range: `${sheetName}!A2:T` // Busca até a coluna T (Transportadora)
             });
 
             const rows = response.data.values || [];
@@ -157,7 +157,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     observacao: row[14] || '',
                     itens: row[15] || '',
                     avaliacao: row[16] || '',
-                    equipamento: row[18] || ''
+                    equipamento: row[18] || '',
+                    transportadora: row[19] || ''
                 };
             });
 
@@ -184,7 +185,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 equipamento,
                 itens,
                 observacao,
-                avaliacao
+                avaliacao,
+                transportadora
             } = req.body;
 
             if (!idPedido) {
@@ -249,6 +251,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             addUpdate('P', itens);
             addUpdate('Q', avaliacao);
             addUpdate('S', equipamento);
+            addUpdate('T', transportadora);
 
             if (updates.length > 0) {
                 const data = updates.map(u => ({
@@ -292,7 +295,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:AE` // Até AE (coluna 31)
+                range: `${sheetName}!A2:AF` // Até AF (coluna 32)
             });
 
             const rows = response.data.values || [];
@@ -330,7 +333,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     idPedido: row[27] || '',                   // AB (Pedido Vinculado)
                     retornoItem: row[28] || 'EM ANALISE',        // AC (Retorno Item)
                     observacaoSatg: row[29] || '',             // AD (Observação SatG)
-                    ondeEstaProblema: row[30] || ''            // AE (Onde Está o Problema)
+                    ondeEstaProblema: row[30] || '',           // AE (Onde Está o Problema)
+                    tipoEquipamento: row[31] || ''             // AF (Tipo Equipamento)
                 };
             });
 
@@ -417,12 +421,13 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 '',                                         // AB: ID Pedido Vinculado
                 'EM ANALISE',                               // AC: Retorno Item
                 '',                                         // AD: Observação Sat-G
-                formData.ondeEstaProblema || ''             // AE: Onde Está o Problema
+                formData.ondeEstaProblema || '',            // AE: Onde Está o Problema
+                ''                                          // AF: Tipo Equipamento
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: `${sheetName}!A:AE`,
+                range: `${sheetName}!A:AF`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
@@ -456,7 +461,20 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             const sheetName = 'SatG';
             
             // Status fica na Coluna Y (25), Observação na Coluna AA (27), ID Pedido na Coluna AB (28)
-            // Retorno Item na AC (29), Observação SATG na AD (30)
+            // Retorno Item na AC (29), ObservaÇÃO SATG na AD (30)
+
+            if (req.body.updates && Array.isArray(req.body.updates)) {
+                for (let update of req.body.updates) {
+                    if (update.column && update.value !== undefined) {
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId,
+                            range: `${sheetName}!${update.column}${rowIndex}`,
+                            valueInputOption: 'USER_ENTERED',
+                            resource: { values: [[update.value]] }
+                        });
+                    }
+                }
+            }
             if (status) {
                 await sheets.spreadsheets.values.update({
                     spreadsheetId,
