@@ -390,39 +390,46 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             // R: emOperacao, S: dataParada, T: dataUltimaPreventiva, U: sintoma, V: problema,
             // W: preDiagnostico, X: fotos, Y: status, Z: acaoPecas, AA: observacao, AB: idPedido
 
+            const safeString = (val) => {
+                if (!val) return '';
+                const str = String(val);
+                if (str.startsWith('+') || str.startsWith('=')) return "'" + str;
+                return str;
+            };
+
             const newRow = [
                 novoCodigo,                                 // A: Código
                 dataAtual,                                  // B: Data
-                formData.cliente || '',                     // C: Razão Social
-                formData.cpf || '',                         // D: CPF/CNPJ
-                formData.nomeContato || '',                 // E: Nome
-                formData.telefone || '',                    // F: Telefone
-                formData.email || '',                       // G: Email
-                formData.revenda || '',                     // H: Revenda?
-                formData.localRevenda || '',                // I: Local da Revenda
-                formData.equipamento || '',                 // J: Modelo/Ano
-                formData.numeroSerie || '',                 // K: Num Série
-                formData.numeroRequisicao || '',            // L: Requisicao
-                formData.notaFiscal || '',                  // M: NF
-                formData.dataCompra || '',                  // N: Data Compra
-                formData.dataEntregaTecnica || '',          // O: Data Entrega Técnica
-                formData.aplicacao || '',                   // P: Aplicação
-                formData.chassiEndereco || '',              // Q: Endereço/Chassi
-                formData.emOperacao || '',                  // R: Em operação
-                formData.dataParada || '',                  // S: Data Parada
-                formData.dataUltimaPreventiva || '',        // T: Ultima Preventiva
-                formData.sintoma || '',                     // U: Sintoma
-                formData.problema || '',                    // V: Descrição do Defeito
-                formData.preDiagnostico || '',              // W: Pre diagnostico
-                formData.fotos || '',                       // X: Fotos (Links ImgBB)
-                'EM ANALISE',                               // Y: Status Padrão
-                '',                                         // Z: Acao Pecas
-                '',                                         // AA: Observacao interna
+                safeString(formData.cliente),               // C: Razão Social
+                safeString(formData.cpf),                   // D: CPF/CNPJ
+                safeString(formData.nomeContato),           // E: Nome
+                safeString(formData.telefone),              // F: Telefone
+                safeString(formData.email),                 // G: Email
+                safeString(formData.revenda),               // H: Revenda?
+                safeString(formData.localRevenda),          // I: Local da Revenda
+                safeString(formData.equipamento),           // J: Modelo/Ano
+                safeString(formData.numeroSerie),           // K: Num Série
+                safeString(formData.numeroRequisicao),      // L: Nº Requisição
+                safeString(formData.notaFiscal),            // M: Nota Fiscal
+                safeString(formData.dataCompra),            // N: Data Compra
+                safeString(formData.dataEntregaTecnica),    // O: Data Entrega Técnica
+                safeString(formData.aplicacao),             // P: Aplicação
+                safeString(formData.chassiEndereco),        // Q: Chassi / Endereço
+                safeString(formData.emOperacao),            // R: Em Operação?
+                safeString(formData.dataParada),            // S: Data da Parada
+                safeString(formData.dataUltimaPreventiva),  // T: Data Última Preventiva
+                safeString(formData.sintoma),               // U: Sintoma Apresentado
+                safeString(formData.problema),              // V: Problema
+                safeString(formData.preDiagnostico),        // W: Pré-Diagnóstico
+                '',                                         // X: Fotos
+                'EM ANALISE',                               // Y: Status Garantia
+                '',                                         // Z: Ação Peças
+                '',                                         // AA: Observação Interna
                 '',                                         // AB: ID Pedido Vinculado
                 'EM ANALISE',                               // AC: Retorno Item
                 '',                                         // AD: Observação Sat-G
-                formData.ondeEstaProblema || '',            // AE: Onde Está o Problema
-                ''                                          // AF: Tipo Equipamento
+                safeString(formData.ondeEstaProblema),      // AE: Onde Está o Problema
+                safeString(formData.tipoEquipamento)        // AF: Tipo Equipamento
             ];
 
             await sheets.spreadsheets.values.append({
@@ -466,11 +473,18 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             if (req.body.updates && Array.isArray(req.body.updates)) {
                 for (let update of req.body.updates) {
                     if (update.column && update.value !== undefined) {
+                        let safeValue = update.value;
+                        if (typeof safeValue === 'string' && (safeValue.startsWith('+') || safeValue.startsWith('='))) {
+                            safeValue = "'" + safeValue;
+                        }
+
                         await sheets.spreadsheets.values.update({
                             spreadsheetId,
                             range: `${sheetName}!${update.column}${rowIndex}`,
                             valueInputOption: 'USER_ENTERED',
-                            resource: { values: [[update.value]] }
+                            requestBody: {
+                                values: [[safeValue]]
+                            }
                         });
                     }
                 }
