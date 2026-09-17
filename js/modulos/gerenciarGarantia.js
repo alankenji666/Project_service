@@ -1212,9 +1212,8 @@ export const GerenciarGarantiaApp = (function () {
                     <div class="font-bold text-gray-800">${req.codigo || '-'}</div>
                     <div class="text-xs text-gray-500">${req.data ? req.data.split(' ')[0] : '-'}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm font-semibold text-gray-900">${req.cliente || '-'}</div>
-                    <div class="text-sm text-gray-600 max-w-[200px] truncate" title="${req.equipamento || req.produto}">${req.equipamento || req.produto || '-'}</div>
+                <td class="px-6 py-4 whitespace-normal max-w-[250px]">
+                    <div class="text-sm font-semibold text-gray-900 line-clamp-2" title="${req.cliente}">${req.cliente || '-'}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-center">
                     <div class="relative inline-block text-left" data-dropdown-container>
