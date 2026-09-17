@@ -12,6 +12,23 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSubmit.innerHTML = `<svg class="animate-spin h-5 w-5 mr-3 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Enviando...`;
         btnSubmit.disabled = true;
 
+        const valEntrega = document.getElementById('dataEntregaTecnica').value;
+        const valPreventiva = document.getElementById('dataUltimaPreventiva').value;
+
+        if (valEntrega && valPreventiva) {
+            const dtEntrega = new Date(valEntrega);
+            const dtPreventiva = new Date(valPreventiva);
+            const diffTime = Math.abs(dtPreventiva - dtEntrega);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays > 365) {
+                alert("Data invalida para garantia.");
+                btnSubmit.innerHTML = originalBtnText;
+                btnSubmit.disabled = false;
+                return;
+            }
+        }
+
         try {
             // Montar objeto com os dados
             const payload = {
