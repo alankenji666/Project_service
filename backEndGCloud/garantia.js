@@ -33,7 +33,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             } = req.body;
 
             const sheets = await getInitializedSheetsClient();
-            const sheetName = 'PedidosGarantia';
+            const sheetName = 'OrcamentosGarantia';
 
             // Estrutura das Colunas da planilha de pedidos:
             // 0: Conferido (Deixa Vazio)
@@ -136,7 +136,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
     router.get('/pedido', async (req, res, next) => {
         try {
             const sheets = await getInitializedSheetsClient();
-            const sheetName = 'PedidosGarantia';
+            const sheetName = 'OrcamentosGarantia';
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
@@ -194,7 +194,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             }
 
             const sheets = await getInitializedSheetsClient();
-            const sheetName = 'PedidosGarantia';
+            const sheetName = 'OrcamentosGarantia';
             
             // 1. Buscar a linha correta baseada no idPedido
             const response = await sheets.spreadsheets.values.get({

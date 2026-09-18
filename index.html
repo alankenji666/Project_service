@@ -648,7 +648,7 @@
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                 </button>
                 <h1 class="text-4xl font-bold text-gray-800 m-0">
-                    Pedidos Garantia
+                    Orçamentos Garantia
                 </h1>
             </div>
             
@@ -660,7 +660,7 @@
                         <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-500 transition-colors">
                             <svg class="w-10 h-10 text-blue-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                         </div>
-                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Criar Pedido</h3>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Criar Orçamento</h3>
                         <p class="text-gray-500">Registrar uma nova garantia.</p>
                     </div>
 
@@ -675,12 +675,15 @@
 
                     <!-- Card: Sat-G -->
                     <div id="btn-show-garantia-satg" class="w-full md:w-[340px] bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all cursor-pointer border-2 border-transparent hover:border-purple-500 flex flex-col items-center justify-center text-center min-h-[250px] group relative">
-                        <div class="absolute top-4 right-4 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full hidden" id="satg-badge-count">0</div>
-                        <div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-purple-500 transition-colors">
-                            <svg class="w-10 h-10 text-purple-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+                        <!-- Badge de Notificação -->
+                        <div id="satg-badge-count" class="hidden absolute -top-3 -right-3 bg-red-500 text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-bounce-short">
+                            0
                         </div>
-                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Sat-G</h3>
-                        <p class="text-gray-500">Triagem de solicitações pendentes.</p>
+                        <div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-purple-500 transition-colors">
+                            <svg class="w-10 h-10 text-purple-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Triagem Sat-G</h3>
+                        <p class="text-gray-500">Avaliar formulários enviados.</p>
                     </div>
 
                     <!-- Card: Pedidos Garantia -->
@@ -688,7 +691,7 @@
                         <div class="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-indigo-500 transition-colors">
                             <svg class="w-10 h-10 text-indigo-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
                         </div>
-                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Pedidos Garantia</h3>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Orçamentos Garantia</h3>
                         <p class="text-gray-500">Visualizar pedidos vinculados.</p>
                     </div>
                 </div>
@@ -936,7 +939,7 @@
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Código / Data</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Cliente</th>
                                     <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Garantia</th>
-                                    <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Pedido</th>
+                                    <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Orçamento</th>
                                     <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">Retorno Item</th>
                                     <th scope="col" class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Ações</th>
                                 </tr>
@@ -996,9 +999,30 @@
                             <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                             Avaliar Solicitação <span id="satg-modal-codigo" class="text-purple-600 font-mono text-lg ml-1"></span>
                         </h3>
-                        <button id="btn-fechar-modal-satg" class="text-gray-400 hover:text-gray-600 transition-colors">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </button>
+                        
+                        <div class="flex items-center gap-3">
+                            <div class="relative inline-block text-left" id="modal-satg-print-dropdown-container">
+                                <button type="button" id="modal-satg-print-btn" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none transition-colors items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                                    Imprimir
+                                    <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                </button>
+                    
+                                <!-- Dropdown menu -->
+                                <div id="modal-satg-print-dropdown-menu" class="hidden origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                                    <div class="py-1" role="menu" aria-orientation="vertical">
+                                        <button id="modal-satg-print-satg-btn" class="w-full text-left flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors" role="menuitem">
+                                            <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                            Imprimir Sat-G
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button id="btn-fechar-modal-satg" class="text-gray-400 hover:text-gray-600 transition-colors">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
                     </div>
                     
                     <div class="p-6 overflow-y-auto flex-1">
@@ -1069,7 +1093,7 @@
                             <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100 mb-3">
                                 <p class="text-gray-900 font-bold mb-2">Onde está o problema: <span id="satg-modal-onde-esta" class="font-normal text-blue-600">-</span></p>
                                 <p class="text-gray-900 font-bold mb-2">Sintoma: <span id="satg-modal-sintoma" class="font-normal">-</span></p>
-                                <p class="text-gray-800 whitespace-pre-line italic text-sm" id="satg-modal-problema">-</p>
+                                <p class="text-gray-900 font-bold mb-2">Problema Detalhado: <span class="font-normal whitespace-pre-line italic text-sm" id="satg-modal-problema">-</span></p>
                             </div>
                             <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
                                 <p class="text-gray-600 text-xs font-bold uppercase mb-1">Pré-Diagnóstico (Revenda)</p>
@@ -1118,7 +1142,7 @@
                 <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                     <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
                         <svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        Detalhes do Pedido: <span id="modal-pedido-garantia-id" class="text-blue-600 font-mono ml-1"></span>
+                        Detalhes do Orçamento: <span id="modal-pedido-garantia-id" class="text-blue-600 font-mono ml-1"></span>
                     </h3>
                     <button id="btn-fechar-modal-pedido-garantia" class="text-gray-400 hover:text-gray-600 transition-colors">
                         <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -1816,6 +1840,11 @@
                             <button id="modal-print-lados-cima-btn" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-2">
                                 <svg class="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
                                 Imprimir "Lado p/ Cima"
+                            </button>
+                            <div class="border-t border-gray-100 mt-1"></div>
+                            <button id="modal-sync-order-btn" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors flex items-center gap-2">
+                                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                Sincronizar com Bling
                             </button>
                         </div>
                     </div>

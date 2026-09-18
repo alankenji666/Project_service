@@ -396,6 +396,13 @@ export const GerenciarPedidosApp = (function () {
             });
         }
 
+        const syncOrderBtn = document.getElementById('modal-sync-order-btn');
+        if (syncOrderBtn) {
+            syncOrderBtn.addEventListener('click', () => {
+                _handleSyncOrder();
+            });
+        }
+
         if (_state.modalPrintNfeBtn) {
             _state.modalPrintNfeBtn.addEventListener('click', () => {
                 printDropdownMenu.classList.add('hidden');
@@ -3600,6 +3607,95 @@ export const GerenciarPedidosApp = (function () {
 </body>
 </html>`);
         printWindow.document.close();
+    }
+    async function _handleSyncOrder() {
+        const modal = document.getElementById('order-details-modal');
+        if (!modal) return;
+        
+        const orderNumber = modal.dataset.currentOrderNumber;
+        if (!orderNumber) return;
+
+        const pedidoOriginal = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
+        if (!pedidoOriginal) return;
+
+        const idParaEnviar = pedidoOriginal.id || pedidoOriginal.id_pedido || pedidoOriginal['id pedido'] || orderNumber;
+
+        const syncBtn = document.getElementById('modal-sync-order-btn');
+        let originalHtml = '';
+        if (syncBtn) {
+            originalHtml = syncBtn.innerHTML;
+            syncBtn.innerHTML = `<svg class="animate-spin h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Sincronizando...`;
+            syncBtn.disabled = true;
+        }
+
+        try {
+            // 1. Busca os dados mais recentes diretamente do Bling
+            const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${idParaEnviar}`);
+            if (!res.ok) throw new Error('Falha ao buscar pedido no Bling (Status ' + res.status + ')');
+            const json = await res.json();
+            const blingData = json.data ? json.data : json;
+
+            // 2. Dispara o Webhook internamente em BACKGROUND (sem await) para gravar na planilha
+            const baseUrl = API_URLS.ORDERS_BLING.replace('/pedidos', '');
+            
+            // Webhook de Pedidos
+            fetch(`${baseUrl}/bling/pedidos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    event: 'pedido.updated', // Campo obrigatório para o backend não quebrar
+                    data: blingData 
+                })
+            }).catch(e => console.error("Erro ao notificar webhook de pedido:", e));
+
+            // Webhook de NF-e (se houver nota, sincroniza também a planilha de notas)
+            if (blingData.notaFiscal && blingData.notaFiscal.id) {
+                fetch(`${baseUrl}/bling/nfe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        event: 'invoice.updated',
+                        data: { id: blingData.notaFiscal.id }
+                    })
+                }).catch(e => console.error("Erro ao notificar webhook de NFe:", e));
+            }
+
+            // 3. Traduz os dados do Bling para o formato da interface instantaneamente
+            const situacaoMap = {
+                6: "Em aberto", 9: "Atendido", 12: "Cancelado", 15: "Em andamento", 24: "Em andamento"
+            };
+            const novaSituacao = blingData.situacao ? (situacaoMap[blingData.situacao.id] || "N/A") : "N/A";
+            const novoIdNota = blingData.notaFiscal ? blingData.notaFiscal.id : "";
+
+            // 4. Faz o Merge local para evitar o Race Condition de leitura da planilha (que é lenta)
+            const index = _allPedidos.findIndex(p => p.id === pedidoOriginal.id || p.numero === pedidoOriginal.numero);
+            if (index !== -1) {
+                _allPedidos[index].situacao = novaSituacao;
+                if (novoIdNota) _allPedidos[index].id_nota = novoIdNota;
+                if (blingData.contato?.nome) _allPedidos[index].contato_nome = blingData.contato.nome;
+            }
+
+            // 5. Atualiza a tabela global
+            _filterPedidos();
+
+            // 6. Reabre o menu de impressão
+            const printDropdownMenu = document.getElementById('modal-print-dropdown-menu');
+            if (printDropdownMenu) {
+                printDropdownMenu.classList.add('hidden');
+            }
+
+            // 7. Reabre o modal já com os dados corretos forçados na memória
+            _openOrderDetailsModal(orderNumber);
+
+        } catch (error) {
+            console.error('Erro ao sincronizar:', error);
+            alert('Não foi possível sincronizar o pedido. Verifique o console.');
+        } finally {
+            if (syncBtn) {
+                syncBtn.innerHTML = originalHtml;
+                syncBtn.disabled = false;
+            }
+        }
     }
 
     function _handlePrintLadosCima() {

@@ -84,6 +84,10 @@ export const GerenciarGarantiaApp = (function () {
     let _btnAprovarPedidoSatg;
     let _btnViewVinculadoSatg;
     let _satgVinculadoAlert;
+    
+    let _modalSatgPrintBtn;
+    let _modalSatgPrintDropdownMenu;
+    let _modalSatgPrintSatgBtn;
 
     // Estado interno
     let _garantiaData = [];
@@ -201,6 +205,10 @@ export const GerenciarGarantiaApp = (function () {
         // Novo: Botão para ver Sat-G vinculado dentro do form
         _btnViewVinculadoSatg = document.getElementById('btn-view-vinculado-satg');
         _satgVinculadoAlert = document.getElementById('satg-vinculado-alert');
+
+        _modalSatgPrintBtn = document.getElementById('modal-satg-print-btn');
+        _modalSatgPrintDropdownMenu = document.getElementById('modal-satg-print-dropdown-menu');
+        _modalSatgPrintSatgBtn = document.getElementById('modal-satg-print-satg-btn');
     }
 
     /**
@@ -305,7 +313,25 @@ export const GerenciarGarantiaApp = (function () {
             if (!e.target.closest('[data-dropdown-container]')) {
                 document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
             }
+            if (_modalSatgPrintDropdownMenu && !e.target.closest('#modal-satg-print-dropdown-container')) {
+                _modalSatgPrintDropdownMenu.classList.add('hidden');
+            }
         });
+
+        if (_modalSatgPrintBtn) {
+            _modalSatgPrintBtn.onclick = (e) => {
+                e.stopPropagation();
+                _modalSatgPrintDropdownMenu.classList.toggle('hidden');
+            };
+        }
+        
+        if (_modalSatgPrintSatgBtn) {
+            _modalSatgPrintSatgBtn.onclick = (e) => {
+                e.preventDefault();
+                if (_modalSatgPrintDropdownMenu) _modalSatgPrintDropdownMenu.classList.add('hidden');
+                _handlePrintSatG();
+            };
+        }
 
         if (_btnRecusarSatg) _btnRecusarSatg.onclick = () => _updateSatgStatus('RECUSADO');
         
@@ -515,12 +541,9 @@ export const GerenciarGarantiaApp = (function () {
         _itemsList.innerHTML = '';
         
         if (_currentOrderItems.length === 0) {
-            _itemsList.appendChild(_itemsEmpty);
-            _itemsEmpty.classList.remove('hidden');
+            _itemsList.innerHTML = '<li id="garantia-items-empty" class="text-sm text-gray-500 italic text-center py-2">Nenhum item adicionado.</li>';
             return;
         }
-
-        _itemsEmpty.classList.add('hidden');
 
         _currentOrderItems.forEach((item, index) => {
             const li = document.createElement('li');
@@ -1239,9 +1262,9 @@ export const GerenciarGarantiaApp = (function () {
                         ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Detalhe Sat-G'}
                     </button>
                     ${req.idPedido ? 
-                        `<button class="btn-ver-pedido inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm" title="Ver Pedido Vinculado: ${req.idPedido}" data-id="${req.idPedido}">
+                        `<button class="btn-ver-pedido inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm" title="Ver Orçamento Vinculado: ${req.idPedido}" data-id="${req.idPedido}">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
-                            Pedido
+                            Orçamento
                         </button>` 
                         : ''
                     }
@@ -1621,6 +1644,176 @@ export const GerenciarGarantiaApp = (function () {
     function _closeSatgModal() {
         _modalSatg.classList.add('hidden');
         _currentSatgRowIndex = null;
+    }
+
+    function _getPedidoPrintHtml(idPedido) {
+        if (!idPedido) return '';
+        const pedido = _pedidosGarantiaData.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
+        if (!pedido) return '';
+        
+        let htmlItens = '';
+        if (pedido.itens && Array.isArray(pedido.itens)) {
+            pedido.itens.forEach(i => {
+                htmlItens += `
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;">${i.descricao || i.nome || '-'} <br><small style="color: #888;">Cód: ${i.codigo || '-'}</small></td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${i.quantidade || 1}</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        return `
+            <div class="section" style="margin-top: 40px; border-top: 2px dashed #ccc; padding-top: 30px;">
+                <div class="section-title">Pedido Vinculado: ${pedido.numero || '-'}</div>
+                <div class="grid">
+                    <div class="field">
+                        <span class="field-label">Status do Pedido</span>
+                        <span class="field-value">${pedido.situacao?.nome || pedido.situacao || '-'}</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Orçamento</span>
+                        <span class="field-value">${pedido.numeroLoja || '-'}</span>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <span class="field-label">Itens do Pedido</span>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding: 8px; background: #f9f9f9; border-bottom: 1px solid #ddd;">Produto</th>
+                                <th style="text-align: center; padding: 8px; background: #f9f9f9; border-bottom: 1px solid #ddd;">Qtd</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${htmlItens || '<tr><td colspan="2" style="padding: 8px; text-align: center; color: #888;">Nenhum item</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    function _handlePrintSatG() {
+        if (!_currentSatgRowIndex) return;
+        const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
+        if (!req) return;
+
+        const win = window.open('', '_blank', 'width=850,height=750');
+        if (!win) {
+            alert('Por favor, permita pop-ups no seu navegador para imprimir.');
+            return;
+        }
+
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Impressão Sat-G ${req.codigo}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 30px; color: #333; }
+                    .header { text-align: center; margin-bottom: 30px; padding-bottom: 10px; border-bottom: 2px solid #ddd; }
+                    .header h1 { margin: 0; color: #4F46E5; }
+                    .header p { margin: 5px 0; color: #666; }
+                    .section { margin-bottom: 25px; }
+                    .section-title { font-size: 14px; text-transform: uppercase; color: #666; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 15px; }
+                    .grid { display: flex; flex-wrap: wrap; gap: 15px; }
+                    .field { flex: 1; min-width: 200px; background: #f9f9f9; padding: 10px; border-radius: 5px; }
+                    .field-label { font-size: 11px; text-transform: uppercase; color: #888; margin-bottom: 4px; display: block; font-weight: bold; }
+                    .field-value { font-size: 14px; font-weight: bold; }
+                    .problema-box { background: #fef2f2; border: 1px solid #fecaca; padding: 15px; border-radius: 5px; margin-top: 15px; }
+                    .problema-label { font-size: 11px; text-transform: uppercase; color: #dc2626; margin-bottom: 4px; display: block; font-weight: bold; }
+                    
+                    @media print {
+                        body { padding: 0; }
+                        button { display: none; }
+                        .field { border: 1px solid #eee; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>Solicitação de Garantia SAT-G</h1>
+                    <p>Código: <b>${req.codigo || '-'}</b> &nbsp;|&nbsp; Data: <b>${req.data ? req.data.split(' ')[0] : '-'}</b></p>
+                </div>
+                
+                <div class="section">
+                    <div class="section-title">Dados do Cliente</div>
+                    <div class="grid">
+                        <div class="field" style="flex: 2;">
+                            <span class="field-label">Cliente / Empresa</span>
+                            <span class="field-value">${req.cliente || '-'}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">CPF / CNPJ</span>
+                            <span class="field-value">${req.cpf || '-'}</span>
+                        </div>
+                    </div>
+                    <div class="grid" style="margin-top: 15px;">
+                        <div class="field">
+                            <span class="field-label">Telefone / WhatsApp</span>
+                            <span class="field-value">${req.telefone || '-'}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">E-mail</span>
+                            <span class="field-value">${req.email || '-'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Revenda Autorizada</div>
+                    <div class="grid">
+                        <div class="field">
+                            <span class="field-label">Revenda</span>
+                            <span class="field-value">${req.revenda || '-'}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Local (Cidade/UF)</span>
+                            <span class="field-value">${req.revendaLocal || '-'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Equipamento com Defeito</div>
+                    <div class="grid">
+                        <div class="field" style="flex: 2;">
+                            <span class="field-label">Equipamento (Modelo e Ano)</span>
+                            <span class="field-value">${req.equipamento || '-'}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Nº Série</span>
+                            <span class="field-value">${req.numeroSerie || '-'}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Nota Fiscal</span>
+                            <span class="field-value">${req.notaFiscal || '-'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="problema-box">
+                        <span class="problema-label">Problema Detalhado</span>
+                        <div style="font-size: 14px; white-space: pre-wrap;">${req.problema || '-'}</div>
+                    </div>
+                </div>
+                
+                ${_getPedidoPrintHtml(req.idPedido)}
+                
+                <div style="text-align: center; margin-top: 40px;">
+                    <button onclick="window.print()" style="background: #4F46E5; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer;">Imprimir</button>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); }
+                </script>
+            </body>
+            </html>
+        `;
+
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
     }
 
     async function _updateSatgStatus(status = null) {
