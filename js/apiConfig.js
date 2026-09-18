@@ -23,6 +23,7 @@
           SAIDAS_GARANTIA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saidas-estoque",
           GARANTIA_PEDIDO: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/pedido",
           GARANTIA_PEDIDO_UPDATE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/pedido/update",
+          GARANTIA_ITENS_DETALHE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/pedido/itens-detalhe",
           GARANTIA_SATG: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/satg",
           GARANTIA_SATG_UPDATE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/satg/update",
       

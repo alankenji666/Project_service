@@ -30,6 +30,10 @@ export const GerenciarGarantiaApp = (function () {
     let _btnFecharGarantiaProduto;
     let _inputSearchProduto;
     let _divProdutoResults;
+    
+    // Novas variaveis modal Item Detalhe
+    let _modalItemDetalhe, _btnFecharModalItemDetalhe, _btnCancelarItemDetalhe, _btnSalvarItemDetalhe;
+    let _inputItemDetalheIndex, _inputItemDetalheNomeOriginal, _inputItemDetalheDescricao, _inputItemDetalheObservacao;
     let _itemsList;
     let _itemsEmpty;
     let _inputObservacao;
@@ -99,6 +103,7 @@ export const GerenciarGarantiaApp = (function () {
     let _currentEditPedidoId = null;
     let _currentSatgReqForOrder = null; // Guarda o SatG vinculado ao formulário atual
     let _pedidosGarantiaData = [];
+    let _itensDetalhadoGarantiaData = [];
     let _eventsBound = false;
     let _formHasChanges = false;
     let _btnBackFromFormArrow = null;
@@ -156,6 +161,16 @@ export const GerenciarGarantiaApp = (function () {
         _btnFecharGarantiaProduto = document.getElementById('btn-fechar-garantia-produto');
         _inputSearchProduto = document.getElementById('garantia-search-produto-input');
         _divProdutoResults = document.getElementById('garantia-produto-results');
+        
+        // Modal Detalhe do Item
+        _modalItemDetalhe = document.getElementById('modal-garantia-item-detalhe');
+        _btnFecharModalItemDetalhe = document.getElementById('btn-fechar-modal-item-detalhe');
+        _btnCancelarItemDetalhe = document.getElementById('btn-cancelar-item-detalhe');
+        _btnSalvarItemDetalhe = document.getElementById('btn-salvar-item-detalhe');
+        _inputItemDetalheIndex = document.getElementById('item-detalhe-index');
+        _inputItemDetalheNomeOriginal = document.getElementById('item-detalhe-nome-original');
+        _inputItemDetalheDescricao = document.getElementById('item-detalhe-descricao');
+        _inputItemDetalheObservacao = document.getElementById('item-detalhe-observacao');
 
         // Headers
         _mainHeader = document.getElementById('garantia-main-header');
@@ -219,7 +234,7 @@ export const GerenciarGarantiaApp = (function () {
         _itemsList.innerHTML = '<li id="garantia-items-empty" class="text-sm text-gray-500 italic text-center py-2">Nenhum item adicionado.</li>';
         
         const titleEl = document.querySelector('#garantia-form-header h1');
-        if (titleEl) titleEl.innerText = 'Novo Pedido de Garantia';
+        if (titleEl) titleEl.innerText = 'Novo Orçamento';
         
         const situacaoContainer = document.getElementById('garantia-situacao-container');
         if (situacaoContainer) situacaoContainer.classList.add('hidden');
@@ -378,6 +393,26 @@ export const GerenciarGarantiaApp = (function () {
         if (_btnFecharGarantiaProduto) {
             _btnFecharGarantiaProduto.onclick = () => {
                 _modalGarantiaProduto.classList.add('hidden');
+            };
+        }
+        
+        // Modal Detalhes do Item
+        const closeItemDetalheModal = () => {
+            if (_modalItemDetalhe) _modalItemDetalhe.classList.add('hidden');
+        };
+        if (_btnFecharModalItemDetalhe) _btnFecharModalItemDetalhe.onclick = closeItemDetalheModal;
+        if (_btnCancelarItemDetalhe) _btnCancelarItemDetalhe.onclick = closeItemDetalheModal;
+        
+        if (_btnSalvarItemDetalhe) {
+            _btnSalvarItemDetalhe.onclick = () => {
+                const idx = parseInt(_inputItemDetalheIndex.value);
+                if (!isNaN(idx) && idx >= 0 && idx < _currentOrderItems.length) {
+                    _currentOrderItems[idx].descricaoPersonalizada = _inputItemDetalheDescricao.value.trim();
+                    _currentOrderItems[idx].observacaoItem = _inputItemDetalheObservacao.value.trim();
+                    _renderOrderItems(); // Atualiza a tela
+                }
+                closeItemDetalheModal();
+                _formHasChanges = true;
             };
         }
 
@@ -541,42 +576,94 @@ export const GerenciarGarantiaApp = (function () {
         _itemsList.innerHTML = '';
         
         if (_currentOrderItems.length === 0) {
-            _itemsList.innerHTML = '<li id="garantia-items-empty" class="text-sm text-gray-500 italic text-center py-2">Nenhum item adicionado.</li>';
+            _itemsList.innerHTML = '<tr><td colspan="5" id="garantia-items-empty" class="px-4 py-8 text-sm text-gray-500 italic text-center">Nenhum item adicionado.</td></tr>';
             return;
         }
 
         _currentOrderItems.forEach((item, index) => {
-            const li = document.createElement('li');
-            li.className = 'flex justify-between items-center bg-white p-3 border border-gray-200 rounded-xl text-sm shadow-sm hover:border-blue-200 transition-colors';
-            li.innerHTML = `
-                <div class="grid grid-cols-12 gap-4 items-center w-full pr-4">
-                    <div class="col-span-3 md:col-span-2">
-                        <span class="text-[10px] text-gray-500 block uppercase font-bold tracking-wider">Código</span>
-                        <span class="font-bold text-gray-800">${item.cod || '-'}</span>
+            const tr = document.createElement('tr');
+            tr.className = 'cursor-pointer hover:bg-gray-50 transition-colors item-row';
+            
+            // Busca imagem no _allProducts
+            let imgSrc = '';
+            if (window._allProducts) {
+                const prod = window._allProducts.find(p => String(p.codigo || '').trim() === String(item.cod || item.id || '').trim());
+                if (prod) {
+                    if (prod.url_imagens_externas && prod.url_imagens_externas.length > 0) {
+                        imgSrc = prod.url_imagens_externas[0];
+                    } else if (prod.imagem) {
+                        imgSrc = prod.imagem;
+                    }
+                }
+            }
+            
+            const temPersonalizacao = !!item.descricaoPersonalizada || !!item.observacaoItem;
+            let badgePersonalizado = '';
+            if (temPersonalizacao) {
+                badgePersonalizado = `
+                    <div class="mt-2 bg-yellow-50 border border-yellow-100 rounded-lg p-2 text-xs w-full">
+                        ${item.descricaoPersonalizada ? `<div class="mb-1"><span class="font-bold text-yellow-800">Desc. Customizada:</span> <span class="text-yellow-900">${item.descricaoPersonalizada}</span></div>` : ''}
+                        ${item.observacaoItem ? `<div><span class="font-bold text-yellow-800">Obs:</span> <span class="text-yellow-900">${item.observacaoItem}</span></div>` : ''}
                     </div>
-                    <div class="col-span-9 md:col-span-5">
-                        <span class="text-[10px] text-gray-500 block uppercase font-bold tracking-wider">Descrição</span>
-                        <span class="font-bold text-gray-800 truncate block" title="${item.desc || 'Sem descrição'}">${item.desc || 'Sem descrição'}</span>
+                `;
+            }
+
+            const imgHtml = imgSrc 
+                ? `<img src="${imgSrc}" class="w-12 h-12 rounded-lg object-cover bg-gray-100 flex-shrink-0 border border-gray-200" title="Ver imagem">` 
+                : `<div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-[10px] border border-gray-200">Sem img</div>`;
+
+            tr.innerHTML = `
+                <td class="px-4 py-3">
+                    <div class="flex items-start gap-3">
+                        ${imgHtml}
+                        <div class="flex flex-col">
+                            <span class="font-medium text-gray-800">${item.desc || 'Sem descrição'}</span>
+                            <span class="text-xs text-gray-400 mt-0.5">${item.cod || '-'}</span>
+                            ${badgePersonalizado}
+                        </div>
                     </div>
-                    <div class="col-span-4 md:col-span-1 text-center bg-gray-50 rounded-lg p-1">
-                        <span class="text-[10px] text-gray-500 block uppercase font-bold tracking-wider">Qtd</span>
-                        <span class="font-black text-blue-600">${item.qtd}</span>
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <span class="font-black text-gray-800">${item.qtd}</span>
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <span class="font-medium text-gray-600">${(item.peso || 0).toFixed(3)} kg</span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <span class="font-bold text-emerald-600">${(item.preco || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</span>
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <div class="flex items-center justify-center gap-1">
+                        <button type="button" class="btn-edit-item-detalhe text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-lg transition-colors" title="Detalhes Customizados">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                        <button type="button" class="btn-remove-item text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors" title="Remover">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
                     </div>
-                    <div class="col-span-4 md:col-span-2 text-center">
-                        <span class="text-[10px] text-gray-500 block uppercase font-bold tracking-wider">Peso</span>
-                        <span class="font-bold text-gray-600">${(item.peso || 0).toFixed(3)} kg</span>
-                    </div>
-                    <div class="col-span-4 md:col-span-2 text-right">
-                        <span class="text-[10px] text-gray-500 block uppercase font-bold tracking-wider">Preço</span>
-                        <span class="font-bold text-emerald-600">${(item.preco || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</span>
-                    </div>
-                </div>
-                <button type="button" class="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0" title="Remover">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                </button>
+                </td>
             `;
-            li.querySelector('button').onclick = () => _removeOrderItem(index);
-            _itemsList.appendChild(li);
+            
+            tr.querySelector('.btn-remove-item').onclick = (e) => { e.stopPropagation(); _removeOrderItem(index); };
+            tr.querySelector('.btn-edit-item-detalhe').onclick = (e) => {
+                e.stopPropagation();
+                _inputItemDetalheIndex.value = index;
+                _inputItemDetalheNomeOriginal.innerText = `${item.cod} - ${item.desc}`;
+                _inputItemDetalheDescricao.value = item.descricaoPersonalizada || '';
+                _inputItemDetalheObservacao.value = item.observacaoItem || '';
+                
+                const imgModalElement = document.getElementById('item-detalhe-imagem');
+                if (imgSrc && imgModalElement) {
+                    imgModalElement.src = imgSrc;
+                    imgModalElement.classList.remove('hidden');
+                } else if (imgModalElement) {
+                    imgModalElement.classList.add('hidden');
+                }
+                
+                if (_modalItemDetalhe) _modalItemDetalhe.classList.remove('hidden');
+            };
+            
+            _itemsList.appendChild(tr);
         });
     }
 
@@ -611,7 +698,14 @@ export const GerenciarGarantiaApp = (function () {
                 equipamento: document.getElementById('garantia-equipamento').value.trim(),
                 itens: _formatItemsString(),
                 observacao: _inputObservacao.value.trim(),
-                avaliacao: _inputAvaliacao.value.trim()
+                avaliacao: _inputAvaliacao.value.trim(),
+                itensDetalhado: _currentOrderItems
+                    .filter(item => item.descricaoPersonalizada || item.observacaoItem)
+                    .map(item => ({
+                        idProduto: item.id || item.cod, // O cod pode ser o id no Bling, vamos garantir enviando ambos caso precise
+                        descricao: item.descricaoPersonalizada,
+                        observacoes: item.observacaoItem
+                    }))
             };
 
             const isEdit = !!_currentEditPedidoId;
@@ -640,6 +734,26 @@ export const GerenciarGarantiaApp = (function () {
             
             if (data.error) {
                 throw new Error(data.message || 'Erro desconhecido');
+            }
+            
+            // NOVO: Se tiver itens detalhados customizados, envia para a aba ItensDetalhadoGarantia
+            const itensCustom = payload.itensDetalhado;
+            if (itensCustom && itensCustom.length > 0) {
+                const idParaSalvar = isEdit ? _currentEditPedidoId : (data.idPedido || payload.numero);
+                if (idParaSalvar) {
+                    try {
+                        await fetch(API_URLS.GARANTIA_ITENS_DETALHE, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                idPedido: idParaSalvar,
+                                itensDetalhado: itensCustom
+                            })
+                        });
+                    } catch (errDet) {
+                        console.error('Erro ao salvar itens detalhados:', errDet);
+                    }
+                }
             }
 
             alert(isEdit ? 'Pedido de Garantia atualizado com sucesso!' : 'Pedido de Garantia criado com sucesso!');
@@ -774,7 +888,7 @@ export const GerenciarGarantiaApp = (function () {
             if (satgAssociado && satgAssociado.codigo) {
                 satgTitleHTML = `<span class="ml-auto text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-sm border border-blue-200">${satgAssociado.codigo}</span>`;
             }
-            titleEl.innerHTML = `<span>Editar Pedido: <span class="text-gray-500">${idPedido}</span></span>${satgTitleHTML}`;
+            titleEl.innerHTML = `<span>Editar Orçamento: <span class="text-gray-500">${idPedido}</span></span>${satgTitleHTML}`;
         }
 
         const btnSubmit = document.getElementById('btn-submit-garantia');
@@ -803,6 +917,22 @@ export const GerenciarGarantiaApp = (function () {
 
         // Populate items
         _currentOrderItems = _parseItemsString(pedido.itens);
+        
+        // NOVO: Preencher as descrições e observações customizadas
+        if (_currentOrderItems.length > 0 && _itensDetalhadoGarantiaData.length > 0) {
+            _currentOrderItems.forEach(item => {
+                const itemRef = String(item.cod || item.id || '').trim();
+                const detalhe = _itensDetalhadoGarantiaData.find(d => 
+                    (String(d.idPedido) === refStr || String(d.idPedido) === cleanRef) && 
+                    String(d.idProduto).trim() === itemRef
+                );
+                if (detalhe) {
+                    item.descricaoPersonalizada = detalhe.descricao;
+                    item.observacaoItem = detalhe.observacoes;
+                }
+            });
+        }
+        
         _renderOrderItems();
 
         // Switch View
@@ -1059,7 +1189,11 @@ export const GerenciarGarantiaApp = (function () {
         _pedidosGarantiaTableContent.innerHTML = '<tr><td colspan="4" class="text-center py-8"><div class="flex flex-col items-center"><svg class="animate-spin h-8 w-8 text-blue-500 mb-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-sm text-gray-500">Buscando pedidos...</span></div></td></tr>';
 
         try {
-            const response = await fetch(API_URLS.GARANTIA_PEDIDO);
+            const [response, detalheResponse] = await Promise.all([
+                fetch(API_URLS.GARANTIA_PEDIDO),
+                fetch(API_URLS.GARANTIA_ITENS_DETALHE).catch(() => ({ ok: false }))
+            ]);
+            
             if (!response.ok) throw new Error('Falha ao carregar Pedidos de Garantia');
             
             let data = await response.json();
@@ -1067,6 +1201,11 @@ export const GerenciarGarantiaApp = (function () {
             let pData = Array.isArray(data) ? data : (data.data || []);
             pData.reverse(); 
             _pedidosGarantiaData = pData;
+            
+            if (detalheResponse && detalheResponse.ok) {
+                const detalheData = await detalheResponse.json();
+                _itensDetalhadoGarantiaData = detalheData.data || [];
+            }
             
             _renderPedidosGarantiaTable();
         } catch (error) {
@@ -1489,8 +1628,22 @@ export const GerenciarGarantiaApp = (function () {
         document.getElementById('satg-modal-cpf').innerText = req.cpf || '-';
         injectEditPencil('satg-modal-cpf', 'D', 'cpf', req.cpf);
         
-        document.getElementById('satg-modal-telefone').innerText = req.telefone || '-';
+        const phoneTxt = req.telefone || '-';
+        document.getElementById('satg-modal-telefone').innerHTML = `<span class="align-middle">${phoneTxt}</span>`;
         injectEditPencil('satg-modal-telefone', 'F', 'telefone', req.telefone);
+
+        if (req.telefone && req.telefone.length > 8) {
+            let phoneClean = req.telefone.replace(/\D/g, '');
+            if (phoneClean) {
+                if (!phoneClean.startsWith('55') && phoneClean.length <= 11) {
+                    phoneClean = '55' + phoneClean;
+                }
+                const wppHtml = `<a href="https://wa.me/${phoneClean}" target="_blank" class="text-green-500 hover:text-green-600 align-middle inline-flex ml-2 transition-transform hover:scale-110" title="Chamar no WhatsApp">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                </a>`;
+                document.getElementById('satg-modal-telefone').insertAdjacentHTML('beforeend', wppHtml);
+            }
+        }
         
         document.getElementById('satg-modal-email').innerText = req.email || '-';
         injectEditPencil('satg-modal-email', 'G', 'email', req.email);
@@ -1652,42 +1805,85 @@ export const GerenciarGarantiaApp = (function () {
         if (!pedido) return '';
         
         let htmlItens = '';
-        if (pedido.itens && Array.isArray(pedido.itens)) {
-            pedido.itens.forEach(i => {
+        let totalValor = 0;
+        const parsedItens = _parseItemsString(pedido.itens);
+        const fmtBRL = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+        if (parsedItens && parsedItens.length > 0) {
+            parsedItens.forEach(i => {
+                const itemRef = String(i.cod || i.id || '').trim();
+                const detalhe = _itensDetalhadoGarantiaData.find(d => 
+                    (String(d.idPedido) === String(pedido.idPedido) || String(d.idPedido) === String(pedido.numero)) && 
+                    String(d.idProduto).trim() === itemRef
+                );
+                
+                // Busca a imagem no cache
+                let imgSrc = '';
+                if (window._allProducts) {
+                    const prod = window._allProducts.find(p => String(p.codigo || '').trim() === itemRef);
+                    if (prod) {
+                        if (prod.url_imagens_externas && prod.url_imagens_externas.length > 0) {
+                            imgSrc = prod.url_imagens_externas[0];
+                        } else if (prod.imagem) {
+                            imgSrc = prod.imagem;
+                        }
+                    }
+                }
+                
+                const precoItem = parseFloat(i.preco || 0);
+                const qtdItem = parseInt(i.qtd || 1);
+                totalValor += (precoItem * qtdItem);
+
+                const descFinal = detalhe && detalhe.descricao ? detalhe.descricao : (i.desc || i.nome || '-');
+                const obsFinal = detalhe && detalhe.observacoes ? `<div style="color: #c2410c; margin-top: 4px; font-weight: bold; font-size: 11px;">Obs: ${detalhe.observacoes}</div>` : '';
+                
+                const imgHtml = imgSrc && !imgSrc.includes('placehold.co') 
+                    ? `<img src="${imgSrc}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;flex-shrink:0;">` 
+                    : `<div style="width:44px;height:44px;background:#f1f5f9;border-radius:6px;border:1px solid #e2e8f0;flex-shrink:0;"></div>`;
+
                 htmlItens += `
                     <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #eee;">${i.descricao || i.nome || '-'} <br><small style="color: #888;">Cód: ${i.codigo || '-'}</small></td>
-                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${i.quantidade || 1}</td>
+                        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;">
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                ${imgHtml}
+                                <div>
+                                    <div style="font-weight:600;font-size:13px;color:#1e293b;">${descFinal}</div>
+                                    ${obsFinal}
+                                    <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Cód: ${i.cod || '-'}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:center;color:#475569;">${qtdItem}</td>
+                        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;color:#1e293b;">${fmtBRL(precoItem * qtdItem)}</td>
                     </tr>
                 `;
             });
         }
         
+        const totalFooter = parsedItens && parsedItens.length > 0 ? `
+            <tr style="background:#f0fdf4;">
+                <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:14px;color:#15803d;">Total</td>
+                <td style="padding:12px 14px;font-weight:700;font-size:15px;color:#15803d;text-align:right;">${fmtBRL(totalValor)}</td>
+            </tr>
+        ` : '';
+
         return `
             <div class="section" style="margin-top: 40px; border-top: 2px dashed #ccc; padding-top: 30px;">
-                <div class="section-title">Pedido Vinculado: ${pedido.numero || '-'}</div>
-                <div class="grid">
-                    <div class="field">
-                        <span class="field-label">Status do Pedido</span>
-                        <span class="field-value">${pedido.situacao?.nome || pedido.situacao || '-'}</span>
-                    </div>
-                    <div class="field">
-                        <span class="field-label">Orçamento</span>
-                        <span class="field-value">${pedido.numeroLoja || '-'}</span>
-                    </div>
-                </div>
+                <div class="section-title">Orçamento Vinculado: ${pedido.numero || '-'}</div>
                 
                 <div style="margin-top: 15px;">
-                    <span class="field-label">Itens do Pedido</span>
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;">
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: .06em; margin-bottom: 8px;">Itens do Orçamento</div>
+                    <table style="width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; font-family: Arial, sans-serif;">
                         <thead>
                             <tr>
-                                <th style="text-align: left; padding: 8px; background: #f9f9f9; border-bottom: 1px solid #ddd;">Produto</th>
-                                <th style="text-align: center; padding: 8px; background: #f9f9f9; border-bottom: 1px solid #ddd;">Qtd</th>
+                                <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: left;">Produto</th>
+                                <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: center; width: 60px;">Qtd</th>
+                                <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: right; width: 100px;">Valor</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${htmlItens || '<tr><td colspan="2" style="padding: 8px; text-align: center; color: #888;">Nenhum item</td></tr>'}
+                            ${htmlItens || '<tr><td colspan="3" style="padding: 12px; text-align: center; color: #888;">Nenhum item encontrado</td></tr>'}
+                            ${totalFooter}
                         </tbody>
                     </table>
                 </div>
@@ -1762,19 +1958,7 @@ export const GerenciarGarantiaApp = (function () {
                     </div>
                 </div>
 
-                <div class="section">
-                    <div class="section-title">Revenda Autorizada</div>
-                    <div class="grid">
-                        <div class="field">
-                            <span class="field-label">Revenda</span>
-                            <span class="field-value">${req.revenda || '-'}</span>
-                        </div>
-                        <div class="field">
-                            <span class="field-label">Local (Cidade/UF)</span>
-                            <span class="field-value">${req.revendaLocal || '-'}</span>
-                        </div>
-                    </div>
-                </div>
+
 
                 <div class="section">
                     <div class="section-title">Equipamento com Defeito</div>

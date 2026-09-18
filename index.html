@@ -707,7 +707,7 @@
                                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                                 </button>
                                 <h1 class="text-xl font-bold text-gray-800 m-0">
-                                    Novo Pedido de Garantia
+                                    Novo Orçamento
                                 </h1>
                             </div>
                         </div>
@@ -750,7 +750,7 @@
                                 <input type="text" id="garantia-equipamento" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors" placeholder="Ex: MKS2500">
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Número do Pedido (Opcional)</label>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1">Número do Orçamento (Opcional)</label>
                                 <input type="text" id="garantia-numero" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-400 cursor-not-allowed" placeholder="Será gerado se vazio" readonly>
                             </div>
                             <div>
@@ -760,7 +760,7 @@
                         </div>
 
                         <div id="garantia-situacao-container" class="hidden mb-6">
-                            <label class="block text-sm font-semibold text-gray-700 mb-1">Situação do Pedido</label>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Situação do Orçamento</label>
                             <select id="garantia-situacao" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors">
                                 <option value="Pendente">Pendente</option>
                                 <option value="Em andamento">Em andamento</option>
@@ -775,13 +775,13 @@
                         <!-- Itens -->
                         <div class="border-t border-gray-200 pt-6">
                             <div class="flex justify-between items-center mb-4">
-                                <h4 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Itens em Garantia</h4>
+                                <h4 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Itens do Orçamento</h4>
                                 <button type="button" id="btn-add-garantia-item-modal" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors flex items-center gap-1.5 shadow-sm">
                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                                     Adicionar Produto
                                 </button>
                             </div>
-                            
+
                             <!-- Modal Selecionar Produto (Garantia) -->
                             <div id="modal-garantia-selecionar-produto" class="fixed hidden inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center p-4">
                                 <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh]">
@@ -805,10 +805,23 @@
                                 </div>
                             </div>
 
-                            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                                <ul id="garantia-items-list" class="space-y-2">
-                                    <li id="garantia-items-empty" class="text-sm text-gray-500 italic text-center py-2">Nenhum item adicionado.</li>
-                                </ul>
+                            <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Produto</th>
+                                            <th class="px-4 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider">Qtd</th>
+                                            <th class="px-4 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider">Peso</th>
+                                            <th class="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Valor</th>
+                                            <th class="px-4 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="garantia-items-list" class="divide-y divide-gray-100">
+                                        <tr>
+                                            <td colspan="5" id="garantia-items-empty" class="px-4 py-8 text-sm text-gray-500 italic text-center">Nenhum item adicionado.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -1607,7 +1620,42 @@
         </div>
     </div>
 
-    <!-- Modal para Selecionar Peça do Produto -->
+    <!-- Modal para Detalhes do Item de Garantia (Descrição e Observação) -->
+    <div id="modal-garantia-item-detalhe" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[120] flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="text-lg font-bold text-gray-800">Detalhes do Item</h3>
+                <button id="btn-fechar-modal-item-detalhe" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <input type="hidden" id="item-detalhe-index">
+                
+                <div class="flex items-center gap-4 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    <img id="item-detalhe-imagem" src="" class="w-16 h-16 object-cover rounded-lg shadow-sm border border-gray-200 hidden" alt="Imagem da peça">
+                    <div class="flex-1">
+                        <p class="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Peça Original</p>
+                        <p class="text-sm font-semibold text-gray-800" id="item-detalhe-nome-original"></p>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Descrição Personalizada</label>
+                    <input type="text" id="item-detalhe-descricao" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Substitui a descrição original na impressão e visualização">
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Observações do Item</label>
+                    <textarea id="item-detalhe-observacao" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-24" placeholder="Detalhes do defeito, lote, observações exclusivas dessa peça"></textarea>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                <button id="btn-cancelar-item-detalhe" class="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+                <button id="btn-salvar-item-detalhe" class="px-6 py-2 text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">Salvar Detalhes</button>
+            </div>
+        </div>
+    </div>
     <div id="select-piece-modal" class="fixed hidden inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[110] p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden animate-fade-in-up">
             <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">

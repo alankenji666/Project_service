@@ -546,6 +546,100 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
         }
     });
 
+    // GET /garantia/pedido/itens-detalhe
+    // Retorna todos os itens detalhados customizados
+    router.get('/pedido/itens-detalhe', async (req, res, next) => {
+        try {
+            const sheets = await getInitializedSheetsClient();
+            const sheetName = 'ItensDetalhadoGarantia';
+            
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A2:E`
+            });
+            
+            const rows = response.data.values || [];
+            const data = rows.map(r => ({
+                idPedido: r[0] || '',
+                idProduto: r[1] || '',
+                descricao: r[2] || '',
+                observacoes: r[3] || '',
+                data: r[4] || ''
+            }));
+            
+            res.json({ error: false, data });
+        } catch (error) {
+            console.error('[garantia] Erro ao buscar itens detalhados:', error);
+            res.status(500).json({ error: true, message: 'Erro ao buscar itens detalhados.' });
+        }
+    });
+
+    // POST /garantia/pedido/itens-detalhe
+    // Adiciona ou atualiza itens detalhados customizados (Descrição/Observação)
+    router.post('/pedido/itens-detalhe', async (req, res, next) => {
+        console.log('[garantia] POST /pedido/itens-detalhe recebido:', JSON.stringify(req.body, null, 2));
+        try {
+            const { idPedido, itensDetalhado } = req.body;
+            if (!idPedido || !itensDetalhado || !Array.isArray(itensDetalhado)) {
+                return res.status(400).json({ error: true, message: 'idPedido e array itensDetalhado são obrigatórios.' });
+            }
+            
+            const sheets = await getInitializedSheetsClient();
+            const sheetName = 'ItensDetalhadoGarantia';
+            
+            // Buscar existentes para saber se fazemos update ou append
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A:B`
+            });
+            const existingRows = response.data.values || [];
+            
+            const dataAtualStr = new Date().toISOString().split('T')[0];
+            
+            for (const item of itensDetalhado) {
+                // Procurar linha correspondente
+                let rowIndexToUpdate = -1;
+                for (let i = 1; i < existingRows.length; i++) {
+                    if (String(existingRows[i][0]).trim() === String(idPedido).trim() && 
+                        String(existingRows[i][1]).trim() === String(item.idProduto).trim()) {
+                        rowIndexToUpdate = i + 1; // +1 porque i=0 é a linha 1 do sheets, e a array começa do 0
+                        break;
+                    }
+                }
+                
+                const rowData = [
+                    String(idPedido),
+                    String(item.idProduto),
+                    item.descricao || '',
+                    item.observacoes || '',
+                    dataAtualStr
+                ];
+                
+                if (rowIndexToUpdate !== -1) {
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId,
+                        range: `${sheetName}!A${rowIndexToUpdate}:E${rowIndexToUpdate}`,
+                        valueInputOption: 'USER_ENTERED',
+                        resource: { values: [rowData] }
+                    });
+                } else {
+                    await sheets.spreadsheets.values.append({
+                        spreadsheetId,
+                        range: `${sheetName}!A:E`,
+                        valueInputOption: 'USER_ENTERED',
+                        insertDataOption: 'INSERT_ROWS',
+                        resource: { values: [rowData] }
+                    });
+                }
+            }
+            
+            res.status(200).json({ error: false, message: 'Itens detalhados salvos com sucesso!' });
+        } catch (error) {
+            console.error('[garantia] Erro ao salvar itens detalhados:', error);
+            res.status(500).json({ error: true, message: 'Erro ao salvar itens detalhados.' });
+        }
+    });
+
     return router;
 }
 
