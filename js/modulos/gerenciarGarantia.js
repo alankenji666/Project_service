@@ -1576,7 +1576,93 @@ export const GerenciarGarantiaApp = (function () {
         
         document.getElementById('satg-modal-codigo').innerText = req.codigo;
 
-        function injectEditPencil(elementId, column, key, currentValue) {
+        function _openCustomPrompt(title, initialValue, callback, type) {
+            const modal = document.getElementById('modal-generic-edit');
+            const titleEl = document.getElementById('modal-generic-edit-title');
+            const labelEl = document.getElementById('modal-generic-edit-label');
+            const inputEl = document.getElementById('modal-generic-edit-input');
+            const btnCancel = document.getElementById('btn-cancel-generic-edit');
+            const btnSave = document.getElementById('btn-save-generic-edit');
+            const btnClose = document.getElementById('btn-close-generic-edit');
+
+            if (!modal) return;
+
+            titleEl.innerText = 'Editar Campo';
+            labelEl.innerText = title;
+            inputEl.value = initialValue || '';
+            
+            // Remove listeners antigos
+            const newBtnSave = btnSave.cloneNode(true);
+            btnSave.parentNode.replaceChild(newBtnSave, btnSave);
+            const newBtnCancel = btnCancel.cloneNode(true);
+            btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel);
+            const newBtnClose = btnClose.cloneNode(true);
+            btnClose.parentNode.replaceChild(newBtnClose, btnClose);
+            const newInput = inputEl.cloneNode(true);
+            inputEl.parentNode.replaceChild(newInput, inputEl);
+
+            const closeModal = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            };
+
+            newBtnCancel.onclick = closeModal;
+            newBtnClose.onclick = closeModal;
+
+            // Função de máscara
+            newInput.addEventListener('input', (e) => {
+                let v = e.target.value;
+                if (type === 'cpf') {
+                    let digits = v.replace(/\D/g, "").substring(0, 14);
+                    if (digits.length <= 11) {
+                        v = digits.replace(/(\d{3})(\d)/, "$1.$2")
+                                  .replace(/(\d{3})(\d)/, "$1.$2")
+                                  .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+                    } else {
+                        v = digits.replace(/^(\d{2})(\d)/, "$1.$2")
+                                  .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+                                  .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
+                                  .replace(/(\d{4})(\d)/, "$1-$2");
+                    }
+                    e.target.value = v;
+                } else if (type === 'telefone') {
+                    let digits = v.replace(/\D/g, "");
+                    if (digits.startsWith("55")) digits = digits.substring(2);
+                    digits = digits.substring(0, 11);
+                    
+                    if (digits.length === 0) {
+                        v = "";
+                    } else if (digits.length <= 2) {
+                        v = `+55 ${digits}`;
+                    } else if (digits.length <= 6) {
+                        v = `+55 ${digits.substring(0,2)} ${digits.substring(2)}`;
+                    } else if (digits.length <= 10) {
+                        v = `+55 ${digits.substring(0,2)} ${digits.substring(2,6)}-${digits.substring(6)}`;
+                    } else {
+                        v = `+55 ${digits.substring(0,2)} ${digits.substring(2,7)}-${digits.substring(7)}`;
+                    }
+                    e.target.value = v;
+                }
+            });
+            
+            // Força a formatação inicial
+            newInput.dispatchEvent(new Event('input'));
+
+            newBtnSave.onclick = () => {
+                closeModal();
+                callback(newInput.value);
+            };
+
+            newInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') newBtnSave.click();
+            });
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => newInput.focus(), 100);
+        }
+
+        function injectEditPencil(elementId, column, key, currentValue, type = 'text') {
             const el = document.getElementById(elementId);
             if (!el) return;
             
@@ -1596,29 +1682,37 @@ export const GerenciarGarantiaApp = (function () {
                     labelText = labelEl.innerText.replace(':', '');
                 }
                 
-                const newValue = prompt(`Editar ${labelText}:`, currentValue || '');
-                if (newValue !== null && newValue.trim() !== (currentValue || '').trim()) {
-                    el.innerText = 'Salvando...';
-                    try {
-                        const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                rowIndex: req.rowIndex,
-                                updates: [ { column: column, value: newValue } ]
-                            })
-                        });
-                        if (!res.ok) throw new Error();
-                        req[key] = newValue; 
-                        el.innerText = newValue;
-                        injectEditPencil(elementId, column, key, newValue);
-                        _fetchSatGData(true); // reload table silencioso no fundo
-                    } catch(err) {
-                        alert('Erro ao salvar edição.');
-                        el.innerText = currentValue || '-';
+                _openCustomPrompt(labelText, currentValue || '', async (newValue) => {
+                    if (newValue !== null && newValue.trim() !== (currentValue || '').trim()) {
+                        el.innerText = 'Salvando...';
+                        try {
+                            const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    rowIndex: req.rowIndex,
+                                    updates: [ { column: column, value: newValue } ]
+                                })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                // Update local data temporarily to avoid full reload flicker
+                                req[key] = newValue;
+                                _openSatgModal(req); // Re-render modal silently
+                                _fetchSatGData(true); // reload table silencioso no fundo
+                            } else {
+                                alert('Erro ao salvar: ' + (data.message || 'Desconhecido'));
+                                el.innerText = currentValue || '-';
+                            }
+                        } catch(e) {
+                            console.error(e);
+                            alert('Erro ao salvar campo.');
+                            el.innerText = currentValue || '-';
+                        }
                     }
-                }
+                }, type);
             };
+            
             el.appendChild(btn);
         }
 
@@ -1626,11 +1720,11 @@ export const GerenciarGarantiaApp = (function () {
         injectEditPencil('satg-modal-cliente', 'C', 'cliente', req.cliente);
         
         document.getElementById('satg-modal-cpf').innerText = req.cpf || '-';
-        injectEditPencil('satg-modal-cpf', 'D', 'cpf', req.cpf);
+        injectEditPencil('satg-modal-cpf', 'D', 'cpf', req.cpf, 'cpf');
         
         const phoneTxt = req.telefone || '-';
         document.getElementById('satg-modal-telefone').innerHTML = `<span class="align-middle">${phoneTxt}</span>`;
-        injectEditPencil('satg-modal-telefone', 'F', 'telefone', req.telefone);
+        injectEditPencil('satg-modal-telefone', 'F', 'telefone', req.telefone, 'telefone');
 
         if (req.telefone && req.telefone.length > 8) {
             let phoneClean = req.telefone.replace(/\D/g, '');
@@ -2217,9 +2311,6 @@ export const GerenciarGarantiaApp = (function () {
                                 <p class="font-bold text-gray-800 text-sm leading-tight">${nomeProduto}</p>
                                 <div class="flex items-center gap-2 mt-1">
                                     <span class="text-xs font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md tracking-wide">${codigo}</span>
-                                    <div class="flex gap-1.5 opacity-60">
-                                        <svg class="w-4 h-4 text-blue-500 cursor-pointer hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                    </div>
                                 </div>
                             </div>
                         </div>

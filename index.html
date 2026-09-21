@@ -3961,5 +3961,27 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal Genérico de Edição -->
+    <div id="modal-generic-edit" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[999] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden transform transition-all">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <h3 id="modal-generic-edit-title" class="text-lg font-bold text-gray-800">Editar Campo</h3>
+                <button id="btn-close-generic-edit" class="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-lg hover:bg-gray-100">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <label id="modal-generic-edit-label" class="block text-sm font-semibold text-gray-700 mb-2">Valor</label>
+                    <input type="text" id="modal-generic-edit-input" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors text-gray-800 font-medium" autocomplete="off">
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                <button id="btn-cancel-generic-edit" class="px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancelar</button>
+                <button id="btn-save-generic-edit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Salvar</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
