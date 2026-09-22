@@ -232,7 +232,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
 
             const getBlingUrl = `${blingBaseUrl}/produtos/${idProduto}`;
             const getBlingRes = await axios.get(getBlingUrl, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
 
             res.status(200).json(getBlingRes.data);
@@ -283,7 +283,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             console.log(`[Bling] Buscando dados atuais completos do produto ID ${idProduto}...`);
             const getBlingUrl = `${blingBaseUrl}/produtos/${idProduto}?campos=camposCustomizados`;
             const getBlingRes = await axios.get(getBlingUrl, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
 
             const currentProduct = getBlingRes.data.data;
@@ -404,7 +404,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
                     console.log(`[Bling] Payload do fornecedor:`, JSON.stringify(supplierPayload, null, 2));
                     
                     await axios.put(supplierUrl, supplierPayload, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                        headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
                     });
                     console.log(`[Bling] Sucesso na atualização do fornecedor vínculo ${fornecedorVinculo.id}`);
                 } catch (err) {
@@ -423,7 +423,7 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
 
             console.log(`[Bling] Enviando atualização completa para ${blingUrl}...`);
             const blingResponse = await axios.put(blingUrl, blingPayload, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
 
             console.log(`[Bling] SUCESSO! Resposta: ${blingResponse.status}`);

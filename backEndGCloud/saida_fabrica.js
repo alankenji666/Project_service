@@ -133,7 +133,7 @@ const createSaidaFabricaRouter = (
                     // 2.1 - Atualizar Bling
                     console.log(`[Bling - ${codigoService}] Buscando ID do produto...`);
                     const blingProductUrl = `${BLING_API_BASE_URL}/produtos?codigo=${codigoService}`;
-                    const productResponse = await axios.get(blingProductUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                    const productResponse = await axios.get(blingProductUrl, { headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' } });
                     
                     if (!productResponse.data.data || productResponse.data.data.length === 0) {
                         throw new Error(`Produto não encontrado no Bling.`);
@@ -149,7 +149,7 @@ const createSaidaFabricaRouter = (
                         observacoes: `Saída via App - Requisição: ${item.requisicao}`
                     };
 
-                    await axios.post(`${BLING_API_BASE_URL}/estoques`, blingPayload, { headers: { 'Authorization': `Bearer ${accessToken}` }});
+                    await axios.post(`${BLING_API_BASE_URL}/estoques`, blingPayload, { headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }});
                     console.log(`[Bling - ${codigoService}] SUCESSO: Estoque atualizado no Bling.`);
 
                     // 2.2 - Atualizar Planilha de Estoque

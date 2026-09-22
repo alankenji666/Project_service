@@ -71,7 +71,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     // 2. Buscar dados completos do pedido no Bling
                     try {
                         const blingRes = await axios.get(`${BLING_API_BASE_URL}/pedidos/vendas/${pedidoId}`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
+                            headers: { 'Authorization': `Bearer ${token}`, 'enable-jwt': '1' }
                         });
                         p = blingRes.data.data;
                     } catch (e) {

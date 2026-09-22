@@ -42,7 +42,7 @@ ${text}
                         response_format: { type: 'json_object' }
                     }, {
                         headers: {
-                            'Authorization': `Bearer ${GROQ_API_KEY}`,
+                            'Authorization': `Bearer ${GROQ_API_KEY}`, 'enable-jwt': '1',
                             'Content-Type': 'application/json'
                         }
                     });

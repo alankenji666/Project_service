@@ -88,7 +88,7 @@ async function runRecovery() {
             
             try {
                 const blingRes = await axios.get(`${BLING_API_BASE_URL}/pedidos/vendas/${item.pedidoId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': `Bearer ${token}`, 'enable-jwt': '1' }
                 });
                 const p = blingRes.data.data;
                 

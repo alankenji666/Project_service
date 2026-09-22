@@ -72,7 +72,7 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
         if (cacheVendedores.has(vIdStr)) return cacheVendedores.get(vIdStr);
         try {
             const res = await axios.get(`${BLING_API_BASE_URL}/vendedores/${vIdStr}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${token}`, 'enable-jwt': '1' }
             });
             const nome = res.data.data?.contato?.nome || res.data.data?.nome || `ID: ${vIdStr}`;
             cacheVendedores.set(vIdStr, nome);
@@ -114,14 +114,14 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID_NFE, SHEET_
                 let blingRes;
                 try {
                     blingRes = await axios.get(`${BLING_API_BASE_URL}/nfe/${nfeId}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
+                        headers: { 'Authorization': `Bearer ${token}`, 'enable-jwt': '1' }
                     });
                 } catch (err) {
                     if (err.response && err.response.status === 404) {
                         console.log(`[Webhook NF-e] Nota ${nfeId} retornou 404. Aguardando 3s e tentando novamente...`);
                         await sleep(3000);
                         blingRes = await axios.get(`${BLING_API_BASE_URL}/nfe/${nfeId}`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
+                            headers: { 'Authorization': `Bearer ${token}`, 'enable-jwt': '1' }
                         });
                     } else {
                         throw err;

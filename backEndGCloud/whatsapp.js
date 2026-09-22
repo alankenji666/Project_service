@@ -89,7 +89,7 @@ const createWhatsAppRouter = (
         console.log(`[WhatsApp] Enviando mensagem REAL para ${to}...`);
         const response = await axios.post(apiUrl, payload, {
             headers: {
-                'Authorization': `Bearer ${config.ACCESS_TOKEN}`,
+                'Authorization': `Bearer ${config.ACCESS_TOKEN}`, 'enable-jwt': '1',
                 'Content-Type': 'application/json'
             }
         });

@@ -237,7 +237,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 try {
                     console.log(`[Bling] Tentando atualizar pedido ${id} para situação ${idSituacao}`);
                     await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${id}/situacoes/${idSituacao}`, {}, { 
-                        headers: { 'Authorization': `Bearer ${accessToken}` } 
+                        headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' } 
                     });
                     results.sucessos.push(id);
                 } catch (err) {
@@ -421,7 +421,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
             console.log(`[Bling] Buscando detalhes completos do pedido ${idPedido} para o frontend...`);
             const resPedido = await httpClient.get(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
             res.status(200).send(resPedido.data);
         } catch (error) {
@@ -449,7 +449,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
             console.log(`[Bling] Atualizando pedido ${idPedido} com payload clonado/modificado...`);
             const resUpdate = await httpClient.put(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}`, payloadUpdate, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
             res.status(200).send(resUpdate.data);
 
@@ -491,7 +491,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
             console.log(`[Bling] Buscando detalhes do contato ${idContato} para o frontend...`);
             const resContato = await httpClient.get(`${BLING_API_BASE_URL}/contatos/${idContato}`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
             res.status(200).send(resContato.data);
         } catch (error) {
@@ -517,7 +517,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
             console.log(`[Bling] Buscando lista de contatos para o frontend... Query: ${queryString}`);
             const resContatos = await httpClient.get(`${BLING_API_BASE_URL}/contatos${queryString}`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
             res.status(200).send(resContatos.data);
         } catch (error) {
@@ -545,7 +545,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
             console.log(`[Bling] Atualizando contato ${idContato} com payload clonado/modificado...`);
             const resUpdate = await httpClient.put(`${BLING_API_BASE_URL}/contatos/${idContato}`, payloadUpdate, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
             res.status(200).send(resUpdate.data);
         } catch (error) {
@@ -576,7 +576,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             try {
                 // Chama a API oficial da V3 para gerar NFe A PARTIR do pedido, o que mantém o vínculo perfeitamente
                 const resCriacao = await httpClient.post(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/gerar-nfe`, {}, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
                 });
                 
                 // O schema de resposta diz que retorna { idNotaFiscal: 1234 }
@@ -610,7 +610,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             try {
                 console.log(`[Bling] Enviando NF-e ${idNota} para a SEFAZ...`);
                 const resEnvio = await httpClient.post(`${BLING_API_BASE_URL}/nfe/${idNota}/enviar`, {}, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
                 });
                 
                 console.log(`[Bling] NF-e ${idNota} enviada para processamento.`);
@@ -619,7 +619,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 try {
                     console.log(`[Bling] Atualizando situação do pedido ${idPedido} para Atendido (9) após gerar NFe...`);
                     await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/situacoes/9`, {}, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                        headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
                     });
                     
                     // Sincroniza a planilha instantaneamente via webhook local
@@ -645,7 +645,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 // Se falhou porque o Bling já auto-emitiu, vamos checar a situação da nota
                 try {
                     const resVerifica = await httpClient.get(`${BLING_API_BASE_URL}/nfe/${idNota}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                        headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
                     });
                     const situacao = resVerifica.data?.data?.situacao;
                     // Situação 6 = Autorizada, 3 = Emitida DANFE, 1 = Pendente (na fila do auto-emit)
@@ -654,7 +654,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                         
                         try {
                             await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/situacoes/9`, {}, {
-                                headers: { 'Authorization': `Bearer ${accessToken}` }
+                                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
                             });
                             const port = process.env.PORT || 8080;
                             httpClient.post(`http://localhost:${port}/webhook/pedidos-bling`, {

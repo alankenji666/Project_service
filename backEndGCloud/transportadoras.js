@@ -449,7 +449,7 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
             // 1. Busca Token e Lista de Transportadoras do Bling
             const token = await getToken();
             const blingUrl = `${BLING_API_BASE_URL || 'https://www.bling.com.br/Api/v3'}/contatos?idTipoContato=14578222406&limite=100`;
-            const blingRes = await axiosModule.get(blingUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+            const blingRes = await axiosModule.get(blingUrl, { headers: { 'Authorization': `Bearer ${token}`, 'enable-jwt': '1' } });
             const contatosBlingList = blingRes.data.data || [];
             
             console.log(`[Transportadoras] Encontrados ${contatosBlingList.length} contatos tipo T no Bling. Buscando detalhes...`);
@@ -459,7 +459,7 @@ function createTransportadorasRouter(getInitializedSheetsClient, spreadsheetId, 
             for (const c of contatosBlingList) {
                 try {
                     const detailRes = await axiosModule.get(`${BLING_API_BASE_URL || 'https://www.bling.com.br/Api/v3'}/contatos/${c.id}`, { 
-                        headers: { 'Authorization': `Bearer ${token}` } 
+                        headers: { 'Authorization': `Bearer ${token}`, 'enable-jwt': '1' } 
                     });
                     contatosCompletos.push(detailRes.data.data);
                 } catch (err) {

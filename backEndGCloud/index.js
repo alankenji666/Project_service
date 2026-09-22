@@ -1003,7 +1003,7 @@ app.get('/proxy-danfe', async (req, res, next) => {
         // Chama a API V3 do Bling para obter o base64
         const blingUrl = `${BLING_API_BASE_URL}/nfe/documento/${chaveAcesso}?formato=pdf`;
         const blingResponse = await axios.get(blingUrl, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
         });
 
         if (!blingResponse.data || !blingResponse.data.data || !blingResponse.data.data[0]) {
@@ -1087,7 +1087,7 @@ app.post('/proxy-email-danfe', async (req, res, next) => {
 
             const blingUrl = `${BLING_API_BASE_URL}/nfe/documento/${chaveAcesso}?formato=pdf`;
             const blingResponse = await axios.get(blingUrl, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
 
             if (!blingResponse.data || !blingResponse.data.data || !blingResponse.data.data[0]) {

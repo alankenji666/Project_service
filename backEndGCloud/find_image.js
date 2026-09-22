@@ -6,12 +6,12 @@ async function findProductWithImage() {
         const accessToken = tokenResponse.data.access_token;
         
         let getBlingRes = await axios.get(`https://api.bling.com.br/Api/v3/produtos?pagina=1&limite=50`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
         });
         
         for (let p of getBlingRes.data.data) {
             let fullRes = await axios.get(`https://api.bling.com.br/Api/v3/produtos/${p.id}`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
             });
             let midia = fullRes.data.data.midia;
             if (midia && midia.imagens && (midia.imagens.internas.length > 0 || midia.imagens.externas.length > 0)) {

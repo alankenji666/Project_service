@@ -184,7 +184,7 @@ const createEstoqueRouter = (
                 
                 const blingUrl = `${BLING_API_BASE_URL}/estoques`;
                 const blingResponse = await axios.post(blingUrl, blingPayload, {
-                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1', 'Content-Type': 'application/json' },
                     validateStatus: (status) => status < 500
                 });
 
@@ -362,7 +362,7 @@ const createEstoqueRouter = (
         try {
             const accessToken = await getTokenWithRetry(axios, APPS_SCRIPT_TOKEN_URL);
             const blingUrl = `${BLING_API_BASE_URL}/depositos`;
-            const blingResponse = await axios.get(blingUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+            const blingResponse = await axios.get(blingUrl, { headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' } });
             
             const depositos = blingResponse.data.data.map(d => ({ id: d.id, descricao: d.descricao }));
             res.status(200).send({ status: 'success', data: depositos });
@@ -382,7 +382,7 @@ const createEstoqueRouter = (
         try {
             const accessToken = await getTokenWithRetry(axios, APPS_SCRIPT_TOKEN_URL);
             const blingUrl = `${BLING_API_BASE_URL}/produtos?codigo=${codigo}`;
-            const blingResponse = await axios.get(blingUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+            const blingResponse = await axios.get(blingUrl, { headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' } });
 
             if (blingResponse.data.data && blingResponse.data.data.length > 0) {
                 const produto = blingResponse.data.data[0];

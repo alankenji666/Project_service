@@ -6,7 +6,7 @@ async function checkMidia() {
         const accessToken = tokenResponse.data.access_token;
         
         let getBlingRes = await axios.get(`https://api.bling.com.br/Api/v3/produtos/16676777872`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
         });
         
         console.log("Midia:", JSON.stringify(getBlingRes.data.data.midia, null, 2));
