@@ -702,14 +702,17 @@
                         
                         <!-- Header do Modal Form -->
                         <div id="garantia-form-header" class="px-6 py-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
-                            <div class="flex items-center">
-                                <button type="button" id="btn-back-garantia-form-arrow" class="mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-600 flex items-center justify-center" title="Voltar">
+                            <div class="flex items-center flex-1">
+                                <button type="button" id="btn-back-garantia-form-arrow" class="mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-600 flex items-center justify-center shrink-0" title="Voltar">
                                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                                 </button>
-                                <h1 class="text-xl font-bold text-gray-800 m-0">
+                                <h1 class="text-xl font-bold text-gray-800 m-0 w-full flex items-center">
                                     Novo Orçamento
                                 </h1>
                             </div>
+                            <button type="button" id="btn-close-garantia-form-x" class="ml-4 text-gray-400 hover:text-gray-600 transition-colors flex items-center justify-center shrink-0" title="Fechar">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
                         </div>
                         
                         <!-- Corpo com scroll -->
@@ -747,7 +750,80 @@
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">Equipamento em Garantia</label>
-                                <input type="text" id="garantia-equipamento" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors" placeholder="Ex: MKS2500">
+                                <select id="garantia-equipamento" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors cursor-pointer appearance-none">
+                                    <option value="" disabled selected>Selecione o modelo</option>
+                                    <option value="MKS-150PTE">MKS-150PTE</option>
+                                    <option value="MKS-250PCE">MKS-250PCE</option>
+                                    <option value="MKS-300PAP">MKS-300PAP</option>
+                                    <option value="MKS-400PHL">MKS-400PHL</option>
+                                    <option value="MKS-400PTE">MKS-400PTE</option>
+                                    <option value="MKS-500P1EH">MKS-500P1EH</option>
+                                    <option value="MKS-500P2E">MKS-500P2E</option>
+                                    <option value="MKS-500P2EH">MKS-500P2EH</option>
+                                    <option value="MKS-500P3E">MKS-500P3E</option>
+                                    <option value="MKS-500P3EH">MKS-500P3EH</option>
+                                    <option value="MKS-500P3X">MKS-500P3X</option>
+                                    <option value="MKS-500PCE">MKS-500PCE</option>
+                                    <option value="MKS-500PHL">MKS-500PHL</option>
+                                    <option value="MKS-500PNDMM">MKS-500PNDMM</option>
+                                    <option value="MKS-500R1I">MKS-500R1I</option>
+                                    <option value="MKS-600P2E">MKS-600P2E</option>
+                                    <option value="MKS-900PHL">MKS-900PHL</option>
+                                    <option value="MKS-1000P1EH">MKS-1000P1EH</option>
+                                    <option value="MKS-1000P2EH">MKS-1000P2EH</option>
+                                    <option value="MKS-1000P3E">MKS-1000P3E</option>
+                                    <option value="MKS-1000P3EH">MKS-1000P3EH</option>
+                                    <option value="MKS-1000PHL">MKS-1000PHL</option>
+                                    <option value="MKS-1000PNDMM">MKS-1000PNDMM</option>
+                                    <option value="MKS-1200P4E">MKS-1200P4E</option>
+                                    <option value="MKS-1500P4E">MKS-1500P4E</option>
+                                    <option value="MKS-1500PCE">MKS-1500PCE</option>
+                                    <option value="MKS-1500PNDME">MKS-1500PNDME</option>
+                                    <option value="MKS-1500PRE">MKS-1500PRE</option>
+                                    <option value="MKS-2000L">MKS-2000L</option>
+                                    <option value="MKS-2000PEP">MKS-2000PEP</option>
+                                    <option value="MKS-2000PNDEF">MKS-2000PNDEF</option>
+                                    <option value="MKS-2000PNDMM">MKS-2000PNDMM</option>
+                                    <option value="MKS-2000RM">MKS-2000RM</option>
+                                    <option value="MKS-2200P4E">MKS-2200P4E</option>
+                                    <option value="MKS-2200PRE">MKS-2200PRE</option>
+                                    <option value="MKS-2500DMC">MKS-2500DMC</option>
+                                    <option value="MKS-3000DMC">MKS-3000DMC</option>
+                                    <option value="MKS-3000PNDEE">MKS-3000PNDEE</option>
+                                    <option value="MKS-3000PNDEEW">MKS-3000PNDEEW</option>
+                                    <option value="MKS-3000PNDEF">MKS-3000PNDEF</option>
+                                    <option value="MKS-3000PNDME">MKS-3000PNDME</option>
+                                    <option value="MKS-3000PNDMM">MKS-3000PNDMM</option>
+                                    <option value="MKS-4000ME">MKS-4000ME</option>
+                                    <option value="MKS-4000PEP">MKS-4000PEP</option>
+                                    <option value="MKS-4000PNDEE">MKS-4000PNDEE</option>
+                                    <option value="MKS-5000PNDMM">MKS-5000PNDMM</option>
+                                    <option value="MKS-6000PEP">MKS-6000PEP</option>
+                                    <option value="MKS-6000PNDEE">MKS-6000PNDEE</option>
+                                    <option value="MKS-6000PNDEET">MKS-6000PNDEET</option>
+                                    <option value="MKS-6000PNDEEVL">MKS-6000PNDEEVL</option>
+                                    <option value="MKS-6000PNDEEW">MKS-6000PNDEEW</option>
+                                    <option value="MKS-6000PNDEEWL">MKS-6000PNDEEWL</option>
+                                    <option value="MKS-6000PNDEF">MKS-6000PNDEF</option>
+                                    <option value="MKS-6000PNDEFL">MKS-6000PNDEFL</option>
+                                    <option value="MKS-6000PNDME">MKS-6000PNDME</option>
+                                    <option value="MKS-6000PNDMEL">MKS-6000PNDMEL</option>
+                                    <option value="MKS-6000PNDMFA">MKS-6000PNDMFA</option>
+                                    <option value="MKS-6000PNDMM">MKS-6000PNDMM</option>
+                                    <option value="MKS-6000 PPV">MKS-6000 PPV</option>
+                                    <option value="MKS-8000PNDEE">MKS-8000PNDEE</option>
+                                    <option value="MKS-8000PNDEET">MKS-8000PNDEET</option>
+                                    <option value="MKS-9000PNDEE">MKS-9000PNDEE</option>
+                                    <option value="MKS-9000PNDEEW">MKS-9000PNDEEW</option>
+                                    <option value="MKS-9000PNDEF">MKS-9000PNDEF</option>
+                                    <option value="MKS-9000PNDME">MKS-9000PNDME</option>
+                                    <option value="MKS-9000PNDMFA">MKS-9000PNDMFA</option>
+                                    <option value="MKS-12000PNDEE">MKS-12000PNDEE</option>
+                                    <option value="MKS-12000PNDEF">MKS-12000PNDEF</option>
+                                    <option value="MKS-15000PNDEE">MKS-15000PNDEE</option>
+                                    <option value="MKS-15000PNDEF">MKS-15000PNDEF</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">Número do Orçamento (Opcional)</label>
@@ -781,6 +857,28 @@
                                     Adicionar Produto
                                 </button>
                             </div>
+
+                            <!-- Custom 3-way Modal para Salvar Alterações -->
+                    <div id="garantia-save-confirm-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 items-center justify-center z-[100]">
+                        <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full text-center relative transform transition-all">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
+                                <svg class="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                            </div>
+                            <h3 class="text-xl font-bold mb-2 text-gray-900">Alterações não salvas</h3>
+                            <p class="text-gray-600 mb-6 font-medium">Você tem modificações neste orçamento. Deseja salvá-las antes de sair?</p>
+                            <div class="flex flex-col sm:flex-row justify-center gap-3">
+                                <button type="button" id="garantia-save-modal-cancel" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg transition-colors focus:outline-none">
+                                    Cancelar
+                                </button>
+                                <button type="button" id="garantia-save-modal-discard" class="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-lg transition-colors focus:outline-none">
+                                    Sair Sem Salvar
+                                </button>
+                                <button type="button" id="garantia-save-modal-save" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-sm focus:outline-none">
+                                    Salvar Alterações
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                             <!-- Modal Selecionar Produto (Garantia) -->
                             <div id="modal-garantia-selecionar-produto" class="fixed hidden inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center p-4">

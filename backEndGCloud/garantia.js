@@ -615,6 +615,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     dataAtualStr
                 ];
                 
+                const isEmpty = !(item.descricao || '').trim() && !(item.observacoes || '').trim();
+
                 if (rowIndexToUpdate !== -1) {
                     await sheets.spreadsheets.values.update({
                         spreadsheetId,
@@ -622,7 +624,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                         valueInputOption: 'USER_ENTERED',
                         resource: { values: [rowData] }
                     });
-                } else {
+                } else if (!isEmpty) {
                     await sheets.spreadsheets.values.append({
                         spreadsheetId,
                         range: `${sheetName}!A:E`,

@@ -77,8 +77,81 @@
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label class="label-text">Equipamento (Modelo e Ano) *</label>
-                        <input type="text" id="equipamento" required class="input-field"  placeholder="Ex: MKS 2000 - 2024">
+                        <label class="label-text">Equipamento *</label>
+                        <select id="equipamento" required class="input-field cursor-pointer appearance-none bg-white">
+                            <option value="" disabled selected>Selecione o modelo</option>
+                            <option value="MKS-150PTE">MKS-150PTE</option>
+                            <option value="MKS-250PCE">MKS-250PCE</option>
+                            <option value="MKS-300PAP">MKS-300PAP</option>
+                            <option value="MKS-400PHL">MKS-400PHL</option>
+                            <option value="MKS-400PTE">MKS-400PTE</option>
+                            <option value="MKS-500P1EH">MKS-500P1EH</option>
+                            <option value="MKS-500P2E">MKS-500P2E</option>
+                            <option value="MKS-500P2EH">MKS-500P2EH</option>
+                            <option value="MKS-500P3E">MKS-500P3E</option>
+                            <option value="MKS-500P3EH">MKS-500P3EH</option>
+                            <option value="MKS-500P3X">MKS-500P3X</option>
+                            <option value="MKS-500PCE">MKS-500PCE</option>
+                            <option value="MKS-500PHL">MKS-500PHL</option>
+                            <option value="MKS-500PNDMM">MKS-500PNDMM</option>
+                            <option value="MKS-500R1I">MKS-500R1I</option>
+                            <option value="MKS-600P2E">MKS-600P2E</option>
+                            <option value="MKS-900PHL">MKS-900PHL</option>
+                            <option value="MKS-1000P1EH">MKS-1000P1EH</option>
+                            <option value="MKS-1000P2EH">MKS-1000P2EH</option>
+                            <option value="MKS-1000P3E">MKS-1000P3E</option>
+                            <option value="MKS-1000P3EH">MKS-1000P3EH</option>
+                            <option value="MKS-1000PHL">MKS-1000PHL</option>
+                            <option value="MKS-1000PNDMM">MKS-1000PNDMM</option>
+                            <option value="MKS-1200P4E">MKS-1200P4E</option>
+                            <option value="MKS-1500P4E">MKS-1500P4E</option>
+                            <option value="MKS-1500PCE">MKS-1500PCE</option>
+                            <option value="MKS-1500PNDME">MKS-1500PNDME</option>
+                            <option value="MKS-1500PRE">MKS-1500PRE</option>
+                            <option value="MKS-2000L">MKS-2000L</option>
+                            <option value="MKS-2000PEP">MKS-2000PEP</option>
+                            <option value="MKS-2000PNDEF">MKS-2000PNDEF</option>
+                            <option value="MKS-2000PNDMM">MKS-2000PNDMM</option>
+                            <option value="MKS-2000RM">MKS-2000RM</option>
+                            <option value="MKS-2200P4E">MKS-2200P4E</option>
+                            <option value="MKS-2200PRE">MKS-2200PRE</option>
+                            <option value="MKS-2500DMC">MKS-2500DMC</option>
+                            <option value="MKS-3000DMC">MKS-3000DMC</option>
+                            <option value="MKS-3000PNDEE">MKS-3000PNDEE</option>
+                            <option value="MKS-3000PNDEEW">MKS-3000PNDEEW</option>
+                            <option value="MKS-3000PNDEF">MKS-3000PNDEF</option>
+                            <option value="MKS-3000PNDME">MKS-3000PNDME</option>
+                            <option value="MKS-3000PNDMM">MKS-3000PNDMM</option>
+                            <option value="MKS-4000ME">MKS-4000ME</option>
+                            <option value="MKS-4000PEP">MKS-4000PEP</option>
+                            <option value="MKS-4000PNDEE">MKS-4000PNDEE</option>
+                            <option value="MKS-5000PNDMM">MKS-5000PNDMM</option>
+                            <option value="MKS-6000PEP">MKS-6000PEP</option>
+                            <option value="MKS-6000PNDEE">MKS-6000PNDEE</option>
+                            <option value="MKS-6000PNDEET">MKS-6000PNDEET</option>
+                            <option value="MKS-6000PNDEEVL">MKS-6000PNDEEVL</option>
+                            <option value="MKS-6000PNDEEW">MKS-6000PNDEEW</option>
+                            <option value="MKS-6000PNDEEWL">MKS-6000PNDEEWL</option>
+                            <option value="MKS-6000PNDEF">MKS-6000PNDEF</option>
+                            <option value="MKS-6000PNDEFL">MKS-6000PNDEFL</option>
+                            <option value="MKS-6000PNDME">MKS-6000PNDME</option>
+                            <option value="MKS-6000PNDMEL">MKS-6000PNDMEL</option>
+                            <option value="MKS-6000PNDMFA">MKS-6000PNDMFA</option>
+                            <option value="MKS-6000PNDMM">MKS-6000PNDMM</option>
+                            <option value="MKS-6000 PPV">MKS-6000 PPV</option>
+                            <option value="MKS-8000PNDEE">MKS-8000PNDEE</option>
+                            <option value="MKS-8000PNDEET">MKS-8000PNDEET</option>
+                            <option value="MKS-9000PNDEE">MKS-9000PNDEE</option>
+                            <option value="MKS-9000PNDEEW">MKS-9000PNDEEW</option>
+                            <option value="MKS-9000PNDEF">MKS-9000PNDEF</option>
+                            <option value="MKS-9000PNDME">MKS-9000PNDME</option>
+                            <option value="MKS-9000PNDMFA">MKS-9000PNDMFA</option>
+                            <option value="MKS-12000PNDEE">MKS-12000PNDEE</option>
+                            <option value="MKS-12000PNDEF">MKS-12000PNDEF</option>
+                            <option value="MKS-15000PNDEE">MKS-15000PNDEE</option>
+                            <option value="MKS-15000PNDEF">MKS-15000PNDEF</option>
+                            <option value="Outro">Outro</option>
+                        </select>
                     </div>
                     <div>
                         <label class="label-text">Número de Série</label>

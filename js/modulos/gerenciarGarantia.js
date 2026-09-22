@@ -265,16 +265,49 @@ export const GerenciarGarantiaApp = (function () {
         // Back buttons
         const checkCloseForm = () => {
             if (_formHasChanges) {
-                if (!confirm('Você tem alterações não salvas. Deseja realmente sair sem salvar?')) {
-                    return;
+                const modalConfirm = document.getElementById('garantia-save-confirm-modal');
+                if (modalConfirm) {
+                    modalConfirm.classList.remove('hidden');
+                    modalConfirm.classList.add('flex');
+                    return; // Retorna pois a ação continua nos botões do modal
                 }
             }
             document.getElementById('modal-garantia-form').classList.add('hidden');
             _fetchPedidosGarantiaData(); 
         };
 
+        // Ligar os botões do Modal 3-way
+        const saveModalCancel = document.getElementById('garantia-save-modal-cancel');
+        const saveModalDiscard = document.getElementById('garantia-save-modal-discard');
+        const saveModalSave = document.getElementById('garantia-save-modal-save');
+
+        if (saveModalCancel) {
+            saveModalCancel.onclick = () => {
+                document.getElementById('garantia-save-confirm-modal').classList.add('hidden');
+                document.getElementById('garantia-save-confirm-modal').classList.remove('flex');
+            };
+        }
+        if (saveModalDiscard) {
+            saveModalDiscard.onclick = () => {
+                document.getElementById('garantia-save-confirm-modal').classList.add('hidden');
+                document.getElementById('garantia-save-confirm-modal').classList.remove('flex');
+                document.getElementById('modal-garantia-form').classList.add('hidden');
+                _fetchPedidosGarantiaData(); 
+            };
+        }
+        if (saveModalSave) {
+            saveModalSave.onclick = () => {
+                document.getElementById('garantia-save-confirm-modal').classList.add('hidden');
+                document.getElementById('garantia-save-confirm-modal').classList.remove('flex');
+                const btnSubmit = document.getElementById('btn-submit-garantia');
+                if (btnSubmit) btnSubmit.click();
+            };
+        }
+
         if (_btnBackFromForm) _btnBackFromForm.onclick = checkCloseForm;
         if (_btnBackFromFormArrow) _btnBackFromFormArrow.onclick = checkCloseForm;
+        const btnCloseFormX = document.getElementById('btn-close-garantia-form-x');
+        if (btnCloseFormX) btnCloseFormX.onclick = checkCloseForm;
         if (_btnBackFromTable) _btnBackFromTable.onclick = () => { _showView('cards'); };
         if (_btnBackFromSatg) _btnBackFromSatg.onclick = () => { _showView('cards'); };
         if (_btnBackFromPedidosGarantia) _btnBackFromPedidosGarantia.onclick = () => _showView('cards');
@@ -700,11 +733,15 @@ export const GerenciarGarantiaApp = (function () {
                 observacao: _inputObservacao.value.trim(),
                 avaliacao: _inputAvaliacao.value.trim(),
                 itensDetalhado: _currentOrderItems
-                    .filter(item => item.descricaoPersonalizada || item.observacaoItem)
+                    .filter(item => {
+                        const hasCustom = !!item.descricaoPersonalizada || !!item.observacaoItem;
+                        const hadCustomBefore = _itensDetalhadoGarantiaData.some(d => String(d.idProduto) === String(item.id || item.cod));
+                        return hasCustom || hadCustomBefore;
+                    })
                     .map(item => ({
-                        idProduto: item.id || item.cod, // O cod pode ser o id no Bling, vamos garantir enviando ambos caso precise
-                        descricao: item.descricaoPersonalizada,
-                        observacoes: item.observacaoItem
+                        idProduto: item.id || item.cod,
+                        descricao: item.descricaoPersonalizada || '',
+                        observacoes: item.observacaoItem || ''
                     }))
             };
 
@@ -780,11 +817,7 @@ export const GerenciarGarantiaApp = (function () {
             document.getElementById('modal-garantia-form').classList.add('hidden');
             
             if (isEdit) {
-                // Se for edição, aguarda atualizar os dados para refletir no modal de detalhes que está por trás
                 await _fetchPedidosGarantiaData();
-                if (editedId) {
-                    _openPedidoGarantiaModal(editedId);
-                }
             } else {
                 _fetchPedidosGarantiaData();
                 _showView('satg');
@@ -903,7 +936,15 @@ export const GerenciarGarantiaApp = (function () {
         _inputCpfCnpj.value = pedido.cpfCnpj || pedido.cpf || '';
         _inputNumero.value = pedido.numero || '';
         _inputIdNota.value = pedido.idNotaFiscal || pedido.idNota || '';
-        document.getElementById('garantia-equipamento').value = pedido.equipamento || pedido.produto || '';
+        const eqValue = pedido.equipamento || pedido.produto || '';
+        const eqSelect = document.getElementById('garantia-equipamento');
+        if (eqValue && !Array.from(eqSelect.options).some(opt => opt.value === eqValue)) {
+            const newOpt = document.createElement('option');
+            newOpt.value = eqValue;
+            newOpt.text = eqValue;
+            eqSelect.add(newOpt);
+        }
+        eqSelect.value = eqValue;
         _inputObservacao.value = pedido.observacao || '';
         _inputAvaliacao.value = pedido.avaliacao || pedido.analise || '';
 
@@ -1564,7 +1605,7 @@ export const GerenciarGarantiaApp = (function () {
 
             const btnVerPedido = tr.querySelector('.btn-ver-pedido');
             if (btnVerPedido) {
-                btnVerPedido.onclick = () => _openPedidoGarantiaModal(req.idPedido);
+                btnVerPedido.onclick = () => _openEditPedidoForm(req.idPedido);
             }
 
             _satgTableContent.appendChild(tr);
@@ -1846,16 +1887,7 @@ export const GerenciarGarantiaApp = (function () {
             _btnAprovarPedidoSatg.className = "px-5 py-2 text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-md flex items-center gap-2";
             _btnAprovarPedidoSatg.onclick = () => {
                 _closeSatgModal();
-                const navGerenciarPedidos = document.getElementById('nav-gerenciar-pedidos');
-                if (navGerenciarPedidos) navGerenciarPedidos.click();
-                
-                setTimeout(() => {
-                    const searchInput = document.getElementById('pedidos-search');
-                    if (searchInput) {
-                        searchInput.value = pedidoLigado;
-                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                }, 300);
+                _openEditPedidoForm(pedidoLigado);
             };
         } else {
             _btnAprovarPedidoSatg.innerHTML = `
@@ -1879,7 +1911,7 @@ export const GerenciarGarantiaApp = (function () {
         if (_btnVerPedidoSatg) {
             if (req.idPedido) {
                 _btnVerPedidoSatg.classList.remove('hidden');
-                _btnVerPedidoSatg.onclick = () => _openPedidoGarantiaModal(req.idPedido);
+                _btnVerPedidoSatg.onclick = () => _openEditPedidoForm(req.idPedido);
             } else {
                 _btnVerPedidoSatg.classList.add('hidden');
             }
@@ -2147,7 +2179,15 @@ export const GerenciarGarantiaApp = (function () {
                 _inputAvaliacao.value = document.getElementById('satg-modal-observacao').value.trim();
                 
                 // NOVO: Adiciona o equipamento no campo próprio e deixa os itens vazios
-                document.getElementById('garantia-equipamento').value = req.equipamento || req.produto || '';
+                const reqEqValue = req.equipamento || req.produto || '';
+                const reqEqSelect = document.getElementById('garantia-equipamento');
+                if (reqEqValue && !Array.from(reqEqSelect.options).some(opt => opt.value === reqEqValue)) {
+                    const newReqOpt = document.createElement('option');
+                    newReqOpt.value = reqEqValue;
+                    newReqOpt.text = reqEqValue;
+                    reqEqSelect.add(newReqOpt);
+                }
+                reqEqSelect.value = reqEqValue;
                 
                 // Lista vazia para o usuário preencher com as peças
                 _currentOrderItems = [];
