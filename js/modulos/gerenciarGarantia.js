@@ -1753,6 +1753,16 @@ export const GerenciarGarantiaApp = (function () {
                                   .replace(/(\d{4})(\d)/, "$1-$2");
                     }
                     e.target.value = v;
+                } else if (type === 'data') {
+                    let digits = v.replace(/\D/g, "").substring(0, 8);
+                    if (digits.length <= 2) {
+                        v = digits;
+                    } else if (digits.length <= 4) {
+                        v = digits.substring(0, 2) + '/' + digits.substring(2);
+                    } else {
+                        v = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
+                    }
+                    e.target.value = v;
                 } else if (type === 'telefone') {
                     let digits = v.replace(/\D/g, "");
                     if (digits.startsWith("55")) digits = digits.substring(2);
@@ -1912,10 +1922,10 @@ export const GerenciarGarantiaApp = (function () {
         injectEditPencil('satg-modal-pedido', 'L', 'numeroRequisicao', req.numeroRequisicao);
         
         document.getElementById('satg-modal-data-compra').innerText = req.dataCompra || '-';
-        injectEditPencil('satg-modal-data-compra', 'N', 'dataCompra', req.dataCompra);
+        injectEditPencil('satg-modal-data-compra', 'N', 'dataCompra', req.dataCompra, 'data');
         
         document.getElementById('satg-modal-entrega').innerText = req.dataEntregaTecnica || '-';
-        injectEditPencil('satg-modal-entrega', 'O', 'dataEntregaTecnica', req.dataEntregaTecnica);
+        injectEditPencil('satg-modal-entrega', 'O', 'dataEntregaTecnica', req.dataEntregaTecnica, 'data');
         
         const tipoSelect = document.getElementById('satg-modal-tipo-equipamento');
         if (tipoSelect) {
@@ -1974,7 +1984,7 @@ export const GerenciarGarantiaApp = (function () {
         }
         
         document.getElementById('satg-modal-parada').innerText = req.dataParada || '-';
-        injectEditPencil('satg-modal-parada', 'S', 'dataParada', req.dataParada);
+        injectEditPencil('satg-modal-parada', 'S', 'dataParada', req.dataParada, 'data');
         
         document.getElementById('satg-modal-preventiva').innerText = req.dataUltimaPreventiva || '-';
         injectEditPencil('satg-modal-preventiva', 'T', 'dataUltimaPreventiva', req.dataUltimaPreventiva);
