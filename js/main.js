@@ -4959,8 +4959,10 @@ async function _saveProductLocationEdit() {
 */
 async function _saveProductWeightEdit() {
     const productId = _productWeightEditModal.dataset.productId;
-    const pesoBruto = parseFloat(_productWeightBrutoInput.value);
-    const pesoLiquido = parseFloat(_productWeightLiquidoInput.value);
+    
+    const pesoBruto = parseFloat(String(_productWeightBrutoInput.value).replace(',', '.'));
+    const pesoLiquido = parseFloat(String(_productWeightLiquidoInput.value).replace(',', '.'));
+
 
     if (isNaN(pesoBruto) || isNaN(pesoLiquido) || pesoBruto < 0 || pesoLiquido < 0) {
         _showMessageModal("Aviso", "Por favor, insira valores válidos para o peso.");
@@ -5152,6 +5154,32 @@ function _openProductLocationEditModal(productId) {
 /**
 * NOVO: Abre o modal para editar o peso do produto.
 */
+
+function _formatModalWeightInput(inputEl) {
+    if (!inputEl) return;
+    
+    function formatValue(value) {
+        let clean = String(value).replace(/[^0-9]/g, '');
+        if (!clean) return '0,000';
+        
+        let grams = parseInt(clean, 10);
+        let valFloat = grams / 1000;
+        
+        return valFloat.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    }
+    
+    // Removendo os listeners antigos se existirem para não acumular
+    const newEl = inputEl.cloneNode(true);
+    inputEl.parentNode.replaceChild(newEl, inputEl);
+    
+    newEl.addEventListener('input', function(e) {
+        let val = this.value;
+        this.value = formatValue(val);
+    });
+    
+    return newEl; // retorna a nova referência
+}
+
 function _openProductWeightEditModal(productId) {
     const product = _allProducts.find(p => String(p.id) === String(productId));
     if (!product) {
@@ -5162,8 +5190,18 @@ function _openProductWeightEditModal(productId) {
     if (_productWeightEditModal) {
         _productWeightEditModal.dataset.productId = product.id;
         if (_productWeightEditInfo) _productWeightEditInfo.innerHTML = `Editando peso do produto código: <b>${product.codigo}</b> - ${product.descricao}`;
-        if (_productWeightBrutoInput) _productWeightBrutoInput.value = product.pesoBruto || product.metricas?.peso_bruto || "";
-        if (_productWeightLiquidoInput) _productWeightLiquidoInput.value = product.pesoLiq || product.metricas?.peso_liquido || "";
+        
+        if (_productWeightBrutoInput) {
+            let val = parseFloat(product.pesoBruto || product.metricas?.peso_bruto || 0);
+            _productWeightBrutoInput.value = val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+            _productWeightBrutoInput = _formatModalWeightInput(_productWeightBrutoInput);
+        }
+        if (_productWeightLiquidoInput) {
+            let val = parseFloat(product.pesoLiq || product.metricas?.peso_liquido || 0);
+            _productWeightLiquidoInput.value = val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+            _productWeightLiquidoInput = _formatModalWeightInput(_productWeightLiquidoInput);
+        }
+
 
         if (_productWeightEditLoading) _productWeightEditLoading.classList.add('hidden');
         if (_productWeightEditSuccess) _productWeightEditSuccess.classList.add('hidden');
