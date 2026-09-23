@@ -2702,33 +2702,6 @@ export const GerenciarPedidosApp = (function () {
                 'Tem certeza de que deseja atualizar este pedido no Bling com as informações preenchidas?'
             );
             if (!confirmed) return { success: false, error: "Cancelado pelo usuário" };
-
-
-    function _formatWeightInput(inputEl) {
-        if (!inputEl) return;
-        
-        function formatValue(value) {
-            let clean = String(value).replace(/[^0-9]/g, '');
-            if (!clean) return '0,000';
-            
-            let grams = parseInt(clean, 10);
-            let valFloat = grams / 1000;
-            
-            return valFloat.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-        }
-        
-        if (inputEl.value) {
-            let val = parseFloat(String(inputEl.value).replace(',', '.')) || 0;
-            inputEl.value = val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-        }
-        
-        inputEl.addEventListener('input', function(e) {
-            let val = this.value;
-            this.value = formatValue(val);
-        });
-    }
-
-    return { success: false, error: "Cancelado pelo usuário" };
         }
 
         // Para evitar que o Bling apague o endereço do cliente no pedido (já que o GET não traz o endereço dentro de contato),
