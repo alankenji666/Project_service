@@ -619,6 +619,7 @@ export const GerenciarGarantiaApp = (function () {
             
             // Busca imagem no _allProducts
             let imgSrc = '';
+            let fallbackPeso = 0;
             if (window._allProducts) {
                 const prod = window._allProducts.find(p => String(p.codigo || '').trim() === String(item.cod || item.id || '').trim());
                 if (prod) {
@@ -627,8 +628,12 @@ export const GerenciarGarantiaApp = (function () {
                     } else if (prod.imagem) {
                         imgSrc = prod.imagem;
                     }
+                    fallbackPeso = parseFloat(prod.pesoBruto) || parseFloat(prod.pesoLiquido) || parseFloat(prod.metricas?.peso_bruto) || parseFloat(prod.metricas?.peso_liquido) || 0;
                 }
             }
+            
+            let itemPeso = parseFloat(item.peso) || fallbackPeso;
+            item.peso = itemPeso;
             
             const temPersonalizacao = !!item.descricaoPersonalizada || !!item.observacaoItem;
             let badgePersonalizado = '';
@@ -661,8 +666,8 @@ export const GerenciarGarantiaApp = (function () {
                 </td>
                 <td class="px-4 py-3">
                     <div class="flex items-center gap-2 justify-center" onclick="event.stopPropagation()">
-                        <input type="text" class="garantia-item-peso-input w-20 px-2 py-1 text-sm border border-gray-300 rounded text-center focus:ring-1 focus:ring-blue-500" value="${(item.peso || 0).toFixed(3)}">
-                        <button type="button" class="garantia-item-sync-peso-btn flex-shrink-0 p-1 text-blue-500 hover:text-blue-700 bg-white rounded shadow-sm border border-gray-200 hidden transition-all" title="Salvar novo peso no cadastro do produto no Bling" data-original-peso="${(item.peso || 0).toFixed(3)}">
+                        <input type="text" class="garantia-item-peso-input w-20 px-2 py-1 text-sm border border-gray-300 rounded text-center focus:ring-1 focus:ring-blue-500" value="${itemPeso.toFixed(3)}">
+                        <button type="button" class="garantia-item-sync-peso-btn flex-shrink-0 p-1 text-blue-500 hover:text-blue-700 bg-white rounded shadow-sm border border-gray-200 hidden transition-all" title="Salvar novo peso no cadastro do produto no Bling" data-original-peso="${itemPeso.toFixed(3)}">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
                         </button>
                     </div>
