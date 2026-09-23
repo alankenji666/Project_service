@@ -1987,7 +1987,7 @@ export const GerenciarGarantiaApp = (function () {
         injectEditPencil('satg-modal-parada', 'S', 'dataParada', req.dataParada, 'data');
         
         document.getElementById('satg-modal-preventiva').innerText = req.dataUltimaPreventiva || '-';
-        injectEditPencil('satg-modal-preventiva', 'T', 'dataUltimaPreventiva', req.dataUltimaPreventiva);
+        injectEditPencil('satg-modal-preventiva', 'T', 'dataUltimaPreventiva', req.dataUltimaPreventiva, 'data');
         
         document.getElementById('satg-modal-onde-esta').innerText = req.ondeEstaProblema || '-';
         injectEditPencil('satg-modal-onde-esta', 'AE', 'ondeEstaProblema', req.ondeEstaProblema);
