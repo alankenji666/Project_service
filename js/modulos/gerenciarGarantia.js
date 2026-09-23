@@ -1704,7 +1704,7 @@ export const GerenciarGarantiaApp = (function () {
         
         document.getElementById('satg-modal-codigo').innerText = req.codigo;
 
-        function _openCustomPrompt(title, initialValue, callback, type) {
+        function _openCustomPrompt(title, initialValue, callback, options = null) {
             const modal = document.getElementById('modal-generic-edit');
             const titleEl = document.getElementById('modal-generic-edit-title');
             const labelEl = document.getElementById('modal-generic-edit-label');
@@ -1790,7 +1790,7 @@ export const GerenciarGarantiaApp = (function () {
             setTimeout(() => newInput.focus(), 100);
         }
 
-        function injectEditPencil(elementId, column, key, currentValue, type = 'text') {
+        function injectEditPencil(elementId, column, key, currentValue, options = null) {
             const el = document.getElementById(elementId);
             if (!el) return;
             
@@ -1821,7 +1821,7 @@ export const GerenciarGarantiaApp = (function () {
                                     rowIndex: req.rowIndex,
                                     updates: [ { column: column, value: newValue } ]
                                 })
-                            });
+                            }, options);
                             const data = await res.json();
                             if (data.success) {
                                 // Update local data temporarily to avoid full reload flicker
@@ -1874,7 +1874,7 @@ export const GerenciarGarantiaApp = (function () {
         injectEditPencil('satg-modal-nf', 'M', 'notaFiscal', req.notaFiscal);
         
         document.getElementById('satg-modal-revenda').innerText = req.revenda || '-';
-        injectEditPencil('satg-modal-revenda', 'H', 'revenda', req.revenda);
+        injectEditPencil('satg-modal-revenda', 'H', 'revenda', req.revenda, ['SIM', 'NÃO']);
         
         document.getElementById('satg-modal-local-revenda').innerText = req.localRevenda || '-';
         injectEditPencil('satg-modal-local-revenda', 'I', 'localRevenda', req.localRevenda);
