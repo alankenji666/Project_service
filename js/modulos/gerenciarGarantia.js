@@ -1838,7 +1838,7 @@ export const GerenciarGarantiaApp = (function () {
                             el.innerText = currentValue || '-';
                         }
                     }
-                }, type);
+                }, options);
             };
             
             el.appendChild(btn);
