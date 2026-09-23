@@ -7,7 +7,7 @@
         // URLs das suas APIs do Google Apps Script
         // ATENÇÃO: Substitua estas URLs pelas URLs de IMPLANTAÇÃO dos seus respectivos scripts
         import { API_URLS } from './apiConfig.js?v=5';
-        import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=2';
+        import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=26';
         window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js?v=2';
         import { DashboardApp } from './modulos/dashboard.js?v=18';

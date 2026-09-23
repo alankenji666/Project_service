@@ -255,7 +255,7 @@ export const PesquisarProduto = (function() {
                 <div class="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
                     <div>
                         <p class="text-sm font-medium text-gray-500">Peso (Kg)</p>
-                        <p class="text-lg text-gray-800 font-semibold product-detail-weight">${product.pesoBruto || product.metricas?.peso_bruto || 0}</p>
+                        <p class="text-lg text-gray-800 font-semibold product-detail-weight">${parseFloat(product.pesoBruto || product.metricas?.peso_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</p>
                     </div>
                     <button class="read-only-disable edit-product-weight-btn p-2 rounded-full hover:bg-gray-200 text-blue-600" data-product-id="${product.id}" title="Editar Peso">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg>
@@ -779,7 +779,7 @@ export const PesquisarProduto = (function() {
         if (String(_activeProductId) === String(productId) && _dom.product_details) {
             const weightElement = _dom.product_details.querySelector('.product-detail-weight');
             if (weightElement) {
-                weightElement.textContent = novoPesoBruto || 0;
+                weightElement.textContent = parseFloat(novoPesoBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
                 weightElement.classList.add('text-green-600', 'scale-105', 'transition-all', 'duration-300');
                 setTimeout(() => weightElement.classList.remove('text-green-600', 'scale-105'), 2000);
             }
