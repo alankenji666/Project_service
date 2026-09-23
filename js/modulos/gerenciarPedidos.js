@@ -1830,7 +1830,7 @@ export const GerenciarPedidosApp = (function () {
             </td>
             <td class="px-4 py-2">
                 <div class="flex items-center gap-2 justify-center">
-                    <input type="number" step="0.001" min="0" class="nfe-edit-item-peso w-20 px-2 py-1 text-sm border border-gray-300 rounded text-center focus:ring-1 focus:ring-blue-500" value="${itemPeso}">
+                    <input type="text" class="nfe-edit-item-peso w-20 px-2 py-1 text-sm border border-gray-300 rounded text-center focus:ring-1 focus:ring-blue-500" value="${itemPeso}">
                     <button type="button" class="nfe-edit-item-sync-peso-btn flex-shrink-0 p-1 text-blue-500 hover:text-blue-700 bg-white rounded shadow-sm border border-gray-200 hidden transition-all" title="Salvar novo peso no cadastro do produto" data-original-peso="${itemPeso}">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
                     </button>
@@ -1864,11 +1864,12 @@ export const GerenciarPedidosApp = (function () {
         if (qtdInput) qtdInput.addEventListener('input', _calculateTotals);
 
         const pesoInput = tr.querySelector('.nfe-edit-item-peso');
+        if (pesoInput) _formatWeightInput(pesoInput);
         const syncPesoBtn = tr.querySelector('.nfe-edit-item-sync-peso-btn');
         if (pesoInput && syncPesoBtn) {
             pesoInput.addEventListener('input', () => {
                 const originalPeso = parseFloat(syncPesoBtn.dataset.originalPeso) || 0;
-                const currentPeso = parseFloat(pesoInput.value) || 0;
+                const currentPeso = parseFloat(String(pesoInput.value).replace(',', '.')) || 0;
                 if (currentPeso !== originalPeso) {
                     syncPesoBtn.classList.remove('hidden');
                 } else {
@@ -1877,7 +1878,7 @@ export const GerenciarPedidosApp = (function () {
             });
 
             syncPesoBtn.addEventListener('click', async () => {
-                const currentPeso = parseFloat(pesoInput.value) || 0;
+                const currentPeso = parseFloat(String(pesoInput.value).replace(',', '.')) || 0;
                 const originalBtnHtml = syncPesoBtn.innerHTML;
                 
                 syncPesoBtn.innerHTML = `<svg class="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
@@ -2700,7 +2701,32 @@ export const GerenciarPedidosApp = (function () {
                 'Atualizar Pedido no Bling',
                 'Tem certeza de que deseja atualizar este pedido no Bling com as informações preenchidas?'
             );
-            if (!confirmed) return { success: false, error: "Cancelado pelo usuário" };
+            if (!confirmed)
+    function _formatWeightInput(inputEl) {
+        if (!inputEl) return;
+        
+        function formatValue(value) {
+            let clean = String(value).replace(/[^0-9]/g, '');
+            if (!clean) return '0,000';
+            
+            let grams = parseInt(clean, 10);
+            let valFloat = grams / 1000;
+            
+            return valFloat.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+        }
+        
+        if (inputEl.value) {
+            let val = parseFloat(String(inputEl.value).replace(',', '.')) || 0;
+            inputEl.value = val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+        }
+        
+        inputEl.addEventListener('input', function(e) {
+            let val = this.value;
+            this.value = formatValue(val);
+        });
+    }
+    
+    return { success: false, error: "Cancelado pelo usuário" };
         }
 
         // Para evitar que o Bling apague o endereço do cliente no pedido (já que o GET não traz o endereço dentro de contato),
