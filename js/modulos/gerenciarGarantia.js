@@ -1704,7 +1704,7 @@ export const GerenciarGarantiaApp = (function () {
         
         document.getElementById('satg-modal-codigo').innerText = req.codigo;
 
-        function _openCustomPrompt(title, initialValue, callback, options = null) {
+        function _openCustomPrompt(title, initialValue, callback, type = null) {
             const modal = document.getElementById('modal-generic-edit');
             const titleEl = document.getElementById('modal-generic-edit-title');
             const labelEl = document.getElementById('modal-generic-edit-label');
@@ -1790,7 +1790,7 @@ export const GerenciarGarantiaApp = (function () {
             setTimeout(() => newInput.focus(), 100);
         }
 
-        function injectEditPencil(elementId, column, key, currentValue, options = null) {
+        function injectEditPencil(elementId, column, key, currentValue, type = 'text') {
             const el = document.getElementById(elementId);
             if (!el) return;
             
@@ -1821,7 +1821,7 @@ export const GerenciarGarantiaApp = (function () {
                                     rowIndex: req.rowIndex,
                                     updates: [ { column: column, value: newValue } ]
                                 })
-                            }, options);
+                            }, type);
                             const data = await res.json();
                             if (data.success) {
                                 // Update local data temporarily to avoid full reload flicker
@@ -1838,7 +1838,7 @@ export const GerenciarGarantiaApp = (function () {
                             el.innerText = currentValue || '-';
                         }
                     }
-                }, options);
+                }, type);
             };
             
             el.appendChild(btn);
@@ -1873,8 +1873,31 @@ export const GerenciarGarantiaApp = (function () {
         document.getElementById('satg-modal-nf').innerText = req.notaFiscal || '-';
         injectEditPencil('satg-modal-nf', 'M', 'notaFiscal', req.notaFiscal);
         
-        document.getElementById('satg-modal-revenda').innerText = req.revenda || '-';
-        injectEditPencil('satg-modal-revenda', 'H', 'revenda', req.revenda, ['SIM', 'NÃO']);
+        const revendaSelect = document.getElementById('satg-modal-revenda');
+        if (revendaSelect) {
+            revendaSelect.value = req.revenda || '';
+            revendaSelect.onchange = async () => {
+                const newValue = revendaSelect.value;
+                try {
+                    const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            rowIndex: req.rowIndex,
+                            updates: [ { column: 'H', value: newValue } ]
+                        })
+                    });
+                    if (!res.ok) throw new Error();
+                    req.revenda = newValue;
+                    _fetchSatGData(true);
+                    if (window._showToast) window._showToast('Revenda atualizada com sucesso', 'success');
+                } catch(e) {
+                    console.error(e);
+                    alert('Erro ao atualizar Revenda');
+                    revendaSelect.value = req.revenda || '';
+                }
+            };
+        }
         
         document.getElementById('satg-modal-local-revenda').innerText = req.localRevenda || '-';
         injectEditPencil('satg-modal-local-revenda', 'I', 'localRevenda', req.localRevenda);
