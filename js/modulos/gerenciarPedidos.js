@@ -2701,7 +2701,9 @@ export const GerenciarPedidosApp = (function () {
                 'Atualizar Pedido no Bling',
                 'Tem certeza de que deseja atualizar este pedido no Bling com as informações preenchidas?'
             );
-            if (!confirmed)
+            if (!confirmed) return { success: false, error: "Cancelado pelo usuário" };
+
+
     function _formatWeightInput(inputEl) {
         if (!inputEl) return;
         
@@ -2725,7 +2727,7 @@ export const GerenciarPedidosApp = (function () {
             this.value = formatValue(val);
         });
     }
-    
+
     return { success: false, error: "Cancelado pelo usuário" };
         }
 
