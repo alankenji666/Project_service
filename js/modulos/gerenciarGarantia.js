@@ -1947,8 +1947,31 @@ export const GerenciarGarantiaApp = (function () {
         document.getElementById('satg-modal-chassi').innerText = req.chassiEndereco || '-';
         injectEditPencil('satg-modal-chassi', 'Q', 'chassiEndereco', req.chassiEndereco);
         
-        document.getElementById('satg-modal-operacao').innerText = req.emOperacao || '-';
-        injectEditPencil('satg-modal-operacao', 'R', 'emOperacao', req.emOperacao);
+        const operacaoSelect = document.getElementById('satg-modal-operacao');
+        if (operacaoSelect) {
+            operacaoSelect.value = req.emOperacao || '';
+            operacaoSelect.onchange = async () => {
+                const newValue = operacaoSelect.value;
+                try {
+                    const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            rowIndex: req.rowIndex,
+                            updates: [ { column: 'R', value: newValue } ]
+                        })
+                    });
+                    if (!res.ok) throw new Error();
+                    req.emOperacao = newValue;
+                    _fetchSatGData(true);
+                    if (window._showToast) window._showToast('Status "Em Operação" atualizado com sucesso', 'success');
+                } catch(e) {
+                    console.error(e);
+                    alert('Erro ao atualizar status "Em Operação"');
+                    operacaoSelect.value = req.emOperacao || '';
+                }
+            };
+        }
         
         document.getElementById('satg-modal-parada').innerText = req.dataParada || '-';
         injectEditPencil('satg-modal-parada', 'S', 'dataParada', req.dataParada);
