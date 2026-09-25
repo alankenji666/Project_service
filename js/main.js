@@ -2723,7 +2723,7 @@ const data = filteredProducts.map(product => {
                                     let dotColor = 'bg-yellow-400';
                                     if (s === 'Em Produção') dotColor = 'bg-blue-400';
                                     if (s === 'Finalizado') dotColor = 'bg-green-400';
-                                    return `<button type="button" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 fabrica-dropdown-option" data-value="${s}" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-quantidade="${item.quantidadePedido}"><span class="w-2 h-2 rounded-full ${dotColor}"></span>${s}</button>`;
+                                    return `<button type="button" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 fabrica-dropdown-option" data-value="${s}" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-quantidade="${item.quantidadePedido}"><span class="w-2 h-2 rounded-full ${dotColor}"></span>${s.toUpperCase()}</button>`;
                                 }).join('');
 
                                 statusHtml = `
