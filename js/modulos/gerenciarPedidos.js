@@ -1069,7 +1069,7 @@ export const GerenciarPedidosApp = (function () {
      */
     function _createItemStatusBadge(status, pedidoId, itemCodigo, index) {
         let s = String(status || 'OK').toUpperCase().trim();
-        if (s === 'CRIADO' || s === 'PENDENTE') s = 'OK';
+        if (s === 'CRIADO' || s === 'PENDENTE' || s === 'FINALIZADO') s = 'OK';
         let currentStatus = s;
         if (currentStatus === 'PRODUCAO' || currentStatus === 'EM PRODUCAO') currentStatus = 'EM PRODUÇÃO';
         
@@ -1080,19 +1080,17 @@ export const GerenciarPedidosApp = (function () {
             window._pedidoItemDropdownListener = true;
         }
         
-        const statusOptions = ['OK', 'EM PRODUÇÃO', 'FINALIZADO'];
+        const statusOptions = ['OK', 'EM PRODUÇÃO'];
         if (!statusOptions.includes(currentStatus)) {
             currentStatus = 'OK'; // Default fallback
         }
 
-        let pBadgeClass = 'bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-200'; // OK default
+        let pBadgeClass = 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200'; // OK default
         if (currentStatus === 'EM PRODUÇÃO') pBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200';
-        if (currentStatus === 'FINALIZADO') pBadgeClass = 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200';
 
         let dropdownOptions = statusOptions.map(opt => {
-            let dotColor = 'bg-gray-400';
+            let dotColor = 'bg-green-400';
             if (opt === 'EM PRODUÇÃO') dotColor = 'bg-blue-400';
-            if (opt === 'FINALIZADO') dotColor = 'bg-green-400';
             return `<button type="button" onclick="GerenciarPedidosApp.handleDropdownItemStatus('${pedidoId}', '${itemCodigo}', '${opt}', ${index}, '${currentStatus}', event)" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 pedido-item-dropdown-option"><span class="w-2 h-2 rounded-full ${dotColor}"></span>${opt}</button>`;
         }).join('');
 
