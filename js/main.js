@@ -2704,16 +2704,30 @@ const data = filteredProducts.map(product => {
                             ? item.situacao.charAt(0).toUpperCase() + item.situacao.slice(1).toLowerCase()
                             : 'Pendente';
 
-                        if (itemStatus === 'ok') {
-                            statusHtml = _createOrderStatusPill('ok', 'OK');
-                            rowClass = 'row-ok';
-                        } else { // Para 'PENDENTE' ou qualquer outro status não-OK
-                            if (diasAtrasadosUteis > 0) {
-                                statusHtml = _createOrderStatusPill('overdue', statusText);
-                                rowClass = 'row-overdue';
+                        if (item.requisitionType === 'fabrica') {
+                            if (isOk) {
+                                statusHtml = _createOrderStatusPill('ok', statusText);
+                                rowClass = 'row-ok';
                             } else {
-                                statusHtml = _createOrderStatusPill('pending', statusText);
-                                rowClass = 'row-pending';
+                                statusHtml = `<select data-quantidade="${item.quantidadePedido}" class="fabrica-status-select text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-yellow-50 text-yellow-800" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}">
+                                    <option value="Criado" ${itemStatus === 'criado' || itemStatus === 'pendente' ? 'selected' : ''}>Criado</option>
+                                    <option value="Em Produção" ${itemStatus === 'em produção' || itemStatus === 'em producao' ? 'selected' : ''}>Em Produção</option>
+                                    <option value="Finalizado">Finalizado</option>
+                                </select>`;
+                                rowClass = diasAtrasadosUteis > 0 ? 'row-overdue' : 'row-pending';
+                            }
+                        } else {
+                            if (itemStatus === 'ok') {
+                                statusHtml = _createOrderStatusPill('ok', 'OK');
+                                rowClass = 'row-ok';
+                            } else {
+                                if (diasAtrasadosUteis > 0) {
+                                    statusHtml = _createOrderStatusPill('overdue', statusText);
+                                    rowClass = 'row-overdue';
+                                } else {
+                                    statusHtml = _createOrderStatusPill('pending', statusText);
+                                    rowClass = 'row-pending';
+                                }
                             }
                         }
 
