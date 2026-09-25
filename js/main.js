@@ -2809,7 +2809,7 @@ const data = filteredProducts.map(product => {
                                 }
                             } else if (newStatus === 'Em Produção') {
                                 // Trigger generic prompt for Responsável
-                                _openGenericPrompt("Responsável", "Insira o nome do responsável:", async (ans) => {
+                                _promptGeneric("Responsável", "Insira o nome do responsável:", async (ans) => {
                                     if (!ans) {
                                         event.target.value = 'Criado';
                                         return;
