@@ -2827,15 +2827,21 @@ const data = filteredProducts.map(product => {
                                         if (!updateOrderRes.ok) throw new Error("Erro ao atualizar status na requisição");
 
                                         // 2. Enviar para LinhaProducao
+                                        
+                                        const targetItemDesc = _allOrdersFabrica.flatMap(o => o.rawItems).find(i => i.orderCode === orderCode && i.codigoService === codigoService);
+                                        const dt = new Date();
+                                        const dtStr = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+                                        
                                         const linhaPayload = {
                                             pedidoId: orderCode,
                                             itemCodigo: codigoService,
                                             newStatus: 'Em Produção',
                                             itemIndex: 1,
-                                            newDescription: '',
+                                            newDescription: targetItemDesc ? targetItemDesc.descricao : '',
                                             responsavel: ans,
                                             numeroPedido: orderCode,
-                                            quantidade: event.target.dataset.quantidade || 1
+                                            quantidade: event.target.dataset.quantidade || 1,
+                                            dataPedido: dtStr
                                         };
                                         const linhaRes = await fetch(API_URLS.UPDATE_ITEM_STATUS, {
                                             method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
