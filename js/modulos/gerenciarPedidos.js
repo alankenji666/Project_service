@@ -5573,7 +5573,7 @@ export const GerenciarPedidosApp = (function () {
                         pCache.detalhesProducao[`${pedidoId}-${index}`] = { status: newStatus === 'FINALIZADO' ? 'OK' : newStatus, descricao: currentDesc };
                     }
 
-                    _renderOrderDetailsModal(pedidoId);
+                    _openOrderDetailsModal(pedidoId);
 
                 } catch (error) {
                     console.error("Erro ao alternar status do item:", error);
@@ -5697,7 +5697,7 @@ export const GerenciarPedidosApp = (function () {
                 console.error("Erro ao alternar status do item:", error);
                 alert("Erro ao salvar: " + error.message);
                 // Restaura o botão em caso de erro
-                _renderOrderDetailsModal(pedidoId);
+                _openOrderDetailsModal(pedidoId);
             }
         },
         handleEditProductionDate: async function(pedidoId, itemCodigo, itemIndex, currentDate, event, numeroPedido) {
