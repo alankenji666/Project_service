@@ -14,7 +14,7 @@
         import { EstoqueApp } from './modulos/estoque.js?v=2';
         import { SaidaItens } from './modulos/saidaItens.js?v=4';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=28';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=48';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
         import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=35';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
@@ -4064,7 +4064,8 @@ const data = filteredProducts.map(product => {
             /**
              * NOVO: Imprime a "Solicitação" a partir da tela de Relatório/Preparação.
              */
-            function _promptGeneric(title, label, callback, type = "text") {
+            window._promptGeneric = _promptGeneric;
+function _promptGeneric(title, label, callback, type = "text") {
     const modal = document.getElementById('modal-generic-edit');
     if (!modal) {
         const ans = window.prompt(label);

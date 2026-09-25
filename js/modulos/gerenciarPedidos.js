@@ -1068,27 +1068,43 @@ export const GerenciarPedidosApp = (function () {
      * Cria o HTML do badge de status do item (OK / Em Produção).
      */
     function _createItemStatusBadge(status, pedidoId, itemCodigo, index) {
-        const s = String(status || 'OK').toUpperCase().trim();
-        const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
+        const s = String(status || 'CRIADO').toUpperCase().trim();
+        let currentStatus = s === 'OK' ? 'FINALIZADO' : s;
+        if (currentStatus === 'PENDENTE') currentStatus = 'CRIADO';
+        if (currentStatus === 'PRODUCAO' || currentStatus === 'EM PRODUCAO') currentStatus = 'EM PRODUÇÃO';
         
-        const badgeClass = isProducao 
-            ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' 
-            : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200';
-        
-        const label = isProducao ? 'Em Produção' : 'OK';
-        const icon = isProducao 
-            ? '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>'
-            : '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+        if (!window._pedidoItemDropdownListener) {
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.pedido-item-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+            });
+            window._pedidoItemDropdownListener = true;
+        }
+        const statusOptions = ['CRIADO', 'EM PRODUÇÃO', 'FINALIZADO'];
+        if (!statusOptions.includes(currentStatus)) {
+            currentStatus = 'CRIADO'; // Default fallback
+        }
+
+        let pBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200';
+        if (currentStatus === 'EM PRODUÇÃO') pBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200';
+        if (currentStatus === 'FINALIZADO') pBadgeClass = 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200';
+
+        let dropdownOptions = statusOptions.map(opt => {
+            let dotColor = 'bg-yellow-400';
+            if (opt === 'EM PRODUÇÃO') dotColor = 'bg-blue-400';
+            if (opt === 'FINALIZADO') dotColor = 'bg-green-400';
+            return `<button type="button" onclick="GerenciarPedidosApp.handleDropdownItemStatus('${pedidoId}', '${itemCodigo}', '${opt}', ${index}, '${currentStatus}', event)" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 pedido-item-dropdown-option"><span class="w-2 h-2 rounded-full ${dotColor}"></span>${opt}</button>`;
+        }).join('');
 
         return `
-            <button onclick="GerenciarPedidosApp.handleToggleItemStatus('${pedidoId}', '${itemCodigo}', '${s}', ${index}, event)"
-                    id="status-badge-${pedidoId}-${index}"
-                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border transition-all cursor-pointer shadow-sm active:scale-95 ${badgeClass}"
-                    title="Clique para alternar status do item">
-                ${icon}
-                <span>${label}</span>
+        <div class="relative inline-block text-left" data-dropdown-container>
+            <button type="button" onclick="event.stopPropagation(); document.querySelectorAll('.pedido-item-custom-dropdown-menu:not(.hidden)').forEach(m => { if(m !== this.nextElementSibling) m.classList.add('hidden') }); this.nextElementSibling.classList.toggle('hidden');" class="px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${pBadgeClass} min-w-[120px] transition-all cursor-pointer shadow-sm">
+                <span class="flex-1 text-center">${currentStatus}</span>
+                <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
-        `;
+            <div class="pedido-item-custom-dropdown-menu absolute right-0 mt-1.5 w-40 bg-white border border-gray-100 rounded-xl shadow-xl z-[60] hidden overflow-hidden py-1">
+                ${dropdownOptions}
+            </div>
+        </div>`;
     }
 
     async function _enrichItensWithProductData(itensList) {
@@ -5483,6 +5499,103 @@ export const GerenciarPedidosApp = (function () {
                     btn.innerHTML = originalHtml;
                     btn.disabled = false;
                 }
+            }
+        },
+        handleDropdownItemStatus: async function(pedidoId, itemCodigo, newStatus, index, currentStatus, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            if (newStatus === currentStatus) return;
+
+            document.querySelectorAll('.pedido-item-custom-dropdown-menu').forEach(m => m.classList.add('hidden'));
+
+            const pCache = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+            
+            if (newStatus === 'EM PRODUÇÃO' && pCache) {
+                const sit = String(pCache.situação || pCache.situacao || '').toLowerCase().trim();
+                if (sit.includes('atendid')) {
+                    _showCustomAlert('Ação não permitida', 'Não é possivel alterar o item para "Em Produção", o pedido está como "Atendido"', false);
+                    return;
+                }
+            }
+
+            const executeUpdate = async (responsavel = '') => {
+                try {
+                    let currentDesc = '';
+                    if (pCache && pCache.detalhesProducao) {
+                        const keyId = `${pedidoId}-${index}`;
+                        const keyNum = `${pCache.numero || pCache.numero_pedido}-${index}`;
+                        const extra = pCache.detalhesProducao[keyId] || pCache.detalhesProducao[keyNum];
+                        if (extra) currentDesc = extra.descricao || '';
+                    }
+                    if (!currentDesc) {
+                        const prod = window._enrichedProductsMap ? window._enrichedProductsMap[itemCodigo] : null;
+                        if (prod && prod.descricao) currentDesc = prod.descricao;
+                    }
+
+                    const loadingOverlay = document.getElementById('loading-overlay');
+                    if (loadingOverlay) {
+                        const detailsBox = loadingOverlay.querySelector('.bg-gray-900');
+                        if (detailsBox) detailsBox.style.display = 'none';
+                        const p = loadingOverlay.querySelector('p');
+                        if (p) p.textContent = 'Enviando p/ Linha...';
+                        loadingOverlay.classList.remove('hidden');
+                    }
+
+                    const response = await fetch(API_URLS.UPDATE_ITEM_STATUS, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            pedidoId,
+                            itemCodigo,
+                            newStatus: newStatus === 'FINALIZADO' ? 'OK' : newStatus,
+                            itemIndex: index,
+                            newDescription: currentDesc,
+                            responsavel: responsavel,
+                            numeroPedido: pCache ? (pCache.numero || pCache.numero_pedido || '') : '',
+                            quantidade: index !== undefined && pCache ? (_parseItens(pCache.itens, pCache.detalhesProducao || {}, pedidoId)[index]?.quantidade || 1) : 1,
+                            dataPedido: pCache ? (pCache.data || pCache.data_criacao || '') : '',
+                            origem: 'Pedido'
+                        })
+                    });
+
+                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+
+                    if (!response.ok) {
+                        const errTxt = await response.text();
+                        throw new Error(errTxt || 'Erro ao atualizar status do item');
+                    }
+
+                    // Sincronização de Cache
+                    if (pCache) {
+                        if (!pCache.detalhesProducao) pCache.detalhesProducao = {};
+                        pCache.detalhesProducao[`${pedidoId}-${index}`] = { status: newStatus === 'FINALIZADO' ? 'OK' : newStatus, descricao: currentDesc };
+                    }
+
+                    _renderOrderDetailsModal(pedidoId);
+
+                } catch (error) {
+                    console.error("Erro ao alternar status do item:", error);
+                    const loadingOverlay = document.getElementById('loading-overlay');
+                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+                    alert("Erro ao salvar: " + error.message);
+                }
+            };
+
+            if (newStatus === 'EM PRODUÇÃO') {
+                if (window._promptGeneric) {
+                    window._promptGeneric("Responsável", "Insira o nome do responsável:", async (ans) => {
+                        if (!ans) return;
+                        await executeUpdate(ans);
+                    }, "text");
+                } else {
+                    const ans = prompt("Insira o nome do responsável:");
+                    if (!ans) return;
+                    await executeUpdate(ans);
+                }
+            } else {
+                await executeUpdate('');
             }
         },
         handleToggleItemStatus: async function(pedidoId, itemCodigo, currentStatus, index, event) {
