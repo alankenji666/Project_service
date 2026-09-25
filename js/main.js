@@ -2142,6 +2142,9 @@ const data = filteredProducts.map(product => {
                 const container = document.getElementById('loading-details');
                 if (container) container.innerHTML = ''; // Limpa logs anteriores
 
+                const detailsBox = _loadingOverlay.querySelector('.bg-gray-900');
+                if (detailsBox) detailsBox.style.display = '';
+                _loadingOverlay.querySelector('p').textContent = 'Atualizando dados...';
                 _loadingOverlay.classList.remove('hidden');
                 _logLoading('Iniciando sincronização...');
 
@@ -2815,6 +2818,9 @@ const data = filteredProducts.map(product => {
                                         return;
                                     }
                                     
+                                    const detailsBox = _loadingOverlay.querySelector('.bg-gray-900');
+                                    if (detailsBox) detailsBox.style.display = 'none';
+                                    _loadingOverlay.querySelector('p').textContent = 'Enviando p/ Linha...';
                                     _loadingOverlay.classList.remove('hidden');
                                     try {
                                         // 1. Atualizar a planilha de Requisicao Fabrica
@@ -2863,6 +2869,9 @@ const data = filteredProducts.map(product => {
                                     }
                                 }, "text");
                             } else if (newStatus === 'Criado') {
+                                const detailsBox = _loadingOverlay.querySelector('.bg-gray-900');
+                                if (detailsBox) detailsBox.style.display = 'none';
+                                _loadingOverlay.querySelector('p').textContent = 'Atualizando status...';
                                 _loadingOverlay.classList.remove('hidden');
                                 try {
                                     const updateOrderRes = await fetch(API_URLS.ORDERS_UPDATE, {
@@ -3732,7 +3741,10 @@ const data = filteredProducts.map(product => {
              * NOVO: Função centralizada que envia a requisição para a API de lançamento.
              */
             async function _executeLaunch(type, requisitionCode, itemsToLaunch) {
-                _loadingOverlay.classList.remove('hidden');
+                  const detailsBox = _loadingOverlay.querySelector('.bg-gray-900');
+                  if (detailsBox) detailsBox.style.display = 'none';
+                  _loadingOverlay.querySelector('p').textContent = 'Lançando requisição...';
+                  _loadingOverlay.classList.remove('hidden');
                 const targetLaunchUrl = type === 'fabrica' ? `${API_URLS.WEBHOOK_LAUNCH}/launch-fabrica` : API_URLS.WEBHOOK_LAUNCH;
 
                 try {
@@ -4276,6 +4288,9 @@ function _printReportSolicitation() {
                 );
 
                 if (confirmed) {
+                    const detailsBox = _loadingOverlay.querySelector('.bg-gray-900');
+                    if (detailsBox) detailsBox.style.display = 'none';
+                    _loadingOverlay.querySelector('p').textContent = 'Processando...';
                     _loadingOverlay.classList.remove('hidden');
                     try {
                         const payload = {
