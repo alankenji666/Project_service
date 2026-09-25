@@ -2841,7 +2841,8 @@ const data = filteredProducts.map(product => {
                                             responsavel: ans,
                                             numeroPedido: orderCode,
                                             quantidade: event.target.dataset.quantidade || 1,
-                                            dataPedido: dtStr
+                                            dataPedido: dtStr,
+                                            origem: 'Reposição'
                                         };
                                         const linhaRes = await fetch(API_URLS.UPDATE_ITEM_STATUS, {
                                             method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },

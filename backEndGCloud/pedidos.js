@@ -110,7 +110,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
     router.post('/update-item-status', async (req, res, next) => {
         try {
-            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, responsavel, numeroPedido, quantidade } = req.body;
+            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, responsavel, numeroPedido, quantidade, origem } = req.body;
             const idParaPlanilha = numeroPedido || pedidoId;
             if (!idParaPlanilha) throw new Error("Identificação do pedido é obrigatória.");
 
@@ -127,12 +127,13 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 if (pHeadersNorm.indexOf('quantidade') === -1) { pHeadersRaw.push('quantidade'); pHeadersNorm.push('quantidade'); changed = true; }
                 if (pHeadersNorm.indexOf('data') === -1) { pHeadersRaw.push('data'); pHeadersNorm.push('data'); changed = true; }
                 if (pHeadersNorm.indexOf('responsavel') === -1) { pHeadersRaw.push('responsavel'); pHeadersNorm.push('responsavel'); changed = true; }
+                if (pHeadersNorm.indexOf('origem') === -1) { pHeadersRaw.push('Origem'); pHeadersNorm.push('origem'); changed = true; }
                 if (changed) {
                     await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeadersRaw] } });
                 }
             } else {
-                pHeadersRaw = ['pedido_id', 'sku', 'item_index', 'status', 'quantidade', 'data', 'descricao', 'responsavel'];
-                pHeadersNorm = ['pedido_id', 'sku', 'item_index', 'status', 'quantidade', 'data', 'descricao', 'responsavel'];
+                pHeadersRaw = ['pedido_id', 'sku', 'item_index', 'status', 'quantidade', 'data', 'descricao', 'responsavel', 'Origem'];
+                pHeadersNorm = ['pedido_id', 'sku', 'item_index', 'status', 'quantidade', 'data', 'descricao', 'responsavel', 'origem'];
                 await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeadersRaw] } });
                 pRows = [pHeadersRaw];
             }
@@ -145,6 +146,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             const hQty = pHeadersNorm.indexOf('quantidade');
             const hDate = pHeadersNorm.indexOf('data');
             const hResp = pHeadersNorm.indexOf('responsavel');
+            const hOrigem = pHeadersNorm.indexOf('origem');
 
             let foundIdx = -1;
             for (let i = 1; i < pRows.length; i++) {
@@ -160,6 +162,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             let finalResp = responsavel;
             let finalQty = quantidade;
             let finalDate = dataPedido;
+            let finalOrigem = origem;
 
             if (foundIdx !== -1) {
                 if (finalStatus === undefined && hSt !== -1) finalStatus = pRows[foundIdx][hSt];
@@ -167,6 +170,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 if (finalResp === undefined && hResp !== -1) finalResp = pRows[foundIdx][hResp];
                 if (finalQty === undefined && hQty !== -1) finalQty = pRows[foundIdx][hQty];
                 if (finalDate === undefined && hDate !== -1) finalDate = pRows[foundIdx][hDate];
+                if (finalOrigem === undefined && hOrigem !== -1) finalOrigem = pRows[foundIdx][hOrigem];
             }
 
             const rowData = new Array(pHeadersRaw.length).fill('');
@@ -178,6 +182,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             if (hDate !== -1) rowData[hDate] = finalDate || '';
             if (hDesc !== -1) rowData[hDesc] = finalDesc || '';
             if (hResp !== -1) rowData[hResp] = finalResp || '';
+            if (hOrigem !== -1) rowData[hOrigem] = finalOrigem || '';
 
             if (foundIdx !== -1) {
                 await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A${foundIdx + 1}`, valueInputOption: 'RAW', resource: { values: [rowData] } });
