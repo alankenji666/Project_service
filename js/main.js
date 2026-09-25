@@ -14,7 +14,7 @@
         import { EstoqueApp } from './modulos/estoque.js?v=2';
         import { SaidaItens } from './modulos/saidaItens.js?v=4';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=53';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=54';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
         import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=35';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
@@ -4065,10 +4065,10 @@ const data = filteredProducts.map(product => {
              * NOVO: Imprime a "Solicitação" a partir da tela de Relatório/Preparação.
              */
             window._promptGeneric = _promptGeneric;
-function _promptGeneric(title, label, callback, type = "text") {
+function _promptGeneric(title, label, callback, type = "text", defaultValue = "") {
     const modal = document.getElementById('modal-generic-edit');
     if (!modal) {
-        const ans = window.prompt(label);
+        const ans = window.prompt(label, defaultValue);
         if (ans !== null) callback(ans);
         return;
     }
@@ -4095,7 +4095,7 @@ function _promptGeneric(title, label, callback, type = "text") {
     if (selectEl) selectEl.classList.add('hidden');
     newInput.classList.remove('hidden');
     newInput.type = type;
-    newInput.value = '';
+    newInput.value = defaultValue || '';
 
     const closeModal = () => {
         modal.classList.add('hidden');
