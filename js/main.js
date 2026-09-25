@@ -2712,11 +2712,31 @@ const data = filteredProducts.map(product => {
                                 statusHtml = _createOrderStatusPill('ok', statusText);
                                 rowClass = 'row-ok';
                             } else {
-                                statusHtml = `<select data-quantidade="${item.quantidadePedido}" class="fabrica-status-select text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-yellow-50 text-yellow-800" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}">
-                                    <option value="Criado" ${itemStatus === 'criado' || itemStatus === 'pendente' ? 'selected' : ''}>Criado</option>
-                                    <option value="Em Produção" ${itemStatus === 'em produção' || itemStatus === 'em producao' ? 'selected' : ''}>Em Produção</option>
-                                    <option value="Finalizado">Finalizado</option>
-                                </select>`;
+                                
+                                const statusOptions = ['Criado', 'Em Produção', 'Finalizado'];
+                                let pBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                                let currentStatus = (itemStatus === 'criado' || itemStatus === 'pendente') ? 'CRIADO' : (itemStatus.includes('produ') ? 'EM PRODUÇÃO' : 'FINALIZADO');
+                                if (currentStatus === 'EM PRODUÇÃO') pBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
+                                if (currentStatus === 'FINALIZADO') pBadgeClass = 'bg-green-100 text-green-800 border-green-200';
+
+                                let dropdownOptions = statusOptions.map(s => {
+                                    let dotColor = 'bg-yellow-400';
+                                    if (s === 'Em Produção') dotColor = 'bg-blue-400';
+                                    if (s === 'Finalizado') dotColor = 'bg-green-400';
+                                    return `<button type="button" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 fabrica-dropdown-option" data-value="${s}" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-quantidade="${item.quantidadePedido}"><span class="w-2 h-2 rounded-full ${dotColor}"></span>${s}</button>`;
+                                }).join('');
+
+                                statusHtml = `
+                                <div class="relative inline-block text-left fabrica-custom-dropdown" data-dropdown-container>
+                                    <button type="button" class="fabrica-custom-dropdown-btn px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${pBadgeClass} min-w-[120px] transition-all hover:shadow-sm">
+                                        <span class="flex-1 text-center">${currentStatus}</span>
+                                        <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    </button>
+                                    <div class="fabrica-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1 w-40 bg-white border border-gray-100 rounded-xl shadow-xl z-[60] hidden overflow-hidden py-1">
+                                        ${dropdownOptions}
+                                    </div>
+                                </div>`;
+
                                 rowClass = diasAtrasadosUteis > 0 ? 'row-overdue' : 'row-pending';
                             }
                         } else {
@@ -2794,18 +2814,45 @@ const data = filteredProducts.map(product => {
                         });
                     });
 
-                    _ordersTableContent.querySelectorAll('.fabrica-status-select').forEach(selectElem => {
-                        selectElem.addEventListener('change', async (event) => {
-                            const newStatus = event.target.value;
-                            const { orderCode, codigoService } = event.target.dataset;
+                    
+                    // Listener para fechar dropdowns se clicar fora
+                    if (!window._fabricaGlobalClickSet) {
+                        document.addEventListener('click', () => {
+                            document.querySelectorAll('.fabrica-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+                        });
+                        window._fabricaGlobalClickSet = true;
+                    }
+
+                    _ordersTableContent.querySelectorAll('.fabrica-custom-dropdown-btn').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            document.querySelectorAll('.fabrica-custom-dropdown-menu:not(.hidden)').forEach(m => {
+                                if (m !== btn.nextElementSibling) m.classList.add('hidden');
+                            });
+                            const menu = btn.nextElementSibling;
+                            if (menu) menu.classList.toggle('hidden');
+                        });
+                    });
+
+                    _ordersTableContent.querySelectorAll('.fabrica-dropdown-option').forEach(optionBtn => {
+                        optionBtn.addEventListener('click', async (event) => {
+                            event.stopPropagation();
+                            const menu = event.target.closest('.fabrica-custom-dropdown-menu');
+                            if (menu) menu.classList.add('hidden');
+
+                            const newStatus = event.target.closest('button').dataset.value;
+                            const { orderCode, codigoService, quantidade } = event.target.closest('button').dataset;
                             const requisitionType = 'fabrica';
-                            
+
+                            // Extrair o current status (texto atual do botão principal) para ver se não é o mesmo
+                            const btnMain = menu.previousElementSibling;
+                            const currentStatusStr = btnMain.querySelector('span').textContent.trim();
+                            if (newStatus.toUpperCase() === currentStatusStr.toUpperCase()) return; // não mudou
+
                             if (newStatus === 'Finalizado') {
-                                // Revert visually to allow the _handleItemStatusChange to handle the transition normally
-                                event.target.value = Array.from(event.target.options).find(o => o.defaultSelected)?.value || 'Criado';
-                                
                                 // Call the exact same logic as checking the checkbox
-                                const checkbox = event.target.closest('tr').querySelector('.order-item-checkbox');
+                                const tr = event.target.closest('tr');
+                                const checkbox = tr.querySelector('.order-item-checkbox');
                                 if (checkbox) {
                                     checkbox.checked = true;
                                     _handleItemStatusChange(orderCode, codigoService, requisitionType, checkbox);
@@ -2813,17 +2860,14 @@ const data = filteredProducts.map(product => {
                             } else if (newStatus === 'Em Produção') {
                                 // Trigger generic prompt for Responsável
                                 _promptGeneric("Responsável", "Insira o nome do responsável:", async (ans) => {
-                                    if (!ans) {
-                                        event.target.value = 'Criado';
-                                        return;
-                                    }
+                                    if (!ans) return;
                                     
                                     const detailsBox = _loadingOverlay.querySelector('.bg-gray-900');
                                     if (detailsBox) detailsBox.style.display = 'none';
                                     _loadingOverlay.querySelector('p').textContent = 'Enviando p/ Linha...';
                                     _loadingOverlay.classList.remove('hidden');
+
                                     try {
-                                        // 1. Atualizar a planilha de Requisicao Fabrica
                                         const updateOrderRes = await fetch(API_URLS.ORDERS_UPDATE, {
                                             method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({
@@ -2832,8 +2876,6 @@ const data = filteredProducts.map(product => {
                                         });
                                         if (!updateOrderRes.ok) throw new Error("Erro ao atualizar status na requisição");
 
-                                        // 2. Enviar para LinhaProducao
-                                        
                                         const targetItemDesc = _allOrdersFabrica.flatMap(o => o.rawItems).find(i => i.orderCode === orderCode && i.codigoService === codigoService);
                                         const dt = new Date();
                                         const dtStr = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
@@ -2846,7 +2888,7 @@ const data = filteredProducts.map(product => {
                                             newDescription: targetItemDesc ? targetItemDesc.descricao : '',
                                             responsavel: ans,
                                             numeroPedido: orderCode,
-                                            quantidade: event.target.dataset.quantidade || 1,
+                                            quantidade: quantidade || 1,
                                             dataPedido: dtStr,
                                             origem: 'Reposição'
                                         };
@@ -2854,7 +2896,6 @@ const data = filteredProducts.map(product => {
                                             method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify(linhaPayload)
                                         });
-                                        // ignorar falha da linha producao se der erro pq a planilha as vezes ta ruim
                                         
                                         const targetItem = _allOrdersFabrica.flatMap(o => o.rawItems).find(i => i.orderCode === orderCode && i.codigoService === codigoService);
                                         if (targetItem) targetItem.situacao = 'Em Produção';
@@ -2862,7 +2903,6 @@ const data = filteredProducts.map(product => {
                                         _showMessageModal("Sucesso", "Status alterado para Em Produção e enviado para a Linha de Produção.");
                                     } catch (e) {
                                         _showMessageModal("Erro", "Erro ao mudar status: " + e.message);
-                                        event.target.value = 'Criado';
                                     } finally {
                                         _loadingOverlay.classList.add('hidden');
                                         _renderConsolidatedOrdersTable();
@@ -2873,6 +2913,7 @@ const data = filteredProducts.map(product => {
                                 if (detailsBox) detailsBox.style.display = 'none';
                                 _loadingOverlay.querySelector('p').textContent = 'Atualizando status...';
                                 _loadingOverlay.classList.remove('hidden');
+
                                 try {
                                     const updateOrderRes = await fetch(API_URLS.ORDERS_UPDATE, {
                                         method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
@@ -2892,6 +2933,7 @@ const data = filteredProducts.map(product => {
                             }
                         });
                     });
+
 
                     // Adiciona listeners para o tooltip de produto na tabela de pedidos
                     const tableBody = _ordersTableContent.querySelector('#orders-table-body-items');
