@@ -202,11 +202,12 @@ app.post('/', async (req, res, next) => {
             item.descricao,    // D - Descrição
             item.localizacao || '', // E - Localização
             item.quantidade,   // F - Quantidade Pedido
-                        'PENDENTE',        // H - Situação
+            '',                // G - Quantidade Recebida
+            'PENDENTE',        // H - Situação
             formattedDate,     // I - Data Pedido
             '',                // J - Dias Corridos
             '',                // K - Observação
-            item.prazoEntrega || '15'               // L - Prazo Entrega
+            item.prazoEntrega || '15' // L - Prazo Entrega
         ]);
 
         const response = await sheets.spreadsheets.values.append({
@@ -288,11 +289,12 @@ app.post('/launch-fabrica', async (req, res, next) => {
             item.descricao,    // D - Descrição
             item.localizacao || '', // E - Localização
             item.quantidade,   // F - Quantidade Pedido
-                        'PENDENTE',        // H - Situação
+            '',                // G - Quantidade Recebida
+            'PENDENTE',        // H - Situação
             formattedDate,     // I - Data Pedido
             '',                // J - Dias Corridos
             '',                // K - Observação
-            item.prazoEntrega || item.prazoEntrega || '15'               // L - Prazo Entrega
+            item.prazoEntrega || '15' // L - Prazo Entrega
         ]);
 
         const response = await sheets.spreadsheets.values.append({
@@ -352,7 +354,7 @@ app.post('/update-order-status', async (req, res, next) => {
     console.log('Requisição POST recebida na Cloud Function para /update-order-status:', JSON.stringify(req.body, null, 2));
 
     try {
-        const { orderCode, codigoService, newStatus, requisitionType, diasCorridos } = req.body;
+        const { orderCode, codigoService, newStatus, requisitionType, diasCorridos, quantidadeMovimento } = req.body;
 
         if (!orderCode || !codigoService || !newStatus || !requisitionType) {
             const error = new Error("Dados incompletos: 'orderCode', 'codigoService', 'newStatus' e 'requisitionType' são obrigatórios.");
@@ -392,6 +394,7 @@ app.post('/update-order-status', async (req, res, next) => {
         const codigoServiceColIndex = headers.indexOf('codigo service');
         const situacaoColIndex = headers.indexOf('situação');
         const diasCorridosColIndex = headers.indexOf('dias corridos');
+        const qtdRecebidaColIndex = headers.indexOf('quantidade recebida') !== -1 ? headers.indexOf('quantidade recebida') : headers.indexOf('quantidade recebido');
         const dataEntregaColIndex = headers.indexOf('data entrega');
 
         if (orderCodeColIndex === -1 || codigoServiceColIndex === -1 || situacaoColIndex === -1 || dataEntregaColIndex === -1) {
@@ -422,6 +425,14 @@ app.post('/update-order-status', async (req, res, next) => {
             range: situacaoRange,
             values: [[newStatus]]
         });
+
+        if (typeof quantidadeMovimento !== 'undefined' && qtdRecebidaColIndex !== -1) {
+            const qtdRecebidaRange = `${sheetName}!${String.fromCharCode(65 + qtdRecebidaColIndex)}${rowIndexToUpdate + 1}`;
+            updates.push({
+                range: qtdRecebidaRange,
+                values: [[quantidadeMovimento]]
+            });
+        }
 
         if (typeof diasCorridos !== 'undefined' && diasCorridosColIndex !== -1) {
             const diasCorridosRange = `${sheetName}!${String.fromCharCode(65 + diasCorridosColIndex)}${rowIndexToUpdate + 1}`;
