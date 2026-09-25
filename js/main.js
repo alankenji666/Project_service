@@ -3886,8 +3886,6 @@ const data = filteredProducts.map(product => {
              * NOVO: Imprime a "Solicitação" a partir da tela de Relatório/Preparação.
              */
             function _printReportSolicitation() {
-                // CORREÇÃO: Usa os produtos já filtrados na tela do relatório, em vez de buscar na lista completa.
-                // A chave do mapa de quantidades é o 'id' do produto.
                 const productsToPrint = Array.from(_reportQuantities.keys())
                     .filter(productId => (_reportQuantities.get(productId) || 0) > 0)
                     .map(productId => _allProducts.find(p => String(p.id) === String(productId)));
@@ -3897,8 +3895,80 @@ const data = filteredProducts.map(product => {
                     return;
                 }
 
+                // Usando o modal genérico para pedir o prazo
+                const modal = document.getElementById('modal-generic-edit');
+                if (!modal) {
+                    // Fallback to window.prompt just in case
+                    const ans = window.prompt("Prazo para entrega (em dias):", "5");
+                    if (ans !== null) {
+                        _executePrintReportSolicitation(productsToPrint, parseInt(ans) || 0);
+                    }
+                    return;
+                }
+
+                const titleEl = document.getElementById('modal-generic-edit-title');
+                const labelEl = document.getElementById('modal-generic-edit-label');
+                const inputEl = document.getElementById('modal-generic-edit-input');
+                const selectEl = document.getElementById('modal-generic-edit-select');
+                const btnCancel = document.getElementById('btn-cancel-generic-edit');
+                const btnSave = document.getElementById('btn-save-generic-edit');
+                const btnClose = document.getElementById('btn-close-generic-edit');
+
+                titleEl.innerText = 'Prazo de Entrega';
+                labelEl.innerText = 'Insira o prazo para entrega (em dias):';
+
+                // Clone para limpar eventos anteriores
+                const newBtnSave = btnSave.cloneNode(true);
+                btnSave.parentNode.replaceChild(newBtnSave, btnSave);
+                const newBtnCancel = btnCancel.cloneNode(true);
+                btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel);
+                const newBtnClose = btnClose.cloneNode(true);
+                btnClose.parentNode.replaceChild(newBtnClose, btnClose);
+                const newInput = inputEl.cloneNode(true);
+                inputEl.parentNode.replaceChild(newInput, inputEl);
+
+                if (selectEl) selectEl.classList.add('hidden');
+                newInput.classList.remove('hidden');
+                
+                newInput.type = 'number';
+                newInput.min = '0';
+                newInput.value = '5';
+
+                const closeModal = () => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    newInput.type = 'text'; // reset
+                };
+
+                const handleSave = () => {
+                    const dias = parseInt(newInput.value) || 0;
+                    closeModal();
+                    _executePrintReportSolicitation(productsToPrint, dias);
+                };
+
+                newBtnCancel.addEventListener('click', closeModal);
+                newBtnClose.addEventListener('click', closeModal);
+                newBtnSave.addEventListener('click', handleSave);
+
+                newInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') handleSave();
+                    if (e.key === 'Escape') closeModal();
+                });
+
+                modal.classList.add('flex');
+                modal.classList.remove('hidden');
+                newInput.focus();
+                newInput.select();
+            }
+
+            function _executePrintReportSolicitation(productsToPrint, dias) {
                 const requisitionModeText = _reportState.isIntelligentMode ? 'Requisição Inteligente' : 'Requisição Padrão';
-                const currentDateText = new Date().toLocaleDateString('pt-BR');
+                const today = new Date();
+                const currentDateText = today.toLocaleDateString('pt-BR');
+                
+                const dataPrevista = new Date(today);
+                dataPrevista.setDate(dataPrevista.getDate() + dias);
+                const dataPrevistaText = dataPrevista.toLocaleDateString('pt-BR');
 
                 let printHtml = `
                 <div class="solicitation-page">
@@ -3908,6 +3978,7 @@ const data = filteredProducts.map(product => {
                         <div class="solicitation-info">
                             <div><strong>Modo:</strong> ${requisitionModeText}</div>
                             <div><strong>Data da Solicitação:</strong> ${currentDateText}</div>
+                            <div><strong>Data Prevista:</strong> ${dataPrevistaText}</div>
                         </div>
                     </div>
                     <table class="solicitation-print-table">
@@ -3935,6 +4006,7 @@ const data = filteredProducts.map(product => {
                     _printArea.innerHTML = '';
                 }
             }
+
 
             function _exportReportToCSV() {
                 if (_selectedStockItems.size === 0) {
