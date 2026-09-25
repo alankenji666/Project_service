@@ -290,7 +290,7 @@ app.post('/launch-fabrica', async (req, res, next) => {
             item.localizacao || '', // E - Localização
             item.quantidade,   // F - Quantidade Pedido
             '',                // G - Quantidade Recebida
-            'PENDENTE',        // H - Situação
+            'CRIADO',          // H - Situação
             formattedDate,     // I - Data Pedido
             '',                // J - Dias Corridos
             '',                // K - Observação

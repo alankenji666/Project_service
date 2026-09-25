@@ -2561,7 +2561,7 @@ const data = filteredProducts.map(product => {
                     // Se houver filtros de status ativos, aplica-os
                     filteredItems = filteredItems.filter(item => {
                         const itemStatus = (item.situacao || '').toLowerCase();
-                        const isOk = itemStatus === 'ok';
+                        const isOk = itemStatus === 'ok' || itemStatus === 'finalizado';
 
                         let daysOverdue = 0;
                         if (!isOk && item.dataPedido) {
@@ -2668,7 +2668,7 @@ const data = filteredProducts.map(product => {
 
                     filteredItems.forEach(item => {
                         const itemStatus = (item.situacao || '').toLowerCase();
-                        const isOk = itemStatus === 'ok';
+                        const isOk = itemStatus === 'ok' || itemStatus === 'finalizado';
                         const orderDate = _parsePtBrDate(item.dataPedido);
                         const prazoEntregaDias = parseInt(item.prazoEntregaRaw) || 15; // Prazo padrão de 15 dias
 
@@ -2774,6 +2774,92 @@ const data = filteredProducts.map(product => {
                         checkbox.addEventListener('change', (event) => {
                             const { orderCode, codigoService, requisitionType } = event.target.dataset;
                             _handleItemStatusChange(orderCode, codigoService, requisitionType, event.target);
+                        });
+                    });
+
+                    _ordersTableContent.querySelectorAll('.fabrica-status-select').forEach(selectElem => {
+                        selectElem.addEventListener('change', async (event) => {
+                            const newStatus = event.target.value;
+                            const { orderCode, codigoService } = event.target.dataset;
+                            const requisitionType = 'fabrica';
+                            
+                            if (newStatus === 'Finalizado') {
+                                // Revert visually to allow the _handleItemStatusChange to handle the transition normally
+                                event.target.value = Array.from(event.target.options).find(o => o.defaultSelected)?.value || 'Criado';
+                                
+                                // Call the exact same logic as checking the checkbox
+                                const checkbox = event.target.closest('tr').querySelector('.order-item-checkbox');
+                                if (checkbox) {
+                                    checkbox.checked = true;
+                                    _handleItemStatusChange(orderCode, codigoService, requisitionType, checkbox);
+                                }
+                            } else if (newStatus === 'Em Produção') {
+                                // Trigger generic prompt for Responsável
+                                _openGenericPrompt("Responsável", "Insira o nome do responsável:", async (ans) => {
+                                    if (!ans) {
+                                        event.target.value = 'Criado';
+                                        return;
+                                    }
+                                    
+                                    _loadingOverlay.classList.remove('hidden');
+                                    try {
+                                        // 1. Atualizar a planilha de Requisicao Fabrica
+                                        const updateOrderRes = await fetch(API_URLS.ORDERS_UPDATE, {
+                                            method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                orderCode, codigoService, newStatus: 'Em Produção', requisitionType
+                                            })
+                                        });
+                                        if (!updateOrderRes.ok) throw new Error("Erro ao atualizar status na requisição");
+
+                                        // 2. Enviar para LinhaProducao
+                                        const linhaPayload = {
+                                            pedidoId: orderCode,
+                                            itemCodigo: codigoService,
+                                            newStatus: 'Em Produção',
+                                            itemIndex: 1,
+                                            newDescription: '',
+                                            responsavel: ans,
+                                            numeroPedido: orderCode,
+                                            quantidade: event.target.dataset.quantidade || 1
+                                        };
+                                        const linhaRes = await fetch(API_URLS.UPDATE_ITEM_STATUS, {
+                                            method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify(linhaPayload)
+                                        });
+                                        // ignorar falha da linha producao se der erro pq a planilha as vezes ta ruim
+                                        
+                                        const targetItem = _allOrdersFabrica.flatMap(o => o.rawItems).find(i => i.orderCode === orderCode && i.codigoService === codigoService);
+                                        if (targetItem) targetItem.situacao = 'Em Produção';
+                                        
+                                        _showMessageModal("Sucesso", "Status alterado para Em Produção e enviado para a Linha de Produção.");
+                                    } catch (e) {
+                                        _showMessageModal("Erro", "Erro ao mudar status: " + e.message);
+                                        event.target.value = 'Criado';
+                                    } finally {
+                                        _loadingOverlay.classList.add('hidden');
+                                        _renderConsolidatedOrdersTable();
+                                    }
+                                }, "text");
+                            } else if (newStatus === 'Criado') {
+                                _loadingOverlay.classList.remove('hidden');
+                                try {
+                                    const updateOrderRes = await fetch(API_URLS.ORDERS_UPDATE, {
+                                        method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            orderCode, codigoService, newStatus: 'Criado', requisitionType
+                                        })
+                                    });
+                                    if (!updateOrderRes.ok) throw new Error("Erro ao atualizar status");
+                                    const targetItem = _allOrdersFabrica.flatMap(o => o.rawItems).find(i => i.orderCode === orderCode && i.codigoService === codigoService);
+                                    if (targetItem) targetItem.situacao = 'Criado';
+                                } catch (e) {
+                                    _showMessageModal("Erro", "Erro ao mudar status: " + e.message);
+                                } finally {
+                                    _loadingOverlay.classList.add('hidden');
+                                    _renderConsolidatedOrdersTable();
+                                }
+                            }
                         });
                     });
 
@@ -3515,7 +3601,7 @@ const data = filteredProducts.map(product => {
                             id: product.id, codigo: product.codigo, descricao: product.descricao, quantidade: qty,
                             unidade: product.unidade || 'UN', preco: product.preco || 0,
                             localizacao: product.localizacao || '',
-                            situacao: 'PENDENTE' // Adiciona o status padrão ao criar o item
+                            situacao: type === 'fabrica' ? 'Criado' : 'PENDENTE'
                         };
                     });
 
@@ -3595,7 +3681,7 @@ const data = filteredProducts.map(product => {
                             id: product.id, codigo: product.codigo, descricao: product.descricao, quantidade: qty,
                             unidade: product.unidade || 'UN', preco: product.preco || 0,
                             localizacao: product.localizacao || '',
-                            situacao: 'PENDENTE' // Adiciona o status padrão ao criar o item
+                            situacao: type === 'fabrica' ? 'Criado' : 'PENDENTE'
                         };
                     });
 
@@ -3903,7 +3989,64 @@ const data = filteredProducts.map(product => {
             /**
              * NOVO: Imprime a "Solicitação" a partir da tela de Relatório/Preparação.
              */
-            function _printReportSolicitation() {
+            function _promptGeneric(title, label, callback, type = "text") {
+    const modal = document.getElementById('modal-generic-edit');
+    if (!modal) {
+        const ans = window.prompt(label);
+        if (ans !== null) callback(ans);
+        return;
+    }
+    const titleEl = document.getElementById('modal-generic-edit-title');
+    const labelEl = document.getElementById('modal-generic-edit-label');
+    const inputEl = document.getElementById('modal-generic-edit-input');
+    const selectEl = document.getElementById('modal-generic-edit-select');
+    const btnCancel = document.getElementById('btn-cancel-generic-edit');
+    const btnSave = document.getElementById('btn-save-generic-edit');
+    const btnClose = document.getElementById('btn-close-generic-edit');
+
+    titleEl.innerText = title;
+    labelEl.innerText = label;
+
+    const newBtnSave = btnSave.cloneNode(true);
+    btnSave.parentNode.replaceChild(newBtnSave, btnSave);
+    const newBtnCancel = btnCancel.cloneNode(true);
+    btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel);
+    const newBtnClose = btnClose.cloneNode(true);
+    btnClose.parentNode.replaceChild(newBtnClose, btnClose);
+    const newInput = inputEl.cloneNode(true);
+    inputEl.parentNode.replaceChild(newInput, inputEl);
+
+    if (selectEl) selectEl.classList.add('hidden');
+    newInput.classList.remove('hidden');
+    newInput.type = type;
+    newInput.value = '';
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    };
+
+    const handleSave = () => {
+        const val = newInput.value;
+        closeModal();
+        callback(val);
+    };
+
+    newBtnCancel.addEventListener('click', closeModal);
+    newBtnClose.addEventListener('click', closeModal);
+    newBtnSave.addEventListener('click', handleSave);
+
+    newInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleSave();
+        if (e.key === 'Escape') closeModal();
+    });
+
+    modal.classList.add('flex');
+    modal.classList.remove('hidden');
+    newInput.focus();
+}
+
+function _printReportSolicitation() {
                 const productsToPrint = Array.from(_reportQuantities.keys())
                     .filter(productId => (_reportQuantities.get(productId) || 0) > 0)
                     .map(productId => _allProducts.find(p => String(p.id) === String(productId)));
