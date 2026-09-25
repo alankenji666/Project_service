@@ -3542,9 +3542,17 @@ const data = filteredProducts.map(product => {
                     const requisitionCode = `${ddmmaa}-${nextSequence}`;
 
                     // Mostra o modal de confirmação final.
-                    const confirmationMessage = `Confirmar lançamento de <b>${itemsToLaunch.length}</b> itens?<br><br>Requisição <b>${type.toUpperCase()}</b> com o código <b>${requisitionCode}</b>.`;
+                    const confirmationMessage = `Confirmar lançamento de <b>${itemsToLaunch.length}</b> itens?<br><br>Requisição <b>${type.toUpperCase()}</b> com o código <b>${requisitionCode}</b>.<br><br>
+                    <div class="text-left mt-4 border-t pt-4">
+                        <label class="text-sm font-semibold text-gray-700 block mb-1">Prazo de Entrega (dias):</label>
+                        <input type="number" id="prazo-entrega-input" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" value="15" min="0">
+                    </div>`;
                     const confirmed = await _showConfirmationModal("Confirmar Lançamento", confirmationMessage);
                     if (!confirmed) return;
+
+                    const prazoInput = document.getElementById('prazo-entrega-input');
+                    const prazoEntregaVal = prazoInput ? prazoInput.value : '15';
+                    itemsToLaunch.forEach(item => item.prazoEntrega = prazoEntregaVal);
 
                     // Se confirmado, executa o lançamento.
                     _executeLaunch(type, requisitionCode, itemsToLaunch);
@@ -3595,9 +3603,17 @@ const data = filteredProducts.map(product => {
                 }
 
                 // Mostra o modal de confirmação final.
-                const confirmationMessage = `Confirmar lançamento de <b>${itemsToLaunch.length}</b> itens?<br><br>Requisição <b>TERCEIROS</b> com o código <b>${requisitionCode}</b>.`;
+                const confirmationMessage = `Confirmar lançamento de <b>${itemsToLaunch.length}</b> itens?<br><br>Requisição <b>TERCEIROS</b> com o código <b>${requisitionCode}</b>.<br><br>
+                    <div class="text-left mt-4 border-t pt-4">
+                        <label class="text-sm font-semibold text-gray-700 block mb-1">Prazo de Entrega (dias):</label>
+                        <input type="number" id="prazo-entrega-input" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" value="15" min="0">
+                    </div>`;
                 const confirmed = await _showConfirmationModal("Confirmar Lançamento", confirmationMessage);
                 if (!confirmed) return;
+
+                const prazoInput = document.getElementById('prazo-entrega-input');
+                const prazoEntregaVal = prazoInput ? prazoInput.value : '15';
+                itemsToLaunch.forEach(item => item.prazoEntrega = prazoEntregaVal);
 
                 // Se confirmado, executa o lançamento.
                 _executeLaunch('terceiros', requisitionCode, itemsToLaunch);

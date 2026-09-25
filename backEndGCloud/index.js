@@ -202,12 +202,11 @@ app.post('/', async (req, res, next) => {
             item.descricao,    // D - Descrição
             item.localizacao || '', // E - Localização
             item.quantidade,   // F - Quantidade Pedido
-            '',                // G - Quantidade Recebido (vazio ao lançar)
-            'PENDENTE',        // H - Situação
+                        'PENDENTE',        // H - Situação
             formattedDate,     // I - Data Pedido
             '',                // J - Dias Corridos
             '',                // K - Observação
-            '15'               // L - Prazo Entrega
+            item.prazoEntrega || '15'               // L - Prazo Entrega
         ]);
 
         const response = await sheets.spreadsheets.values.append({
@@ -289,12 +288,11 @@ app.post('/launch-fabrica', async (req, res, next) => {
             item.descricao,    // D - Descrição
             item.localizacao || '', // E - Localização
             item.quantidade,   // F - Quantidade Pedido
-            '',                // G - Quantidade Recebido (vazio ao lançar)
-            'PENDENTE',        // H - Situação
+                        'PENDENTE',        // H - Situação
             formattedDate,     // I - Data Pedido
             '',                // J - Dias Corridos
             '',                // K - Observação
-            item.prazoEntrega || '15' // L - Prazo Entrega
+            item.prazoEntrega || item.prazoEntrega || '15'               // L - Prazo Entrega
         ]);
 
         const response = await sheets.spreadsheets.values.append({
