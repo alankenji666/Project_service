@@ -3514,6 +3514,7 @@ const data = filteredProducts.map(product => {
                         return {
                             id: product.id, codigo: product.codigo, descricao: product.descricao, quantidade: qty,
                             unidade: product.unidade || 'UN', preco: product.preco || 0,
+                            localizacao: product.localizacao || '',
                             situacao: 'PENDENTE' // Adiciona o status padrão ao criar o item
                         };
                     });
@@ -3593,6 +3594,7 @@ const data = filteredProducts.map(product => {
                         return {
                             id: product.id, codigo: product.codigo, descricao: product.descricao, quantidade: qty,
                             unidade: product.unidade || 'UN', preco: product.preco || 0,
+                            localizacao: product.localizacao || '',
                             situacao: 'PENDENTE' // Adiciona o status padrão ao criar o item
                         };
                     });
