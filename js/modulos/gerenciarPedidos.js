@@ -5529,8 +5529,11 @@ export const GerenciarPedidosApp = (function () {
                         if (extra) currentDesc = extra.descricao || '';
                     }
                     if (!currentDesc) {
-                        const prod = window._enrichedProductsMap ? window._enrichedProductsMap[itemCodigo] : null;
+                        const prod = _enrichedProductsMap ? _enrichedProductsMap[itemCodigo] : null;
                         if (prod && prod.descricao) currentDesc = prod.descricao;
+                    }
+                    if (!currentDesc && pCache && pCache.itens && pCache.itens[index]) {
+                        currentDesc = pCache.itens[index].descricao || pCache.itens[index].descricaoPersonalizada || '';
                     }
 
                     const loadingOverlay = document.getElementById('loading-overlay');
@@ -5548,7 +5551,7 @@ export const GerenciarPedidosApp = (function () {
                         body: JSON.stringify({
                             pedidoId,
                             itemCodigo,
-                            newStatus: newStatus,
+                            newStatus: newStatus === 'OK' ? 'FINALIZADO' : newStatus,
                             itemIndex: index,
                             newDescription: currentDesc,
                             responsavel: responsavel,
@@ -5569,7 +5572,7 @@ export const GerenciarPedidosApp = (function () {
                     // Sincronização de Cache
                     if (pCache) {
                         if (!pCache.detalhesProducao) pCache.detalhesProducao = {};
-                        pCache.detalhesProducao[`${pedidoId}-${index}`] = { status: newStatus, descricao: currentDesc };
+                        pCache.detalhesProducao[`${pedidoId}-${index}`] = { status: newStatus === 'OK' ? 'FINALIZADO' : newStatus, descricao: currentDesc };
                     }
 
                     _openOrderDetailsModal(pedidoId);
