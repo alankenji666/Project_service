@@ -5519,14 +5519,18 @@ export const GerenciarPedidosApp = (function () {
                 }
             }
 
-            const executeUpdate = async (responsavel = '') => {
+            const executeUpdate = async (responsavel) => {
                 try {
                     let currentDesc = '';
+                    let currentResp = '';
                     if (pCache && pCache.detalhesProducao) {
                         const keyId = `${pedidoId}-${index}`;
                         const keyNum = `${pCache.numero || pCache.numero_pedido}-${index}`;
                         const extra = pCache.detalhesProducao[keyId] || pCache.detalhesProducao[keyNum];
-                        if (extra) currentDesc = extra.descricao || '';
+                        if (extra) {
+                            currentDesc = extra.descricao || '';
+                            currentResp = extra.responsavel || '';
+                        }
                     }
                     if (!currentDesc) {
                         const prod = _enrichedProductsMap ? _enrichedProductsMap[itemCodigo] : null;
@@ -5535,6 +5539,8 @@ export const GerenciarPedidosApp = (function () {
                     if (!currentDesc && pCache && pCache.itens && pCache.itens[index]) {
                         currentDesc = pCache.itens[index].descricao || pCache.itens[index].descricaoPersonalizada || '';
                     }
+
+                    const finalResponsavel = (responsavel !== undefined && responsavel !== null) ? responsavel : currentResp;
 
                     const loadingOverlay = document.getElementById('loading-overlay');
                     if (loadingOverlay) {
@@ -5554,7 +5560,7 @@ export const GerenciarPedidosApp = (function () {
                             newStatus: newStatus === 'OK' ? 'FINALIZADO' : newStatus,
                             itemIndex: index,
                             newDescription: currentDesc,
-                            responsavel: responsavel,
+                            responsavel: finalResponsavel,
                             numeroPedido: pCache ? (pCache.numero || pCache.numero_pedido || '') : '',
                             quantidade: index !== undefined && pCache ? (_parseItens(pCache.itens, pCache.detalhesProducao || {}, pedidoId)[index]?.quantidade || 1) : 1,
                             dataPedido: pCache ? (pCache.data || pCache.data_criacao || '') : '',
@@ -5572,7 +5578,11 @@ export const GerenciarPedidosApp = (function () {
                     // Sincronização de Cache
                     if (pCache) {
                         if (!pCache.detalhesProducao) pCache.detalhesProducao = {};
-                        pCache.detalhesProducao[`${pedidoId}-${index}`] = { status: newStatus === 'OK' ? 'FINALIZADO' : newStatus, descricao: currentDesc };
+                        pCache.detalhesProducao[`${pedidoId}-${index}`] = { 
+                            status: newStatus === 'OK' ? 'FINALIZADO' : newStatus, 
+                            descricao: currentDesc,
+                            responsavel: finalResponsavel
+                        };
                     }
 
                     _openOrderDetailsModal(pedidoId);
@@ -5597,7 +5607,7 @@ export const GerenciarPedidosApp = (function () {
                     await executeUpdate(ans);
                 }
             } else {
-                await executeUpdate('');
+                await executeUpdate();
             }
         },
         handleToggleItemStatus: async function(pedidoId, itemCodigo, currentStatus, index, event) {
