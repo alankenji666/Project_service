@@ -3753,7 +3753,7 @@ const data = filteredProducts.map(product => {
                             id: product.id, codigo: product.codigo, descricao: product.descricao, quantidade: qty,
                             unidade: product.unidade || 'UN', preco: product.preco || 0,
                             localizacao: product.localizacao || '',
-                            situacao: type === 'fabrica' ? 'Criado' : 'PENDENTE'
+                            situacao: 'PENDENTE'
                         };
                     });
 
