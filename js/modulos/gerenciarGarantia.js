@@ -21,8 +21,9 @@ export const GerenciarGarantiaApp = (function () {
 
     // Referências do DOM - Formulário
     let _formPedido;
-    let _inputCliente;
-    let _inputCpfCnpj;
+    let _inputCodCliente;
+      let _inputCliente;
+      let _inputCpfCnpj;
     let _inputNumero;
     let _inputIdNota;
     let _btnAddItemModal;
@@ -144,7 +145,8 @@ export const GerenciarGarantiaApp = (function () {
 
         // Form
         _formPedido = document.getElementById('garantia-pedido-form');
-        _inputCliente = document.getElementById('garantia-cliente');
+        _inputCodCliente = document.getElementById('garantia-codcliente');
+          _inputCliente = document.getElementById('garantia-cliente');
         _inputCpfCnpj = document.getElementById('garantia-cpf-cnpj');
         _inputNumero = document.getElementById('garantia-numero');
         _inputIdNota = document.getElementById('garantia-id-nota');
@@ -810,8 +812,8 @@ export const GerenciarGarantiaApp = (function () {
 
         try {
             const payload = {
-                idCliente: _inputCliente.value.trim(), 
-                nomeContato: _inputCliente.value.trim(),
+                idCliente: (_inputCodCliente ? _inputCodCliente.value.trim() : ''),
+                  nomeContato: _inputCliente.value.trim(),
                 cpfCnpj: _inputCpfCnpj.value.trim(),
                 numero: _inputNumero.value.trim(),
                 idNotaFiscal: _inputIdNota.value.trim(),
@@ -2313,6 +2315,7 @@ export const GerenciarGarantiaApp = (function () {
             // Agora preenche o formulário de "Criar Pedido" com os dados do cliente e redireciona a view
             const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
             if (req) {
+                if (_inputCodCliente) _inputCodCliente.value = req.codigoCliente || '';
                 _inputCliente.value = req.cliente || '';
                 _inputCpfCnpj.value = req.cpf || '';
                 _inputNumero.value = ''; // Começa vazio para gerar um novo ID, se quiser manter usar req.idPedido

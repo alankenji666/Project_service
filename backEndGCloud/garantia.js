@@ -66,6 +66,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 data || new Date().toISOString().split('T')[0], // Data
                 data || new Date().toISOString().split('T')[0], // Data Saída
                 situacao || 'EM ABERTO', // Situação
+                idCliente || '', // NOVO: Cod Cliente
                 nomeContato || '', // Contato Nome
                 cpfCnpj || '', // CPF/CNPJ
                 totalProdutos || '0,00', // Total Produtos
@@ -152,13 +153,14 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     numero: row[2] || '',
                     data: row[4] || '',
                     situacao: row[6] || '',
-                    cliente: row[7] || '',
-                    cpfCnpj: row[8] || '',
-                    observacao: row[14] || '',
-                    itens: row[15] || '',
-                    avaliacao: row[16] || '',
-                    equipamento: row[18] || '',
-                    transportadora: row[19] || ''
+                    codigoCliente: row[7] || '', // NOVO
+                    cliente: row[8] || '',
+                    cpfCnpj: row[9] || '',
+                    observacao: row[15] || '',
+                    itens: row[16] || '',
+                    avaliacao: row[17] || '',
+                    equipamento: row[19] || '',
+                    transportadora: row[20] || ''
                 };
             });
 
@@ -334,7 +336,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     retornoItem: row[28] || 'EM ANALISE',        // AC (Retorno Item)
                     observacaoSatg: row[29] || '',             // AD (Observação SatG)
                     ondeEstaProblema: row[30] || '',           // AE (Onde Está o Problema)
-                    tipoEquipamento: row[31] || ''             // AF (Tipo Equipamento)
+                    tipoEquipamento: row[31] || '',             // AF (Tipo Equipamento)
+                    codigoCliente: row[32] || ''               // AG (Cod Cliente)
                 };
             });
 
