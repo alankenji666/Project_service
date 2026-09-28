@@ -1838,7 +1838,7 @@ export const GerenciarGarantiaApp = (function () {
                                 })
                             }, type);
                             const data = await res.json();
-                            if (data.success) {
+                            if (data.success || !data.error) {
                                 // Update local data temporarily to avoid full reload flicker
                                 req[key] = newValue;
                                 _openSatgModal(req); // Re-render modal silently
