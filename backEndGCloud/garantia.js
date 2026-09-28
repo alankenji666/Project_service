@@ -66,9 +66,9 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 data || new Date().toISOString().split('T')[0], // Data
                 data || new Date().toISOString().split('T')[0], // Data Saída
                 situacao || 'EM ABERTO', // Situação
-                idCliente || '', // NOVO: Cod Cliente
-                nomeContato || '', // Contato Nome
-                cpfCnpj || '', // CPF/CNPJ
+                '', // H: Cod Cliente (Removido p/ evitar duplicidade com SatG)
+                '', // I: Contato Nome (Removido p/ evitar duplicidade)
+                '', // J: CPF/CNPJ (Removido p/ evitar duplicidade)
                 totalProdutos || '0,00', // Total Produtos
                 totalPedido || '0,00', // Total Pedido
                 vendedor || 'Sistema', // Vendedor
@@ -247,9 +247,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
 
             addUpdate('C', numero);
             addUpdate('G', situacao);
-            addUpdate('H', idCliente); // NOVO Cod Cliente
-            addUpdate('I', nomeContato);
-            addUpdate('J', cpfCnpj);
+            // Colunas H, I, J removidas (Dados do cliente agora vivem apenas no SatG)
             addUpdate('O', idNotaFiscal);
             addUpdate('P', observacao);
             addUpdate('Q', itens);
