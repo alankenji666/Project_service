@@ -181,6 +181,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 idPedido, // Obrigatório para saber qual linha atualizar
                 numero,
                 situacao,
+                idCliente, // NOVO
                 nomeContato,
                 cpfCnpj,
                 idNotaFiscal,
@@ -246,14 +247,15 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
 
             addUpdate('C', numero);
             addUpdate('G', situacao);
-            addUpdate('H', nomeContato);
-            addUpdate('I', cpfCnpj);
-            addUpdate('N', idNotaFiscal);
-            addUpdate('O', observacao);
-            addUpdate('P', itens);
-            addUpdate('Q', avaliacao);
-            addUpdate('S', equipamento);
-            addUpdate('T', transportadora);
+            addUpdate('H', idCliente); // NOVO Cod Cliente
+            addUpdate('I', nomeContato);
+            addUpdate('J', cpfCnpj);
+            addUpdate('O', idNotaFiscal);
+            addUpdate('P', observacao);
+            addUpdate('Q', itens);
+            addUpdate('R', avaliacao);
+            addUpdate('T', equipamento);
+            addUpdate('U', transportadora);
 
             if (updates.length > 0) {
                 const data = updates.map(u => ({

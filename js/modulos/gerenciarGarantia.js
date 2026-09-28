@@ -1024,7 +1024,11 @@ export const GerenciarGarantiaApp = (function () {
         if (situacaoContainer) situacaoContainer.classList.remove('hidden');
 
         // Populate fields
-        if (_inputCodCliente) _inputCodCliente.value = pedido.codigoCliente || '';
+        let codFall = pedido.codigoCliente || '';
+        if (!codFall && typeof satgAssociado !== 'undefined' && satgAssociado) {
+            codFall = satgAssociado.codigoCliente || '';
+        }
+        if (_inputCodCliente) _inputCodCliente.value = codFall;
         _inputCliente.value = pedido.cliente || pedido.nomeContato || '';
         _inputCpfCnpj.value = pedido.cpfCnpj || pedido.cpf || '';
         _inputNumero.value = pedido.numero || '';
