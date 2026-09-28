@@ -141,7 +141,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:T` // Busca até a coluna T (Transportadora)
+                range: `${sheetName}!A2:U` // Busca até a coluna U (Transportadora agora está em U)
             });
 
             const rows = response.data.values || [];
@@ -297,7 +297,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:AF` // Até AF (coluna 32)
+                range: `${sheetName}!A2:AG` // Até AG (coluna 33)
             });
 
             const rows = response.data.values || [];
