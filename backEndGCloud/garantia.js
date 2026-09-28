@@ -66,9 +66,6 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 data || new Date().toISOString().split('T')[0], // Data
                 data || new Date().toISOString().split('T')[0], // Data Saída
                 situacao || 'EM ABERTO', // Situação
-                '', // H: Cod Cliente (Removido p/ evitar duplicidade com SatG)
-                '', // I: Contato Nome (Removido p/ evitar duplicidade)
-                '', // J: CPF/CNPJ (Removido p/ evitar duplicidade)
                 totalProdutos || '0,00', // Total Produtos
                 totalPedido || '0,00', // Total Pedido
                 vendedor || 'Sistema', // Vendedor
@@ -141,7 +138,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:U` // Busca até a coluna U (Transportadora agora está em U)
+                range: `${sheetName}!A2:V` // Busca até a coluna U (Transportadora agora está em U)
             });
 
             const rows = response.data.values || [];
@@ -156,11 +153,11 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     codigoCliente: row[7] || '', // NOVO
                     cliente: row[8] || '',
                     cpfCnpj: row[9] || '',
-                    observacao: row[15] || '',
-                    itens: row[16] || '',
-                    avaliacao: row[17] || '',
-                    equipamento: row[19] || '',
-                    transportadora: row[20] || ''
+                    observacao: row[12] || '', // Era 15, recuou 3
+                    itens: row[13] || '', // Era 16, recuou 3
+                    avaliacao: row[14] || '', // Era 17, recuou 3
+                    equipamento: row[16] || '', // Era 19, recuou 3
+                    transportadora: row[17] || '' // Era 20, recuou 3
                 };
             });
 
@@ -247,13 +244,13 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
 
             addUpdate('C', numero);
             addUpdate('G', situacao);
-            // Colunas H, I, J removidas (Dados do cliente agora vivem apenas no SatG)
-            addUpdate('O', idNotaFiscal);
-            addUpdate('P', observacao);
-            addUpdate('Q', itens);
-            addUpdate('R', avaliacao);
-            addUpdate('T', equipamento);
-            addUpdate('U', transportadora);
+            // Colunas recuadas em 3 posições pois H, I, J foram deletadas da planilha
+            addUpdate('L', idNotaFiscal);
+            addUpdate('M', observacao);
+            addUpdate('N', itens);
+            addUpdate('O', avaliacao);
+            addUpdate('Q', equipamento);
+            addUpdate('R', transportadora);
 
             if (updates.length > 0) {
                 const data = updates.map(u => ({
