@@ -21,7 +21,7 @@ export const GerenciarGarantiaApp = (function () {
 
     // Referências do DOM - Formulário
     let _formPedido;
-    let _inputCodCliente;
+    
       let _inputCodCliente;
       let _inputCliente;
       let _inputCpfCnpj;
@@ -146,9 +146,10 @@ export const GerenciarGarantiaApp = (function () {
 
         // Form
         _formPedido = document.getElementById('garantia-pedido-form');
-        _inputCodCliente = document.getElementById('garantia-codcliente');
+        
+          
           _inputCodCliente = document.getElementById('garantia-codcliente');
-          _inputCliente = document.getElementById('garantia-cliente');
+        _inputCliente = document.getElementById('garantia-cliente');
         _inputCpfCnpj = document.getElementById('garantia-cpf-cnpj');
         _inputNumero = document.getElementById('garantia-numero');
         _inputIdNota = document.getElementById('garantia-id-nota');
