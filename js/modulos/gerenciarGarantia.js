@@ -22,6 +22,7 @@ export const GerenciarGarantiaApp = (function () {
     // Referências do DOM - Formulário
     let _formPedido;
     let _inputCodCliente;
+      let _inputCodCliente;
       let _inputCliente;
       let _inputCpfCnpj;
     let _inputNumero;
@@ -146,6 +147,7 @@ export const GerenciarGarantiaApp = (function () {
         // Form
         _formPedido = document.getElementById('garantia-pedido-form');
         _inputCodCliente = document.getElementById('garantia-codcliente');
+          _inputCodCliente = document.getElementById('garantia-codcliente');
           _inputCliente = document.getElementById('garantia-cliente');
         _inputCpfCnpj = document.getElementById('garantia-cpf-cnpj');
         _inputNumero = document.getElementById('garantia-numero');
@@ -1856,6 +1858,9 @@ export const GerenciarGarantiaApp = (function () {
             el.appendChild(btn);
         }
 
+        document.getElementById('satg-modal-codcliente').innerText = req.codigoCliente || '-';
+        injectEditPencil('satg-modal-codcliente', 'AG', 'codigoCliente', req.codigoCliente);
+        
         document.getElementById('satg-modal-cliente').innerText = req.cliente || '-';
         injectEditPencil('satg-modal-cliente', 'C', 'cliente', req.cliente);
         
@@ -2315,6 +2320,7 @@ export const GerenciarGarantiaApp = (function () {
             // Agora preenche o formulário de "Criar Pedido" com os dados do cliente e redireciona a view
             const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
             if (req) {
+                if (_inputCodCliente) _inputCodCliente.value = req.codigoCliente || '';
                 if (_inputCodCliente) _inputCodCliente.value = req.codigoCliente || '';
                 _inputCliente.value = req.cliente || '';
                 _inputCpfCnpj.value = req.cpf || '';
