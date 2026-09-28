@@ -980,7 +980,13 @@ export const GerenciarGarantiaApp = (function () {
     function _openEditPedidoForm(idPedido) {
         if (!_pedidosGarantiaData) return;
         
-        const refStr = String(idPedido);
+                const refStr = String(idPedido);
+        const cleanRef = refStr.replace('GAR-', '');
+        const satgAssociado = _satgData.find(s => {
+            const sId = String(s.idPedido || '').replace('GAR-', '');
+            return sId === cleanRef && sId !== '';
+        });
+        
         const pedido = _pedidosGarantiaData.find(p => 
             String(p.idPedido || '') === refStr || 
             String(p.numero || '') === refStr || 
@@ -1004,12 +1010,6 @@ export const GerenciarGarantiaApp = (function () {
             titleEl.parentElement.classList.add('w-full');
             
             let satgTitleHTML = '';
-            // Buscar com mais flexibilidade (com ou sem GAR-)
-            const cleanRef = refStr.replace('GAR-', '');
-            const satgAssociado = _satgData.find(s => {
-                const sId = String(s.idPedido || '').replace('GAR-', '');
-                return sId === cleanRef && sId !== '';
-            });
             if (satgAssociado && satgAssociado.codigo) {
                 satgTitleHTML = `<span class="ml-auto text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-sm border border-blue-200">${satgAssociado.codigo}</span>`;
             }
