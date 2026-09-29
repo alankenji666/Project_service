@@ -2104,6 +2104,7 @@ export const GerenciarGarantiaApp = (function () {
         
         let htmlItens = '';
         let totalValor = 0;
+        let totalPeso = 0;
         const parsedItens = _parseItemsString(pedido.itens);
         const fmtBRL = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
@@ -2130,7 +2131,9 @@ export const GerenciarGarantiaApp = (function () {
                 
                 const precoItem = parseFloat(i.preco || 0);
                 const qtdItem = parseInt(i.qtd || 1);
+                const pesoItem = parseFloat(i.peso || i.pesoBruto || prodPeso || 0);
                 totalValor += (precoItem * qtdItem);
+                totalPeso += (pesoItem * qtdItem);
 
                 const descFinal = detalhe && detalhe.descricao ? detalhe.descricao : (i.desc || i.nome || '-');
                 const obsFinal = detalhe && detalhe.observacoes ? `<div style="color: #c2410c; margin-top: 4px; font-weight: bold; font-size: 11px;">Obs: ${detalhe.observacoes}</div>` : '';
@@ -2160,13 +2163,18 @@ export const GerenciarGarantiaApp = (function () {
         
         const totalFooter = parsedItens && parsedItens.length > 0 ? `
             <tr style="background:#f0fdf4;">
-                <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:14px;color:#15803d;">Total</td>
+                <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:14px;color:#15803d;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #4b5563; font-size: 12px; font-weight: normal;">Peso Total: <b style="color: #1e293b;">${totalPeso.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg</b></span>
+                        <span>Valor Total:</span>
+                    </div>
+                </td>
                 <td style="padding:12px 14px;font-weight:700;font-size:15px;color:#15803d;text-align:right;">${fmtBRL(totalValor)}</td>
             </tr>
         ` : '';
 
         return `
-            <div class="section" style="margin-top: 40px; border-top: 2px dashed #ccc; padding-top: 30px;">
+            <div class="section" style="margin-top: 40px;">
                 <div class="section-title">Orçamento Vinculado: ${pedido.numero || '-'}</div>
                 
                 <div style="margin-top: 15px;">
