@@ -83,7 +83,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 req.body.estado || '', // V
                 req.body.bairro || '', // W
                 req.body.endereco || '', // X
-                req.body.numero || '', // Y
+                req.body.numeroEndereco || '', // Y
                 req.body.complemento || '' // Z
             ];
 
@@ -162,11 +162,21 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     codigoCliente: row[7] || '', // NOVO
                     cliente: row[8] || '',
                     cpfCnpj: row[9] || '',
-                    observacao: row[12] || '', // Era 15, recuou 3
-                    itens: row[13] || '', // Era 16, recuou 3
-                    avaliacao: row[14] || '', // Era 17, recuou 3
-                    equipamento: row[16] || '', // Era 19, recuou 3
-                    transportadora: row[17] || '' // Era 20, recuou 3
+                    idNotaFiscal: row[11] || '',
+                    observacao: row[12] || '',
+                    itens: row[13] || '',
+                    avaliacao: row[14] || '',
+                    equipamento: row[15] || '',
+                    transportadora: row[16] || '',
+                    volume: row[17] || '',
+                    pesoTotal: row[18] || '',
+                    cep: row[19] || '',
+                    cidade: row[20] || '',
+                    estado: row[21] || '',
+                    bairro: row[22] || '',
+                    endereco: row[23] || '',
+                    numeroEndereco: row[24] || '',
+                    complemento: row[25] || ''
                 };
             });
 
@@ -266,7 +276,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             addUpdate('V', req.body.estado);
             addUpdate('W', req.body.bairro);
             addUpdate('X', req.body.endereco);
-            addUpdate('Y', req.body.numero);
+            addUpdate('Y', req.body.numeroEndereco);
             addUpdate('Z', req.body.complemento);
 
             if (updates.length > 0) {

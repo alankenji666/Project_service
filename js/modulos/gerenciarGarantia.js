@@ -357,19 +357,7 @@ export const GerenciarGarantiaApp = (function () {
                         select.appendChild(opt);
                     });
                     
-                    // Auto-fill upon selection
-                    select.addEventListener('change', (e) => {
-                        const tName = e.target.value;
-                        const tData = _listaTransportadoras.find(x => (x.nomeFantasia || x.razaoSocial || x.nome) === tName);
-                        if (tData) {
-                            if (document.getElementById('garantia-endereco') && !document.getElementById('garantia-endereco').value) document.getElementById('garantia-endereco').value = tData.endereco || '';
-                            if (document.getElementById('garantia-numero-envio') && !document.getElementById('garantia-numero-envio').value) document.getElementById('garantia-numero-envio').value = tData.numero || '';
-                            if (document.getElementById('garantia-cep') && !document.getElementById('garantia-cep').value) document.getElementById('garantia-cep').value = tData.cep || '';
-                            if (document.getElementById('garantia-bairro') && !document.getElementById('garantia-bairro').value) document.getElementById('garantia-bairro').value = tData.bairro || '';
-                            if (document.getElementById('garantia-cidade') && !document.getElementById('garantia-cidade').value) document.getElementById('garantia-cidade').value = tData.cidade || '';
-                            if (document.getElementById('garantia-estado') && !document.getElementById('garantia-estado').value) document.getElementById('garantia-estado').value = tData.uf || tData.estado || '';
-                        }
-                    });
+                    
                 }
             })
             .catch(err => console.error("Erro ao carregar transportadoras", err));
@@ -920,7 +908,7 @@ export const GerenciarGarantiaApp = (function () {
                 payload.volume = document.getElementById('garantia-volume').value.trim();
                 payload.cep = document.getElementById('garantia-cep').value.trim();
                 payload.endereco = document.getElementById('garantia-endereco').value.trim();
-                payload.numero = document.getElementById('garantia-numero-envio').value.trim();
+                payload.numeroEndereco = document.getElementById('garantia-numero-envio').value.trim();
                 payload.complemento = document.getElementById('garantia-complemento').value.trim();
                 payload.bairro = document.getElementById('garantia-bairro').value.trim();
                 payload.cidade = document.getElementById('garantia-cidade').value.trim();
@@ -930,7 +918,7 @@ export const GerenciarGarantiaApp = (function () {
                 payload.volume = '';
                 payload.cep = '';
                 payload.endereco = '';
-                payload.numero = '';
+                payload.numeroEndereco = '';
                 payload.complemento = '';
                 payload.bairro = '';
                 payload.cidade = '';
@@ -1114,7 +1102,7 @@ export const GerenciarGarantiaApp = (function () {
             document.getElementById('garantia-volume').value = pedido.volume || '';
             document.getElementById('garantia-cep').value = pedido.cep || '';
             document.getElementById('garantia-endereco').value = pedido.endereco || '';
-            document.getElementById('garantia-numero-envio').value = pedido.numeroEndereco || pedido.numero || '';
+            document.getElementById('garantia-numero-envio').value = pedido.numeroEndereco || '';
             document.getElementById('garantia-complemento').value = pedido.complemento || '';
             document.getElementById('garantia-bairro').value = pedido.bairro || '';
             document.getElementById('garantia-cidade').value = pedido.cidade || '';
