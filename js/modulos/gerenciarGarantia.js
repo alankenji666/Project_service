@@ -120,10 +120,46 @@ export const GerenciarGarantiaApp = (function () {
         }
         _showView('cards');
         render(); // Pré-carrega a tabela
+        _setupMasks();
+    }
+
+    
+    function formatMoneyBR(value) {
+        if (!value) return '';
+        let v = String(value).replace(/\D/g, '');
+        if (!v) return '';
+        v = (parseInt(v, 10) / 100).toFixed(2);
+        return 'R$ ' + v.replace('.', ',').replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+    }
+
+    function _setupMasks() {
+        const cepInput = document.getElementById('garantia-cep');
+        if (cepInput) {
+            cepInput.addEventListener('input', (e) => {
+                let v = e.target.value.replace(/\D/g, '');
+                if (v.length > 8) v = v.slice(0, 8);
+                if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
+                e.target.value = v;
+            });
+        }
+    
+        const freteInput = document.getElementById('garantia-valor-frete');
+        if (freteInput) {
+            freteInput.addEventListener('input', (e) => {
+                let v = e.target.value.replace(/\D/g, '');
+                if (v === '') {
+                    e.target.value = '';
+                    return;
+                }
+                v = (parseInt(v, 10) / 100).toFixed(2);
+                e.target.value = 'R$ ' + v.replace('.', ',').replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+            });
+        }
     }
 
     /**
      * Busca os elementos no DOM
+
      */
     function _cacheDomElements() {
         // Views
@@ -1147,7 +1183,7 @@ export const GerenciarGarantiaApp = (function () {
             
             document.getElementById('garantia-transportadora').value = pedido.transportadora || '';
             document.getElementById('garantia-volume').value = pedido.volume || '';
-            document.getElementById('garantia-valor-frete').value = pedido.valorFrete || '';
+            document.getElementById('garantia-valor-frete').value = formatMoneyBR(pedido.valorFrete) || '';
             document.getElementById('garantia-peso-total').value = pedido.pesoTotal || '';
             document.getElementById('garantia-cep').value = pedido.cep || '';
             document.getElementById('garantia-endereco').value = pedido.endereco || '';
