@@ -985,6 +985,37 @@ export const GerenciarGarantiaApp = (function () {
     async function _submitGarantiaPedido(e) {
         e.preventDefault();
 
+        // VALIDAÇÃO DE ENVIO
+        const chkE = document.getElementById('garantia-possui-envio');
+        if (chkE && chkE.checked) {
+            const requiredFields = [
+                { id: 'garantia-transportadora', name: 'Transportadora' },
+                { id: 'garantia-volume', name: 'Volume' },
+                { id: 'garantia-valor-frete', name: 'Valor Frete' },
+                { id: 'garantia-cep', name: 'CEP' },
+                { id: 'garantia-endereco', name: 'Endereço' },
+                { id: 'garantia-numero-envio', name: 'Número' },
+                { id: 'garantia-bairro', name: 'Bairro' },
+                { id: 'garantia-cidade', name: 'Cidade' },
+                { id: 'garantia-estado', name: 'Estado (UF)' }
+            ];
+
+            const missing = requiredFields.filter(f => {
+                const el = document.getElementById(f.id);
+                return !el || !el.value.trim();
+            });
+            
+            if (missing.length > 0) {
+                const missingNames = missing.map(f => f.name).join(', ');
+                alert(`Por favor, preencha os seguintes campos de envio obrigatórios:\n\n${missingNames}`);
+                
+                // Dar foco no primeiro campo vazio
+                const firstEl = document.getElementById(missing[0].id);
+                if (firstEl) firstEl.focus();
+                return;
+            }
+        }
+
         const btnOriginalText = _btnSubmitGarantia.innerHTML;
         _btnSubmitGarantia.disabled = true;
         _btnSubmitGarantia.innerHTML = '<svg class="animate-spin h-5 w-5 mr-2 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Salvando...';
