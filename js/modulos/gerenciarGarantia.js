@@ -133,6 +133,9 @@ export const GerenciarGarantiaApp = (function () {
     }
 
     function _setupMasks() {
+        if (window._garantiaMasksConfigured) return;
+        window._garantiaMasksConfigured = true;
+        
         const cepInput = document.getElementById('garantia-cep');
         if (cepInput) {
             cepInput.addEventListener('input', (e) => {
