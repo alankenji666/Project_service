@@ -2519,8 +2519,14 @@ export const GerenciarGarantiaApp = (function () {
                 }
                 
                 const fullEndereco = `${pedido.endereco || '-'}, ${pedido.numeroEndereco || '-'} ${pedido.complemento ? ' - ' + pedido.complemento : ''} - ${pedido.bairro || '-'}, ${pedido.cidade || '-'}/${pedido.estado || '-'} - CEP: ${pedido.cep || '-'}`;
-                const emb = pedido.embalagem || 'Nenhuma';
-                const vol = pedido.volume ? ` (${pedido.volume} vol)` : '';
+                let emb = pedido.embalagem || 'Nenhuma';
+                if (emb !== 'Nenhuma' && emb.includes('/')) {
+                    const p = emb.split('/');
+                    if (p.length === 4) {
+                        emb = `${p[0]} - ${p[1]}x${p[2]}x${p[3]}`;
+                    }
+                }
+                const vol = pedido.volume ? ` (${pedido.volume} Vol)` : '';
 
                 htmlEnvio = `
                 <div class="section">
