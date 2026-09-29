@@ -2104,7 +2104,7 @@ export const GerenciarGarantiaApp = (function () {
         
         let htmlItens = '';
         let totalValor = 0;
-        let totalPeso = 0;
+        let totalPeso = parseFloat(pedido.pesoTotal || 0);
         const parsedItens = _parseItemsString(pedido.itens);
         const fmtBRL = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
@@ -2131,9 +2131,7 @@ export const GerenciarGarantiaApp = (function () {
                 
                 const precoItem = parseFloat(i.preco || 0);
                 const qtdItem = parseInt(i.qtd || 1);
-                const pesoItem = parseFloat(i.peso || i.pesoBruto || prodPeso || 0);
                 totalValor += (precoItem * qtdItem);
-                totalPeso += (pesoItem * qtdItem);
 
                 const descFinal = detalhe && detalhe.descricao ? detalhe.descricao : (i.desc || i.nome || '-');
                 const obsFinal = detalhe && detalhe.observacoes ? `<div style="color: #c2410c; margin-top: 4px; font-weight: bold; font-size: 11px;">Obs: ${detalhe.observacoes}</div>` : '';

@@ -59,23 +59,32 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             const idGerado = numero || 'GAR-' + Math.floor(Date.now() / 1000).toString();
 
             const novaLinha = [
-                '', // Conferido
-                idGerado, // ID Pedido
-                idGerado, // Número
-                '', // Número Loja
-                data || new Date().toISOString().split('T')[0], // Data
-                data || new Date().toISOString().split('T')[0], // Data Saída
-                situacao || 'EM ABERTO', // Situação
-                totalProdutos || '0,00', // Total Produtos
-                totalPedido || '0,00', // Total Pedido
-                vendedor || 'Sistema', // Vendedor
-                loja || 'Fábrica', // Loja
-                idNotaFiscal || '', // ID Nota Fiscal
-                observacao || '', // Observação
-                itens || '', // Itens
-                avaliacao || '', // Observação (2) - Usado para Avaliação Interna
-                '', // Orçamento
-                equipamento || '' // Equipamento
+                '', // Conferido (A)
+                idGerado, // ID Pedido (B)
+                idGerado, // Número (C)
+                '', // Número Loja (D)
+                data || new Date().toISOString().split('T')[0], // Data (E)
+                data || new Date().toISOString().split('T')[0], // Data Saída (F)
+                situacao || 'EM ABERTO', // Situação (G)
+                totalProdutos || '0,00', // Total Produtos (H)
+                totalPedido || '0,00', // Total Pedido (I)
+                vendedor || 'Sistema', // Vendedor (J)
+                loja || 'Fábrica', // Loja (K)
+                idNotaFiscal || '', // L
+                observacao || '', // M
+                itens || '', // N (Itens do orcamento)
+                avaliacao || '', // O (Observacao 2)
+                equipamento || '', // P
+                req.body.transportadora || '', // Q
+                req.body.volume || '', // R
+                req.body.pesoTotal || '', // S
+                req.body.cep || '', // T
+                req.body.cidade || '', // U
+                req.body.estado || '', // V
+                req.body.bairro || '', // W
+                req.body.endereco || '', // X
+                req.body.numero || '', // Y
+                req.body.complemento || '' // Z
             ];
 
             // Verifica se a planilha está vazia para adicionar o cabeçalho
@@ -138,7 +147,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:V` // Busca até a coluna U (Transportadora agora está em U)
+                range: `${sheetName}!A2:Z` // Busca até a coluna U (Transportadora agora está em U)
             });
 
             const rows = response.data.values || [];
@@ -244,13 +253,21 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
 
             addUpdate('C', numero);
             addUpdate('G', situacao);
-            // Colunas recuadas em 3 posições pois H, I, J foram deletadas da planilha
             addUpdate('L', idNotaFiscal);
             addUpdate('M', observacao);
             addUpdate('N', itens);
             addUpdate('O', avaliacao);
-            addUpdate('Q', equipamento);
-            addUpdate('R', transportadora);
+            addUpdate('P', equipamento);
+            addUpdate('Q', req.body.transportadora);
+            addUpdate('R', req.body.volume);
+            addUpdate('S', req.body.pesoTotal);
+            addUpdate('T', req.body.cep);
+            addUpdate('U', req.body.cidade);
+            addUpdate('V', req.body.estado);
+            addUpdate('W', req.body.bairro);
+            addUpdate('X', req.body.endereco);
+            addUpdate('Y', req.body.numero);
+            addUpdate('Z', req.body.complemento);
 
             if (updates.length > 0) {
                 const data = updates.map(u => ({
