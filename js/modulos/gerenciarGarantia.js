@@ -164,7 +164,7 @@ export const GerenciarGarantiaApp = (function () {
         if (chk) chk.checked = false;
         const cont = document.getElementById('garantia-envio-container');
         if (cont) cont.classList.add('hidden');
-        ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado', 'garantia-valor-frete'].forEach(id => {
+        ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado', 'garantia-valor-frete', 'garantia-peso-total'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
@@ -1103,6 +1103,7 @@ export const GerenciarGarantiaApp = (function () {
             document.getElementById('garantia-transportadora').value = pedido.transportadora || '';
             document.getElementById('garantia-volume').value = pedido.volume || '';
             document.getElementById('garantia-valor-frete').value = pedido.valorFrete || '';
+            document.getElementById('garantia-peso-total').value = pedido.pesoTotal || '';
             document.getElementById('garantia-cep').value = pedido.cep || '';
             document.getElementById('garantia-endereco').value = pedido.endereco || '';
             document.getElementById('garantia-numero-envio').value = pedido.numeroEndereco || '';
