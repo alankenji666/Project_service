@@ -2545,9 +2545,9 @@ export const GerenciarGarantiaApp = (function () {
                             <span class="field-label">Transportadora</span>
                             <span class="field-value">${nomeTransp}</span>
                         </div>
-                        <div class="field" style="flex: 1;">
+                        <div class="field" style="flex: 1.5; white-space: nowrap;">
                             <span class="field-label">Embalagem / Vol</span>
-                            <span class="field-value">${emb}${vol}</span>
+                            <span class="field-value" style="font-size: 11px;">${emb}${vol}</span>
                         </div>
                         <div class="field" style="flex: 1;">
                             <span class="field-label">Valor Frete</span>
@@ -2557,7 +2557,7 @@ export const GerenciarGarantiaApp = (function () {
                     <div class="grid">
                         <div class="field" style="flex: 1;">
                             <span class="field-label">Endereço de Entrega Completo</span>
-                            <span class="field-value" style="font-size: 12px;">${fullEndereco}</span>
+                            <span class="field-value" style="font-size: 11px;">${fullEndereco}</span>
                         </div>
                     </div>
                 </div>
@@ -2575,14 +2575,14 @@ export const GerenciarGarantiaApp = (function () {
                     .header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #ddd; }
                     .header h1 { margin: 0; color: #4F46E5; }
                     .header p { margin: 5px 0; color: #666; }
-                    .section { margin-bottom: 15px; }
-                    .section-title { font-size: 13px; text-transform: uppercase; color: #666; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 10px; }
-                    .grid { display: flex; flex-wrap: wrap; gap: 10px; }
-                    .field { flex: 1; min-width: auto; background: #f9f9f9; padding: 6px 10px; border-radius: 5px; }
-                    .field-label { font-size: 10px; text-transform: uppercase; color: #888; margin-bottom: 2px; display: block; font-weight: bold; }
-                    .field-value { font-size: 13px; font-weight: bold; }
-                    .problema-box { background: #fef2f2; border: 1px solid #fecaca; padding: 10px; border-radius: 5px; margin-top: 10px; }
-                    .problema-label { font-size: 10px; text-transform: uppercase; color: #dc2626; margin-bottom: 2px; display: block; font-weight: bold; }
+                    .section { margin-bottom: 8px; }
+                    .section-title { font-size: 11px; text-transform: uppercase; color: #666; border-bottom: 1px solid #eee; padding-bottom: 2px; margin-bottom: 6px; }
+                    .grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+                    .field { flex: 1; min-width: auto; background: #f9f9f9; padding: 4px 8px; border-radius: 5px; }
+                    .field-label { font-size: 9px; text-transform: uppercase; color: #888; margin-bottom: 0px; display: block; font-weight: bold; }
+                    .field-value { font-size: 12px; font-weight: bold; }
+                    .problema-box { background: #fef2f2; border: 1px solid #fecaca; padding: 8px; border-radius: 5px; margin-top: 6px; }
+                    .problema-label { font-size: 9px; text-transform: uppercase; color: #dc2626; margin-bottom: 0px; display: block; font-weight: bold; }
                     
                     @media print {
                         body { padding: 0; }
@@ -2602,7 +2602,7 @@ export const GerenciarGarantiaApp = (function () {
                         <span>Dados do Cliente</span>
                         <span style="font-size: 11px; font-weight: normal; color: #4b5563; text-transform: uppercase;">Cód. Cliente: <b style="color: #111827;">${req.codigoCliente || '-'}</b></span>
                     </div>
-                    <div class="grid" style="margin-bottom: 15px;">
+                    <div class="grid" style="margin-bottom: 6px;">
                         <div class="field" style="flex: 1;">
                             <span class="field-label">Cliente / Empresa</span>
                             <span class="field-value">${req.cliente || '-'}</span>
@@ -2713,9 +2713,9 @@ export const GerenciarGarantiaApp = (function () {
                             <span class="field-label">Transportadora</span>
                             <span class="field-value">${nomeTransp}</span>
                         </div>
-                        <div class="field" style="flex: 1;">
+                        <div class="field" style="flex: 1.5; white-space: nowrap;">
                             <span class="field-label">Embalagem / Vol</span>
-                            <span class="field-value">${emb}${vol}</span>
+                            <span class="field-value" style="font-size: 11px;">${emb}${vol}</span>
                         </div>
                         <div class="field" style="flex: 1;">
                             <span class="field-label">Valor Frete</span>
@@ -2725,7 +2725,7 @@ export const GerenciarGarantiaApp = (function () {
                     <div class="grid">
                         <div class="field" style="flex: 1;">
                             <span class="field-label">Endereço de Entrega Completo</span>
-                            <span class="field-value" style="font-size: 12px;">${fullEndereco}</span>
+                            <span class="field-value" style="font-size: 11px;">${fullEndereco}</span>
                         </div>
                     </div>
                 </div>
@@ -2740,14 +2740,14 @@ export const GerenciarGarantiaApp = (function () {
                 .header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #ddd; }
                 .header h1 { margin: 0; color: #4F46E5; }
                 .header p { margin: 5px 0; color: #666; }
-                .section { margin-bottom: 15px; }
-                .section-title { font-size: 13px; text-transform: uppercase; color: #666; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 10px; }
-                .grid { display: flex; flex-wrap: wrap; gap: 10px; }
-                .field { flex: 1; min-width: auto; background: #f9f9f9; padding: 6px 10px; border-radius: 5px; }
-                .field-label { font-size: 10px; text-transform: uppercase; color: #888; margin-bottom: 2px; display: block; font-weight: bold; }
-                .field-value { font-size: 13px; font-weight: bold; }
-                .problema-box { background: #fef2f2; border: 1px solid #fecaca; padding: 10px; border-radius: 5px; margin-top: 10px; }
-                .problema-label { font-size: 10px; text-transform: uppercase; color: #dc2626; margin-bottom: 2px; display: block; font-weight: bold; }
+                .section { margin-bottom: 8px; }
+                .section-title { font-size: 11px; text-transform: uppercase; color: #666; border-bottom: 1px solid #eee; padding-bottom: 2px; margin-bottom: 6px; }
+                .grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+                .field { flex: 1; min-width: auto; background: #f9f9f9; padding: 4px 8px; border-radius: 5px; }
+                .field-label { font-size: 9px; text-transform: uppercase; color: #888; margin-bottom: 0px; display: block; font-weight: bold; }
+                .field-value { font-size: 12px; font-weight: bold; }
+                .problema-box { background: #fef2f2; border: 1px solid #fecaca; padding: 8px; border-radius: 5px; margin-top: 6px; }
+                .problema-label { font-size: 9px; text-transform: uppercase; color: #dc2626; margin-bottom: 0px; display: block; font-weight: bold; }
             </style>
             <div class="pdf-body">
                 <div class="header">
@@ -2760,7 +2760,7 @@ export const GerenciarGarantiaApp = (function () {
                         <span>Dados do Cliente</span>
                         <span style="font-size: 11px; font-weight: normal; color: #4b5563; text-transform: uppercase;">Cód. Cliente: <b style="color: #111827;">${req.codigoCliente || '-'}</b></span>
                     </div>
-                    <div class="grid" style="margin-bottom: 15px;">
+                    <div class="grid" style="margin-bottom: 6px;">
                         <div class="field" style="flex: 1;">
                             <span class="field-label">Cliente / Empresa</span>
                             <span class="field-value">${req.cliente || '-'}</span>
