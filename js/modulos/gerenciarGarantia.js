@@ -2282,6 +2282,11 @@ export const GerenciarGarantiaApp = (function () {
                         <span class="problema-label">Problema Detalhado</span>
                         <div style="font-size: 14px; white-space: pre-wrap;">${req.problema || '-'}</div>
                     </div>
+                    
+                    <div class="problema-box" style="background: #f8fafc; border-color: #cbd5e1; margin-top: 15px;">
+                        <span class="problema-label" style="color: #475569;">Avaliação Interna (Constatação do Problema) *</span>
+                        <div style="font-size: 14px; white-space: pre-wrap;">${req.observacao || '-'}</div>
+                    </div>
                 </div>
                 
                 ${_getPedidoPrintHtml(req.idPedido)}
