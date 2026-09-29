@@ -84,7 +84,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 req.body.bairro || '', // W
                 req.body.endereco || '', // X
                 req.body.numeroEndereco || '', // Y
-                req.body.complemento || '' // Z
+                req.body.complemento || '', // Z
+                req.body.valorFrete || '' // AA
             ];
 
             // Verifica se a planilha está vazia para adicionar o cabeçalho
@@ -147,7 +148,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:Z` // Busca até a coluna U (Transportadora agora está em U)
+                range: `${sheetName}!A2:AA` // Busca até a coluna U (Transportadora agora está em U)
             });
 
             const rows = response.data.values || [];
@@ -176,7 +177,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     bairro: row[22] || '',
                     endereco: row[23] || '',
                     numeroEndereco: row[24] || '',
-                    complemento: row[25] || ''
+                    complemento: row[25] || '',
+                    valorFrete: row[26] || ''
                 };
             });
 
@@ -278,6 +280,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             addUpdate('X', req.body.endereco);
             addUpdate('Y', req.body.numeroEndereco);
             addUpdate('Z', req.body.complemento);
+            addUpdate('AA', req.body.valorFrete);
 
             if (updates.length > 0) {
                 const data = updates.map(u => ({
