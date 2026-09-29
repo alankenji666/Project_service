@@ -243,30 +243,18 @@ export const GerenciarGarantiaApp = (function () {
     /**
      * Reseta o form para estado inicial
      */
-    function _resetGarantiaForm() {
+        function _resetGarantiaForm() {
         document.getElementById('garantia-pedido-form').reset();
         _itemsList.innerHTML = '<li id="garantia-items-empty" class="text-sm text-gray-500 italic text-center py-2">Nenhum item adicionado.</li>';
         
-        
-        // Preencher Envio
-        const chkEnvio = document.getElementById('garantia-possui-envio');
-        const contEnvio = document.getElementById('garantia-envio-container');
-        if (chkEnvio) {
-            const hasEnvio = pedido.transportadora || pedido.volume || pedido.cep || pedido.cidade || pedido.bairro;
-            chkEnvio.checked = !!hasEnvio;
-            if (hasEnvio && contEnvio) contEnvio.classList.remove('hidden');
-            else if (contEnvio) contEnvio.classList.add('hidden');
-            
-            document.getElementById('garantia-transportadora').value = pedido.transportadora || '';
-            document.getElementById('garantia-volume').value = pedido.volume || '';
-            document.getElementById('garantia-cep').value = pedido.cep || '';
-            document.getElementById('garantia-endereco').value = pedido.endereco || '';
-            document.getElementById('garantia-numero-envio').value = pedido.numeroEndereco || pedido.numero || '';
-            document.getElementById('garantia-complemento').value = pedido.complemento || '';
-            document.getElementById('garantia-bairro').value = pedido.bairro || '';
-            document.getElementById('garantia-cidade').value = pedido.cidade || '';
-            document.getElementById('garantia-estado').value = pedido.estado || '';
-        }
+        const chk = document.getElementById('garantia-possui-envio');
+        if (chk) chk.checked = false;
+        const cont = document.getElementById('garantia-envio-container');
+        if (cont) cont.classList.add('hidden');
+        ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
 
         const titleEl = document.querySelector('#garantia-form-header h1');
         if (titleEl) titleEl.innerText = 'Novo Orçamento';
@@ -1112,6 +1100,26 @@ export const GerenciarGarantiaApp = (function () {
 
         _resetGarantiaForm();
         _currentEditPedidoId = idPedido;
+
+        // Preencher Envio
+        const chkEnvio = document.getElementById('garantia-possui-envio');
+        const contEnvio = document.getElementById('garantia-envio-container');
+        if (chkEnvio) {
+            const hasEnvio = pedido.transportadora || pedido.volume || pedido.cep || pedido.cidade || pedido.bairro;
+            chkEnvio.checked = !!hasEnvio;
+            if (hasEnvio && contEnvio) contEnvio.classList.remove('hidden');
+            else if (contEnvio) contEnvio.classList.add('hidden');
+            
+            document.getElementById('garantia-transportadora').value = pedido.transportadora || '';
+            document.getElementById('garantia-volume').value = pedido.volume || '';
+            document.getElementById('garantia-cep').value = pedido.cep || '';
+            document.getElementById('garantia-endereco').value = pedido.endereco || '';
+            document.getElementById('garantia-numero-envio').value = pedido.numeroEndereco || pedido.numero || '';
+            document.getElementById('garantia-complemento').value = pedido.complemento || '';
+            document.getElementById('garantia-bairro').value = pedido.bairro || '';
+            document.getElementById('garantia-cidade').value = pedido.cidade || '';
+            document.getElementById('garantia-estado').value = pedido.estado || '';
+        }
 
         // Change Title
         const titleEl = document.querySelector('#garantia-form-header h1');
