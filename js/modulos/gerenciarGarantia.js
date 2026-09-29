@@ -948,7 +948,6 @@ export const GerenciarGarantiaApp = (function () {
                 payload.cidade = '';
                 payload.estado = '';
             }
-            };
 
             const isEdit = !!_currentEditPedidoId;
             let url = API_URLS.GARANTIA_PEDIDO;
