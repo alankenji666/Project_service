@@ -807,6 +807,12 @@ export const GerenciarGarantiaApp = (function () {
                             }
                             if (!updateSuccess) throw lastError;
                             
+                            // Atualiza o item local no array atual do pedido de garantia
+                            item.peso = currentPeso;
+                            item.pesoBruto = currentPeso;
+                            // Recalcula o peso total para atualizar o campo "Peso Total (kg)" na UI
+                            _updateUIPesoTotal();
+                            
                             if (window._allProducts) {
                                 const p = window._allProducts.find(x => String(x.id) === String(productIdToUpdate));
                                 if (p) {
