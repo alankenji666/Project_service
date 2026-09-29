@@ -2235,6 +2235,10 @@ export const GerenciarGarantiaApp = (function () {
                 <div class="section">
                     <div class="section-title">Dados do Cliente</div>
                     <div class="grid">
+                        <div class="field" style="flex: 0.5;">
+                            <span class="field-label">Cód. Cliente</span>
+                            <span class="field-value">${req.codigoCliente || '-'}</span>
+                        </div>
                         <div class="field" style="flex: 2;">
                             <span class="field-label">Cliente / Empresa</span>
                             <span class="field-value">${req.cliente || '-'}</span>
