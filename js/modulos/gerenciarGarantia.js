@@ -245,7 +245,7 @@ export const GerenciarGarantiaApp = (function () {
         if (chk) chk.checked = false;
         const cont = document.getElementById('garantia-envio-container');
         if (cont) cont.classList.add('hidden');
-        ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado', 'garantia-valor-frete', 'garantia-peso-total'].forEach(id => {
+        ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado', 'garantia-valor-frete', 'garantia-peso-total', 'garantia-tipo-embalagem', 'garantia-altura', 'garantia-largura', 'garantia-comprimento'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
@@ -991,7 +991,7 @@ export const GerenciarGarantiaApp = (function () {
         // VALIDAÇÃO DE ENVIO
         const chkE = document.getElementById('garantia-possui-envio');
         if (chkE && chkE.checked) {
-            const requiredFields = [
+            let requiredFields = [
                 { id: 'garantia-transportadora', name: 'Transportadora' },
                 { id: 'garantia-volume', name: 'Volume' },
                 { id: 'garantia-valor-frete', name: 'Valor Frete' },
@@ -1001,7 +1001,13 @@ export const GerenciarGarantiaApp = (function () {
                 { id: 'garantia-bairro', name: 'Bairro' },
                 { id: 'garantia-cidade', name: 'Cidade' },
                 { id: 'garantia-estado', name: 'Estado (UF)' }
-            ];
+            , { id: 'garantia-tipo-embalagem', name: 'Tipo Embalagem' }];
+            const tipoEmbEl = document.getElementById('garantia-tipo-embalagem');
+            if (tipoEmbEl && tipoEmbEl.value && tipoEmbEl.value !== 'Nenhuma') {
+                requiredFields.push({ id: 'garantia-altura', name: 'Altura (m)' });
+                requiredFields.push({ id: 'garantia-largura', name: 'Largura (m)' });
+                requiredFields.push({ id: 'garantia-comprimento', name: 'Comprimento (m)' });
+            }
 
             const missing = requiredFields.filter(f => {
                 const el = document.getElementById(f.id);
@@ -1071,6 +1077,12 @@ export const GerenciarGarantiaApp = (function () {
                 payload.bairro = document.getElementById('garantia-bairro').value.trim();
                 payload.cidade = document.getElementById('garantia-cidade').value.trim();
                 payload.estado = document.getElementById('garantia-estado').value.trim();
+                
+                const tEmb = document.getElementById('garantia-tipo-embalagem').value.trim();
+                const alt = document.getElementById('garantia-altura').value.trim();
+                const larg = document.getElementById('garantia-largura').value.trim();
+                const comp = document.getElementById('garantia-comprimento').value.trim();
+                payload.embalagem = (tEmb && tEmb !== 'Nenhuma') ? `${tEmb}/${alt}/${larg}/${comp}` : tEmb;
             } else {
                 payload.transportadora = '';
                 payload.volume = '';
@@ -1082,6 +1094,7 @@ export const GerenciarGarantiaApp = (function () {
                 payload.bairro = '';
                 payload.cidade = '';
                 payload.estado = '';
+                payload.embalagem = '';
             }
 
             const isEdit = !!_currentEditPedidoId;
@@ -1268,6 +1281,25 @@ export const GerenciarGarantiaApp = (function () {
             document.getElementById('garantia-bairro').value = pedido.bairro || '';
             document.getElementById('garantia-cidade').value = pedido.cidade || '';
             document.getElementById('garantia-estado').value = pedido.estado || '';
+            
+            if (pedido.embalagem) {
+                const parts = pedido.embalagem.split('/');
+                document.getElementById('garantia-tipo-embalagem').value = parts[0] || '';
+                if (parts.length > 1) {
+                    document.getElementById('garantia-altura').value = parts[1] || '';
+                    document.getElementById('garantia-largura').value = parts[2] || '';
+                    document.getElementById('garantia-comprimento').value = parts[3] || '';
+                } else {
+                    document.getElementById('garantia-altura').value = '';
+                    document.getElementById('garantia-largura').value = '';
+                    document.getElementById('garantia-comprimento').value = '';
+                }
+            } else {
+                document.getElementById('garantia-tipo-embalagem').value = '';
+                document.getElementById('garantia-altura').value = '';
+                document.getElementById('garantia-largura').value = '';
+                document.getElementById('garantia-comprimento').value = '';
+            }
         }
 
         // Change Title
