@@ -780,11 +780,32 @@ export const GerenciarGarantiaApp = (function () {
 
                         if (productIdToUpdate) {
                             // IMPORTANTE: Utiliza API_URLS do gerenciarGarantia
-                            await fetch(`${API_URLS.PRODUCTS}/${productIdToUpdate}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ peso_bruto: currentPeso, peso_liquido: currentPeso })
-                            });
+                            const maxRetries = 3;
+                            const retryDelays = [5000, 10000, 15000];
+                            let updateSuccess = false;
+                            let lastError = null;
+                            
+                            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                                try {
+                                    const res = await fetch(`${API_URLS.PRODUCTS}/${productIdToUpdate}`, {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ peso_bruto: currentPeso, peso_liquido: currentPeso })
+                                    });
+                                    if (res.ok) {
+                                        updateSuccess = true;
+                                        break; // Success!
+                                    }
+                                    throw new Error(`HTTP Error: ${res.status}`);
+                                } catch (err) {
+                                    lastError = err;
+                                    if (attempt < maxRetries) {
+                                        console.warn(`[Peso] Falha ao atualizar (Tentativa ${attempt + 1}). Retentando em ${retryDelays[attempt]/1000}s...`);
+                                        await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+                                    }
+                                }
+                            }
+                            if (!updateSuccess) throw lastError;
                             
                             if (window._allProducts) {
                                 const p = window._allProducts.find(x => String(x.id) === String(productIdToUpdate));
@@ -843,6 +864,9 @@ export const GerenciarGarantiaApp = (function () {
             
             _itemsList.appendChild(tr);
         });
+        
+        // NOVO: Update visual UI total
+        _updateUIPesoTotal();
     }
 
     /**
@@ -850,6 +874,21 @@ export const GerenciarGarantiaApp = (function () {
      * Padrão atual: (Código, Qtd, Valor|OK) 
      * Como não temos valor, enviaremos 0.00
      */
+    function _updateUIPesoTotal() {
+        const el = document.getElementById('garantia-peso-total');
+        if (!el) return;
+        let totalPesoCalc = 0;
+        _currentOrderItems.forEach(i => {
+            let pPeso = 0;
+            if (window._allProducts) {
+                const pr = window._allProducts.find(p => String(p.codigo || '').trim() === String(i.id || i.cod).trim());
+                if (pr) pPeso = parseFloat(pr.pesoBruto || pr.peso || 0);
+            }
+            totalPesoCalc += (parseFloat(i.peso || i.pesoBruto || pPeso || 0) * parseInt(i.qtd || 1));
+        });
+        el.value = totalPesoCalc.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3});
+    }
+
     function _formatItemsString() {
         return _currentOrderItems.map(item => {
             return `(${item.cod || item.desc}, ${item.qtd.toFixed(2)}, ${(item.preco || 0).toFixed(2)}|OK)`;
