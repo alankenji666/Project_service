@@ -352,7 +352,7 @@ export const GerenciarGarantiaApp = (function () {
                     _listaTransportadoras = data.transportadoras;
                     data.transportadoras.forEach(t => {
                         const opt = document.createElement('option');
-                        opt.value = t.nomeFantasia || t.razaoSocial || t.nome;
+                        opt.value = t.codigo;
                         opt.text = t.nomeFantasia || t.razaoSocial || t.nome;
                         select.appendChild(opt);
                     });
