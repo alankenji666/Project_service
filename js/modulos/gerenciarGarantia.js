@@ -2237,22 +2237,22 @@ export const GerenciarGarantiaApp = (function () {
                         <span>Dados do Cliente</span>
                         <span style="font-size: 11px; font-weight: normal; color: #4b5563; text-transform: uppercase;">Cód. Cliente: <b style="color: #111827;">${req.codigoCliente || '-'}</b></span>
                     </div>
-                    <div class="grid">
-                        <div class="field" style="flex: 2;">
+                    <div class="grid" style="margin-bottom: 15px;">
+                        <div class="field" style="flex: 1;">
                             <span class="field-label">Cliente / Empresa</span>
                             <span class="field-value">${req.cliente || '-'}</span>
                         </div>
-                        <div class="field">
+                    </div>
+                    <div class="grid">
+                        <div class="field" style="flex: 1; min-width: 140px;">
                             <span class="field-label">CPF / CNPJ</span>
                             <span class="field-value">${req.cpf || '-'}</span>
                         </div>
-                    </div>
-                    <div class="grid" style="margin-top: 15px;">
-                        <div class="field">
+                        <div class="field" style="flex: 1; min-width: 140px;">
                             <span class="field-label">Telefone / WhatsApp</span>
                             <span class="field-value">${req.telefone || '-'}</span>
                         </div>
-                        <div class="field">
+                        <div class="field" style="flex: 1.5; min-width: 150px;">
                             <span class="field-label">E-mail</span>
                             <span class="field-value">${req.email || '-'}</span>
                         </div>
