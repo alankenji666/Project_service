@@ -153,10 +153,12 @@ export const GerenciarGarantiaApp = (function () {
                 let v = e.target.value.replace(/\D/g, '');
                 if (v === '') {
                     e.target.value = '';
+                    _updateUITotalValues();
                     return;
                 }
                 v = (parseInt(v, 10) / 100).toFixed(2);
                 e.target.value = 'R$ ' + v.replace('.', ',').replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+                _updateUITotalValues();
             });
         }
 
@@ -443,6 +445,7 @@ export const GerenciarGarantiaApp = (function () {
         const containerEnvio = document.getElementById('garantia-envio-container');
         if (checkboxEnvio && containerEnvio) {
             checkboxEnvio.addEventListener('change', (e) => {
+                _updateUITotalValues();
                 if (e.target.checked) {
                     containerEnvio.classList.remove('hidden');
                 } else {
@@ -931,6 +934,7 @@ export const GerenciarGarantiaApp = (function () {
                             item.pesoBruto = currentPeso;
                             // Recalcula o peso total para atualizar o campo "Peso Total (kg)" na UI
                             _updateUIPesoTotal();
+        _updateUITotalValues();
                             
                             if (window._allProducts) {
                                 const p = window._allProducts.find(x => String(x.id) === String(productIdToUpdate));
@@ -992,6 +996,7 @@ export const GerenciarGarantiaApp = (function () {
         
         // NOVO: Update visual UI total
         _updateUIPesoTotal();
+        _updateUITotalValues();
     }
 
     /**
@@ -1014,7 +1019,67 @@ export const GerenciarGarantiaApp = (function () {
         el.value = totalPesoCalc.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3});
     }
 
-    function _formatItemsString() {
+    
+    function _updateUITotalValues() {
+        const tfoot = document.getElementById('garantia-items-footer');
+        if (!tfoot) return;
+        if (_currentOrderItems.length === 0) {
+            tfoot.classList.add('hidden');
+            return;
+        }
+
+        tfoot.classList.remove('hidden');
+
+        let totalItens = 0;
+        _currentOrderItems.forEach(i => {
+            totalItens += (parseFloat(i.preco || 0) * parseInt(i.qtd || 1));
+        });
+
+        const chkEnvio = document.getElementById('garantia-possui-envio');
+        const inputFrete = document.getElementById('garantia-valor-frete');
+        let freteVal = 0;
+        
+        if (chkEnvio && chkEnvio.checked && inputFrete && inputFrete.value.trim() !== '') {
+            let fStr = String(inputFrete.value).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
+            freteVal = parseFloat(fStr) || 0;
+        }
+
+        const fmt = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+        
+        let html = '';
+        
+        if (freteVal > 0) {
+            html += `
+                <tr class="bg-slate-50">
+                    <td colspan="3" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Itens:</td>
+                    <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(totalItens)}</td>
+                    <td></td>
+                </tr>
+                <tr class="bg-slate-50 border-t border-slate-200">
+                    <td colspan="3" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Frete:</td>
+                    <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(freteVal)}</td>
+                    <td></td>
+                </tr>
+                <tr class="bg-green-50 border-t border-green-200">
+                    <td colspan="3" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
+                    <td class="px-4 py-3 text-right font-black text-green-700 text-base">${fmt(totalItens + freteVal)}</td>
+                    <td></td>
+                </tr>
+            `;
+        } else {
+            html += `
+                <tr class="bg-green-50">
+                    <td colspan="3" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
+                    <td class="px-4 py-3 text-right font-black text-green-700 text-base">${fmt(totalItens)}</td>
+                    <td></td>
+                </tr>
+            `;
+        }
+        
+        tfoot.innerHTML = html;
+    }
+
+function _formatItemsString() {
         return _currentOrderItems.map(item => {
             return `(${item.cod || item.desc}, ${item.qtd.toFixed(2)}, ${(item.preco || 0).toFixed(2)}|OK)`;
         }).join(' ');
