@@ -1,3 +1,4 @@
+import { API_URLS } from '../apiConfig.js?v=22';
 // js/modulos/dashboard.js
 
 // Importa Chart e o plugin, que estão disponíveis globalmente a partir dos scripts no index.
@@ -4257,7 +4258,7 @@ export const DashboardApp = (function() {
 
 
 
-    async function _showGarantiaDashboard() {
+   async function _showGarantiaDashboard() {
         _dom.selectorContainer?.classList.add('hidden');
         _dom.vendasContainer?.classList.add('hidden');
         _dom.estoqueContainer?.classList.add('hidden');
@@ -4421,3 +4422,5 @@ export const DashboardApp = (function() {
             summaryContainer.innerHTML = '<div class="col-span-4 text-center py-8 text-red-500">Erro ao carregar dados. Tente novamente mais tarde.</div>';
         }
     }
+
+ 
