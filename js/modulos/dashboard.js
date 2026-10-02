@@ -390,6 +390,7 @@ export const DashboardApp = (function() {
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
         _setDateRange('all');
     }
