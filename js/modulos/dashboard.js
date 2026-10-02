@@ -388,6 +388,8 @@ export const DashboardApp = (function() {
         if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
         if (_dom.vendasContainer) _dom.vendasContainer.classList.remove('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
+        if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
         _setDateRange('all');
     }
@@ -407,6 +409,7 @@ export const DashboardApp = (function() {
         if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.remove('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
         _state.activeEstoqueFilter = 'all';
         _state.estoqueCurrentPage = 1; // Reseta para a primeira página
@@ -4109,6 +4112,7 @@ export const DashboardApp = (function() {
 async function _showGarantiaDashboard() {
         _dom.selectorContainer?.classList.add('hidden');
         _dom.vendasContainer?.classList.add('hidden');
+            _dom.garantiaContainer?.classList.add('hidden');
         _dom.estoqueContainer?.classList.add('hidden');
         _dom.rankingContainer?.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.remove('hidden');
