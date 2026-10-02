@@ -2576,6 +2576,8 @@ function _formatItemsString() {
         }
         
         document.getElementById('satg-modal-observacao').value = req.observacao || '';
+        const elAcaoPecas = document.getElementById('satg-modal-acao-pecas');
+        if (elAcaoPecas) elAcaoPecas.value = req.acaoPecas || req.acao_pecas || req.acao || '';
         
         const pedidoLigado = req.idPedido || req.pedidoGerado;
         if (pedidoLigado) {
@@ -3099,6 +3101,8 @@ function _formatItemsString() {
         const payload = { rowIndex: _currentSatgRowIndex };
         if (status) payload.status = status;
         if (observacao !== undefined) payload.observacao = observacao;
+        const elAcaoPecas = document.getElementById('satg-modal-acao-pecas');
+        if (elAcaoPecas) payload.acaoPecas = elAcaoPecas.value.trim();
 
         const btnToUpdate = status === 'RECUSADO' ? _btnRecusarSatg : _btnSalvarObsSatg;
         const originalText = btnToUpdate.innerText;
