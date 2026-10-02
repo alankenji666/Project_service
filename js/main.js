@@ -1,27 +1,27 @@
         // Importa as funções utilitárias do novo módulo
-        import { debounce, addBusinessDays, getBusinessDaysDifference, formatCnpjCpf, createDetailItem, createStatusPill, positionTooltip } from './utils.js?v=2';
-        import { sendNFeByEmail } from './utils/sendNfeEmail.js?v=2';
+        import { debounce, addBusinessDays, getBusinessDaysDifference, formatCnpjCpf, createDetailItem, createStatusPill, positionTooltip } from './utils.js?v=110';
+        import { sendNFeByEmail } from './utils/sendNfeEmail.js?v=110';
         window.sendNFeByEmail = sendNFeByEmail;
 
 
         // URLs das suas APIs do Google Apps Script
         // ATENÇÃO: Substitua estas URLs pelas URLs de IMPLANTAÇÃO dos seus respectivos scripts
-        import { API_URLS } from './apiConfig.js?v=5';
-        import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=26';
+        import { API_URLS } from './apiConfig.js?v=110';
+        import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=110';
         window.PesquisarProduto = PesquisarProduto;
-        import { Atendimento } from './modulos/atendimento.js?v=2';
-        import { DashboardApp } from './modulos/dashboard.js?v=108';
-        import { EstoqueApp } from './modulos/estoque.js?v=2';
-        import { SaidaItens } from './modulos/saidaItens.js?v=4';
-        import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=54';
+        import { Atendimento } from './modulos/atendimento.js?v=110';
+        import { DashboardApp } from './modulos/dashboard.js?v=110';
+        import { EstoqueApp } from './modulos/estoque.js?v=110';
+        import { SaidaItens } from './modulos/saidaItens.js?v=110';
+        import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=110';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=110';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
-        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=109';
+        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=110';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
-        import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=2';
-        import { TransportadorasApp } from './modulos/transportadoras.js?v=4';
+        import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=110';
+        import { TransportadorasApp } from './modulos/transportadoras.js?v=110';
         window.TransportadorasApp = TransportadorasApp;
-        import * as AjusteEstoque from './modulos/ajusteEstoque.js?v=2';
+        import * as AjusteEstoque from './modulos/ajusteEstoque.js?v=110';
 
         // Início do padrão Revealing Module para a aplicação principal
         const App = (function () {
