@@ -102,6 +102,8 @@ export const GerenciarGarantiaApp = (function () {
     let _currentOrderItems = [];
     let _satgData = [];
     let _filteredSatgData = [];
+    let _satgCurrentPage = 1;
+    const _satgPageSize = 20;
     let _currentSatgRowIndex = null;
     let _currentEditPedidoId = null;
     let _currentSatgReqForOrder = null; // Guarda o SatG vinculado ao formulário atual
@@ -1930,7 +1932,7 @@ function _formatItemsString() {
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
                     <div class="font-bold text-gray-800">${req.codigo || '-'}</div>
-                    <div class="text-xs text-gray-500">${req.data ? req.data.split(' ')[0] : '-'}</div>
+                    <div class="text-xs text-gray-500">${req.data ? (req.data.includes(' ') ? req.data.split(':').slice(0, 2).join(':') : req.data) : '-'}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-normal max-w-[250px]">
                     <div class="text-sm font-semibold text-gray-900 line-clamp-2" title="${req.cliente}">${req.cliente || '-'}</div>
@@ -2715,7 +2717,7 @@ function _formatItemsString() {
             <body>
                 <div class="header">
                     <h1>Solicitação de Garantia SAT-G</h1>
-                    <p>Código: <b>${req.codigo || '-'}</b> &nbsp;|&nbsp; Data: <b>${req.data ? req.data.split(' ')[0] : '-'}</b></p>
+                    <p>Código: <b>${req.codigo || '-'}</b> &nbsp;|&nbsp; Data: <b>${req.data ? (req.data.includes(' ') ? req.data.split(':').slice(0, 2).join(':') : req.data) : '-'}</b></p>
                 </div>
                 
                 <div class="section">
@@ -2873,7 +2875,7 @@ function _formatItemsString() {
             <div class="pdf-body">
                 <div class="header">
                     <h1>Solicitação de Garantia SAT-G</h1>
-                    <p>Código: <b>${req.codigo || '-'}</b> &nbsp;|&nbsp; Data: <b>${req.data ? req.data.split(' ')[0] : '-'}</b></p>
+                    <p>Código: <b>${req.codigo || '-'}</b> &nbsp;|&nbsp; Data: <b>${req.data ? (req.data.includes(' ') ? req.data.split(':').slice(0, 2).join(':') : req.data) : '-'}</b></p>
                 </div>
                 
                 <div class="section">
