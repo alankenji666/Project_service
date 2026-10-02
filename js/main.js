@@ -16,7 +16,7 @@
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=110';
         import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=110';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
-        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=111';
+        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=116';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=110';
         import { TransportadorasApp } from './modulos/transportadoras.js?v=110';

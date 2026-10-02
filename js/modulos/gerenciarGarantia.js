@@ -75,6 +75,13 @@ export const GerenciarGarantiaApp = (function () {
     let _pedidosGarantiaTableContent;
     let _noPedidosGarantiaMessage;
     let _pedidosGarantiaSearchInput;
+    
+        let _satgTopFilterBar;
+    let _satgStatusSelect;
+    let _satgOrcamentoSelect;
+    let _satgRetornoSelect;
+    let _satgSortRadios;
+
     let _satgFilterBtn;
     let _satgFilterDropdown;
     let _satgFilterText;
@@ -296,6 +303,13 @@ export const GerenciarGarantiaApp = (function () {
         _satgObservationCharCount = document.getElementById('satg-observation-char-count');
         _saveSatgObservationBtn = document.getElementById('save-satg-observation-btn');
         _cancelSatgObservationBtn = document.getElementById('cancel-satg-observation-btn');
+        
+                _satgTopFilterBar = document.getElementById('satg-top-filter-bar');
+        _satgStatusSelect = document.getElementById('satg-status-select');
+        _satgOrcamentoSelect = document.getElementById('satg-orcamento-select');
+        _satgRetornoSelect = document.getElementById('satg-retorno-select');
+        _satgSortRadios = document.querySelectorAll('.satg-sort-radio');
+
         _satgFilterBtn = document.getElementById('btn-satg-filter');
         _satgFilterDropdown = document.getElementById('satg-filter-dropdown');
         _satgFilterText = document.getElementById('satg-filter-text');
@@ -521,6 +535,14 @@ export const GerenciarGarantiaApp = (function () {
 
         // SatG Search
         if (_satgSearchInput) _satgSearchInput.addEventListener('input', _applySatgFilters);
+        if (_satgStatusSelect) _satgStatusSelect.addEventListener('change', _applySatgFilters);
+        if (_satgOrcamentoSelect) _satgOrcamentoSelect.addEventListener('change', _applySatgFilters);
+        if (_satgRetornoSelect) _satgRetornoSelect.addEventListener('change', _applySatgFilters);
+        if (_satgSortRadios) {
+            _satgSortRadios.forEach(radio => {
+                radio.addEventListener('change', _applySatgFilters);
+            });
+        }
         if (_btnFecharModalSatg) _btnFecharModalSatg.onclick = _closeSatgModal;
         
         if (_btnFecharModalPedidoGarantia) {
@@ -669,6 +691,7 @@ export const GerenciarGarantiaApp = (function () {
         _formContainer.classList.add('hidden');
         _tableContainer.classList.add('hidden');
         if (_satgContainer) _satgContainer.classList.add('hidden');
+        if (_satgTopFilterBar) _satgTopFilterBar.classList.add('hidden');
         if (_pedidosGarantiaContainer) _pedidosGarantiaContainer.classList.add('hidden');
         
         if (_mainHeader) _mainHeader.classList.add('hidden');
@@ -704,6 +727,7 @@ export const GerenciarGarantiaApp = (function () {
             if (_tableHeader) _tableHeader.classList.remove('hidden');
         } else if (viewName === 'satg') {
             if (_satgContainer) _satgContainer.classList.remove('hidden');
+            if (_satgTopFilterBar) _satgTopFilterBar.classList.remove('hidden');
             if (_satgHeader) _satgHeader.classList.remove('hidden');
         } else if (viewName === 'pedidosGarantia') {
             if (_pedidosGarantiaContainer) _pedidosGarantiaContainer.classList.remove('hidden');
@@ -1696,7 +1720,11 @@ function _formatItemsString() {
                 }
             }
 
-            _applySatgFilters();
+            
+        if (_satgFilterBtn) _satgFilterBtn.parentElement.classList.add('hidden');
+        // (Removido: Ocultação movida para _showView)
+
+        _applySatgFilters();
         } catch (error) {
             console.error('Erro ao buscar SatG:', error);
             _satgTableContent.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
@@ -1705,35 +1733,95 @@ function _formatItemsString() {
 
     function _applySatgFilters() {
         const query = _satgSearchInput ? _satgSearchInput.value.toLowerCase().trim() : '';
+        const statusFilter = _satgStatusSelect ? _satgStatusSelect.value.toLowerCase() : 'all';
+        const orcamentoFilter = _satgOrcamentoSelect ? _satgOrcamentoSelect.value.toLowerCase() : 'all';
+        const retornoFilter = _satgRetornoSelect ? _satgRetornoSelect.value.toLowerCase() : 'all';
         
-        // Pega os checkboxes selecionados
-        let selectedStatus = [];
-        if (_satgFilterCheckboxes) {
-            _satgFilterCheckboxes.forEach(cb => {
-                if (cb.checked) selectedStatus.push(cb.value.toUpperCase());
+        let sortOrder = 'desc';
+        if (_satgSortRadios) {
+            _satgSortRadios.forEach(r => {
+                if (r.checked) sortOrder = r.value;
             });
         }
-        
-        if (_satgFilterText) {
-            _satgFilterText.innerText = `Filtro (${selectedStatus.length})`;
-        }
 
-        _filteredSatgData = _satgData.filter(d => {
+        const normalizeStr = (str) => {
+            return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        };
+
+        let filtered = _satgData.filter(d => {
+            // 1. Filtro Texto (Busca)
+            const textMatch = !query || 
+                              String(d.codigo).toLowerCase().includes(query) ||
+                              String(d.cliente).toLowerCase().includes(query) ||
+                              String(d.cpf).toLowerCase().includes(query);
+            if (!textMatch) return false;
+
+            // 2. Filtro Situação Garantia
             const currentStatus = String(d.status).toUpperCase();
-            
-            // Verifica se o status atual esta nos filtros marcados
-            const statusMatch = selectedStatus.length === 0 || selectedStatus.includes(currentStatus) || 
-                                (currentStatus.includes('RECUSADO') && selectedStatus.includes('RECUSADO')) ||
-                                (currentStatus.includes('ARQUIVADO') && selectedStatus.includes('RECUSADO')); 
-            
+            let statusMatch = false;
+            if (statusFilter === 'all') {
+                statusMatch = true;
+            } else if (statusFilter === 'em analise') {
+                statusMatch = currentStatus.includes('ANALISE') || currentStatus.includes('ANÁLISE') || currentStatus.trim() === '';
+            } else if (statusFilter === 'aprovado') {
+                statusMatch = currentStatus.includes('APROVADO');
+            } else if (statusFilter === 'recusado') {
+                statusMatch = currentStatus.includes('RECUSADO') || currentStatus.includes('ARQUIVADO');
+            }
             if (!statusMatch) return false;
-            
-            if (!query) return true;
-            
-            return String(d.codigo).toLowerCase().includes(query) ||
-                   String(d.cliente).toLowerCase().includes(query) ||
-                   String(d.cpf).toLowerCase().includes(query);
+
+            // 3. Filtro Situação Orçamento
+            let visualOrcamentoStatus = 'EM ANALISE';
+            if (currentStatus.includes('RECUSADO')) {
+                visualOrcamentoStatus = 'CANCELADO';
+            } else if (d.idPedido) {
+                const pVinculado = typeof _pedidosGarantiaData !== 'undefined' ? _pedidosGarantiaData.find(p => String(p.idPedido || p.numero || p.id || '') === String(d.idPedido)) : null;
+                if (pVinculado && pVinculado.situacao) {
+                    visualOrcamentoStatus = pVinculado.situacao.toUpperCase();
+                    if (visualOrcamentoStatus === 'PENDENTE') visualOrcamentoStatus = 'EM ANALISE';
+                }
+            }
+
+            let orcMatch = false;
+            if (orcamentoFilter === 'all') {
+                orcMatch = true;
+            } else {
+                const normPStatus = normalizeStr(visualOrcamentoStatus);
+                const normFilter = normalizeStr(orcamentoFilter);
+                if (normPStatus.includes(normFilter)) orcMatch = true;
+            }
+            if (!orcMatch) return false;
+
+            // 4. Filtro Situação Retorno
+            let visualRetornoStatus = (d.retornoItem || 'EM ANALISE').toUpperCase();
+            if (currentStatus.includes('RECUSADO')) {
+                visualRetornoStatus = 'CANCELADO';
+            }
+            let retMatch = false;
+            if (retornoFilter === 'all') {
+                retMatch = true;
+            } else {
+                const normRStatus = normalizeStr(visualRetornoStatus);
+                const normRFilter = normalizeStr(retornoFilter);
+                if (normRStatus.includes(normRFilter)) retMatch = true;
+            }
+            if (!retMatch) return false;
+
+            return true;
         });
+
+        // Ordenar os dados
+        filtered.sort((a, b) => {
+            const dateA = _parseDate(a.data).getTime();
+            const dateB = _parseDate(b.data).getTime();
+            if (sortOrder === 'asc') {
+                return dateA - dateB; // Antigas primeiro
+            } else {
+                return dateB - dateA; // Recentes primeiro
+            }
+        });
+
+        _filteredSatgData = filtered;
 
         _satgCurrentPage = 1;
         _renderSatgTable();
