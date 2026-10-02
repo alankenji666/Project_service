@@ -10,13 +10,13 @@
         import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=26';
         window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js?v=2';
-        import { DashboardApp } from './modulos/dashboard.js?v=18';
+        import { DashboardApp } from './modulos/dashboard.js?v=100';
         import { EstoqueApp } from './modulos/estoque.js?v=2';
         import { SaidaItens } from './modulos/saidaItens.js?v=4';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=2';
         import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=54';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
-        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=98';
+        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=99';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=2';
         import { TransportadorasApp } from './modulos/transportadoras.js?v=4';
