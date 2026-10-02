@@ -4105,160 +4105,8 @@ export const DashboardApp = (function() {
         document.body.removeChild(link);
     }
 
-    return {
-        init: function(config) {
-            _allNFeData = config.allNFeData || [];
-            _allProducts = config.allProducts || [];
-            _allLojaIntegradaOrders = config.allLojaIntegradaOrders || [];
-            _allPedidosBling = config.allPedidosBling || [];
-            _utils = config;
-            
-            if (!_state.isInitialized) {
-                _cacheDom();
-                _bindEvents();
-                _state.isInitialized = true;
-            }
-        },
-
-        start: function(nfeData, liOrders, pedidosBling, products) {
-            if (!_state.isInitialized) {
-                _cacheDom();
-                _bindEvents();
-                _state.isInitialized = true;
-            }
-            if (nfeData) _allNFeData = nfeData;
-            if (liOrders) _allLojaIntegradaOrders = liOrders;
-            if (pedidosBling) _allPedidosBling = pedidosBling;
-            if (products) _allProducts = products;
-
-            // Só popula os anos se o seletor estiver vazio
-            if (_dom.yearFilter && _dom.yearFilter.options.length <= 1) {
-                _populateYearFilter();
-            }
-            
-            // Se já estiver "started", precisamos re-renderizar a view atual para refletir novos dados
-            if (_state.isStarted) {
-                console.log('[Dashboard] Dados atualizados em tempo real. Re-renderizando view ativa.');
-                if (_dom.vendasContainer && !_dom.vendasContainer.classList.contains('hidden')) {
-                    _renderSalesView();
-                } else if (_dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
-                    _renderEstoqueDashboard();
-                } else if (_dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
-                    _renderRankingDashboard();
-                }
-            } else {
-                _showSelector();
-                _state.isStarted = true;
-            }
-        },
-
-        stop: function() {
-            if (_salesChartInstance) { _salesChartInstance.destroy(); _salesChartInstance = null; }
-            Object.values(_state.charts).forEach(c => c?.destroy());
-            _dom.filterBar?.classList.add('hidden');
-            _dom.selectorContainer?.classList.add('hidden');
-            _dom.vendasContainer?.classList.add('hidden');
-            _dom.estoqueContainer?.classList.add('hidden');
-            _state.isStarted = false;
-        },
-
-        updateOrderObservationStatus: function(id, obs) {
-            // A <tr> usa p.id (ID longo), mas o orderId passado pode ser p.numero.
-            // Busca o ícone pelo data-target-id que sempre usa p.numero — mais confiável.
-            const icon = document.querySelector(`.edit-sales-observation-btn[data-target-id="${id}"]`);
-            if (icon) {
-                icon.dataset.observation = JSON.stringify(obs || []);
-                const svg = icon.querySelector('svg');
-                const has = Array.isArray(obs) ? obs.length > 0 : !!(obs && String(obs).trim());
-                svg?.classList.toggle('text-red-500', has);
-                svg?.classList.toggle('text-gray-300', !has);
-            }
-        },
-
-        /**
-         * Atualiza o estoque de um produto em tempo real no Dashboard.
-         * @param {string} codigo 
-         * @param {number} novoEstoque 
-         */
-        updateStockRealTime: function(codigo, novoEstoque) {
-            // 1. Atualiza no array interno de produtos do dashboard
-            const product = _allProducts.find(p => p.codigo === codigo);
-            if (product) {
-                product.estoque = novoEstoque;
-                console.log(`[Dashboard] Estoque do produto ${codigo} atualizado para ${novoEstoque} na memória.`);
-
-                // 2. Se o dashboard de estoque estiver sendo exibido, re-renderiza para atualizar gráficos e tabelas
-                if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
-                    console.log('[Dashboard] Re-renderizando dashboard de estoque em tempo real.');
-                    _renderEstoqueDashboard();
-                }
-            }
-        },
-
-        /**
-         * Atualiza os dados de um produto (ex: custo, venda) em tempo real no Dashboard.
-         */
-        updateProductDataRealTime: function(id, data) {
-            const product = _allProducts.find(p => String(p.id) === String(id));
-            if (product) {
-                if (data.novoPrecoCusto !== undefined) product.preco_de_custo = data.novoPrecoCusto;
-                if (data.novoPreco !== undefined) product.preco = data.novoPreco;
-                if (data.novoNome) product.descricao = data.novoNome;
-                
-                if (_state.isStarted) {
-                    if (_dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
-                        console.log(`[Dashboard] Re-renderizando dashboard de estoque devido a atualização do produto ${id}.`);
-                        _renderEstoqueDashboard();
-                    } else if (_dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
-                        console.log(`[Dashboard] Re-renderizando dashboard de ranking devido a atualização do produto ${id}.`);
-                        _renderRankingDashboard();
-                    }
-                }
-            }
-        },
-
-        /**
-         * Atualiza o nome de um produto em tempo real no Dashboard.
-         * @param {string} codigo 
-         * @param {string} novoNome 
-         */
-        updateProductNameRealTime: function(codigo, novoNome) {
-            const product = _allProducts.find(p => p.codigo === codigo);
-            if (product) {
-                product.descricao = novoNome;
-                if (_state.isStarted && _dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
-                    _renderRankingDashboard();
-                }
-
-                console.log(`[Dashboard] Nome do produto ${codigo} atualizado para "${novoNome}" na memória.`);
-
-                // Se o dashboard de estoque estiver sendo exibido, re-renderiza para atualizar os nomes na tabela
-                if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
-                    _renderEstoqueDashboard();
-                }
-            }
-        },
-        
-        /**
-         * NOVO: Reseta a visualização do dashboard para o seletor de cards.
-         */
-        resetToSelector: function() {
-            _showSelector();
-        },
-
-        /**
-         * Expõe os pedidos Bling carregados no dashboard para uso por outros módulos (ex: modal de observação).
-         */
-        getAllPedidosBling: function() {
-            return _allPedidosBling;
-        }
-    };
-})();
-
-
-
-
-   async function _showGarantiaDashboard() {
+    
+async function _showGarantiaDashboard() {
         _dom.selectorContainer?.classList.add('hidden');
         _dom.vendasContainer?.classList.add('hidden');
         _dom.estoqueContainer?.classList.add('hidden');
@@ -4424,3 +4272,157 @@ export const DashboardApp = (function() {
     }
 
  
+return {
+        init: function(config) {
+            _allNFeData = config.allNFeData || [];
+            _allProducts = config.allProducts || [];
+            _allLojaIntegradaOrders = config.allLojaIntegradaOrders || [];
+            _allPedidosBling = config.allPedidosBling || [];
+            _utils = config;
+            
+            if (!_state.isInitialized) {
+                _cacheDom();
+                _bindEvents();
+                _state.isInitialized = true;
+            }
+        },
+
+        start: function(nfeData, liOrders, pedidosBling, products) {
+            if (!_state.isInitialized) {
+                _cacheDom();
+                _bindEvents();
+                _state.isInitialized = true;
+            }
+            if (nfeData) _allNFeData = nfeData;
+            if (liOrders) _allLojaIntegradaOrders = liOrders;
+            if (pedidosBling) _allPedidosBling = pedidosBling;
+            if (products) _allProducts = products;
+
+            // Só popula os anos se o seletor estiver vazio
+            if (_dom.yearFilter && _dom.yearFilter.options.length <= 1) {
+                _populateYearFilter();
+            }
+            
+            // Se já estiver "started", precisamos re-renderizar a view atual para refletir novos dados
+            if (_state.isStarted) {
+                console.log('[Dashboard] Dados atualizados em tempo real. Re-renderizando view ativa.');
+                if (_dom.vendasContainer && !_dom.vendasContainer.classList.contains('hidden')) {
+                    _renderSalesView();
+                } else if (_dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
+                    _renderEstoqueDashboard();
+                } else if (_dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
+                    _renderRankingDashboard();
+                }
+            } else {
+                _showSelector();
+                _state.isStarted = true;
+            }
+        },
+
+        stop: function() {
+            if (_salesChartInstance) { _salesChartInstance.destroy(); _salesChartInstance = null; }
+            Object.values(_state.charts).forEach(c => c?.destroy());
+            _dom.filterBar?.classList.add('hidden');
+            _dom.selectorContainer?.classList.add('hidden');
+            _dom.vendasContainer?.classList.add('hidden');
+            _dom.estoqueContainer?.classList.add('hidden');
+            _state.isStarted = false;
+        },
+
+        updateOrderObservationStatus: function(id, obs) {
+            // A <tr> usa p.id (ID longo), mas o orderId passado pode ser p.numero.
+            // Busca o ícone pelo data-target-id que sempre usa p.numero — mais confiável.
+            const icon = document.querySelector(`.edit-sales-observation-btn[data-target-id="${id}"]`);
+            if (icon) {
+                icon.dataset.observation = JSON.stringify(obs || []);
+                const svg = icon.querySelector('svg');
+                const has = Array.isArray(obs) ? obs.length > 0 : !!(obs && String(obs).trim());
+                svg?.classList.toggle('text-red-500', has);
+                svg?.classList.toggle('text-gray-300', !has);
+            }
+        },
+
+        /**
+         * Atualiza o estoque de um produto em tempo real no Dashboard.
+         * @param {string} codigo 
+         * @param {number} novoEstoque 
+         */
+        updateStockRealTime: function(codigo, novoEstoque) {
+            // 1. Atualiza no array interno de produtos do dashboard
+            const product = _allProducts.find(p => p.codigo === codigo);
+            if (product) {
+                product.estoque = novoEstoque;
+                console.log(`[Dashboard] Estoque do produto ${codigo} atualizado para ${novoEstoque} na memória.`);
+
+                // 2. Se o dashboard de estoque estiver sendo exibido, re-renderiza para atualizar gráficos e tabelas
+                if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
+                    console.log('[Dashboard] Re-renderizando dashboard de estoque em tempo real.');
+                    _renderEstoqueDashboard();
+                }
+            }
+        },
+
+        /**
+         * Atualiza os dados de um produto (ex: custo, venda) em tempo real no Dashboard.
+         */
+        updateProductDataRealTime: function(id, data) {
+            const product = _allProducts.find(p => String(p.id) === String(id));
+            if (product) {
+                if (data.novoPrecoCusto !== undefined) product.preco_de_custo = data.novoPrecoCusto;
+                if (data.novoPreco !== undefined) product.preco = data.novoPreco;
+                if (data.novoNome) product.descricao = data.novoNome;
+                
+                if (_state.isStarted) {
+                    if (_dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
+                        console.log(`[Dashboard] Re-renderizando dashboard de estoque devido a atualização do produto ${id}.`);
+                        _renderEstoqueDashboard();
+                    } else if (_dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
+                        console.log(`[Dashboard] Re-renderizando dashboard de ranking devido a atualização do produto ${id}.`);
+                        _renderRankingDashboard();
+                    }
+                }
+            }
+        },
+
+        /**
+         * Atualiza o nome de um produto em tempo real no Dashboard.
+         * @param {string} codigo 
+         * @param {string} novoNome 
+         */
+        updateProductNameRealTime: function(codigo, novoNome) {
+            const product = _allProducts.find(p => p.codigo === codigo);
+            if (product) {
+                product.descricao = novoNome;
+                if (_state.isStarted && _dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
+                    _renderRankingDashboard();
+                }
+
+                console.log(`[Dashboard] Nome do produto ${codigo} atualizado para "${novoNome}" na memória.`);
+
+                // Se o dashboard de estoque estiver sendo exibido, re-renderiza para atualizar os nomes na tabela
+                if (_state.isStarted && _dom.estoqueContainer && !_dom.estoqueContainer.classList.contains('hidden')) {
+                    _renderEstoqueDashboard();
+                }
+            }
+        },
+        
+        /**
+         * NOVO: Reseta a visualização do dashboard para o seletor de cards.
+         */
+        resetToSelector: function() {
+            _showSelector();
+        },
+
+        /**
+         * Expõe os pedidos Bling carregados no dashboard para uso por outros módulos (ex: modal de observação).
+         */
+        getAllPedidosBling: function() {
+            return _allPedidosBling;
+        }
+    };
+})();
+
+
+
+
+   
