@@ -10,6 +10,9 @@ export const DashboardApp = (function() {
     let _allNFeData = [];
     let _allProducts = [];
     let _allLojaIntegradaOrders = [];
+    let _garantiaPecasData = [];
+    let _garantiaPecasPage = 1;
+    const _garantiaPecasPerPage = 20;
     let _allPedidosBling = []; // Nova fonte primária
     let _currentSalesDetails = []; // Armazena os dados para o modal de detalhes
     let _currentMonthKey = '';
@@ -389,7 +392,9 @@ export const DashboardApp = (function() {
         if (_dom.vendasContainer) _dom.vendasContainer.classList.remove('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
         _setDateRange('all');
@@ -411,6 +416,7 @@ export const DashboardApp = (function() {
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.remove('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
         _state.activeEstoqueFilter = 'all';
         _state.estoqueCurrentPage = 1; // Reseta para a primeira página
@@ -421,6 +427,7 @@ export const DashboardApp = (function() {
         if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
         if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.remove('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
         _renderRankingDashboard();
@@ -550,7 +557,9 @@ export const DashboardApp = (function() {
         if (_dom.selectorContainer) _dom.selectorContainer.classList.remove('hidden');
         if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
 
         try {
@@ -4110,6 +4119,58 @@ export const DashboardApp = (function() {
     }
 
     
+
+    function _renderGarantiaPecasTable() {
+        const pecasList = document.getElementById('garantia-pecas-list');
+        const info = document.getElementById('garantia-pecas-pagination-info');
+        const prevBtn = document.getElementById('garantia-pecas-prev-btn');
+        const nextBtn = document.getElementById('garantia-pecas-next-btn');
+        const pageText = document.getElementById('garantia-pecas-page-text');
+
+        if (!pecasList) return;
+
+        const totalItems = _garantiaPecasData.length;
+        const totalPages = Math.ceil(totalItems / _garantiaPecasPerPage) || 1;
+        
+        if (_garantiaPecasPage > totalPages) _garantiaPecasPage = totalPages;
+        if (_garantiaPecasPage < 1) _garantiaPecasPage = 1;
+
+        const startIndex = (_garantiaPecasPage - 1) * _garantiaPecasPerPage;
+        const endIndex = Math.min(startIndex + _garantiaPecasPerPage, totalItems);
+        const pageData = _garantiaPecasData.slice(startIndex, endIndex);
+
+        const fmtBRL = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+        pecasList.innerHTML = pageData.map(data => `
+            <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3">
+                    <div class="font-bold text-gray-800 text-sm">${data.descricao}</div>
+                    <div class="text-[10px] text-gray-400 font-mono mt-0.5">${data.codigo}</div>
+                </td>
+                <td class="px-4 py-3 text-center text-sm font-bold text-gray-800">${data.qtd}</td>
+                <td class="px-4 py-3 text-right font-bold text-blue-600">${fmtBRL(data.custo)}</td>
+            </tr>
+        `).join('');
+
+        if (info) info.innerHTML = `Mostrando <span class="font-bold">${totalItems === 0 ? 0 : startIndex + 1}</span> a <span class="font-bold">${endIndex}</span> de <span class="font-bold">${totalItems}</span> itens`;
+        if (pageText) pageText.innerText = `Página ${_garantiaPecasPage} de ${totalPages}`;
+
+        if (prevBtn) {
+            prevBtn.disabled = _garantiaPecasPage === 1;
+            prevBtn.onclick = () => {
+                _garantiaPecasPage--;
+                _renderGarantiaPecasTable();
+            };
+        }
+        if (nextBtn) {
+            nextBtn.disabled = _garantiaPecasPage === totalPages;
+            nextBtn.onclick = () => {
+                _garantiaPecasPage++;
+                _renderGarantiaPecasTable();
+            };
+        }
+    }
+
 async function _showGarantiaDashboard() {
         _dom.selectorContainer?.classList.add('hidden');
         _dom.vendasContainer?.classList.add('hidden');
@@ -4171,7 +4232,7 @@ async function _showGarantiaDashboard() {
                     while ((match = regex.exec(ped.itens)) !== null) {
                         const partes = match[1].split(',');
                         if (partes.length >= 3) {
-                            const codDesc = partes[0].trim();
+                            const rawCodDesc = partes[0].trim();
                             const qtd = parseFloat(partes[1]) || 0;
                             const precoRaw = partes[2].split('|')[0];
                             const preco = parseFloat(precoRaw) || 0;
@@ -4179,9 +4240,23 @@ async function _showGarantiaDashboard() {
                             
                             gastoPecas += custoItem;
 
-                            if (!countPecas[codDesc]) countPecas[codDesc] = { qtd: 0, custo: 0 };
-                            countPecas[codDesc].qtd += qtd;
-                            countPecas[codDesc].custo += custoItem;
+                            let codigo = rawCodDesc;
+                            let descricao = rawCodDesc;
+                            if (_allProducts && _allProducts.length > 0) {
+                                const pr = _allProducts.find(p => String(p.codigo || '').trim() === rawCodDesc);
+                                if (pr) {
+                                    descricao = pr.descricao || pr.nome || rawCodDesc;
+                                } else {
+                                    codigo = '-';
+                                }
+                            } else {
+                                codigo = '-';
+                            }
+                            
+                            const mapKey = descricao + '|||' + codigo;
+                            if (!countPecas[mapKey]) countPecas[mapKey] = { descricao, codigo, qtd: 0, custo: 0 };
+                            countPecas[mapKey].qtd += qtd;
+                            countPecas[mapKey].custo += custoItem;
                         }
                     }
                 }
@@ -4258,17 +4333,11 @@ async function _showGarantiaDashboard() {
             }
 
             // Sort Peças Usadas (by quantity desc)
-            const topPecas = Object.entries(countPecas).sort((a, b) => b[1].qtd - a[1].qtd);
-            const pecasList = document.getElementById('garantia-pecas-list');
-            if (pecasList) {
-                pecasList.innerHTML = topPecas.map(([name, data]) => `
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-4 py-3 text-gray-800 font-medium truncate max-w-[200px]" title="${name}">${name}</td>
-                        <td class="px-4 py-3 text-center"><span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded-full">${data.qtd} un</span></td>
-                        <td class="px-4 py-3 text-right font-bold text-gray-700">${fmtBRL(data.custo)}</td>
-                    </tr>
-                `).join('');
-            }
+            _garantiaPecasData = Object.values(countPecas).sort((a, b) => b.qtd - a.qtd);
+            _garantiaPecasPage = 1;
+            
+            // Render pagination and table
+            _renderGarantiaPecasTable();
 
         } catch (err) {
             console.error('Erro ao carregar dashboard de garantia:', err);

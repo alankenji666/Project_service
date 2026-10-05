@@ -1,0 +1,103 @@
+var fs = require('fs');
+var content = fs.readFileSync('js/modulos/gerenciarGarantia.js', 'utf8');
+
+var s2 = '<td class="px-4 py-3 text-right">\\n                    <span class="font-bold text-emerald-600">${(item.preco || 0).toLocaleString(\\'pt-BR\\', {style: \\'currency\\', currency: \\'BRL\\'})}</span>\\n                </td>';
+
+var r2 = '<td class="px-4 py-3">\\n' +
+'                    <div class="flex items-center gap-2 justify-end" onclick="event.stopPropagation()">\\n' +
+'                        <span class="font-bold text-emerald-600">R$</span>\\n' +
+'                        <input type="text" class="garantia-item-preco-input w-24 px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-1 focus:ring-emerald-500 font-bold text-emerald-600" value="${(item.preco || 0).toFixed(2).replace(\\'.\\', \\',\\')}">\\n' +
+'                        <button type="button" class="garantia-item-sync-preco-btn flex-shrink-0 p-1 text-emerald-500 hover:text-emerald-700 bg-white rounded shadow-sm border border-gray-200 hidden transition-all" title="Salvar novo preco de custo no cadastro do produto" data-original-preco="${(item.preco || 0).toFixed(2).replace(\\'.\\', \\',\\')}">\\n' +
+'                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>\\n' +
+'                        </button>\\n' +
+'                    </div>\\n' +
+'                </td>';
+
+content = content.replace(s2, r2).replace(s2.replace(/\\n/g, '\\r\\n'), r2);
+
+var s3 = 'syncPesoBtn.disabled = false;\\n                    }\\n                });\\n            }';
+
+var r3 = s3 + '\\n\\n' +
+'            const precoInput = tr.querySelector(\\'\\.garantia-item-preco-input\\');\\n' +
+'            const syncPrecoBtn = tr.querySelector(\\'\\.garantia-item-sync-preco-btn\\');\\n' +
+'            if (precoInput && syncPrecoBtn) {\\n' +
+'                precoInput.addEventListener(\\'input\\', (e) => {\\n' +
+'                    let val = e.target.value.replace(/\\\\D/g, \\'\\');\\n' +
+'                    if (val === \\'\\') val = \\'000\\';\\n' +
+'                    val = (parseInt(val) / 100).toFixed(2).replace(\\'.\\', \\',\\');\\n' +
+'                    e.target.value = val;\\n' +
+'                    \\n' +
+'                    const originalPreco = syncPrecoBtn.dataset.originalPreco;\\n' +
+'                    const currentPreco = precoInput.value;\\n' +
+'                    \\n' +
+'                    item.preco = parseFloat(currentPreco.replace(\\'.\\', \\'\\').replace(\\',\\', \\'.\\'));\\n' +
+'                    _updateUITotalValues();\\n' +
+'                    \\n' +
+'                    if (currentPreco !== originalPreco) syncPrecoBtn.classList.remove(\\'hidden\\');\\n' +
+'                    else syncPrecoBtn.classList.add(\\'hidden\\');\\n' +
+'                });\\n' +
+'\\n' +
+'                syncPrecoBtn.addEventListener(\\'click\\', async (e) => {\\n' +
+'                    e.stopPropagation();\\n' +
+'                    const currentPreco = parseFloat(String(precoInput.value).replace(\\'.\\', \\'\\').replace(\\',\\', \\'.\\')) || 0;\\n' +
+'                    const originalBtnHtml = syncPrecoBtn.innerHTML;\\n' +
+'                    \\n' +
+'                    syncPrecoBtn.innerHTML = \\'<svg class="animate-spin h-4 w-4 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>\\';\\n' +
+'                    syncPrecoBtn.disabled = true;\\n' +
+'\\n' +
+'                    try {\\n' +
+'                        let productIdToUpdate = null;\\n' +
+'                        let productCodigo = \\'\\';\\n' +
+'                        if (window._allProducts) {\\n' +
+'                            const p = window._allProducts.find(x => String(x.codigo) === String(item.cod) || String(x.id) === String(item.id));\\n' +
+'                            if (p) {\\n' +
+'                                productIdToUpdate = p.id;\\n' +
+'                                productCodigo = p.codigo;\\n' +
+'                            }\\n' +
+'                        }\\n' +
+'\\n' +
+'                        if (productIdToUpdate) {\\n' +
+'                            const maxRetries = 3;\\n' +
+'                            const retryDelays = [5000, 10000, 15000];\\n' +
+'                            let updateSuccess = false;\\n' +
+'                            \\n' +
+'                            for (let attempt = 0; attempt <= maxRetries; attempt++) {\\n' +
+'                                try {\\n' +
+'                                    const res = await fetch(`${API_URLS.PRODUCTS}/${productIdToUpdate}`, {\\n' +
+'                                        method: \\'PUT\\',\\n' +
+'                                        headers: { \\'Content-Type\\': \\'application/json\\' },\\n' +
+'                                        body: JSON.stringify({ preco_de_custo: currentPreco, codigo: productCodigo })\\n' +
+'                                    });\\n' +
+'                                    if (res.ok) { updateSuccess = true; break; }\\n' +
+'                                } catch(e) { }\\n' +
+'                                if (!updateSuccess && attempt < maxRetries) await new Promise(r => setTimeout(r, retryDelays[attempt]));\\n' +
+'                            }\\n' +
+'                            \\n' +
+'                            if (updateSuccess) {\\n' +
+'                                syncPrecoBtn.dataset.originalPreco = precoInput.value;\\n' +
+'                                syncPrecoBtn.classList.add(\\'hidden\\');\\n' +
+'                                if (window._allProducts) {\\n' +
+'                                    const p = window._allProducts.find(x => String(x.id) === String(productIdToUpdate));\\n' +
+'                                    if (p) p.preco_de_custo = currentPreco;\\n' +
+'                                }\\n' +
+'                                alert(\\'Preço de custo atualizado com sucesso no Bling!\\');\\n' +
+'                            } else {\\n' +
+'                                alert(\\'Falha ao atualizar o preço de custo no Bling.\\');\\n' +
+'                            }\\n' +
+'                        } else {\\n' +
+'                            alert(\\'Produto não encontrado no cache local para atualização.\\');\\n' +
+'                        }\\n' +
+'                    } catch (error) {\\n' +
+'                        console.error(\\'Erro ao salvar preço de custo:\\', error);\\n' +
+'                        alert(\\'Erro ao atualizar preço.\\');\\n' +
+'                    } finally {\\n' +
+'                        syncPrecoBtn.innerHTML = originalBtnHtml;\\n' +
+'                        syncPrecoBtn.disabled = false;\\n' +
+'                    }\\n' +
+'                });\\n' +
+'            }';
+
+content = content.replace(s3, r3).replace(s3.replace(/\\n/g, '\\r\\n'), r3.replace(/\\n/g, '\\r\\n'));
+
+fs.writeFileSync('js/modulos/gerenciarGarantia.js', content);
+console.log('done patching!');
