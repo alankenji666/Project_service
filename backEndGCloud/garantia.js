@@ -491,7 +491,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
     // Atualiza o Status e Observação de um pedido na SatG
     router.post('/satg/update', async (req, res, next) => {
         try {
-            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg } = req.body;
+            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg, acaoPecas } = req.body;
             
             if (!rowIndex) {
                 return res.status(400).json({ error: true, message: 'rowIndex é obrigatório.' });
@@ -537,6 +537,15 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     range: `${sheetName}!AA${rowIndex}`,
                     valueInputOption: 'USER_ENTERED',
                     resource: { values: [[observacao]] }
+                });
+            }
+
+            if (acaoPecas !== undefined) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!Z${rowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[acaoPecas]] }
                 });
             }
             
