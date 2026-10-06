@@ -255,9 +255,11 @@ export const GerenciarGarantiaApp = (function () {
         
         const chk = document.getElementById('garantia-possui-envio');
         if (chk) chk.checked = false;
+        const selConta = document.getElementById('garantia-frete-conta');
+        if (selConta) { selConta.value = ''; selConta.classList.add('hidden'); }
         const cont = document.getElementById('garantia-envio-container');
         if (cont) cont.classList.add('hidden');
-        ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado', 'garantia-valor-frete', 'garantia-peso-total', 'garantia-tipo-embalagem', 'garantia-altura', 'garantia-largura', 'garantia-comprimento'].forEach(id => {
+        ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado', 'garantia-valor-frete', 'garantia-peso-total', 'garantia-tipo-embalagem', 'garantia-altura', 'garantia-largura', 'garantia-comprimento', 'garantia-frete-conta'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
@@ -349,6 +351,8 @@ export const GerenciarGarantiaApp = (function () {
         
         const chk = document.getElementById('garantia-possui-envio');
         if (chk) chk.checked = false;
+        const selConta = document.getElementById('garantia-frete-conta');
+        if (selConta) { selConta.value = ''; selConta.classList.add('hidden'); }
         const cont = document.getElementById('garantia-envio-container');
         if (cont) cont.classList.add('hidden');
         ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado'].forEach(id => {
@@ -459,15 +463,35 @@ export const GerenciarGarantiaApp = (function () {
         // Checkbox "Possui Envio?"
         const checkboxEnvio = document.getElementById('garantia-possui-envio');
         const containerEnvio = document.getElementById('garantia-envio-container');
+        const selectFreteConta = document.getElementById('garantia-frete-conta');
         if (checkboxEnvio && containerEnvio) {
             checkboxEnvio.addEventListener('change', (e) => {
                 _updateUITotalValues();
                 if (e.target.checked) {
-                    containerEnvio.classList.remove('hidden');
+                    if (selectFreteConta) selectFreteConta.classList.remove('hidden');
+                    if (selectFreteConta && selectFreteConta.value) {
+                        containerEnvio.classList.remove('hidden');
+                    } else {
+                        containerEnvio.classList.add('hidden');
+                    }
                 } else {
+                    if (selectFreteConta) {
+                        selectFreteConta.classList.add('hidden');
+                        selectFreteConta.value = '';
+                    }
                     containerEnvio.classList.add('hidden');
                 }
             });
+            if (selectFreteConta) {
+                selectFreteConta.addEventListener('change', (e) => {
+                    if (e.target.value) {
+                        containerEnvio.classList.remove('hidden');
+                    } else {
+                        containerEnvio.classList.add('hidden');
+                    }
+                    _renderFooter();
+                });
+            }
         }
         
         // Fetch Transportadoras na inicialização
@@ -580,10 +604,30 @@ export const GerenciarGarantiaApp = (function () {
         if (_modalSatgPrintSatgBtn) {
             _modalSatgPrintSatgBtn.onclick = (e) => {
                 e.preventDefault();
-                if (_modalSatgPrintDropdownMenu) _modalSatgPrintDropdownMenu.classList.add('hidden');
-                _handlePrintSatG();
-            };
-        }
+                
+                  if (_modalSatgPrintDropdownMenu) _modalSatgPrintDropdownMenu.classList.add('hidden');
+                  _handlePrintSatG();
+              };
+          }
+          
+          const printMarkerBtn = document.getElementById('modal-satg-print-marker-btn');
+          if (printMarkerBtn) {
+              printMarkerBtn.onclick = (e) => {
+                  e.preventDefault();
+                  if (_modalSatgPrintDropdownMenu) _modalSatgPrintDropdownMenu.classList.add('hidden');
+                  _handlePrintMarkerSatG(false);
+              };
+          }
+          
+          const printMarkerSmallBtn = document.getElementById('modal-satg-print-marker-small-btn');
+          if (printMarkerSmallBtn) {
+              printMarkerSmallBtn.onclick = (e) => {
+                  e.preventDefault();
+                  if (_modalSatgPrintDropdownMenu) _modalSatgPrintDropdownMenu.classList.add('hidden');
+                  _handlePrintMarkerSatG(true);
+              };
+          }
+
 
         if (_btnRecusarSatg) _btnRecusarSatg.onclick = () => _updateSatgStatus('RECUSADO');
         
@@ -887,6 +931,9 @@ export const GerenciarGarantiaApp = (function () {
                         </button>
                     </div>
                 </td>
+                <td class="px-4 py-3 text-right font-bold text-slate-700 text-sm">
+                    R$ ${((item.preco || 0) * (item.qtd || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
                 <td class="px-4 py-3 text-center">
                     <div class="flex items-center justify-center gap-1">
                         <button type="button" class="btn-edit-item-detalhe text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-lg transition-colors" title="Detalhes Customizados">
@@ -1159,29 +1206,46 @@ export const GerenciarGarantiaApp = (function () {
         
         let html = '';
         
+        const ipiVal = totalItens * 0.0325;
+        
         if (freteVal > 0) {
             html += `
                 <tr class="bg-slate-50">
-                    <td colspan="3" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Itens:</td>
+                    <td colspan="4" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Itens:</td>
                     <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(totalItens)}</td>
                     <td></td>
                 </tr>
                 <tr class="bg-slate-50 border-t border-slate-200">
-                    <td colspan="3" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Frete:</td>
+                    <td colspan="4" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">IPI (3,25%):</td>
+                    <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(ipiVal)}</td>
+                    <td></td>
+                </tr>
+                <tr class="bg-slate-50 border-t border-slate-200">
+                    <td colspan="4" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Frete:</td>
                     <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(freteVal)}</td>
                     <td></td>
                 </tr>
                 <tr class="bg-green-50 border-t border-green-200">
-                    <td colspan="3" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
-                    <td class="px-4 py-3 text-right font-black text-green-700 text-base">${fmt(totalItens + freteVal)}</td>
+                    <td colspan="4" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
+                    <td class="px-4 py-3 text-right font-black text-green-700 text-base">${fmt(totalItens + ipiVal + freteVal)}</td>
                     <td></td>
                 </tr>
             `;
         } else {
             html += `
-                <tr class="bg-green-50">
-                    <td colspan="3" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
-                    <td class="px-4 py-3 text-right font-black text-green-700 text-base">${fmt(totalItens)}</td>
+                <tr class="bg-slate-50">
+                    <td colspan="4" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Itens:</td>
+                    <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(totalItens)}</td>
+                    <td></td>
+                </tr>
+                <tr class="bg-slate-50 border-t border-slate-200">
+                    <td colspan="4" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">IPI (3,25%):</td>
+                    <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(ipiVal)}</td>
+                    <td></td>
+                </tr>
+                <tr class="bg-green-50 border-t border-green-200">
+                    <td colspan="4" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
+                    <td class="px-4 py-3 text-right font-black text-green-700 text-base">${fmt(totalItens + ipiVal)}</td>
                     <td></td>
                 </tr>
             `;
@@ -1206,6 +1270,7 @@ function _formatItemsString() {
         const chkE = document.getElementById('garantia-possui-envio');
         if (chkE && chkE.checked) {
             let requiredFields = [
+                { id: 'garantia-frete-conta', name: 'Frete por conta' },
                 { id: 'garantia-transportadora', name: 'Transportadora' },
                 { id: 'garantia-volume', name: 'Volume' },
                 { id: 'garantia-valor-frete', name: 'Valor Frete' },
@@ -1297,6 +1362,7 @@ function _formatItemsString() {
                 const larg = document.getElementById('garantia-largura').value.trim();
                 const comp = document.getElementById('garantia-comprimento').value.trim();
                 payload.embalagem = (tEmb && tEmb !== 'Nenhuma') ? `${tEmb}/${alt}/${larg}/${comp}` : tEmb;
+                payload.freteConta = document.getElementById('garantia-frete-conta').value;
             } else {
                 payload.transportadora = '';
                 payload.volume = '';
@@ -1309,6 +1375,7 @@ function _formatItemsString() {
                 payload.cidade = '';
                 payload.estado = '';
                 payload.embalagem = '';
+                payload.freteConta = '';
             }
 
             const isEdit = !!_currentEditPedidoId;
@@ -1479,10 +1546,21 @@ function _formatItemsString() {
         const chkEnvio = document.getElementById('garantia-possui-envio');
         const contEnvio = document.getElementById('garantia-envio-container');
         if (chkEnvio) {
-            const hasEnvio = pedido.transportadora || pedido.volume || pedido.cep || pedido.cidade || pedido.bairro;
+            const hasEnvio = pedido.transportadora || pedido.volume || pedido.cep || pedido.cidade || pedido.bairro || pedido.freteConta;
             chkEnvio.checked = !!hasEnvio;
-            if (hasEnvio && contEnvio) contEnvio.classList.remove('hidden');
-            else if (contEnvio) contEnvio.classList.add('hidden');
+            const selC = document.getElementById('garantia-frete-conta');
+              if (selC) selC.value = pedido.freteConta || '0';
+            if (hasEnvio) {
+                if (selC) selC.classList.remove('hidden');
+                if (selC && selC.value) { 
+                    if (contEnvio) contEnvio.classList.remove('hidden'); 
+                } else { 
+                    if (contEnvio) contEnvio.classList.add('hidden'); 
+                }
+            } else {
+                if (selC) selC.classList.add('hidden');
+                if (contEnvio) contEnvio.classList.add('hidden');
+            }
             
             document.getElementById('garantia-transportadora').value = pedido.transportadora || '';
             document.getElementById('garantia-volume').value = pedido.volume || '';
@@ -1496,6 +1574,7 @@ function _formatItemsString() {
             document.getElementById('garantia-cidade').value = pedido.cidade || '';
             document.getElementById('garantia-estado').value = pedido.estado || '';
             
+            document.getElementById('garantia-frete-conta').value = pedido.freteConta || '0';
             if (pedido.embalagem) {
                 const parts = pedido.embalagem.split('/');
                 document.getElementById('garantia-tipo-embalagem').value = parts[0] || '';
@@ -2774,43 +2853,49 @@ function _formatItemsString() {
         }
         
         let freteVal = 0;
-        if (pedido.valorFrete) {
+        if (pedido.valorFrete && String(pedido.freteConta) === '1') {
             let fStr = String(pedido.valorFrete).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
             freteVal = parseFloat(fStr) || 0;
         }
-        const totalComFrete = totalValor + freteVal;
 
-        const bgCorSub = freteVal > 0 ? '#f8fafc' : '#f0fdf4';
-        const txtCorSub = freteVal > 0 ? '#475569' : '#15803d';
+        const ipiPrint = totalValor * 0.0325;
+        const totalPrint = totalValor + ipiPrint + freteVal;
 
         const totalFooter = parsedItens && parsedItens.length > 0 ? `
-            <tr style="background:${bgCorSub};">
-                <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:13px;color:${txtCorSub};">
+            <tr style="background:#f8fafc;">
+                <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:13px;color:#475569;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #4b5563; font-size: 12px; font-weight: normal;">Peso Total: <b style="color: #1e293b;">${totalPeso.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg</b></span>
-                        <span>${freteVal > 0 ? 'Total Itens:' : 'Valor Total:'}</span>
+                        <span>Total Itens:</span>
                     </div>
                 </td>
-                <td style="padding:12px 14px;font-weight:700;font-size:14px;color:${txtCorSub};text-align:right;">${fmtBRL(totalValor)}</td>
+                <td style="padding:12px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">${fmtBRL(totalValor)}</td>
+            </tr>
+            <tr style="background:#f8fafc; border-top: 1px solid #e2e8f0;">
+                <td colspan="2" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
+                    IPI (3,25%):
+                </td>
+                <td style="padding:8px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">
+                    ${fmtBRL(ipiPrint)}
+                </td>
             </tr>
             ${freteVal > 0 ? `
             <tr style="background:#f8fafc; border-top: 1px solid #e2e8f0;">
                 <td colspan="2" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
-                    Frete:
+                    Frete (FOB):
                 </td>
                 <td style="padding:8px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">
                     ${fmtBRL(freteVal)}
                 </td>
-            </tr>
+            </tr>` : ''}
             <tr style="background:#dcfce7; border-top: 1px solid #bbf7d0;">
                 <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:14px;color:#166534; text-align: right;">
                     Valor Total:
                 </td>
                 <td style="padding:12px 14px;font-weight:700;font-size:15px;color:#166534;text-align:right;">
-                    ${fmtBRL(totalComFrete)}
+                    ${fmtBRL(totalPrint)}
                 </td>
             </tr>
-            ` : ''}
         ` : '';
 
         return `
@@ -2867,6 +2952,16 @@ function _formatItemsString() {
                     }
                 }
                 const vol = pedido.volume ? ` (${pedido.volume} Vol)` : '';
+                  const freteContaMap = {
+                      '0': '0 - CIF',
+                      '1': '1 - FOB',
+                      '2': '2 - Terceiros',
+                      '3': '3 - Próprio Rem.',
+                      '4': '4 - Próprio Dest.',
+                      '9': '9 - Sem Transp.'
+                  };
+                  const fContaStr = freteContaMap[pedido.freteConta] || pedido.freteConta || '-';
+
 
                 htmlEnvio = `
                 <div class="section">
@@ -2882,8 +2977,12 @@ function _formatItemsString() {
                         </div>
                         <div class="field" style="flex: 1;">
                             <span class="field-label">Valor Frete</span>
-                            <span class="field-value">${pedido.valorFrete || '-'}</span>
-                        </div>
+                              <span class="field-value">${pedido.valorFrete || '-'}</span>
+                          </div>
+                          <div class="field" style="flex: 1;">
+                              <span class="field-label">Frete por</span>
+                              <span class="field-value" style="font-size: 11px;">${fContaStr}</span>
+                          </div>
                     </div>
                     <div class="grid">
                         <div class="field" style="flex: 1;">
@@ -3035,6 +3134,16 @@ function _formatItemsString() {
                     }
                 }
                 const vol = pedido.volume ? ` (${pedido.volume} Vol)` : '';
+                  const freteContaMap = {
+                      '0': '0 - CIF',
+                      '1': '1 - FOB',
+                      '2': '2 - Terceiros',
+                      '3': '3 - Próprio Rem.',
+                      '4': '4 - Próprio Dest.',
+                      '9': '9 - Sem Transp.'
+                  };
+                  const fContaStr = freteContaMap[pedido.freteConta] || pedido.freteConta || '-';
+
 
                 htmlEnvio = `
                 <div class="section">
@@ -3050,8 +3159,12 @@ function _formatItemsString() {
                         </div>
                         <div class="field" style="flex: 1;">
                             <span class="field-label">Valor Frete</span>
-                            <span class="field-value">${pedido.valorFrete || '-'}</span>
-                        </div>
+                              <span class="field-value">${pedido.valorFrete || '-'}</span>
+                          </div>
+                          <div class="field" style="flex: 1;">
+                              <span class="field-label">Frete por</span>
+                              <span class="field-value" style="font-size: 11px;">${fContaStr}</span>
+                          </div>
                     </div>
                     <div class="grid">
                         <div class="field" style="flex: 1;">
@@ -3642,6 +3755,158 @@ function _formatItemsString() {
         });
     }
     
+
+    function _handlePrintMarkerSatG(smallMarker = false) {
+        if (!_currentSatgRowIndex) return;
+        const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
+        if (!req) return;
+        
+        const printWindow = window.open('', '_blank', 'width=850,height=750');
+        if (!printWindow) {
+            alert('Por favor, permita pop-ups no seu navegador para imprimir.');
+            return;
+        }
+        
+        const cliente = (req.cliente || '-').toUpperCase();
+        const satgNum = req.codigo || '';
+        let nfeNum = req.notaFiscal || '';
+        
+        let transpNome = '';
+        if (req.idPedido) {
+            const pedido = _pedidosGarantiaData.find(p => String(p.id) === String(req.idPedido) || String(p.numero) === String(req.idPedido));
+            if (pedido && pedido.transportadora) {
+                transpNome = String(pedido.transportadora);
+                if (typeof _listaTransportadoras !== 'undefined') {
+                    const foundTransp = _listaTransportadoras.find(t => String(t.codigo) === String(pedido.transportadora));
+                    if (foundTransp) transpNome = foundTransp.nome;
+                }
+            }
+        }
+        
+        if (transpNome) {
+            transpNome = transpNome.trim().toUpperCase();
+            if (transpNome === 'RETIRADA NA LOJA' || transpNome === 'BALCAO' || transpNome === 'BAL ÃO' || transpNome.includes('RETIRADA')) {
+                transpNome = ''; 
+            }
+        }
+        
+        const now = new Date().toLocaleString('pt-BR');
+        const pageMedia = smallMarker ? '@page { size: A6 portrait; margin: 0; }' : '@page { size: A4 landscape; margin: 0; }';
+        const nameFontSize = smallMarker ? '70px' : '180px';
+        const serviceFontSize = smallMarker ? '26px' : '52px';
+        const detailsFontSize = smallMarker ? '18px' : '34px';
+        const detailsLargeSize = smallMarker ? '20px' : '38px';
+        
+        const html = `\<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Marcador - ${cliente}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Arial Black', Gadget, sans-serif; 
+            background: #fff; 
+            padding: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            width: 100vw;
+            height: 100vh;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .company-name { 
+            font-size: ${nameFontSize}; 
+            font-weight: 900; 
+            color: #000; 
+            line-height: 0.95;
+            margin-bottom: 15px;
+            word-wrap: break-word;
+            width: 100%;
+            text-transform: uppercase;
+        }
+
+        .mks-service { 
+            font-size: ${serviceFontSize}; 
+            font-weight: normal; 
+            color: #000; 
+            margin-bottom: 10px;
+            font-family: Arial, sans-serif;
+            border-top: 8px solid #000;
+            padding-top: 15px;
+            display: inline-block;
+            width: 80%;
+        }
+
+        .vendedor { 
+            font-size: ${detailsFontSize}; 
+            color: #333; 
+            font-family: Arial, sans-serif;
+            font-weight: normal;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 10px;
+            right: 15px;
+            font-size: 9px;
+            color: #999;
+            font-family: Arial, sans-serif;
+        }
+
+        @media print {
+            body { padding: 0< margin: 0; height: 100vh; width: 100vw; }
+            ${pageMedia}
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="print-container">
+        <div class="company-name" id="company-name">${cliente}</div>
+        <div class="mks-service">MKS - Service</div>
+        <br>
+        <div class="vendedor" style="font-size: ${detailsLargeSize};"><strong>${satgNum}</strong>${nfeNum ? ` | <strong>NF-e: ${nfeNum}</strong>` : ''}</div>
+        ${transpNome ? `<div class="vendedor" style="margin-top: 15px; font-size: ${detailsLargeSize};">Transportadora: <strong>${transpNome}</strong></div>` : ''}
+    </div>
+    <div class="footer">Gerado em ${now}</div>
+    <script>
+        window.onload = function(){ 
+            const el = document.getElementById('company-name');
+            const container = document.getElementById('print-container');
+            
+            let fontSize = ${smallMarker ? '70' : '180'}; 
+            el.style.fontSize = fontSize + 'px';
+            
+            function isTooBig() {
+                return container.offsetHeight > window.innerHeight * 0.98;
+            }
+
+            while (isTooBig() && fontSize > 40) {
+                fontSize -= 2;
+                el.style.fontSize = fontSize + 'px';
+            }
+            window.print(); 
+        };
+    </script>
+</body>
+</html>`;
+        printWindow.document.write(html);
+        printWindow.document.close();
+    }
+
+
     return {
         init,
         render,

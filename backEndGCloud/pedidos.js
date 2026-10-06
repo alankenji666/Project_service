@@ -416,6 +416,31 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
     /**
      * NOVO: Rota para obter os detalhes completos de um pedido de venda no Bling.
      */
+
+    /**
+     * NOVO: Rota para listar pedidos de venda no Bling com filtros.
+     */
+    router.get('/vendas', async (req, res, next) => {
+        try {
+            const accessToken = await getToken();
+            const httpClient = axios || axiosModule;
+            
+            // Repassa as query params
+            const queryParams = new URLSearchParams(req.query).toString();
+            const url = `${BLING_API_BASE_URL}/pedidos/vendas${queryParams ? '?' + queryParams : ''}`;
+            
+            console.log(`[Bling] Listando pedidos de venda: ${url}`);
+            const resBling = await httpClient.get(url, {
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
+            });
+            res.status(200).send(resBling.data);
+        } catch (error) {
+            const errMsg = error.response?.data?.error?.message || error.response?.data?.message || error.message;
+            console.error("[Backend Error] listar-vendas:", errMsg);
+            res.status(500).json({ error: errMsg });
+        }
+    });
+
     router.get('/vendas/:id', async (req, res, next) => {
         try {
             const idPedido = req.params.id;

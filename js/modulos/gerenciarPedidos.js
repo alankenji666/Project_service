@@ -235,6 +235,78 @@ export const GerenciarPedidosApp = (function () {
     function _bindEvents() {
         // Eventos para Transportadoras
         if (_transportadorasBtn) _transportadorasBtn.addEventListener('click', _openTransportadorasModal);
+
+        const globalSyncBtn = document.getElementById('global-sync-orders-btn');
+        if (globalSyncBtn) {
+            globalSyncBtn.onclick = async () => {
+                const originalHtml = globalSyncBtn.innerHTML;
+                globalSyncBtn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Buscando...`;
+                globalSyncBtn.disabled = true;
+
+                try {
+                    const date = new Date();
+                    date.setDate(date.getDate() - 15);
+                    const dataInicial = date.toISOString().split('T')[0];
+
+                    const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas?idsSituacoes[]=6&dataInicial=${dataInicial}`);
+                    if (!res.ok) throw new Error("Falha ao buscar do Bling");
+                    
+                    const json = await res.json();
+                    const pedidosBling = json.data || [];
+                    
+                    if (pedidosBling.length === 0) {
+                        alert("Nenhum pedido em aberto nos últimos 15 dias encontrado no Bling.");
+                        return;
+                    }
+                    
+                    // Compara com os pedidos já carregados no sistema (planilha)
+                    const pedidosFaltantes = pedidosBling.filter(pBling => {
+                        return !_allPedidos.some(pLocal => 
+                            String(pLocal.id) === String(pBling.id) || 
+                            String(pLocal.numero) === String(pBling.numero) ||
+                            String(pLocal.numero) === String(pBling.id)
+                        );
+                    });
+
+                    if (pedidosFaltantes.length === 0) {
+                        alert(`Tudo em dia! ${pedidosBling.length} pedido(s) em aberto no Bling já estão na planilha.`);
+                    } else {
+                        globalSyncBtn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Sincronizando ${pedidosFaltantes.length}...`;
+                        
+                        const baseUrl = API_URLS.ORDERS_BLING.replace('/pedidos', '');
+                        
+                        let successCount = 0;
+                        for(const p of pedidosFaltantes) {
+                            try {
+                                // Manda webhook 1 por 1
+                                await fetch(`${baseUrl}/bling/pedidos`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        event: "pedidos.vendas.updated",
+                                        data: { id: p.id }
+                                    })
+                                });
+                                successCount++;
+                            } catch (e) {
+                                console.error("Erro no webhook:", e);
+                            }
+                        }
+                        
+                        const detalhes = pedidosFaltantes.map(p => `Pedido Nº ${p.numero} - ${p.contato?.nome || 'Sem Nome'}`).join('\n');
+                        alert(`Sincronização concluída! ${successCount} pedido(s) novo(s) processado(s):\n\n${detalhes}`);
+                        fetchPedidos(true); // recarrega a tabela
+                    }
+                } catch(error) {
+                    console.error(error);
+                    alert("Erro ao tentar sincronizar os pedidos.");
+                } finally {
+                    globalSyncBtn.innerHTML = originalHtml;
+                    globalSyncBtn.disabled = false;
+                }
+            };
+        }
+
         if (_closeTransportadorasModalBtn) _closeTransportadorasModalBtn.addEventListener('click', function() {
             if (_transportadorasModal) _transportadorasModal.classList.add('hidden');
         });
