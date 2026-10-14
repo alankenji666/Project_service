@@ -50,6 +50,8 @@ export const GerenciarGarantiaApp = (function () {
     let _searchInput;
     let _clearSearchBtn;
 
+    let _servicosMoData = [];
+
     // Referências do DOM - SatG
     let _satgContainer;
     let _btnShowSatg;
@@ -102,6 +104,7 @@ export const GerenciarGarantiaApp = (function () {
     let _modalSatgPrintBtn;
     let _modalSatgPrintDropdownMenu;
     let _modalSatgPrintSatgBtn;
+    let _modalSatgPrintSatgNoPriceBtn;
 
     // Estado interno
     let _garantiaData = [];
@@ -123,10 +126,128 @@ export const GerenciarGarantiaApp = (function () {
     /**
      * Inicializa o módulo, cacheia elementos e configura eventos.
      */
+
+    /**
+     * =========================================
+     * Modal Serviço (M.O)
+     * =========================================
+     */
+    function _openServicoMoModal(req, servicoMoObj = null, initialSituacao = 'Em Andamento') {
+        const modal = document.getElementById('modal-servico-mo');
+        if (!modal) return;
+
+        const titleEl = document.getElementById('modal-servico-mo-title');
+        const subtitleEl = document.getElementById('modal-servico-mo-subtitle');
+        const rowIndexInput = document.getElementById('servico-mo-satg-row-index');
+        const idInput = document.getElementById('servico-mo-id');
+        const situacaoSelect = document.getElementById('servico-mo-situacao');
+        const deslocamentoInput = document.getElementById('servico-mo-deslocamento');
+        const valorInput = document.getElementById('servico-mo-valor');
+        const descricaoTextarea = document.getElementById('servico-mo-descricao');
+
+        rowIndexInput.value = req.rowIndex;
+        const codExibicao = req.codigo ? (String(req.codigo).trim().startsWith('SAT-G') ? req.codigo : `SAT-G: ${req.codigo}`) : '-';
+        subtitleEl.innerText = `Vinculado a ${codExibicao} | Cliente: ${req.cliente || '-'}`;
+
+        if (servicoMoObj) {
+            const isReativando = ['CANCELADO', 'NÃO POSSUI', 'NAO POSSUI'].includes(String(servicoMoObj.situacao || '').trim().toUpperCase());
+            titleEl.innerText = isReativando ? `Reativar Serviço (M.O): ${servicoMoObj.idServicoMO}` : `Editar Serviço (M.O): ${servicoMoObj.idServicoMO}`;
+            idInput.value = servicoMoObj.idServicoMO;
+            situacaoSelect.value = initialSituacao || (isReativando ? 'Em Andamento' : servicoMoObj.situacao) || 'Em Andamento';
+            deslocamentoInput.value = servicoMoObj.deslocamento || '';
+            valorInput.value = servicoMoObj.valorMO || '';
+            descricaoTextarea.value = servicoMoObj.descricao || '';
+        } else {
+            const novoId = 'MO-' + Math.floor(1000000000 + Math.random() * 9000000000);
+            titleEl.innerText = `Novo Serviço (M.O): ${novoId}`;
+            idInput.value = novoId;
+            situacaoSelect.value = initialSituacao || 'Em Andamento';
+            deslocamentoInput.value = '';
+            valorInput.value = '';
+            descricaoTextarea.value = '';
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function _initServicoMoModalEvents() {
+        const modal = document.getElementById('modal-servico-mo');
+        if (!modal || window._servicoMoEventsInit) return;
+        window._servicoMoEventsInit = true;
+
+        const closeBtn = document.getElementById('btn-close-servico-mo');
+        const cancelBtn = document.getElementById('btn-cancel-servico-mo');
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+
+        if (closeBtn) closeBtn.onclick = closeModal;
+        if (cancelBtn) cancelBtn.onclick = closeModal;
+
+        // Máscaras de valor
+        const valorInput = document.getElementById('servico-mo-valor');
+        const deslocamentoInput = document.getElementById('servico-mo-deslocamento');
+        
+        const attachMoneyMask = (el) => {
+            if (!el) return;
+            el.addEventListener('input', (e) => {
+                let v = e.target.value.replace(/\D/g, '');
+                if (v === '') {
+                    e.target.value = '';
+                    return;
+                }
+                v = (parseInt(v, 10) / 100).toFixed(2);
+                e.target.value = 'R$ ' + v.replace('.', ',').replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+            });
+        };
+        attachMoneyMask(valorInput);
+        attachMoneyMask(deslocamentoInput);
+
+        const form = document.getElementById('form-servico-mo');
+        if (form) {
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                const btnSave = document.getElementById('btn-save-servico-mo');
+                const origHtml = btnSave.innerHTML;
+                btnSave.innerHTML = '<span class="animate-pulse">Salvando...</span>';
+                btnSave.disabled = true;
+
+                const payload = {
+                    idServicoMO: document.getElementById('servico-mo-id').value,
+                    situacao: document.getElementById('servico-mo-situacao').value,
+                    deslocamento: document.getElementById('servico-mo-deslocamento').value.trim(),
+                    valorMO: document.getElementById('servico-mo-valor').value.trim(),
+                    descricao: document.getElementById('servico-mo-descricao').value.trim(),
+                    satgRowIndex: document.getElementById('servico-mo-satg-row-index').value
+                };
+
+                try {
+                    const res = await fetch(API_URLS.GARANTIA_SERVICOS_MO, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error();
+                    
+                    closeModal();
+                    _fetchSatGData();
+                } catch (err) {
+                    alert('Erro ao salvar Serviço (M.O)');
+                } finally {
+                    btnSave.innerHTML = origHtml;
+                    btnSave.disabled = false;
+                }
+            };
+        }
+    }
+
     function init() {
         _cacheDomElements();
         if (_overviewCards) {
             _bindEvents();
+        _initServicoMoModalEvents();
         }
         _showView('cards');
         render(); // Pré-carrega a tabela
@@ -340,14 +461,17 @@ export const GerenciarGarantiaApp = (function () {
         _modalSatgPrintBtn = document.getElementById('modal-satg-print-btn');
         _modalSatgPrintDropdownMenu = document.getElementById('modal-satg-print-dropdown-menu');
         _modalSatgPrintSatgBtn = document.getElementById('modal-satg-print-satg-btn');
+        _modalSatgPrintSatgNoPriceBtn = document.getElementById('modal-satg-print-satg-sem-preco-btn');
     }
 
     /**
      * Reseta o form para estado inicial
      */
-        function _resetGarantiaForm() {
-        document.getElementById('garantia-pedido-form').reset();
-        _itemsList.innerHTML = '<li id="garantia-items-empty" class="text-sm text-gray-500 italic text-center py-2">Nenhum item adicionado.</li>';
+    function _resetGarantiaForm() {
+        const formEl = document.getElementById('garantia-pedido-form');
+        if (formEl) formEl.reset();
+        
+        _currentOrderItems = [];
         
         const chk = document.getElementById('garantia-possui-envio');
         if (chk) chk.checked = false;
@@ -355,13 +479,36 @@ export const GerenciarGarantiaApp = (function () {
         if (selConta) { selConta.value = ''; selConta.classList.add('hidden'); }
         const cont = document.getElementById('garantia-envio-container');
         if (cont) cont.classList.add('hidden');
-        ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado'].forEach(id => {
+        
+        [
+            'garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 
+            'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 
+            'garantia-estado', 'garantia-valor-frete', 'garantia-peso-total',
+            'garantia-tipo-embalagem', 'garantia-altura', 'garantia-largura', 'garantia-comprimento',
+            'garantia-codcliente', 'garantia-cliente', 'garantia-cpf-cnpj', 'garantia-numero',
+            'garantia-id-nota', 'garantia-observacao', 'garantia-analise'
+        ].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
 
+        if (_inputCodCliente) { _inputCodCliente.readOnly = false; _inputCodCliente.classList.remove('bg-gray-100', 'cursor-not-allowed', 'opacity-70'); _inputCodCliente.title = ""; }
+        if (_inputCliente) { _inputCliente.readOnly = false; _inputCliente.classList.remove('bg-gray-100', 'cursor-not-allowed', 'opacity-70'); _inputCliente.title = ""; }
+        if (_inputCpfCnpj) { _inputCpfCnpj.readOnly = false; _inputCpfCnpj.classList.remove('bg-gray-100', 'cursor-not-allowed', 'opacity-70'); _inputCpfCnpj.title = ""; }
+
+        const tfoot = document.getElementById('garantia-items-footer');
+        if (tfoot) {
+            tfoot.classList.add('hidden');
+            tfoot.innerHTML = '';
+        }
+
+        _renderOrderItems();
+
         const titleEl = document.querySelector('#garantia-form-header h1');
-        if (titleEl) titleEl.innerText = 'Novo Orçamento';
+        if (titleEl) {
+            titleEl.className = "text-xl font-bold text-gray-800 m-0 w-full flex items-center";
+            titleEl.innerText = 'Novo Orçamento';
+        }
         
         const situacaoContainer = document.getElementById('garantia-situacao-container');
         if (situacaoContainer) situacaoContainer.classList.add('hidden');
@@ -428,6 +575,7 @@ export const GerenciarGarantiaApp = (function () {
                 }
             }
             document.getElementById('modal-garantia-form').classList.add('hidden');
+            _resetGarantiaForm();
             _fetchPedidosGarantiaData(); 
         };
 
@@ -447,6 +595,7 @@ export const GerenciarGarantiaApp = (function () {
                 document.getElementById('garantia-save-confirm-modal').classList.add('hidden');
                 document.getElementById('garantia-save-confirm-modal').classList.remove('flex');
                 document.getElementById('modal-garantia-form').classList.add('hidden');
+                _resetGarantiaForm();
                 _fetchPedidosGarantiaData(); 
             };
         }
@@ -578,7 +727,7 @@ export const GerenciarGarantiaApp = (function () {
         // Fechar dropdowns customizados ao clicar fora
         document.addEventListener('click', (e) => {
             if (!e.target.closest('[data-dropdown-container]')) {
-                document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+                document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden), .servico-mo-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
             }
             if (_modalSatgPrintDropdownMenu && !e.target.closest('#modal-satg-print-dropdown-container')) {
                 _modalSatgPrintDropdownMenu.classList.add('hidden');
@@ -604,11 +753,18 @@ export const GerenciarGarantiaApp = (function () {
         if (_modalSatgPrintSatgBtn) {
             _modalSatgPrintSatgBtn.onclick = (e) => {
                 e.preventDefault();
-                
-                  if (_modalSatgPrintDropdownMenu) _modalSatgPrintDropdownMenu.classList.add('hidden');
-                  _handlePrintSatG();
-              };
-          }
+                if (_modalSatgPrintDropdownMenu) _modalSatgPrintDropdownMenu.classList.add('hidden');
+                _handlePrintSatG(false);
+            };
+        }
+
+        if (_modalSatgPrintSatgNoPriceBtn) {
+            _modalSatgPrintSatgNoPriceBtn.onclick = (e) => {
+                e.preventDefault();
+                if (_modalSatgPrintDropdownMenu) _modalSatgPrintDropdownMenu.classList.add('hidden');
+                _handlePrintSatG(true);
+            };
+        }
           
           const printMarkerBtn = document.getElementById('modal-satg-print-marker-btn');
           if (printMarkerBtn) {
@@ -859,7 +1015,9 @@ export const GerenciarGarantiaApp = (function () {
         _itemsList.innerHTML = '';
         
         if (_currentOrderItems.length === 0) {
-            _itemsList.innerHTML = '<tr><td colspan="5" id="garantia-items-empty" class="px-4 py-8 text-sm text-gray-500 italic text-center">Nenhum item adicionado.</td></tr>';
+            _itemsList.innerHTML = '<tr><td colspan="6" id="garantia-items-empty" class="px-4 py-8 text-sm text-gray-500 italic text-center">Nenhum item adicionado.</td></tr>';
+            _updateUIPesoTotal();
+            _updateUITotalValues();
             return;
         }
 
@@ -1165,6 +1323,10 @@ export const GerenciarGarantiaApp = (function () {
     function _updateUIPesoTotal() {
         const el = document.getElementById('garantia-peso-total');
         if (!el) return;
+        if (!_currentOrderItems || _currentOrderItems.length === 0) {
+            el.value = '';
+            return;
+        }
         let totalPesoCalc = 0;
         _currentOrderItems.forEach(i => {
             let pPeso = 0;
@@ -1181,8 +1343,9 @@ export const GerenciarGarantiaApp = (function () {
     function _updateUITotalValues() {
         const tfoot = document.getElementById('garantia-items-footer');
         if (!tfoot) return;
-        if (_currentOrderItems.length === 0) {
+        if (!_currentOrderItems || _currentOrderItems.length === 0) {
             tfoot.classList.add('hidden');
+            tfoot.innerHTML = '';
             return;
         }
 
@@ -1549,7 +1712,7 @@ function _formatItemsString() {
             const hasEnvio = pedido.transportadora || pedido.volume || pedido.cep || pedido.cidade || pedido.bairro || pedido.freteConta;
             chkEnvio.checked = !!hasEnvio;
             const selC = document.getElementById('garantia-frete-conta');
-              if (selC) selC.value = pedido.freteConta || '0';
+              if (selC) selC.value = (pedido.freteConta !== undefined && pedido.freteConta !== null) ? String(pedido.freteConta) : '';
             if (hasEnvio) {
                 if (selC) selC.classList.remove('hidden');
                 if (selC && selC.value) { 
@@ -1574,7 +1737,7 @@ function _formatItemsString() {
             document.getElementById('garantia-cidade').value = pedido.cidade || '';
             document.getElementById('garantia-estado').value = pedido.estado || '';
             
-            document.getElementById('garantia-frete-conta').value = pedido.freteConta || '0';
+            document.getElementById('garantia-frete-conta').value = (pedido.freteConta !== undefined && pedido.freteConta !== null) ? String(pedido.freteConta) : '';
             if (pedido.embalagem) {
                 const parts = pedido.embalagem.split('/');
                 document.getElementById('garantia-tipo-embalagem').value = parts[0] || '';
@@ -1848,16 +2011,24 @@ function _formatItemsString() {
         if (!_satgTableContent) return;
         
         if (!isSilent) {
-            _satgTableContent.innerHTML = '<tr><td colspan="5" class="text-center py-8"><div class="flex flex-col items-center"><svg class="animate-spin h-8 w-8 text-purple-500 mb-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-sm text-gray-500">Buscando solicitações...</span></div></td></tr>';
+            _satgTableContent.innerHTML = '<tr><td colspan="7" class="text-center py-8"><div class="flex flex-col items-center"><svg class="animate-spin h-8 w-8 text-purple-500 mb-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-sm text-gray-500">Buscando solicitações...</span></div></td></tr>';
         }
 
         try {
-            const response = await fetch(API_URLS.GARANTIA_SATG);
+            const [response, moResponse] = await Promise.all([
+                fetch(API_URLS.GARANTIA_SATG),
+                fetch(API_URLS.GARANTIA_SERVICOS_MO).catch(() => ({ ok: false }))
+            ]);
             if (!response.ok) throw new Error('Falha ao carregar SatG');
             
             let data = await response.json();
             data.reverse(); // Inverte o array recém-criado ANTES de salvar na variável global
             _satgData = data;
+
+            if (moResponse && moResponse.ok) {
+                const moData = await moResponse.json();
+                _servicosMoData = Array.isArray(moData) ? moData : [];
+            }
             
             // Carregar pedidos se a lista estiver vazia ou se for uma atualização de sync (isSilent)
             if (_pedidosGarantiaData.length === 0 || isSilent) {
@@ -1891,7 +2062,7 @@ function _formatItemsString() {
         _applySatgFilters();
         } catch (error) {
             console.error('Erro ao buscar SatG:', error);
-            _satgTableContent.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
+            _satgTableContent.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
         }
     }
 
@@ -2169,21 +2340,21 @@ function _formatItemsString() {
                         else if (su.includes('PRONTO')) dotColor = 'bg-indigo-400';
                         else if (su.includes('ENVIADO') || su.includes('FINALIZADO')) dotColor = 'bg-green-400';
                         else if (su.includes('CANCELADO')) dotColor = 'bg-red-400';
-                        return `<button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2" data-value="${s}"><span class="w-2 h-2 rounded-full ${dotColor}"></span>${su}</button>`;
+                        return `<button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="${s}"><span class="w-2 h-2 rounded-full ${dotColor} shrink-0"></span>${su}</button>`;
                     }).join('');
 
                     pedidoStatusBadge = `
                     <div class="relative inline-block text-left" data-dropdown-container>
-                        <button type="button" class="pedido-custom-dropdown-btn px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${pBadgeClass} min-w-[130px] transition-all hover:shadow-sm">
+                        <button type="button" class="pedido-custom-dropdown-btn px-2.5 py-0.5 inline-flex items-center justify-between text-[10px] font-bold rounded-full border ${pBadgeClass} min-w-[115px] transition-all hover:shadow-sm">
                             <span class="flex-1 text-center">${pStatus}</span>
-                            <svg class="w-3.5 h-3.5 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
-                        <div class="pedido-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
+                        <div class="pedido-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
                             ${dropdownOptions}
                         </div>
                     </div>`;
                 } else {
-                    pedidoStatusBadge = `<span class="px-2.5 py-1 inline-flex text-[11px] font-bold rounded-full border bg-gray-100 text-gray-800 border-gray-200 uppercase" title="Sincronizando...">PROCESSANDO...</span>`;
+                    pedidoStatusBadge = `<span class="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full border bg-gray-100 text-gray-800 border-gray-200 uppercase min-w-[105px] justify-center" title="Sincronizando...">PROCESSANDO...</span>`;
                 }
             }
 
@@ -2197,63 +2368,105 @@ function _formatItemsString() {
 
             let retornoDropdownHtml = `
             <div class="relative inline-block text-left" data-dropdown-container>
-                <button type="button" class="retorno-custom-dropdown-btn px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${retornoBadgeClass} min-w-[130px] transition-all hover:shadow-sm">
+                <button type="button" class="retorno-custom-dropdown-btn px-2.5 py-0.5 inline-flex items-center justify-between text-[10px] font-bold rounded-full border ${retornoBadgeClass} min-w-[105px] transition-all hover:shadow-sm">
                     <span class="flex-1 text-center">${retornoStatus}</span>
-                    <svg class="w-3.5 h-3.5 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
                 <div class="retorno-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
-                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-yellow-50 transition-colors flex items-center gap-2" data-value="EM ANALISE"><span class="w-2 h-2 rounded-full bg-yellow-400"></span>EM ANALISE</button>
-                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2" data-value="SOLICITADO"><span class="w-2 h-2 rounded-full bg-blue-400"></span>SOLICITADO</button>
-                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2" data-value="FINALIZADO"><span class="w-2 h-2 rounded-full bg-green-500"></span>FINALIZADO</button>
-                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2" data-value="NÃO RETORNADO"><span class="w-2 h-2 rounded-full bg-red-500"></span>NÃO RETORNADO</button>
-                    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2" data-value="CANCELADO"><span class="w-2 h-2 rounded-full bg-red-500"></span>CANCELADO</button>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-yellow-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="EM ANALISE"><span class="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>EM ANALISE</button>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="SOLICITADO"><span class="w-2 h-2 rounded-full bg-blue-400 shrink-0"></span>SOLICITADO</button>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="FINALIZADO"><span class="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>FINALIZADO</button>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="NÃO RETORNADO"><span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>NÃO RETORNADO</button>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="CANCELADO"><span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>CANCELADO</button>
                 </div>
             </div>`;
 
             if (statusUpper.includes('RECUSADO')) {
-                retornoDropdownHtml = '<span class="px-2.5 py-1 inline-flex text-[11px] font-bold rounded-full border bg-red-100 text-red-800 border-red-200 uppercase" title="Garantia Recusada">CANCELADO</span>';
+                retornoDropdownHtml = '<span class="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full border bg-red-100 text-red-800 border-red-200 uppercase min-w-[105px] justify-center" title="Garantia Recusada">CANCELADO</span>';
             }
 
+            const idMo = String(req.idServicoMO || '').trim();
+            const servicoMoObj = idMo ? _servicosMoData.find(m => String(m.idServicoMO || '').trim() === idMo) : null;
+            const situacaoMoRaw = servicoMoObj ? (servicoMoObj.situacao || 'Em Andamento') : 'Não Possui';
+            const situacaoMoUpper = situacaoMoRaw.toUpperCase();
+            const isMoCancelado = situacaoMoUpper === 'CANCELADO' || situacaoMoUpper === 'NÃO POSSUI' || situacaoMoUpper === 'NAO POSSUI';
+            const isMoAtivo = !!(servicoMoObj && servicoMoObj.idServicoMO && !isMoCancelado);
+
+            let servicoMoDisplay = 'NÃO POSSUI';
+            let servicoMoBadgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
+            if (isMoAtivo) {
+                if (situacaoMoUpper === 'FINALIZADO') {
+                    servicoMoDisplay = 'FINALIZADO';
+                    servicoMoBadgeClass = 'bg-green-100 text-green-800 border-green-200';
+                } else {
+                    servicoMoDisplay = 'EM ANDAMENTO';
+                    servicoMoBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
+                }
+            }
+
+            let servicoMoDropdownHtml = `
+            <div class="relative inline-block text-left" data-dropdown-container>
+                <button type="button" class="servico-mo-custom-dropdown-btn px-2.5 py-0.5 inline-flex items-center justify-between text-[10px] font-bold rounded-full border ${servicoMoBadgeClass} min-w-[105px] transition-all hover:shadow-sm" title="${isMoAtivo ? 'Clique para alterar situação ou editar M.O' : 'Não possui M.O'}">
+                    <span class="flex-1 text-center">${servicoMoDisplay}</span>
+                    <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="servico-mo-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="Não Possui"><span class="w-2 h-2 rounded-full bg-gray-400 shrink-0"></span>NÃO POSSUI</button>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="Em Andamento"><span class="w-2 h-2 rounded-full bg-blue-400 shrink-0"></span>EM ANDAMENTO</button>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="Finalizado"><span class="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>FINALIZADO</button>
+                    ${isMoAtivo ? `
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="EDITAR">
+                        <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        Editar Dados M.O
+                    </button>
+                    ` : ''}
+                </div>
+            </div>`;
+
             tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
-                    <div class="font-bold text-gray-800">${req.codigo || '-'}</div>
-                    <div class="text-xs text-gray-500">${req.data ? (req.data.includes(' ') ? req.data.split(':').slice(0, 2).join(':') : req.data) : '-'}</div>
+                <td class="px-2.5 py-2.5 whitespace-nowrap text-xs text-gray-600 font-medium">
+                    <div class="font-bold text-gray-800 text-xs">${req.codigo || '-'}</div>
+                    <div class="text-[11px] text-gray-500">${req.data ? (req.data.includes(' ') ? req.data.split(':').slice(0, 2).join(':') : req.data) : '-'}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-normal max-w-[250px]">
-                    <div class="text-sm font-semibold text-gray-900 line-clamp-2" title="${req.cliente}">${req.cliente || '-'}</div>
+                <td class="px-2.5 py-2.5 whitespace-normal max-w-[200px]">
+                    <div class="text-xs font-semibold text-gray-900 line-clamp-2" title="${req.cliente}">${req.cliente || '-'}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-center">
+                <td class="px-2.5 py-2.5 whitespace-nowrap text-center">
                     <div class="relative inline-block text-left" data-dropdown-container>
-                        <button type="button" class="satg-custom-dropdown-btn px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${badgeClass} min-w-[130px] transition-all hover:shadow-sm" data-current="${statusUpper}">
+                        <button type="button" class="satg-custom-dropdown-btn px-2.5 py-0.5 inline-flex items-center justify-between text-[10px] font-bold rounded-full border ${badgeClass} min-w-[105px] transition-all hover:shadow-sm" data-current="${statusUpper}">
                             <span class="flex-1 text-center">${statusUpper}</span>
-                            <svg class="w-3.5 h-3.5 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
                         <div class="satg-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-40 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
-                            <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-yellow-50 transition-colors flex items-center gap-2" data-value="EM ANALISE"><span class="w-2 h-2 rounded-full bg-yellow-400"></span>EM ANALISE</button>
-                            <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2" data-value="APROVADO"><span class="w-2 h-2 rounded-full bg-green-500"></span>APROVADO</button>
-                            <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2" data-value="RECUSADO"><span class="w-2 h-2 rounded-full bg-red-500"></span>RECUSADO</button>
+                            <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-yellow-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="EM ANALISE"><span class="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>EM ANALISE</button>
+                            <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="APROVADO"><span class="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>APROVADO</button>
+                            <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="RECUSADO"><span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>RECUSADO</button>
                         </div>
                     </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-center">
+                <td class="px-2.5 py-2.5 whitespace-nowrap text-center">
                     ${pedidoStatusBadge}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-center">
+                <td class="px-2.5 py-2.5 whitespace-nowrap text-center">
                     ${retornoDropdownHtml}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-end gap-2 items-center">
-                    <button class="btn-avaliar-satg inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 shadow-sm" title="${statusUpper === 'EM ANALISE' ? 'Avaliar Solicitação' : 'Ver Detalhe Sat-G'}">
-                        ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Detalhe Sat-G'}
+                <td class="px-2.5 py-2.5 whitespace-nowrap text-center">
+                    ${servicoMoDropdownHtml}
+                </td>
+                <td class="px-2.5 py-2.5 whitespace-nowrap text-right text-xs font-medium flex justify-end gap-1 items-center">
+                    <button class="btn-avaliar-satg inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 shadow-sm text-xs font-semibold" title="${statusUpper === 'EM ANALISE' ? 'Avaliar Solicitação' : 'Ver Detalhe Sat-G'}">
+                        ${statusUpper === 'EM ANALISE' ? 'Avaliar' : 'Sat-G'}
                     </button>
                     ${req.idPedido ? 
-                        `<button class="btn-ver-pedido inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm" title="Ver Orçamento Vinculado: ${req.idPedido}" data-id="${req.idPedido}">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                        `<button class="btn-ver-pedido inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm text-xs font-semibold" title="Ver Orçamento Vinculado: ${req.idPedido}" data-id="${req.idPedido}">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
                             Orçamento
                         </button>` 
                         : ''
                     }
-                    <span class="btn-observacao-satg cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block ml-1" title="Adicionar/Ver Observação">
-                        <svg class="h-5 w-5 ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
+                    <span class="btn-observacao-satg cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block ml-0.5" title="Adicionar/Ver Observação">
+                        <svg class="h-4 w-4 ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
                         </svg>
                     </span>
@@ -2266,7 +2479,7 @@ function _formatItemsString() {
             if (garBtn && garMenu) {
                 garBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden)').forEach(m => {
+                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden), .servico-mo-custom-dropdown-menu:not(.hidden)').forEach(m => {
                         if (m !== garMenu) m.classList.add('hidden');
                     });
                     garMenu.classList.toggle('hidden');
@@ -2301,7 +2514,7 @@ function _formatItemsString() {
             if (pedBtn && pedMenu && req.idPedido) {
                 pedBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden)').forEach(m => {
+                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden), .servico-mo-custom-dropdown-menu:not(.hidden)').forEach(m => {
                         if (m !== pedMenu) m.classList.add('hidden');
                     });
                     pedMenu.classList.toggle('hidden');
@@ -2348,7 +2561,7 @@ function _formatItemsString() {
             if (retBtn && retMenu) {
                 retBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden)').forEach(m => {
+                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden), .servico-mo-custom-dropdown-menu:not(.hidden)').forEach(m => {
                         if (m !== retMenu) m.classList.add('hidden');
                     });
                     retMenu.classList.toggle('hidden');
@@ -2391,6 +2604,72 @@ function _formatItemsString() {
                         } catch (err) {
                             alert('Erro ao atualizar Retorno de Item');
                             _fetchSatGData();
+                        }
+                    });
+                });
+            }
+
+            const servicoMoBtn = tr.querySelector('.servico-mo-custom-dropdown-btn');
+            const servicoMoMenu = tr.querySelector('.servico-mo-custom-dropdown-menu');
+            if (servicoMoBtn && servicoMoMenu) {
+                servicoMoBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden), .servico-mo-custom-dropdown-menu:not(.hidden)').forEach(m => {
+                        if (m !== servicoMoMenu) m.classList.add('hidden');
+                    });
+                    servicoMoMenu.classList.toggle('hidden');
+                });
+                servicoMoMenu.querySelectorAll('button').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        servicoMoMenu.classList.add('hidden');
+                        const chosenVal = btn.dataset.value;
+                        
+                        if (chosenVal === 'EDITAR') {
+                            _openServicoMoModal(req, servicoMoObj);
+                            return;
+                        }
+
+                        if (!isMoAtivo) {
+                            if (chosenVal === 'Não Possui') return;
+                            _openServicoMoModal(req, servicoMoObj || null, chosenVal);
+                        } else {
+                            if (chosenVal === 'Não Possui') {
+                                const confirmCancel = confirm('Deseja cancelar o Serviço (M.O) vinculado a esta solicitação Sat-G?');
+                                if (!confirmCancel) return;
+                                
+                                servicoMoBtn.classList.add('animate-pulse', 'opacity-50');
+                                servicoMoBtn.disabled = true;
+                                try {
+                                    await fetch(API_URLS.GARANTIA_SERVICOS_MO_UPDATE_STATUS, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ idServicoMO: idMo, situacao: 'Cancelado', satgRowIndex: req.rowIndex })
+                                    });
+                                    if (servicoMoObj) servicoMoObj.situacao = 'Cancelado';
+                                    _fetchSatGData();
+                                } catch (err) {
+                                    alert('Erro ao cancelar Serviço (M.O)');
+                                    _fetchSatGData();
+                                }
+                            } else {
+                                if (chosenVal.toUpperCase() === situacaoMoUpper) return;
+                                
+                                servicoMoBtn.classList.add('animate-pulse', 'opacity-50');
+                                servicoMoBtn.disabled = true;
+                                try {
+                                    await fetch(API_URLS.GARANTIA_SERVICOS_MO_UPDATE_STATUS, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ idServicoMO: idMo, situacao: chosenVal, satgRowIndex: req.rowIndex })
+                                    });
+                                    if (servicoMoObj) servicoMoObj.situacao = chosenVal;
+                                    _fetchSatGData();
+                                } catch (err) {
+                                    alert('Erro ao atualizar situação do Serviço (M.O)');
+                                    _fetchSatGData();
+                                }
+                            }
                         }
                     });
                 });
@@ -2790,7 +3069,7 @@ function _formatItemsString() {
         _currentSatgRowIndex = null;
     }
 
-    function _getPedidoPrintHtml(idPedido) {
+    function _getPedidoPrintHtml(idPedido, hidePrices = false) {
         if (!idPedido) return '';
         const pedido = _pedidosGarantiaData.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido));
         if (!pedido) return '';
@@ -2846,7 +3125,7 @@ function _formatItemsString() {
                             </div>
                         </td>
                         <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:center;color:#475569;">${qtdItem}</td>
-                        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;color:#1e293b;">${fmtBRL(precoItem * qtdItem)}</td>
+                        ${hidePrices ? '' : `<td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;color:#1e293b;">${fmtBRL(precoItem * qtdItem)}</td>`}
                     </tr>
                 `;
             });
@@ -2861,42 +3140,57 @@ function _formatItemsString() {
         const ipiPrint = totalValor * 0.0325;
         const totalPrint = totalValor + ipiPrint + freteVal;
 
-        const totalFooter = parsedItens && parsedItens.length > 0 ? `
-            <tr style="background:#f8fafc;">
-                <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:13px;color:#475569;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: #4b5563; font-size: 12px; font-weight: normal;">Peso Total: <b style="color: #1e293b;">${totalPeso.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg</b></span>
-                        <span>Total Itens:</span>
-                    </div>
-                </td>
-                <td style="padding:12px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">${fmtBRL(totalValor)}</td>
-            </tr>
-            <tr style="background:#f8fafc; border-top: 1px solid #e2e8f0;">
-                <td colspan="2" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
-                    IPI (3,25%):
-                </td>
-                <td style="padding:8px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">
-                    ${fmtBRL(ipiPrint)}
-                </td>
-            </tr>
-            ${freteVal > 0 ? `
-            <tr style="background:#f8fafc; border-top: 1px solid #e2e8f0;">
-                <td colspan="2" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
-                    Frete (FOB):
-                </td>
-                <td style="padding:8px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">
-                    ${fmtBRL(freteVal)}
-                </td>
-            </tr>` : ''}
-            <tr style="background:#dcfce7; border-top: 1px solid #bbf7d0;">
-                <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:14px;color:#166534; text-align: right;">
-                    Valor Total:
-                </td>
-                <td style="padding:12px 14px;font-weight:700;font-size:15px;color:#166534;text-align:right;">
-                    ${fmtBRL(totalPrint)}
-                </td>
-            </tr>
-        ` : '';
+        let totalFooter = '';
+        if (parsedItens && parsedItens.length > 0) {
+            if (hidePrices) {
+                totalFooter = `
+                    <tr style="background:#f8fafc;">
+                        <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:13px;color:#475569;">
+                            <span style="color: #4b5563; font-size: 12px; font-weight: normal;">Peso Total: <b style="color: #1e293b;">${totalPeso.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg</b></span>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                totalFooter = `
+                    <tr style="background:#f8fafc;">
+                        <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:13px;color:#475569;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: #4b5563; font-size: 12px; font-weight: normal;">Peso Total: <b style="color: #1e293b;">${totalPeso.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg</b></span>
+                                <span>Total Itens:</span>
+                            </div>
+                        </td>
+                        <td style="padding:12px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">${fmtBRL(totalValor)}</td>
+                    </tr>
+                    <tr style="background:#f8fafc; border-top: 1px solid #e2e8f0;">
+                        <td colspan="2" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
+                            IPI (3,25%):
+                        </td>
+                        <td style="padding:8px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">
+                            ${fmtBRL(ipiPrint)}
+                        </td>
+                    </tr>
+                    ${freteVal > 0 ? `
+                    <tr style="background:#f8fafc; border-top: 1px solid #e2e8f0;">
+                        <td colspan="2" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
+                            Frete (FOB):
+                        </td>
+                        <td style="padding:8px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">
+                            ${fmtBRL(freteVal)}
+                        </td>
+                    </tr>` : ''}
+                    <tr style="background:#dcfce7; border-top: 1px solid #bbf7d0;">
+                        <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:14px;color:#166534; text-align: right;">
+                            Valor Total:
+                        </td>
+                        <td style="padding:12px 14px;font-weight:700;font-size:15px;color:#166534;text-align:right;">
+                            ${fmtBRL(totalPrint)}
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        const colSpanTotal = hidePrices ? 2 : 3;
 
         return `
             <div class="section" style="margin-top: 40px;">
@@ -2909,11 +3203,11 @@ function _formatItemsString() {
                             <tr>
                                 <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: left;">Produto</th>
                                 <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: center; width: 60px;">Qtd</th>
-                                <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: right; width: 100px;">Valor</th>
+                                ${hidePrices ? '' : '<th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: right; width: 100px;">Valor</th>'}
                             </tr>
                         </thead>
                         <tbody>
-                            ${htmlItens || '<tr><td colspan="3" style="padding: 12px; text-align: center; color: #888;">Nenhum item encontrado</td></tr>'}
+                            ${htmlItens || `<tr><td colspan="${colSpanTotal}" style="padding: 12px; text-align: center; color: #888;">Nenhum item encontrado</td></tr>`}
                             ${totalFooter}
                         </tbody>
                     </table>
@@ -2922,7 +3216,7 @@ function _formatItemsString() {
         `;
     }
 
-    function _handlePrintSatG() {
+    function _handlePrintSatG(hidePrices = false) {
         if (!_currentSatgRowIndex) return;
         const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
         if (!req) return;
@@ -2975,14 +3269,15 @@ function _formatItemsString() {
                             <span class="field-label">Embalagem / Vol</span>
                             <span class="field-value" style="font-size: 11px;">${emb}${vol}</span>
                         </div>
+                        ${hidePrices ? '' : `
                         <div class="field" style="flex: 1;">
                             <span class="field-label">Valor Frete</span>
-                              <span class="field-value">${pedido.valorFrete || '-'}</span>
-                          </div>
-                          <div class="field" style="flex: 1;">
-                              <span class="field-label">Frete por</span>
-                              <span class="field-value" style="font-size: 11px;">${fContaStr}</span>
-                          </div>
+                            <span class="field-value">${pedido.valorFrete || '-'}</span>
+                        </div>`}
+                        <div class="field" style="flex: 1;">
+                            <span class="field-label">Frete por</span>
+                            <span class="field-value" style="font-size: 11px;">${fContaStr}</span>
+                        </div>
                     </div>
                     <div class="grid">
                         <div class="field" style="flex: 1;">
@@ -3086,7 +3381,7 @@ function _formatItemsString() {
                     </div>
                 </div>
                 
-                ${_getPedidoPrintHtml(req.idPedido)}
+                ${_getPedidoPrintHtml(req.idPedido, hidePrices)}
                 
                 <div style="text-align: center; margin-top: 40px;">
                     <button onclick="window.print()" style="background: #4F46E5; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer;">Imprimir</button>

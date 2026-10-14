@@ -231,9 +231,9 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             if (!accessToken) throw new Error("Não foi possível obter o token do Bling.");
 
             const getBlingUrl = `${blingBaseUrl}/produtos/${idProduto}`;
-            const getBlingRes = await axios.get(getBlingUrl, {
+            const getBlingRes = await blingApiRetry(() => axios.get(getBlingUrl, {
                 headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
-            });
+            }));
 
             res.status(200).json(getBlingRes.data);
         } catch (error) {
@@ -241,6 +241,21 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             res.status(500).json({ error: "Erro ao buscar produto." });
         }
     });
+
+
+    const blingApiRetry = async (apiCall, retries = 3) => {
+        for (let i = 0; i < retries; i++) {
+            try {
+                return await apiCall();
+            } catch (error) {
+                // If the error is not 404, or if it's the last retry, throw
+                // But since Bling is intermittently returning 404, we retry even on 404
+                if (i === retries - 1) throw error;
+                console.warn(`[Bling API] Falha temporária (${error.message}). Tentativa ${i + 1}/${retries}... aguardando 2s`);
+                await new Promise(res => setTimeout(res, 2000));
+            }
+        }
+    };
 
     /**
      * Rota para atualizar o nome (descrição) ou a localização de um produto.
@@ -282,9 +297,9 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             // 2. Buscar dados atuais do produto no Bling (trazendo camposCustomizados para não perdê-los no PUT)
             console.log(`[Bling] Buscando dados atuais completos do produto ID ${idProduto}...`);
             const getBlingUrl = `${blingBaseUrl}/produtos/${idProduto}?campos=camposCustomizados`;
-            const getBlingRes = await axios.get(getBlingUrl, {
+            const getBlingRes = await blingApiRetry(() => axios.get(getBlingUrl, {
                 headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
-            });
+            }));
 
             const currentProduct = getBlingRes.data.data;
             if (!currentProduct) {
@@ -422,9 +437,9 @@ const createProdutosRouter = (getSheetsClient, spreadsheetId, sheetNameProdutos,
             }
 
             console.log(`[Bling] Enviando atualização completa para ${blingUrl}...`);
-            const blingResponse = await axios.put(blingUrl, blingPayload, {
+            const blingResponse = await blingApiRetry(() => axios.put(blingUrl, blingPayload, {
                 headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
-            });
+            }));
 
             console.log(`[Bling] SUCESSO! Resposta: ${blingResponse.status}`);
 

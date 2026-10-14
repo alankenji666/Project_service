@@ -26,6 +26,8 @@
           GARANTIA_ITENS_DETALHE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/pedido/itens-detalhe",
           GARANTIA_SATG: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/satg",
           GARANTIA_SATG_UPDATE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/satg/update",
+          GARANTIA_SERVICOS_MO: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/servicos-mo",
+          GARANTIA_SERVICOS_MO_UPDATE_STATUS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/servicos-mo/update-status",
       
           // APIs de Ações (Cloud Functions)
           WEBHOOK_LAUNCH: "https://bling-proxy-api-255108547424.southamerica-east1.run.app",

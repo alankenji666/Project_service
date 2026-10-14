@@ -4599,7 +4599,7 @@ function _printReportSolicitation() {
 
                     if (!response.ok) {
                         const errorData = await response.json();
-                        throw new Error(errorData.error || "Erro ao atualizar nome do produto.");
+                        throw new Error(errorData.message || errorData.error || "Erro ao atualizar nome do produto.");
                     }
 
                     // Atualiza localmente o objeto _allProducts imediatamente
@@ -5349,7 +5349,7 @@ async function _saveProductCodeEdit() {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || "Erro ao atualizar código do produto.");
+            throw new Error(errorData.message || errorData.error || "Erro ao atualizar código do produto.");
         }
 
         // Atualiza localmente o objeto _allProducts
@@ -5593,7 +5593,7 @@ try {
 
     if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Erro ao atualizar localização do produto.");
+        throw new Error(errorData.message || errorData.error || "Erro ao atualizar localização do produto.");
     }
 
     // Atualiza localmente o objeto _allProducts
@@ -5673,7 +5673,7 @@ async function _saveProductImageEdit() {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || "Erro ao atualizar imagem do produto.");
+            throw new Error(errorData.message || errorData.error || "Erro ao atualizar imagem do produto.");
         }
 
         // Atualiza localmente o objeto _allProducts
@@ -5766,7 +5766,7 @@ try {
 
     if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Erro ao atualizar preço de custo do produto.");
+        throw new Error(errorData.message || errorData.error || "Erro ao atualizar preço de custo do produto.");
     }
 
     // Atualiza localmente o objeto _allProducts
@@ -5855,7 +5855,7 @@ try {
 
     if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Erro ao atualizar preço do produto.");
+        throw new Error(errorData.message || errorData.error || "Erro ao atualizar preço do produto.");
     }
 
     // Atualiza localmente o objeto _allProducts
@@ -5975,7 +5975,7 @@ async function _saveProductTagGroupEdit() {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Erro ao atualizar grupo de tags.');
+            throw new Error(errorData.message || errorData.error || 'Erro ao atualizar grupo de tags.');
         }
 
         // Atualiza localmente

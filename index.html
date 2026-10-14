@@ -1236,14 +1236,14 @@
                         <table class="min-w-full divide-y divide-gray-200" id="satg-table">
                             <thead class="bg-gray-50 border-b-2 border-gray-100">
                                 <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">CÓDIGO / DATA</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">CLIENTE</th>
-                                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">GARANTIA</th>
-                                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">ORÇAMENTO</th>
-                                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">RETORNO ITEM</th>
-                                    <th scope="col" class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">AÇÕES</th>
+                                    <th scope="col" class="px-2.5 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">CÓDIGO / DATA</th>
+                                    <th scope="col" class="px-2.5 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">CLIENTE</th>
+                                    <th scope="col" class="px-2.5 py-2.5 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">GARANTIA</th>
+                                    <th scope="col" class="px-2.5 py-2.5 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">ORÇAMENTO</th>
+                                    <th scope="col" class="px-2.5 py-2.5 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">RETORNO ITEM</th>
+                                    <th scope="col" class="px-2.5 py-2.5 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">SERVIÇO (M.O)</th>
+                                    <th scope="col" class="px-2.5 py-2.5 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">AÇÕES</th>
                                 </tr>
-                            </thead>
                             </thead>
                             <tbody id="garantia-satg-table-content" class="bg-white divide-y divide-gray-200">
                                 <!-- Linhas preenchidas via JS -->
@@ -1314,11 +1314,15 @@
                                 </button>
                     
                                 <!-- Dropdown menu -->
-                                <div id="modal-satg-print-dropdown-menu" class="hidden origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                                <div id="modal-satg-print-dropdown-menu" class="hidden origin-top-right absolute right-0 mt-2 w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
                                     <div class="py-1" role="menu" aria-orientation="vertical">
                                         <button id="modal-satg-print-satg-btn" class="w-full text-left flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors" role="menuitem">
                                             <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                             Imprimir Sat-G
+                                        </button>
+                                        <button id="modal-satg-print-satg-sem-preco-btn" class="w-full text-left flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors" role="menuitem">
+                                            <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                            Imprimir Sat-G (Sem Preço)
                                         </button>
                                         <button id="modal-satg-print-marker-btn" class="w-full text-left flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors" role="menuitem">
                                             <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
@@ -4155,7 +4159,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script type="module" src="js/main.js?v=1791292129"></script>
+    <script type="module" src="js/main.js?v=1791999200"></script>
     <!-- MODAL LINHA DE PRODUÇÃO -->
     <div id="production-line-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
         <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden">
@@ -4384,6 +4388,63 @@
             <div class="bg-white p-4 md:p-8 rounded-2xl shadow-2xl w-full flex items-center justify-center">
                 <img id="generic-image-modal-img" src="" alt="Imagem ampliada" class="max-w-full max-h-[80vh] object-contain">
             </div>
+        </div>
+    </div>
+
+    <!-- Modal Serviço (M.O) -->
+    <div id="modal-servico-mo" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[999] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-2 rounded-xl bg-blue-100 text-blue-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 id="modal-servico-mo-title" class="text-lg font-bold text-gray-800">Serviço (M.O)</h3>
+                        <p id="modal-servico-mo-subtitle" class="text-xs text-gray-500 font-medium">Preencha os dados do serviço de mão de obra</p>
+                    </div>
+                </div>
+                <button type="button" id="btn-close-servico-mo" class="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-lg hover:bg-gray-100">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="form-servico-mo" class="p-6 space-y-4">
+                <input type="hidden" id="servico-mo-satg-row-index">
+                <input type="hidden" id="servico-mo-id">
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Situação</label>
+                    <select id="servico-mo-situacao" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors text-sm font-semibold text-gray-800">
+                        <option value="Em Andamento">Em Andamento</option>
+                        <option value="Finalizado">Finalizado</option>
+                        <option value="Cancelado">Cancelado</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Deslocamento</label>
+                        <input type="text" id="servico-mo-deslocamento" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors text-sm text-gray-800" placeholder="R$ 0,00">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Valor MO</label>
+                        <input type="text" id="servico-mo-valor" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors text-sm font-semibold text-emerald-600" placeholder="R$ 0,00">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Descrição</label>
+                    <textarea id="servico-mo-descricao" rows="4" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors text-sm text-gray-800" placeholder="Descreva os detalhes do serviço prestado..."></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-end gap-3 border-t border-gray-100">
+                    <button type="button" id="btn-cancel-servico-mo" class="px-5 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors">Cancelar</button>
+                    <button type="submit" id="btn-save-servico-mo" class="px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Salvar Serviço (M.O)
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 

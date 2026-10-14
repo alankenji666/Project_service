@@ -330,7 +330,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:AG` // Até AG (coluna 33)
+                range: `${sheetName}!A2:AH` // Até AH (coluna 34)
             });
 
             const rows = response.data.values || [];
@@ -370,7 +370,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     observacaoSatg: row[29] || '',             // AD (Observação SatG)
                     ondeEstaProblema: row[30] || '',           // AE (Onde Está o Problema)
                     tipoEquipamento: row[31] || '',             // AF (Tipo Equipamento)
-                    codigoCliente: row[32] || ''               // AG (Cod Cliente)
+                    codigoCliente: row[32] || '',              // AG (Cod Cliente)
+                    idServicoMO: row[33] || ''                 // AH (ID Serviço M.O vinculado)
                 };
             });
 
@@ -465,12 +466,14 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 'EM ANALISE',                               // AC: Retorno Item
                 '',                                         // AD: Observação Sat-G
                 safeString(formData.ondeEstaProblema),      // AE: Onde Está o Problema
-                safeString(formData.tipoEquipamento)        // AF: Tipo Equipamento
+                safeString(formData.tipoEquipamento),       // AF: Tipo Equipamento
+                safeString(formData.codigoCliente),         // AG: Cod Cliente
+                ''                                          // AH: ID Serviço (M.O)
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: `${sheetName}!A:AF`,
+                range: `${sheetName}!A:AH`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
@@ -494,7 +497,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
     // Atualiza o Status e Observação de um pedido na SatG
     router.post('/satg/update', async (req, res, next) => {
         try {
-            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg, acaoPecas } = req.body;
+            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg, acaoPecas, servicoMO, idServicoMO } = req.body;
             
             if (!rowIndex) {
                 return res.status(400).json({ error: true, message: 'rowIndex é obrigatório.' });
@@ -576,6 +579,16 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     range: `${sheetName}!AD${rowIndex}`,
                     valueInputOption: 'USER_ENTERED',
                     resource: { values: [[observacaoSatg]] }
+                });
+            }
+
+            const valMo = idServicoMO !== undefined ? idServicoMO : servicoMO;
+            if (valMo !== undefined) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!AH${rowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[valMo]] }
                 });
             }
 
@@ -684,6 +697,145 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
         } catch (error) {
             console.error('[garantia] Erro ao salvar itens detalhados:', error);
             res.status(500).json({ error: true, message: 'Erro ao salvar itens detalhados.' });
+        }
+    });
+
+    // ==========================================
+    // ROTAS DE SERVIÇOS (M.O)
+    // ==========================================
+
+    // GET /garantia/servicos-mo
+    router.get('/servicos-mo', async (req, res, next) => {
+        try {
+            const sheets = await getInitializedSheetsClient();
+            const sheetName = 'ServiçosMO';
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${sheetName}'!A2:E`
+            });
+            const rows = response.data.values || [];
+            const data = rows.map((row, index) => ({
+                rowIndex: index + 2,
+                idServicoMO: row[0] || '',
+                situacao: row[1] || 'Em Andamento',
+                deslocamento: row[2] || '',
+                descricao: row[3] || '',
+                valorMO: row[4] || ''
+            }));
+            res.json(data);
+        } catch (error) {
+            console.error('[garantia] Erro ao buscar ServiçosMO:', error);
+            next(error);
+        }
+    });
+
+    // POST /garantia/servicos-mo
+    router.post('/servicos-mo', async (req, res, next) => {
+        try {
+            const { idServicoMO, situacao, deslocamento, descricao, valorMO, satgRowIndex } = req.body;
+            if (!idServicoMO) {
+                return res.status(400).json({ error: true, message: 'idServicoMO é obrigatório.' });
+            }
+
+            const sheets = await getInitializedSheetsClient();
+            const sheetName = 'ServiçosMO';
+
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${sheetName}'!A2:A`
+            });
+            const rows = response.data.values || [];
+            const existingIndex = rows.findIndex(r => String(r[0] || '').trim() === String(idServicoMO).trim());
+
+            const safeString = val => {
+                if (!val) return '';
+                const str = String(val);
+                if (str.startsWith('+') || str.startsWith('=')) return "'" + str;
+                return str;
+            };
+
+            const rowData = [
+                safeString(idServicoMO),
+                safeString(situacao || 'Em Andamento'),
+                safeString(deslocamento),
+                safeString(descricao),
+                safeString(valorMO)
+            ];
+
+            if (existingIndex !== -1) {
+                const targetRow = existingIndex + 2;
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `'${sheetName}'!A${targetRow}:E${targetRow}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [rowData] }
+                });
+            } else {
+                await sheets.spreadsheets.values.append({
+                    spreadsheetId,
+                    range: `'${sheetName}'!A:E`,
+                    valueInputOption: 'USER_ENTERED',
+                    insertDataOption: 'INSERT_ROWS',
+                    resource: { values: [rowData] }
+                });
+            }
+
+            // Se satgRowIndex foi fornecido, vincula na aba SatG (Coluna AH)
+            if (satgRowIndex) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `'SatG'!AH${satgRowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[safeString(idServicoMO)]] }
+                });
+            }
+
+            if (req.notifySync) {
+                await req.notifySync('garantiaUpdated', { idServicoMO, tipo: 'servicos_mo' });
+            }
+
+            res.json({ error: false, message: 'Serviço MO salvo com sucesso.', idServicoMO });
+        } catch (error) {
+            console.error('[garantia] Erro ao salvar Serviço MO:', error);
+            next(error);
+        }
+    });
+
+    // POST /garantia/servicos-mo/update-status
+    router.post('/servicos-mo/update-status', async (req, res, next) => {
+        try {
+            const { idServicoMO, situacao, satgRowIndex } = req.body;
+            const sheets = await getInitializedSheetsClient();
+            const sheetName = 'ServiçosMO';
+
+            const statusToSave = (situacao === 'Não Possui' || situacao === 'Cancelado') ? 'Cancelado' : situacao;
+
+            if (idServicoMO) {
+                const response = await sheets.spreadsheets.values.get({
+                    spreadsheetId,
+                    range: `'${sheetName}'!A2:A`
+                });
+                const rows = response.data.values || [];
+                const existingIndex = rows.findIndex(r => String(r[0] || '').trim() === String(idServicoMO).trim());
+                if (existingIndex !== -1) {
+                    const targetRow = existingIndex + 2;
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId,
+                        range: `'${sheetName}'!B${targetRow}`,
+                        valueInputOption: 'USER_ENTERED',
+                        resource: { values: [[statusToSave]] }
+                    });
+                }
+            }
+
+            if (req.notifySync) {
+                await req.notifySync('garantiaUpdated', { idServicoMO, tipo: 'servicos_mo' });
+            }
+
+            res.json({ error: false, message: 'Status atualizado com sucesso.' });
+        } catch (error) {
+            console.error('[garantia] Erro ao atualizar status de Serviço MO:', error);
+            next(error);
         }
     });
 
