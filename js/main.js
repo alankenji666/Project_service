@@ -10,7 +10,8 @@
         import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=110';
         window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js?v=110';
-        import { DashboardApp } from './modulos/dashboard.js?v=110';
+        import { DashboardApp } from './modulos/dashboard.js?v=113';
+        window.DashboardApp = DashboardApp;
         import { EstoqueApp } from './modulos/estoque.js?v=110';
         import { SaidaItens } from './modulos/saidaItens.js?v=110';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=110';
@@ -249,6 +250,9 @@
                             if (!document.getElementById('page-gerenciar-garantia').classList.contains('hidden')) {
                                 GerenciarGarantiaApp.refreshSatG(true);
                             }
+                        }
+                        if (typeof DashboardApp !== 'undefined' && typeof DashboardApp.refreshGarantiaRealTime === 'function') {
+                            DashboardApp.refreshGarantiaRealTime();
                         }
                         break;
 

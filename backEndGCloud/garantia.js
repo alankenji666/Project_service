@@ -128,6 +128,10 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
 
             console.log(`[garantia] Pedido registrado com sucesso em ${sheetName}. Linhas afetadas: ${response.data.updates.updatedRows}`);
 
+            if (req.notifySync) {
+                await req.notifySync('garantiaUpdated', { idPedido: idGerado, tipo: 'novo_pedido' });
+            }
+
             res.status(201).json({
                 error: false,
                 message: 'Pedido de Garantia criado com sucesso!',
@@ -417,7 +421,10 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             const nextCodeNumber = lastCodeNumber + 1;
             const novoCodigo = `SAT-G: ${String(nextCodeNumber).padStart(4, '0')}-00`;
 
-            const dataAtual = new Date().toLocaleDateString('pt-BR');
+            const now = new Date();
+            const dataFormatada = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+            const horaFormatada = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dataAtual = `${dataFormatada} ${horaFormatada}`;
 
             // Preparar a nova linha de acordo com a ordem das colunas mapeadas
             // Colunas:
@@ -691,6 +698,10 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                         resource: { values: [rowData] }
                     });
                 }
+            }
+            
+            if (req.notifySync) {
+                await req.notifySync('garantiaUpdated', { idPedido: req.body.idPedido, tipo: 'itens_detalhe' });
             }
             
             res.status(200).json({ error: false, message: 'Itens detalhados salvos com sucesso!' });

@@ -13,6 +13,51 @@ export const DashboardApp = (function() {
     let _garantiaPecasData = [];
     let _garantiaPecasPage = 1;
     const _garantiaPecasPerPage = 20;
+    let _garantiaSatgData = null;
+    let _garantiaPedidoData = null;
+    let _garantiaServicosMoData = null;
+    let _garantiaMoData = [];
+    let _garantiaMoPage = 1;
+    const _garantiaMoPerPage = 15;
+
+    /**
+     * Utilitário robusto para conversão de datas (DD/MM/YYYY, YYYY-MM-DD, serial Excel, timestamp)
+     */
+    function _parseAnyDate(d) {
+        if (!d) return null;
+        if (d instanceof Date) return isNaN(d.getTime()) ? null : d;
+        d = String(d).trim();
+        if (!d || d === '-' || d.toLowerCase() === 'n/a') return null;
+        // Serial de data do Google Sheets / Excel (ex: 46309)
+        if (/^\d{5}$/.test(d)) {
+            return new Date(Math.round((parseInt(d, 10) - 25569) * 86400 * 1000));
+        }
+        if (d.includes('/')) {
+            const datePart = d.split(' ')[0];
+            const p = datePart.split('/');
+            if (p.length === 3) {
+                const day = parseInt(p[0], 10);
+                const month = parseInt(p[1], 10) - 1;
+                const year = parseInt(p[2], 10);
+                const fullYear = year < 100 ? 2000 + year : year;
+                const dt = new Date(fullYear, month, day);
+                if (!isNaN(dt.getTime())) return dt;
+            }
+        }
+        if (d.includes('-')) {
+            const datePart = d.split(' ')[0];
+            const p = datePart.split('-');
+            if (p.length === 3 && p[0].length === 4) {
+                const year = parseInt(p[0], 10);
+                const month = parseInt(p[1], 10) - 1;
+                const day = parseInt(p[2], 10);
+                const dt = new Date(year, month, day);
+                if (!isNaN(dt.getTime())) return dt;
+            }
+        }
+        const dt = new Date(d);
+        return isNaN(dt.getTime()) ? null : dt;
+    }
     let _allPedidosBling = []; // Nova fonte primária
     let _currentSalesDetails = []; // Armazena os dados para o modal de detalhes
     let _currentMonthKey = '';
@@ -392,10 +437,7 @@ export const DashboardApp = (function() {
         if (_dom.vendasContainer) _dom.vendasContainer.classList.remove('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
-        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
-        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
-        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
         _setDateRange('all');
     }
@@ -403,6 +445,7 @@ export const DashboardApp = (function() {
     function _refreshActiveDashboard() {
         if (!_dom.vendasContainer.classList.contains('hidden')) _renderSalesView();
         if (!_dom.rankingContainer.classList.contains('hidden')) _renderRankingDashboard();
+        if (_dom.garantiaContainer && !_dom.garantiaContainer.classList.contains('hidden')) _renderGarantiaDashboardView();
         
         // Atualiza também o modal de detalhes de vendas se ele estiver visível
         if (_dom.salesDetailsModal && !_dom.salesDetailsModal.classList.contains('hidden')) {
@@ -559,7 +602,6 @@ export const DashboardApp = (function() {
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
-        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
 
         try {
@@ -1724,13 +1766,18 @@ export const DashboardApp = (function() {
         // Se já temos anos populados, não precisa refazer a cada troca de menu
         if (_dom.yearFilter.options.length > 1) return;
 
-        const allData = [..._allNFeData, ..._allLojaIntegradaOrders, ..._allPedidosBling];
+        const allData = [
+            ..._allNFeData, 
+            ..._allLojaIntegradaOrders, 
+            ..._allPedidosBling,
+            ...(_garantiaSatgData || [])
+        ];
         const years = new Set();
 
         allData.forEach(item => {
-            const dateString = item.data_de_emissao || item.data_criacao || item.data_criação; 
+            const dateString = item.data_de_emissao || item.data_criacao || item.data_criação || item.data; 
             if (dateString) {
-                const date = _utils.parsePtBrDate ? _utils.parsePtBrDate(dateString) : new Date(dateString); 
+                const date = _parseAnyDate(dateString); 
                 if (date && !isNaN(date.getTime())) {
                     years.add(date.getFullYear());
                 }
@@ -1757,6 +1804,39 @@ export const DashboardApp = (function() {
         // Define o valor inicial baseado no estado
         if (_dom.yearFilter.querySelector(`option[value="${_state.selectedYearFilter}"]`)) {
             _dom.yearFilter.value = _state.selectedYearFilter;
+        }
+    }
+
+    function _updateYearFilterOptionsWithSatg() {
+        if (!_dom.yearFilter || !_garantiaSatgData) return;
+        const existingYears = new Set();
+        Array.from(_dom.yearFilter.options).forEach(opt => {
+            if (opt.value !== 'all') existingYears.add(opt.value);
+        });
+        let added = false;
+        _garantiaSatgData.forEach(satg => {
+            const dt = _parseAnyDate(satg.data);
+            if (dt && !isNaN(dt.getTime())) {
+                const yr = dt.getFullYear().toString();
+                if (!existingYears.has(yr)) {
+                    existingYears.add(yr);
+                    added = true;
+                }
+            }
+        });
+        if (added) {
+            const currentVal = _dom.yearFilter.value;
+            const sortedYears = Array.from(existingYears).map(Number).sort((a, b) => b - a);
+            _dom.yearFilter.innerHTML = '<option value="all">Tudo</option>';
+            sortedYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                _dom.yearFilter.appendChild(option);
+            });
+            if (_dom.yearFilter.querySelector(`option[value="${currentVal}"]`)) {
+                _dom.yearFilter.value = currentVal;
+            }
         }
     }
 
@@ -3421,8 +3501,17 @@ export const DashboardApp = (function() {
             }
         });
 
-        // NOVO: Evento de Relatório no Ranking
+        // NOVO: Evento de Relatório no Ranking e Garantia
         _dom.reportBtn?.addEventListener('click', e => {
+            // Se estivermos na Garantia, geramos o relatório executivo da Garantia
+            if (_dom.garantiaContainer && !_dom.garantiaContainer.classList.contains('hidden')) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+                _generateGarantiaReport();
+                return;
+            }
+
             // Se estivermos no Ranking, assumimos o controle TOTAL do botão e impedimos outros listeners (main.js)
             if (!_dom.rankingContainer.classList.contains('hidden')) {
                 e.preventDefault();
@@ -4172,177 +4261,735 @@ export const DashboardApp = (function() {
     }
 
 async function _showGarantiaDashboard() {
-        _dom.selectorContainer?.classList.add('hidden');
-        _dom.vendasContainer?.classList.add('hidden');
-            _dom.garantiaContainer?.classList.add('hidden');
-        _dom.estoqueContainer?.classList.add('hidden');
-        _dom.rankingContainer?.classList.add('hidden');
+        if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
+        if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
+        if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
+        if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.remove('hidden');
+        if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
+
+        // Se o seletor de ano estiver vazio, popula com os anos disponíveis
+        if (_dom.yearFilter && _dom.yearFilter.options.length <= 1) {
+            _populateYearFilter();
+        }
+
+        await _loadGarantiaData();
+        _renderGarantiaDashboardView();
+    }
+
+    async function _loadGarantiaData(forceReload = false) {
+        if (!forceReload && _garantiaSatgData && _garantiaPedidoData && _garantiaServicosMoData) {
+            return;
+        }
+
+        const summaryContainer = document.getElementById('garantia-summary-cards');
+        if (summaryContainer && (!_garantiaSatgData || forceReload)) {
+            summaryContainer.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500"><svg class="animate-spin h-8 w-8 mx-auto mb-2 text-purple-500" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Carregando dados da garantia e serviços...</div>';
+        }
+
+        try {
+            const [satgRes, pedidoRes, moRes] = await Promise.all([
+                fetch(API_URLS.GARANTIA_SATG),
+                fetch(API_URLS.GARANTIA_PEDIDO),
+                fetch(API_URLS.GARANTIA_SERVICOS_MO)
+            ]);
+
+            const satgJson = await satgRes.json();
+            _garantiaSatgData = Array.isArray(satgJson) ? satgJson : (satgJson.data || []);
+            const pedJson = await pedidoRes.json();
+            _garantiaPedidoData = Array.isArray(pedJson) ? pedJson : (pedJson.data || []);
+            const moJson = await moRes.json();
+            _garantiaServicosMoData = Array.isArray(moJson) ? moJson : (moJson.data || []);
+
+            // Atualiza anos na barra de filtro se a SatG contiver anos novos
+            _updateYearFilterOptionsWithSatg();
+        } catch (err) {
+            console.error('Erro ao carregar dados do dashboard de garantia:', err);
+            if (summaryContainer) {
+                summaryContainer.innerHTML = '<div class="col-span-full text-center py-8 text-red-500 font-bold">Erro ao carregar dados da garantia. Verifique sua conexão e tente novamente.</div>';
+            }
+        }
+    }
+
+    function _processGarantiaPedidoCosts(ped, countPecas, addFrete, addPecas) {
+        if (!ped) return;
+        // Frete
+        if (ped.valorFrete) {
+            let fStr = String(ped.valorFrete).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
+            const fVal = parseFloat(fStr) || 0;
+            if (fVal > 0) addFrete(fVal);
+        }
+
+        // Peças
+        if (ped.itens && ped.itens.trim() !== '') {
+            const regex = /\(([^)]+)\)/g;
+            let match;
+            let pedPecasTotal = 0;
+            let pedPecasCount = 0;
+            while ((match = regex.exec(ped.itens)) !== null) {
+                const partes = match[1].split(',');
+                if (partes.length >= 3) {
+                    const rawCodDesc = partes[0].trim();
+                    const qtd = parseFloat(partes[1]) || 0;
+                    const precoRaw = partes[2].split('|')[0];
+                    const preco = parseFloat(precoRaw) || 0;
+                    const custoItem = qtd * preco;
+                    
+                    pedPecasTotal += custoItem;
+                    pedPecasCount += qtd;
+
+                    let codigo = rawCodDesc;
+                    let descricao = rawCodDesc;
+                    if (_allProducts && _allProducts.length > 0) {
+                        const pr = _allProducts.find(p => String(p.codigo || '').trim() === rawCodDesc);
+                        if (pr) {
+                            descricao = pr.descricao || pr.nome || rawCodDesc;
+                        } else {
+                            codigo = '-';
+                        }
+                    } else {
+                        codigo = '-';
+                    }
+                    
+                    const mapKey = descricao + '|||' + codigo;
+                    if (!countPecas[mapKey]) countPecas[mapKey] = { descricao, codigo, qtd: 0, custo: 0 };
+                    countPecas[mapKey].qtd += qtd;
+                    countPecas[mapKey].custo += custoItem;
+                }
+            }
+            addPecas(pedPecasTotal, pedPecasCount);
+        }
+    }
+
+    function _renderGarantiaDashboardView() {
+        if (!_dom.garantiaContainer || _dom.garantiaContainer.classList.contains('hidden')) return;
+        if (!_garantiaSatgData || !_garantiaPedidoData || !_garantiaServicosMoData) {
+            _showGarantiaDashboard();
+            return;
+        }
 
         const summaryContainer = document.getElementById('garantia-summary-cards');
         if (!summaryContainer) return;
-        
-        summaryContainer.innerHTML = '<div class="col-span-4 text-center py-8 text-gray-500"><svg class="animate-spin h-8 w-8 mx-auto mb-2 text-purple-500" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Carregando dados da garantia...</div>';
 
-        try {
-            // Fetch dataparallel
-            const [satgRes, pedidoRes] = await Promise.all([
-                fetch(API_URLS.GARANTIA_SATG),
-                fetch(API_URLS.GARANTIA_PEDIDO)
-            ]);
-
-            const satgData = await satgRes.json();
-            const pedRespData = await pedidoRes.json();
-            const pedidoData = Array.isArray(pedRespData) ? pedRespData : (pedRespData.data || []);
-
-            let qtdAprovadas = 0;
-            let qtdRecusadas = 0;
-            let gastoFrete = 0;
-            let gastoPecas = 0;
-            
-            const countEquipamentos = {};
-            const countClientes = {};
-            const countPecas = {};
-
-            // Analisar SAT-Gs
-            satgData.forEach(satg => {
-                const status = String(satg.status || '').toUpperCase();
-                if (status.includes('APROVADO')) qtdAprovadas++;
-                if (status.includes('RECUSADO')) qtdRecusadas++;
-
-                const equip = (satg.equipamento || satg.produto || 'Não informado').trim();
-                const cliente = (satg.cliente || 'Não informado').trim();
-
-                countEquipamentos[equip] = (countEquipamentos[equip] || 0) + 1;
-                countClientes[cliente] = (countClientes[cliente] || 0) + 1;
-            });
-
-            // Parse Pedidos (Custos e Peças)
-            pedidoData.forEach(ped => {
-                // Frete
-                if (ped.valorFrete) {
-                    let fStr = String(ped.valorFrete).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
-                    gastoFrete += (parseFloat(fStr) || 0);
+        // 1. Filtrar SAT-G pelo período e ano selecionados
+        const filteredSatgData = _garantiaSatgData.filter(satg => {
+            const dt = _parseAnyDate(satg.data);
+            if (_state.selectedYearFilter && _state.selectedYearFilter !== 'all') {
+                if (!dt || dt.getFullYear().toString() !== _state.selectedYearFilter) {
+                    return false;
                 }
+            }
+            if (_state.startDate) {
+                const start = new Date(_state.startDate + 'T00:00:00');
+                if (!dt || dt < start) return false;
+            }
+            if (_state.endDate) {
+                const end = new Date(_state.endDate + 'T23:59:59');
+                if (!dt || dt > end) return false;
+            }
+            return true;
+        });
 
-                // Peças
-                if (ped.itens && ped.itens.trim() !== '') {
-                    const regex = /\(([^)]+)\)/g;
-                    let match;
-                    while ((match = regex.exec(ped.itens)) !== null) {
-                        const partes = match[1].split(',');
-                        if (partes.length >= 3) {
-                            const rawCodDesc = partes[0].trim();
-                            const qtd = parseFloat(partes[1]) || 0;
-                            const precoRaw = partes[2].split('|')[0];
-                            const preco = parseFloat(precoRaw) || 0;
-                            const custoItem = qtd * preco;
-                            
-                            gastoPecas += custoItem;
+        // 2. Mapeamento de Serviços M.O
+        const moMap = new Map();
+        _garantiaServicosMoData.forEach(mo => {
+            if (mo && mo.idServicoMO) {
+                moMap.set(String(mo.idServicoMO).trim(), mo);
+            }
+        });
 
-                            let codigo = rawCodDesc;
-                            let descricao = rawCodDesc;
-                            if (_allProducts && _allProducts.length > 0) {
-                                const pr = _allProducts.find(p => String(p.codigo || '').trim() === rawCodDesc);
-                                if (pr) {
-                                    descricao = pr.descricao || pr.nome || rawCodDesc;
-                                } else {
-                                    codigo = '-';
-                                }
-                            } else {
-                                codigo = '-';
-                            }
-                            
-                            const mapKey = descricao + '|||' + codigo;
-                            if (!countPecas[mapKey]) countPecas[mapKey] = { descricao, codigo, qtd: 0, custo: 0 };
-                            countPecas[mapKey].qtd += qtd;
-                            countPecas[mapKey].custo += custoItem;
-                        }
+        // 3. Mapeamento de Pedidos Garantia
+        const pedMap = new Map();
+        _garantiaPedidoData.forEach(ped => {
+            if (ped.idPedido) pedMap.set(String(ped.idPedido).trim(), ped);
+            if (ped.numero) pedMap.set(String(ped.numero).trim(), ped);
+        });
+
+        let qtdAprovadas = 0;
+        let qtdRecusadas = 0;
+        let gastoFrete = 0;
+        let gastoPecas = 0;
+        let gastoDeslocamento = 0;
+        let gastoValorMO = 0;
+        let qtdServicosMO = 0;
+        let qtdComDeslocamento = 0;
+        let totalItensPecasCount = 0;
+
+        const countEquipamentos = {};
+        const countClientes = {};
+        const countPecas = {};
+        const activeMoItems = [];
+        const processedMoIds = new Set();
+        const processedPedidoIds = new Set();
+
+        // 4. Analisar SAT-Gs filtradas
+        filteredSatgData.forEach(satg => {
+            const status = String(satg.status || '').toUpperCase();
+            if (status.includes('APROVADO')) qtdAprovadas++;
+            if (status.includes('RECUSADO')) qtdRecusadas++;
+
+            const equip = (satg.equipamento || satg.produto || 'Não informado').trim();
+            const cliente = (satg.cliente || 'Não informado').trim();
+
+            countEquipamentos[equip] = (countEquipamentos[equip] || 0) + 1;
+            countClientes[cliente] = (countClientes[cliente] || 0) + 1;
+
+            // Verificar M.O vinculado
+            if (satg.idServicoMO && !processedMoIds.has(String(satg.idServicoMO).trim())) {
+                const moId = String(satg.idServicoMO).trim();
+                processedMoIds.add(moId);
+                const mo = moMap.get(moId);
+                if (mo && String(mo.situacao || '').toLowerCase() !== 'cancelado') {
+                    let dVal = 0;
+                    if (mo.deslocamento) {
+                        let s = String(mo.deslocamento).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
+                        dVal = parseFloat(s) || 0;
                     }
+                    let vVal = 0;
+                    if (mo.valorMO) {
+                        let s = String(mo.valorMO).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
+                        vVal = parseFloat(s) || 0;
+                    }
+                    if (dVal > 0) qtdComDeslocamento++;
+                    if (vVal > 0 || dVal > 0) qtdServicosMO++;
+
+                    gastoDeslocamento += dVal;
+                    gastoValorMO += vVal;
+
+                    activeMoItems.push({
+                        satgCodigo: satg.codigo || '-',
+                        cliente: satg.cliente || '-',
+                        equipamento: equip,
+                        descricao: mo.descricao || '-',
+                        deslocamento: dVal,
+                        valorMO: vVal,
+                        total: dVal + vVal,
+                        idServicoMO: mo.idServicoMO
+                    });
                 }
-            });
+            }
 
-            const fmtBRL = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+            // Verificar Pedido vinculado
+            if (satg.idPedido && !processedPedidoIds.has(String(satg.idPedido).trim())) {
+                const pId = String(satg.idPedido).trim();
+                processedPedidoIds.add(pId);
+                const ped = pedMap.get(pId);
+                if (ped) {
+                    _processGarantiaPedidoCosts(ped, countPecas, (frete) => gastoFrete += frete, (pecas, count) => {
+                        gastoPecas += pecas;
+                        totalItensPecasCount += count;
+                    });
+                }
+            }
+        });
 
-            // Renderizar Cards de Resumo
-            summaryContainer.innerHTML = `
-                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col justify-between">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <p class="text-sm font-bold text-gray-500 uppercase tracking-wide">Garantias Aprovadas</p>
-                            <h3 class="text-3xl font-black text-gray-800 mt-1">${qtdAprovadas}</h3>
-                        </div>
-                        <div class="p-3 bg-green-50 rounded-xl"><svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
+        // 5. Verificar também Pedidos de Garantia sem vínculo direto a SAT-G ou com data no período
+        _garantiaPedidoData.forEach(ped => {
+            const pId = String(ped.idPedido || ped.numero || '').trim();
+            if (pId && !processedPedidoIds.has(pId)) {
+                const pDt = _parseAnyDate(ped.data);
+                let match = true;
+                if (_state.selectedYearFilter && _state.selectedYearFilter !== 'all') {
+                    if (!pDt || pDt.getFullYear().toString() !== _state.selectedYearFilter) match = false;
+                }
+                if (_state.startDate) {
+                    const start = new Date(_state.startDate + 'T00:00:00');
+                    if (!pDt || pDt < start) match = false;
+                }
+                if (_state.endDate) {
+                    const end = new Date(_state.endDate + 'T23:59:59');
+                    if (!pDt || pDt > end) match = false;
+                }
+
+                if (match) {
+                    processedPedidoIds.add(pId);
+                    _processGarantiaPedidoCosts(ped, countPecas, (frete) => gastoFrete += frete, (pecas, count) => {
+                        gastoPecas += pecas;
+                        totalItensPecasCount += count;
+                    });
+                }
+            }
+        });
+
+        const gastoTotalGeral = gastoPecas + gastoFrete + gastoDeslocamento + gastoValorMO;
+        const fmtBRL = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+        // 6. Atualizar os 6 cards de resumo
+        summaryContainer.innerHTML = `
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between min-h-[135px] hover:shadow-md transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Garantias Aprovadas</p>
+                        <h3 class="text-3xl font-black text-gray-800 mt-1">${qtdAprovadas}</h3>
                     </div>
-                    <div class="text-sm text-gray-500 mt-2">VS <span class="text-red-500 font-bold">${qtdRecusadas}</span> Recusadas</div>
-                </div>
-
-                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col justify-between">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <p class="text-sm font-bold text-gray-500 uppercase tracking-wide">Custo com Peças</p>
-                            <h3 class="text-2xl font-black text-gray-800 mt-1">${fmtBRL(gastoPecas)}</h3>
-                        </div>
-                        <div class="p-3 bg-blue-50 rounded-xl"><svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></div>
+                    <div class="p-2.5 bg-green-50 rounded-xl text-green-500">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                     </div>
                 </div>
+                <div class="text-xs text-gray-500">VS <span class="text-red-500 font-bold">${qtdRecusadas}</span> Recusadas (${filteredSatgData.length} Total)</div>
+            </div>
 
-                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col justify-between">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <p class="text-sm font-bold text-gray-500 uppercase tracking-wide">Custo com Frete</p>
-                            <h3 class="text-2xl font-black text-gray-800 mt-1">${fmtBRL(gastoFrete)}</h3>
-                        </div>
-                        <div class="p-3 bg-orange-50 rounded-xl"><svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"></path></svg></div>
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between min-h-[135px] hover:shadow-md transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Custo com Peças</p>
+                        <h3 class="text-2xl font-black text-gray-800 mt-1">${fmtBRL(gastoPecas)}</h3>
+                    </div>
+                    <div class="p-2.5 bg-blue-50 rounded-xl text-blue-500">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     </div>
                 </div>
+                <div class="text-xs text-gray-500">${totalItensPecasCount} peças utilizadas</div>
+            </div>
 
-                <div class="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 shadow-lg text-white flex flex-col justify-between">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <p class="text-sm font-bold text-purple-200 uppercase tracking-wide">Custo Total (Peças + Frete)</p>
-                            <h3 class="text-3xl font-black mt-1">${fmtBRL(gastoPecas + gastoFrete)}</h3>
-                        </div>
-                        <div class="p-3 bg-white/20 rounded-xl"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between min-h-[135px] hover:shadow-md transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Custo com Frete</p>
+                        <h3 class="text-2xl font-black text-gray-800 mt-1">${fmtBRL(gastoFrete)}</h3>
+                    </div>
+                    <div class="p-2.5 bg-orange-50 rounded-xl text-orange-500">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"></path></svg>
                     </div>
                 </div>
-            `;
+                <div class="text-xs text-gray-500">${processedPedidoIds.size} envios de peças</div>
+            </div>
 
-            // Sort Equipamentos
-            const topEquips = Object.entries(countEquipamentos).sort((a, b) => b[1] - a[1]).slice(0, 10);
-            const equipList = document.getElementById('garantia-equipamentos-list');
-            if (equipList) {
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between min-h-[135px] hover:shadow-md transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Deslocamento (M.O)</p>
+                        <h3 class="text-2xl font-black text-gray-800 mt-1">${fmtBRL(gastoDeslocamento)}</h3>
+                    </div>
+                    <div class="p-2.5 bg-amber-50 rounded-xl text-amber-500">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-500">${qtdComDeslocamento} visitas/deslocamentos</div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between min-h-[135px] hover:shadow-md transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Serviços de M.O</p>
+                        <h3 class="text-2xl font-black text-gray-800 mt-1">${fmtBRL(gastoValorMO)}</h3>
+                    </div>
+                    <div class="p-2.5 bg-indigo-50 rounded-xl text-indigo-500">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-500">${qtdServicosMO} serviços prestados</div>
+            </div>
+
+            <div class="bg-gradient-to-br from-purple-600 via-indigo-600 to-indigo-800 rounded-2xl p-5 shadow-lg text-white flex flex-col justify-between min-h-[135px] hover:shadow-xl transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-xs font-bold text-purple-200 uppercase tracking-wider">Custo Total Geral</p>
+                        <h3 class="text-2xl sm:text-3xl font-black mt-1 text-white">${fmtBRL(gastoTotalGeral)}</h3>
+                    </div>
+                    <div class="p-2.5 bg-white/20 rounded-xl">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                </div>
+                <div class="text-xs text-purple-200">Peças + Frete + M.O + Desloc.</div>
+            </div>
+        `;
+
+        // Top Equipamentos
+        const topEquips = Object.entries(countEquipamentos).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const equipList = document.getElementById('garantia-equipamentos-list');
+        if (equipList) {
+            if (topEquips.length === 0) {
+                equipList.innerHTML = '<li class="text-sm text-gray-400 text-center py-6">Nenhum equipamento registrado no período.</li>';
+            } else {
                 equipList.innerHTML = topEquips.map(([name, count]) => `
-                    <li class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <li class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100 hover:bg-gray-100/60 transition-colors">
                         <span class="font-medium text-gray-700 text-sm truncate pr-4">${name}</span>
-                        <span class="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded-full">${count} SAT-Gs</span>
+                        <span class="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap">${count} SAT-Gs</span>
                     </li>
                 `).join('');
             }
-
-            // Sort Clientes
-            const topClientes = Object.entries(countClientes).sort((a, b) => b[1] - a[1]).slice(0, 10);
-            const cliList = document.getElementById('garantia-clientes-list');
-            if (cliList) {
-                cliList.innerHTML = topClientes.map(([name, count]) => `
-                    <li class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
-                        <span class="font-medium text-gray-700 text-sm truncate pr-4">${name}</span>
-                        <span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full">${count} SAT-Gs</span>
-                    </li>
-                `).join('');
-            }
-
-            // Sort Peças Usadas (by quantity desc)
-            _garantiaPecasData = Object.values(countPecas).sort((a, b) => b.qtd - a.qtd);
-            _garantiaPecasPage = 1;
-            
-            // Render pagination and table
-            _renderGarantiaPecasTable();
-
-        } catch (err) {
-            console.error('Erro ao carregar dashboard de garantia:', err);
-            summaryContainer.innerHTML = '<div class="col-span-4 text-center py-8 text-red-500">Erro ao carregar dados. Tente novamente mais tarde.</div>';
         }
+
+        // Top Clientes
+        const topClientes = Object.entries(countClientes).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const cliList = document.getElementById('garantia-clientes-list');
+        if (cliList) {
+            if (topClientes.length === 0) {
+                cliList.innerHTML = '<li class="text-sm text-gray-400 text-center py-6">Nenhum cliente registrado no período.</li>';
+            } else {
+                cliList.innerHTML = topClientes.map(([name, count]) => `
+                    <li class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100 hover:bg-gray-100/60 transition-colors">
+                        <span class="font-medium text-gray-700 text-sm truncate pr-4">${name}</span>
+                        <span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap">${count} SAT-Gs</span>
+                    </li>
+                `).join('');
+            }
+        }
+
+        // Tabela de Peças
+        _garantiaPecasData = Object.values(countPecas).sort((a, b) => b.qtd - a.qtd);
+        _garantiaPecasPage = 1;
+        _renderGarantiaPecasTable();
+
+        // Tabela de Serviços M.O
+        _garantiaMoData = activeMoItems.sort((a, b) => b.total - a.total);
+        _garantiaMoPage = 1;
+        _renderGarantiaMoTable(gastoValorMO, gastoDeslocamento);
+    }
+
+    function _renderGarantiaMoTable(totalMO, totalDeslocamento) {
+        const moList = document.getElementById('garantia-mo-list');
+        const info = document.getElementById('garantia-mo-pagination-info');
+        const prevBtn = document.getElementById('garantia-mo-prev-btn');
+        const nextBtn = document.getElementById('garantia-mo-next-btn');
+        const pageText = document.getElementById('garantia-mo-page-text');
+        const moTotalDisplay = document.getElementById('garantia-mo-total-display');
+        const deslocamentoTotalDisplay = document.getElementById('garantia-deslocamento-total-display');
+
+        const fmtBRL = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+        if (moTotalDisplay) moTotalDisplay.innerText = fmtBRL(totalMO || 0);
+        if (deslocamentoTotalDisplay) deslocamentoTotalDisplay.innerText = fmtBRL(totalDeslocamento || 0);
+
+        if (!moList) return;
+
+        const totalItems = _garantiaMoData.length;
+        const totalPages = Math.ceil(totalItems / _garantiaMoPerPage) || 1;
+        
+        if (_garantiaMoPage > totalPages) _garantiaMoPage = totalPages;
+        if (_garantiaMoPage < 1) _garantiaMoPage = 1;
+
+        const startIndex = (_garantiaMoPage - 1) * _garantiaMoPerPage;
+        const endIndex = Math.min(startIndex + _garantiaMoPerPage, totalItems);
+        const pageData = _garantiaMoData.slice(startIndex, endIndex);
+
+        if (pageData.length === 0) {
+            moList.innerHTML = `
+                <tr>
+                    <td colspan="6" class="px-4 py-8 text-center text-gray-400 text-sm">
+                        Nenhum serviço de Mão de Obra registrado no período selecionado.
+                    </td>
+                </tr>
+            `;
+        } else {
+            moList.innerHTML = pageData.map(item => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-3">
+                        <div class="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                            <span class="inline-block px-1.5 py-0.5 bg-purple-50 text-purple-700 text-[10px] font-bold rounded border border-purple-200 whitespace-nowrap">${item.satgCodigo}</span>
+                            <span class="truncate max-w-[200px]" title="${item.cliente}">${item.cliente}</span>
+                        </div>
+                        <div class="text-[10px] text-gray-400 font-mono mt-0.5">${item.idServicoMO}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-700">
+                        <span class="truncate max-w-[180px] block" title="${item.equipamento}">${item.equipamento}</span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-600">
+                        <div class="truncate max-w-[260px]" title="${item.descricao}">${item.descricao}</div>
+                    </td>
+                    <td class="px-4 py-3 text-right text-sm font-semibold text-amber-700">
+                        ${fmtBRL(item.deslocamento)}
+                    </td>
+                    <td class="px-4 py-3 text-right text-sm font-semibold text-indigo-700">
+                        ${fmtBRL(item.valorMO)}
+                    </td>
+                    <td class="px-4 py-3 text-right text-sm font-bold text-gray-900">
+                        ${fmtBRL(item.total)}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        if (info) info.innerHTML = `Mostrando <span class="font-bold">${totalItems === 0 ? 0 : startIndex + 1}</span> a <span class="font-bold">${endIndex}</span> de <span class="font-bold">${totalItems}</span> serviços`;
+        if (pageText) pageText.innerText = `Página ${_garantiaMoPage} de ${totalPages}`;
+
+        if (prevBtn) {
+            prevBtn.disabled = _garantiaMoPage === 1;
+            prevBtn.onclick = () => {
+                _garantiaMoPage--;
+                _renderGarantiaMoTable(totalMO, totalDeslocamento);
+            };
+        }
+        if (nextBtn) {
+            nextBtn.disabled = _garantiaMoPage === totalPages;
+            nextBtn.onclick = () => {
+                _garantiaMoPage++;
+                _renderGarantiaMoTable(totalMO, totalDeslocamento);
+            };
+        }
+    }
+
+    function _generateGarantiaReport() {
+        if (!_garantiaSatgData) {
+            alert('Aguarde os dados da garantia serem carregados.');
+            return;
+        }
+
+        const fmtBRL = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+        const fmtDate = (d) => {
+            if (!d) return '-';
+            const dt = _parseAnyDate(d);
+            return dt ? dt.toLocaleDateString('pt-BR') : d;
+        };
+
+        let periodText = 'Geral (Todos os Períodos)';
+        if (_state.startDate && _state.endDate) {
+            periodText = `${fmtDate(_state.startDate)} até ${fmtDate(_state.endDate)}`;
+        } else if (_state.startDate) {
+            periodText = `A partir de ${fmtDate(_state.startDate)}`;
+        } else if (_state.endDate) {
+            periodText = `Até ${fmtDate(_state.endDate)}`;
+        } else if (_state.selectedYearFilter && _state.selectedYearFilter !== 'all') {
+            periodText = `Ano: ${_state.selectedYearFilter}`;
+        }
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('Por favor, permita pop-ups no seu navegador para gerar o relatório.');
+            return;
+        }
+
+        let qtdAprovadas = 0;
+        let qtdRecusadas = 0;
+        let gastoFrete = 0;
+        let gastoPecas = 0;
+        let gastoDeslocamento = 0;
+        let gastoValorMO = 0;
+
+        const countEquipamentos = {};
+        const countClientes = {};
+        const countPecas = {};
+        const activeMoItems = [];
+        const processedMoIds = new Set();
+        const processedPedidoIds = new Set();
+
+        const moMap = new Map();
+        (_garantiaServicosMoData || []).forEach(mo => {
+            if (mo && mo.idServicoMO) moMap.set(String(mo.idServicoMO).trim(), mo);
+        });
+
+        const pedMap = new Map();
+        (_garantiaPedidoData || []).forEach(ped => {
+            if (ped.idPedido) pedMap.set(String(ped.idPedido).trim(), ped);
+            if (ped.numero) pedMap.set(String(ped.numero).trim(), ped);
+        });
+
+        const filteredSatgData = (_garantiaSatgData || []).filter(satg => {
+            const dt = _parseAnyDate(satg.data);
+            if (_state.selectedYearFilter && _state.selectedYearFilter !== 'all') {
+                if (!dt || dt.getFullYear().toString() !== _state.selectedYearFilter) return false;
+            }
+            if (_state.startDate) {
+                const start = new Date(_state.startDate + 'T00:00:00');
+                if (!dt || dt < start) return false;
+            }
+            if (_state.endDate) {
+                const end = new Date(_state.endDate + 'T23:59:59');
+                if (!dt || dt > end) return false;
+            }
+            return true;
+        });
+
+        filteredSatgData.forEach(satg => {
+            const status = String(satg.status || '').toUpperCase();
+            if (status.includes('APROVADO')) qtdAprovadas++;
+            if (status.includes('RECUSADO')) qtdRecusadas++;
+
+            const equip = (satg.equipamento || satg.produto || 'Não informado').trim();
+            const cliente = (satg.cliente || 'Não informado').trim();
+
+            countEquipamentos[equip] = (countEquipamentos[equip] || 0) + 1;
+            countClientes[cliente] = (countClientes[cliente] || 0) + 1;
+
+            if (satg.idServicoMO && !processedMoIds.has(String(satg.idServicoMO).trim())) {
+                const moId = String(satg.idServicoMO).trim();
+                processedMoIds.add(moId);
+                const mo = moMap.get(moId);
+                if (mo && String(mo.situacao || '').toLowerCase() !== 'cancelado') {
+                    let dVal = 0, vVal = 0;
+                    if (mo.deslocamento) {
+                        dVal = parseFloat(String(mo.deslocamento).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')) || 0;
+                    }
+                    if (mo.valorMO) {
+                        vVal = parseFloat(String(mo.valorMO).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')) || 0;
+                    }
+                    gastoDeslocamento += dVal;
+                    gastoValorMO += vVal;
+                    activeMoItems.push({
+                        satgCodigo: satg.codigo || '-',
+                        cliente: satg.cliente || '-',
+                        equipamento: equip,
+                        descricao: mo.descricao || '-',
+                        deslocamento: dVal,
+                        valorMO: vVal,
+                        total: dVal + vVal
+                    });
+                }
+            }
+
+            if (satg.idPedido && !processedPedidoIds.has(String(satg.idPedido).trim())) {
+                const pId = String(satg.idPedido).trim();
+                processedPedidoIds.add(pId);
+                const ped = pedMap.get(pId);
+                if (ped) {
+                    _processGarantiaPedidoCosts(ped, countPecas, f => gastoFrete += f, (p, c) => gastoPecas += p);
+                }
+            }
+        });
+
+        const topEquips = Object.entries(countEquipamentos).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const topClientes = Object.entries(countClientes).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const topPecas = Object.values(countPecas).sort((a, b) => b.qtd - a.qtd);
+        const gastoTotalGeral = gastoPecas + gastoFrete + gastoDeslocamento + gastoValorMO;
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <title>Relatório Executivo de Garantia (SAT-G)</title>
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding: 24px; color: #1f2937; line-height: 1.4; font-size: 12px; }
+                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #4f46e5; padding-bottom: 14px; margin-bottom: 20px; }
+                    .title { font-size: 20px; font-weight: 800; color: #111827; }
+                    .subtitle { font-size: 13px; color: #4b5563; margin-top: 4px; }
+                    .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 24px; }
+                    .kpi-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: #f9fafb; text-align: center; }
+                    .kpi-title { font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; }
+                    .kpi-value { font-size: 15px; font-weight: 800; color: #111827; margin: 4px 0; }
+                    .kpi-sub { font-size: 9px; color: #6b7280; }
+                    .section-title { font-size: 14px; font-weight: 700; color: #374151; margin: 18px 0 8px 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 11px; }
+                    th { background: #f3f4f6; text-align: left; padding: 6px 8px; font-weight: 700; color: #4b5563; border-bottom: 1px solid #d1d5db; }
+                    td { padding: 6px 8px; border-bottom: 1px solid #f3f4f6; }
+                    .text-right { text-align: right; }
+                    .text-center { text-align: center; }
+                    .btn-print { background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+                    @media print {
+                        .no-print { display: none; }
+                        body { padding: 0; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div>
+                        <div class="title">Relatório Executivo de Garantia SAT-G</div>
+                        <div class="subtitle">Período: <b>${periodText}</b> &nbsp;|&nbsp; Emitido em: ${new Date().toLocaleString('pt-BR')}</div>
+                    </div>
+                    <div class="no-print">
+                        <button class="btn-print" onclick="window.print()">Imprimir Relatório</button>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-title">Garantias</div>
+                        <div class="kpi-value">${qtdAprovadas} Aprov.</div>
+                        <div class="kpi-sub">${qtdRecusadas} Recusadas</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">Custo Peças</div>
+                        <div class="kpi-value">${fmtBRL(gastoPecas)}</div>
+                        <div class="kpi-sub">${topPecas.reduce((a, b) => a + b.qtd, 0)} itens</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">Custo Frete</div>
+                        <div class="kpi-value">${fmtBRL(gastoFrete)}</div>
+                        <div class="kpi-sub">${processedPedidoIds.size} envios</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">Deslocamento</div>
+                        <div class="kpi-value">${fmtBRL(gastoDeslocamento)}</div>
+                        <div class="kpi-sub">Transporte/Visita</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">Mão de Obra</div>
+                        <div class="kpi-value">${fmtBRL(gastoValorMO)}</div>
+                        <div class="kpi-sub">${activeMoItems.length} serviços</div>
+                    </div>
+                    <div class="kpi-card" style="background: #eef2ff; border-color: #c7d2fe;">
+                        <div class="kpi-title" style="color: #4338ca;">Custo Total</div>
+                        <div class="kpi-value" style="color: #4338ca;">${fmtBRL(gastoTotalGeral)}</div>
+                        <div class="kpi-sub">Geral consolidado</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 20px;">
+                    <div style="flex: 1;">
+                        <div class="section-title">Top Equipamentos com Problema</div>
+                        <table>
+                            <thead><tr><th>Equipamento</th><th class="text-right">Qtd SAT-G</th></tr></thead>
+                            <tbody>
+                                ${topEquips.length === 0 ? '<tr><td colspan="2">Nenhum registro</td></tr>' : topEquips.map(([eq, q]) => `<tr><td>${eq}</td><td class="text-right font-bold">${q}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="flex: 1;">
+                        <div class="section-title">Top Clientes com Problema</div>
+                        <table>
+                            <thead><tr><th>Cliente</th><th class="text-right">Qtd SAT-G</th></tr></thead>
+                            <tbody>
+                                ${topClientes.length === 0 ? '<tr><td colspan="2">Nenhum registro</td></tr>' : topClientes.map(([cl, q]) => `<tr><td>${cl}</td><td class="text-right font-bold">${q}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section-title">Serviços de M.O e Deslocamento Registrados (${activeMoItems.length})</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>SAT-G</th>
+                            <th>Cliente</th>
+                            <th>Equipamento</th>
+                            <th>Descrição</th>
+                            <th class="text-right">Deslocamento</th>
+                            <th class="text-right">Valor M.O</th>
+                            <th class="text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${activeMoItems.length === 0 ? '<tr><td colspan="7" class="text-center">Nenhum serviço de M.O no período</td></tr>' : activeMoItems.map(m => `
+                            <tr>
+                                <td><b>${m.satgCodigo}</b></td>
+                                <td>${m.cliente}</td>
+                                <td>${m.equipamento}</td>
+                                <td>${m.descricao}</td>
+                                <td class="text-right">${fmtBRL(m.deslocamento)}</td>
+                                <td class="text-right">${fmtBRL(m.valorMO)}</td>
+                                <td class="text-right font-bold">${fmtBRL(m.total)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div class="section-title">Peças Utilizadas em Garantia (${topPecas.length})</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Peça / Produto</th>
+                            <th>Código</th>
+                            <th class="text-center">Quantidade</th>
+                            <th class="text-right">Custo Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${topPecas.length === 0 ? '<tr><td colspan="4" class="text-center">Nenhuma peça utilizada no período</td></tr>' : topPecas.slice(0, 30).map(p => `
+                            <tr>
+                                <td>${p.descricao}</td>
+                                <td>${p.codigo}</td>
+                                <td class="text-center font-bold">${p.qtd}</td>
+                                <td class="text-right font-bold">${fmtBRL(p.custo)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
     }
 
  
@@ -4386,6 +5033,8 @@ return {
                     _renderEstoqueDashboard();
                 } else if (_dom.rankingContainer && !_dom.rankingContainer.classList.contains('hidden')) {
                     _renderRankingDashboard();
+                } else if (_dom.garantiaContainer && !_dom.garantiaContainer.classList.contains('hidden')) {
+                    _loadGarantiaData(true).then(() => _renderGarantiaDashboardView());
                 }
             } else {
                 _showSelector();
@@ -4400,6 +5049,7 @@ return {
             _dom.selectorContainer?.classList.add('hidden');
             _dom.vendasContainer?.classList.add('hidden');
             _dom.estoqueContainer?.classList.add('hidden');
+            _dom.garantiaContainer?.classList.add('hidden');
             _state.isStarted = false;
         },
 
@@ -4492,6 +5142,23 @@ return {
          */
         getAllPedidosBling: function() {
             return _allPedidosBling;
+        },
+
+        /**
+         * Atualiza os dados de Garantia em tempo real quando notificado pelo Firestore Sync.
+         */
+        refreshGarantiaRealTime: function() {
+            console.log('[Dashboard] Recebido sinal de atualização de garantia em tempo real.');
+            const container = _dom.garantiaContainer || document.getElementById('dashboard-garantia-container');
+            if (container && !container.classList.contains('hidden')) {
+                _loadGarantiaData(true).then(() => {
+                    _renderGarantiaDashboardView();
+                });
+            } else {
+                _garantiaSatgData = null;
+                _garantiaPedidoData = null;
+                _garantiaServicosMoData = null;
+            }
         }
     };
 })();
