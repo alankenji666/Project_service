@@ -68,7 +68,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 sintoma: document.getElementById('sintoma').value,
                 problema: document.getElementById('problema').value,
                 preDiagnostico: document.getElementById('preDiagnostico').value,
-                fotos: '' // Removido temporariamente
+                fotos: '', // Removido temporariamente
+                responsavel: new URLSearchParams(window.location.search).get('responsavel') || ''
             };
 
             // 3. Enviar para o Backend Node.js

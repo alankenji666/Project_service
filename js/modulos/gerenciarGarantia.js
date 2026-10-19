@@ -82,6 +82,9 @@ export const GerenciarGarantiaApp = (function () {
     let _satgStatusSelect;
     let _satgOrcamentoSelect;
     let _satgRetornoSelect;
+    let _satgResponsavelSelect;
+    let _listaResponsaveis = [];
+    let _usuariosMap = {};
     let _satgSortRadios;
 
     let _satgFilterBtn;
@@ -252,6 +255,7 @@ export const GerenciarGarantiaApp = (function () {
         _showView('cards');
         render(); // Pré-carrega a tabela
         _setupMasks();
+        _fetchResponsaveisList().catch(() => {});
     }
 
     
@@ -431,6 +435,7 @@ export const GerenciarGarantiaApp = (function () {
         _satgStatusSelect = document.getElementById('satg-status-select');
         _satgOrcamentoSelect = document.getElementById('satg-orcamento-select');
         _satgRetornoSelect = document.getElementById('satg-retorno-select');
+        _satgResponsavelSelect = document.getElementById('satg-responsavel-select');
         _satgSortRadios = document.querySelectorAll('.satg-sort-radio');
 
         _satgFilterBtn = document.getElementById('btn-satg-filter');
@@ -711,6 +716,7 @@ export const GerenciarGarantiaApp = (function () {
         if (_satgStatusSelect) _satgStatusSelect.addEventListener('change', _applySatgFilters);
         if (_satgOrcamentoSelect) _satgOrcamentoSelect.addEventListener('change', _applySatgFilters);
         if (_satgRetornoSelect) _satgRetornoSelect.addEventListener('change', _applySatgFilters);
+        if (_satgResponsavelSelect) _satgResponsavelSelect.addEventListener('change', _applySatgFilters);
         if (_satgSortRadios) {
             _satgSortRadios.forEach(radio => {
                 radio.addEventListener('change', _applySatgFilters);
@@ -2008,6 +2014,173 @@ function _formatItemsString() {
      * Lógica Sat-G
      * =========================================
      */
+    
+    function _getUsuarioNome(idOrCodigoOrNome) {
+        if (!idOrCodigoOrNome) return '';
+        const val = String(idOrCodigoOrNome).trim();
+        if (_usuariosMap[val.toLowerCase()]) {
+            return _usuariosMap[val.toLowerCase()].nome;
+        }
+        const found = _listaResponsaveis.find(u =>
+            String(u.codigo).toLowerCase() === val.toLowerCase() ||
+            String(u.id).toLowerCase() === val.toLowerCase() ||
+            String(u.nome).toLowerCase() === val.toLowerCase()
+        );
+        if (found) return found.nome;
+        return val;
+    }
+
+    function _getUsuarioId(idOrCodigoOrNome) {
+        if (!idOrCodigoOrNome) return '';
+        const val = String(idOrCodigoOrNome).trim();
+        if (_usuariosMap[val.toLowerCase()]) {
+            return _usuariosMap[val.toLowerCase()].codigo || _usuariosMap[val.toLowerCase()].id;
+        }
+        const found = _listaResponsaveis.find(u =>
+            String(u.codigo).toLowerCase() === val.toLowerCase() ||
+            String(u.id).toLowerCase() === val.toLowerCase() ||
+            String(u.nome).toLowerCase() === val.toLowerCase()
+        );
+        if (found) return found.codigo || found.id;
+        return val;
+    }
+
+    async function _fetchResponsaveisList() {
+        const usersMap = {};
+
+        function registerUser(codigo, nome) {
+            const codStr = String(codigo || '').trim();
+            const nomStr = String(nome || '').trim();
+            if (!codStr && !nomStr) return;
+            const userObj = {
+                codigo: codStr || nomStr,
+                id: codStr || nomStr,
+                nome: nomStr || codStr
+            };
+            if (codStr) usersMap[codStr.toLowerCase()] = userObj;
+            if (nomStr) usersMap[nomStr.toLowerCase()] = userObj;
+        }
+
+        // 1. Backend API (usuários cadastrados na planilha do sistema)
+        try {
+            if (API_URLS && API_URLS.GARANTIA_RESPONSAVEIS) {
+                const res = await fetch(API_URLS.GARANTIA_RESPONSAVEIS);
+                if (res.ok) {
+                    const data = await res.json();
+                    const list = Array.isArray(data) ? data : (data.responsaveis || []);
+                    list.forEach(u => {
+                        if (typeof u === 'string') {
+                            registerUser(u, u);
+                        } else if (u && typeof u === 'object') {
+                            registerUser(u.codigo || u.id || u.nome, u.nome || u.codigo || u.id);
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('Aviso ao carregar lista de responsáveis do backend:', e);
+        }
+
+        // 2. Usuários em cache do sistema (allUsersList)
+        try {
+            const cachedUsers = JSON.parse(localStorage.getItem('allUsersList') || '[]');
+            if (Array.isArray(cachedUsers)) {
+                cachedUsers.forEach(u => {
+                    if (u && typeof u === 'object') {
+                        registerUser(u.codigo || u.id, u.nome || u.name);
+                    } else if (typeof u === 'string') {
+                        registerUser(u, u);
+                    }
+                });
+            }
+        } catch(e) {}
+
+        // 3. Usuário logado atualmente (userInfo)
+        try {
+            const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+            if (userInfo.codigo || userInfo.nome) {
+                registerUser(userInfo.codigo || userInfo.id, userInfo.nome);
+            }
+        } catch(e) {}
+
+        // 4. Qualquer responsável já presente nos dados de SAT-G carregados (para histórico/legado)
+        if (Array.isArray(_satgData)) {
+            _satgData.forEach(d => {
+                if (d.responsavel && typeof d.responsavel === 'string' && d.responsavel.trim()) {
+                    const val = d.responsavel.trim();
+                    if (!usersMap[val.toLowerCase()]) {
+                        registerUser(val, val);
+                    }
+                }
+            });
+        }
+
+        _usuariosMap = usersMap;
+
+        // Constrói lista única ordenada pelo nome
+        const uniqueUsers = [];
+        const seenCodigos = new Set();
+        Object.values(usersMap).forEach(u => {
+            const k = u.codigo.toLowerCase();
+            if (!seenCodigos.has(k)) {
+                seenCodigos.add(k);
+                uniqueUsers.push(u);
+            }
+        });
+        uniqueUsers.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+        _listaResponsaveis = uniqueUsers;
+
+        _populateResponsaveisFilter();
+    }
+
+    function _getResponsaveisDaColuna() {
+        // Somente quem está cadastrado na coluna Responsável dos dados carregados da planilha
+        const codigosNaColuna = new Set();
+        if (Array.isArray(_satgData)) {
+            _satgData.forEach(d => {
+                const r = (d.responsavel || '').trim();
+                if (r) codigosNaColuna.add(r);
+            });
+        }
+
+        const itens = [];
+        const seenIds = new Set();
+        codigosNaColuna.forEach(val => {
+            const id = _getUsuarioId(val);
+            const nome = _getUsuarioNome(val);
+            const k = id.toLowerCase();
+            if (!seenIds.has(k)) {
+                seenIds.add(k);
+                itens.push({ id, codigo: id, nome });
+            }
+        });
+
+        itens.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+        return itens;
+    }
+
+    function _populateResponsaveisFilter() {
+        if (!_satgResponsavelSelect) return;
+        const currentVal = _satgResponsavelSelect.value;
+
+        _satgResponsavelSelect.innerHTML = '<option value="all">Todos</option>';
+
+        const itensFiltro = _getResponsaveisDaColuna();
+
+        itensFiltro.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.nome;
+            _satgResponsavelSelect.appendChild(opt);
+        });
+
+        if (currentVal && Array.from(_satgResponsavelSelect.options).some(o => o.value.toLowerCase() === currentVal.toLowerCase())) {
+            _satgResponsavelSelect.value = currentVal;
+        } else {
+            _satgResponsavelSelect.value = 'all';
+        }
+    }
+
     async function _fetchSatGData(isSilent = false) {
         if (!_satgTableContent) return;
         
@@ -2060,6 +2233,7 @@ function _formatItemsString() {
         if (_satgFilterBtn) _satgFilterBtn.parentElement.classList.add('hidden');
         // (Removido: Ocultação movida para _showView)
 
+        await _fetchResponsaveisList();
         _applySatgFilters();
         } catch (error) {
             console.error('Erro ao buscar SatG:', error);
@@ -2072,6 +2246,7 @@ function _formatItemsString() {
         const statusFilter = _satgStatusSelect ? _satgStatusSelect.value.toLowerCase() : 'all';
         const orcamentoFilter = _satgOrcamentoSelect ? _satgOrcamentoSelect.value.toLowerCase() : 'all';
         const retornoFilter = _satgRetornoSelect ? _satgRetornoSelect.value.toLowerCase() : 'all';
+        const responsavelFilter = _satgResponsavelSelect ? _satgResponsavelSelect.value : 'all';
         
         let sortOrder = 'desc';
         if (_satgSortRadios) {
@@ -2153,6 +2328,16 @@ function _formatItemsString() {
                 }
             }
             if (!retMatch) return false;
+            // 5. Filtro Responsável
+            if (responsavelFilter !== 'all') {
+                const currentResp = (d.responsavel || '').trim();
+                const currentId = _getUsuarioId(currentResp).toLowerCase();
+                const currentNome = _getUsuarioNome(currentResp).toLowerCase();
+                const target = responsavelFilter.toLowerCase();
+                const match = currentId === target || currentNome === target || currentResp.toLowerCase() === target;
+                if (!match) return false;
+            }
+
 
             return true;
         });
@@ -2854,6 +3039,55 @@ function _formatItemsString() {
 
         document.getElementById('satg-modal-codcliente').innerText = req.codigoCliente || '-';
         injectEditPencil('satg-modal-codcliente', 'AG', 'codigoCliente', req.codigoCliente);
+
+        const respSelect = document.getElementById('satg-modal-responsavel-select');
+        if (respSelect) {
+            respSelect.innerHTML = '<option value="">Sem Responsável</option>';
+            const responsaveisColuna = _getResponsaveisDaColuna();
+            responsaveisColuna.forEach(user => {
+                const opt = document.createElement('option');
+                opt.value = user.codigo || user.id;
+                opt.textContent = user.nome;
+                respSelect.appendChild(opt);
+            });
+
+            const currentRespId = _getUsuarioId(req.responsavel);
+            if (currentRespId && !Array.from(respSelect.options).some(o => o.value.toLowerCase() === currentRespId.toLowerCase())) {
+                const opt = document.createElement('option');
+                opt.value = currentRespId;
+                opt.textContent = _getUsuarioNome(req.responsavel);
+                respSelect.appendChild(opt);
+            }
+
+            respSelect.value = currentRespId || '';
+
+            respSelect.onchange = async () => {
+                const novoRespId = respSelect.value;
+                try {
+                    respSelect.disabled = true;
+                    const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            rowIndex: req.rowIndex,
+                            responsavel: novoRespId
+                        })
+                    });
+                    if (!res.ok) throw new Error();
+                    req.responsavel = novoRespId;
+                    _fetchSatGData(true);
+                    const nomeExibicao = _getUsuarioNome(novoRespId);
+                    if (window._showToast) window._showToast(`Responsável atualizado: ${nomeExibicao || 'Sem Responsável'}`, 'success');
+                } catch(e) {
+                    console.error(e);
+                    alert('Erro ao atualizar Responsável');
+                    respSelect.value = currentRespId || '';
+                } finally {
+                    respSelect.disabled = false;
+                }
+            };
+        }
+
         
         document.getElementById('satg-modal-cliente').innerText = req.cliente || '-';
         injectEditPencil('satg-modal-cliente', 'C', 'cliente', req.cliente);
@@ -3971,6 +4205,20 @@ function _formatItemsString() {
         if (observacao !== undefined) payload.observacao = observacao;
         const elAcaoPecas = document.getElementById('satg-modal-acao-pecas');
         if (elAcaoPecas) payload.acaoPecas = elAcaoPecas.value.trim();
+
+        if (status === 'APROVADO' || status === 'RECUSADO') {
+            const respSelect = document.getElementById('satg-modal-responsavel-select');
+            if (respSelect && respSelect.value) {
+                payload.responsavel = respSelect.value;
+            } else {
+                try {
+                    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+                    payload.responsavel = userInfo.codigo || userInfo.id || userInfo.nome || '';
+                } catch (e) {}
+            }
+        } else if (status === 'EM ANALISE') {
+            payload.responsavel = '';
+        }
 
         const btnToUpdate = status === 'RECUSADO' ? _btnRecusarSatg : _btnSalvarObsSatg;
         const originalText = btnToUpdate.innerText;

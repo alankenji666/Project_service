@@ -151,6 +151,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (settingsDropdown) {
             settingsDropdown.classList.toggle('hidden');
         }
+        const notifDropdown = document.getElementById('notification-dropdown');
+        if (notifDropdown && !notifDropdown.classList.contains('hidden')) {
+            notifDropdown.classList.add('hidden');
+        }
+        const updateDropdown = document.getElementById('update-dropdown');
+        if (updateDropdown && !updateDropdown.classList.contains('hidden')) {
+            updateDropdown.classList.add('hidden');
+        }
     }
 
     function _showTab(tabId) {

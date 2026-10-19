@@ -17,12 +17,14 @@
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=110';
         import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=112';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
-        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=124';
+        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=125';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=110';
         import { TransportadorasApp } from './modulos/transportadoras.js?v=110';
         window.TransportadorasApp = TransportadorasApp;
         import * as AjusteEstoque from './modulos/ajusteEstoque.js?v=110';
+        import { UpdateChecker } from './modulos/updateChecker.js?v=110';
+        window.UpdateChecker = UpdateChecker;
 
         // Início do padrão Revealing Module para a aplicação principal
         const App = (function () {
@@ -371,10 +373,14 @@
                         e.stopPropagation();
                         dropdown.classList.toggle('hidden');
                         
-                        // Oculta outros menus, se necessário (ex: settings)
+                        // Oculta outros menus, se necessário (ex: settings, update)
                         const settingsDropdown = document.getElementById('settings-dropdown');
                         if (settingsDropdown && !settingsDropdown.classList.contains('hidden')) {
                             settingsDropdown.classList.add('hidden');
+                        }
+                        const updateDropdown = document.getElementById('update-dropdown');
+                        if (updateDropdown && !updateDropdown.classList.contains('hidden')) {
+                            updateDropdown.classList.add('hidden');
                         }
                     });
                     
@@ -660,6 +666,7 @@
                 }
             }
 
+            window.showToastNotification = _showToastNotification;
             function _showToastNotification(message, type = 'info', link = '#') {
                 let toastContainer = document.getElementById('toast-container');
                 if (!toastContainer) {
@@ -6023,7 +6030,10 @@ async function _saveProductTagGroupEdit() {
                     }
                     console.log('[App] init: Aplicação inicializando...');
                     _initFirestoreSync(); // NOVO: Inicia a sincronização via Firestore Sync
-                    _initNotifications(); // NOVO: Inicializa sino de notificações
+                    _initNotifications(); // NOVO: Inicializa sino de notificações
+                    if (typeof UpdateChecker !== 'undefined' && UpdateChecker.init) {
+                        UpdateChecker.init();
+                    }
                     _cacheDomElements();
                     _setupClearableInputs();
                     _bindEvents();
@@ -6187,4 +6197,9 @@ async function _saveProductTagGroupEdit() {
 
         // CORREÇÃO: Expõe a função de inicialização diretamente no escopo global
         // para que o auth.js possa encontrá-la assim que o script for parseado.
-        window.startApp = App.init; 
+        window.startApp = App.init;
+        try {
+            UpdateChecker.init();
+        } catch (e) {
+            console.warn('[main.js] Erro ao iniciar UpdateChecker na carga:', e);
+        } 

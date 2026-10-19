@@ -158,6 +158,65 @@
                     </div>
                 </div>
 
+                
+                <!-- NOVO: Menu Dropdown de Atualizações do Sistema -->
+                <div id="update-menu-container" class="relative ml-2 mr-2">
+                    <button id="update-button" title="Atualizações do Sistema"
+                        class="relative p-2 rounded-full text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                            </path>
+                        </svg>
+                        <!-- Badge pulsante quando houver atualização -->
+                        <span id="update-badge"
+                            class="hidden absolute top-0.5 right-0.5 flex h-3 w-3">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                        </span>
+                    </button>
+                    <!-- Conteúdo do Dropdown de Atualizações -->
+                    <div id="update-dropdown"
+                        class="hidden absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl z-50 border border-gray-200 overflow-hidden text-sm">
+                        <div class="px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex justify-between items-center">
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                <span class="font-semibold text-sm">Versão do Sistema</span>
+                            </div>
+                            <span id="current-version-tag" class="text-xs bg-white/20 px-2 py-0.5 rounded-full font-mono font-medium">v1.0.1</span>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <div id="update-status-box" class="p-3 rounded-lg bg-gray-50 border border-gray-100 text-gray-700">
+                                <div id="update-status-text" class="text-xs text-gray-600">Sistema atualizado na versão mais recente.</div>
+                                <div class="text-[11px] text-gray-400 mt-1.5 flex items-center justify-between">
+                                    <span>Última checagem:</span>
+                                    <span id="last-update-check" class="font-mono">--:--</span>
+                                </div>
+                            </div>
+                            <div id="update-action-box" class="hidden">
+                                <button id="apply-update-btn"
+                                    class="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md shadow transition flex items-center justify-center space-x-2">
+                                    <svg class="w-4 h-4 animate-spin hidden" id="apply-update-spinner" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                                    </svg>
+                                    <span>Atualizar agora</span>
+                                </button>
+                                <p class="text-[11px] text-gray-400 text-center mt-1">Recarrega o sistema atualizando arquivos e cache.</p>
+                            </div>
+                            <button id="manual-check-update-btn"
+                                class="w-full py-1.5 px-3 border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-md transition flex items-center justify-center space-x-1.5">
+                                <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                <span>Verificar se há atualizações</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- NOVO: Menu Dropdown de Configurações -->
                 <div id="settings-menu-container" class="relative ml-2">
                     <button id="settings-button" title="Configurações"
@@ -1158,6 +1217,13 @@
                                     <option value="cancelado">Cancelado</option>
                                 </select>
                             </div>
+                            <!-- Responsável -->
+                            <div>
+                                <label for="satg-responsavel-select" class="block text-sm font-medium text-gray-700 mb-1">Responsável:</label>
+                                <select id="satg-responsavel-select" class="block w-44 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm">
+                                    <option value="all" selected>Todos</option>
+                                </select>
+                            </div>
                             <!-- Ordenação -->
                             <div class="ml-auto">
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Prioridade / Ordenação:</label>
@@ -1369,6 +1435,12 @@
                             <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
                                 <p class="text-gray-500 text-xs font-semibold uppercase mb-1">E-mail</p>
                                 <p class="font-medium text-gray-800" id="satg-modal-email">-</p>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                <label for="satg-modal-responsavel-select" class="block text-gray-500 text-xs font-semibold uppercase mb-1">Responsável</label>
+                                <select id="satg-modal-responsavel-select" class="w-full bg-white border border-gray-300 rounded-md px-2.5 py-1 text-sm font-semibold text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-xs cursor-pointer">
+                                    <option value="">Sem Responsável</option>
+                                </select>
                             </div>
                         </div>
 
@@ -4064,7 +4136,7 @@
     </div>
 
     <!-- NOVO: Script de autenticação -->
-    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/auth.js?v=1792420001"></script>
 
     <!-- NOVO: Modal de Transportadoras -->
     <div id="transportadoras-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
@@ -4224,7 +4296,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script type="module" src="js/main.js?v=1792002105"></script>
+    <script type="module" src="js/main.js?v=1792420001"></script>
     <!-- MODAL LINHA DE PRODUÇÃO -->
     <div id="production-line-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
         <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden">

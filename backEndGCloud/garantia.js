@@ -350,6 +350,47 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
         }
     });
 
+    // GET /garantia/responsaveis
+    // Retorna a lista de nomes dos usuários cadastrados no sistema
+    router.get('/responsaveis', async (req, res, next) => {
+        try {
+            const sheets = await getInitializedSheetsClient();
+            const spreadsheetIdContas = '1gSjenmmi1mB-LxwlJHMOyjQ0JK--PmWv5lQnqm9R4hI';
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId: spreadsheetIdContas,
+                range: "'Conta - Usuario'!A:Z"
+            });
+            const rows = response.data.values || [];
+            if (rows.length <= 1) return res.json([]);
+            const headers = rows[0].map(h => String(h || '').toLowerCase().trim());
+            const nomeIndex = headers.indexOf('nome');
+            const codigoIndex = headers.findIndex(h => h.includes('código') || h.includes('codigo') || h === 'id');
+            if (nomeIndex === -1 && codigoIndex === -1) return res.json([]);
+
+            const users = [];
+            const seen = new Set();
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                const nome = nomeIndex !== -1 ? (r[nomeIndex] || '').trim() : '';
+                const codigo = codigoIndex !== -1 ? (r[codigoIndex] || '').trim() : '';
+                const key = (codigo || nome).toLowerCase();
+                if (key && !seen.has(key)) {
+                    seen.add(key);
+                    users.push({
+                        id: codigo || nome,
+                        codigo: codigo || nome,
+                        nome: nome || codigo
+                    });
+                }
+            }
+            users.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+            res.json(users);
+        } catch (error) {
+            console.error('[garantia] Erro ao buscar lista de responsáveis:', error);
+            res.json([]);
+        }
+    });
+
     // GET /garantia/satg
     // Lista todas as solicitações da aba SatG
     router.get('/satg', async (req, res, next) => {
@@ -359,7 +400,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:AH` // Até AH (coluna 34)
+                range: `${sheetName}!A2:AI` // Até AI (coluna 35)
             });
 
             const rows = response.data.values || [];
@@ -400,7 +441,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     ondeEstaProblema: row[30] || '',           // AE (Onde Está o Problema)
                     tipoEquipamento: row[31] || '',             // AF (Tipo Equipamento)
                     codigoCliente: row[32] || '',              // AG (Cod Cliente)
-                    idServicoMO: row[33] || ''                 // AH (ID Serviço M.O vinculado)
+                    idServicoMO: row[33] || '',                // AH (ID Serviço M.O vinculado)
+                    responsavel: row[34] || ''                 // AI (Responsável)
                 };
             });
 
@@ -500,12 +542,13 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 safeString(formData.ondeEstaProblema),      // AE: Onde Está o Problema
                 safeString(formData.tipoEquipamento),       // AF: Tipo Equipamento
                 safeString(formData.codigoCliente),         // AG: Cod Cliente
-                ''                                          // AH: ID Serviço (M.O)
+                '',                                         // AH: ID Serviço (M.O)
+                safeString(formData.responsavel || '')      // AI: Responsável
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: `${sheetName}!A:AH`,
+                range: `${sheetName}!A:AI`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
@@ -529,7 +572,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
     // Atualiza o Status e Observação de um pedido na SatG
     router.post('/satg/update', async (req, res, next) => {
         try {
-            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg, acaoPecas, servicoMO, idServicoMO } = req.body;
+            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg, acaoPecas, servicoMO, idServicoMO, responsavel } = req.body;
             
             if (!rowIndex) {
                 return res.status(400).json({ error: true, message: 'rowIndex é obrigatório.' });
@@ -624,6 +667,23 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     range: `${sheetName}!AH${rowIndex}`,
                     valueInputOption: 'USER_ENTERED',
                     resource: { values: [[valMo]] }
+                });
+            }
+
+            if (responsavel !== undefined) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!AI${rowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[responsavel]] }
+                });
+            } else if (status === 'EM ANALISE') {
+                // Se o status voltou para EM ANALISE e nenhum responsável foi fornecido, limpa
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!AI${rowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [['']] }
                 });
             }
 
