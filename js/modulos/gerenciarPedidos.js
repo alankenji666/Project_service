@@ -574,6 +574,26 @@ export const GerenciarPedidosApp = (function () {
             _state.nfeEditContatoIe.addEventListener('change', _updateIeWarning);
         }
 
+        if (_state.nfeEditContatoTipo) {
+            _state.nfeEditContatoTipo.addEventListener('change', _updateIeWarning);
+        }
+
+        if (_state.nfeEditContatoCnpj) {
+            _state.nfeEditContatoCnpj.addEventListener('input', () => {
+                const digits = _state.nfeEditContatoCnpj.value.replace(/\D/g, '');
+                if (digits.length === 11 && _state.nfeEditContatoTipo) {
+                    _state.nfeEditContatoTipo.value = 'F';
+                    if (_state.nfeEditContatoContribuinte && (!_state.nfeEditContatoIe || !_state.nfeEditContatoIe.value.trim())) {
+                        _state.nfeEditContatoContribuinte.value = '9';
+                    }
+                    _updateIeWarning();
+                } else if (digits.length === 14 && _state.nfeEditContatoTipo) {
+                    _state.nfeEditContatoTipo.value = 'J';
+                    _updateIeWarning();
+                }
+            });
+        }
+
         if (_state.nfeEditData) {
             _state.nfeEditData.addEventListener('input', _updateAllDateWarnings);
             _state.nfeEditData.addEventListener('change', _updateAllDateWarnings);
@@ -652,11 +672,13 @@ export const GerenciarPedidosApp = (function () {
                         if (_state.nfeEditContatoNome) _state.nfeEditContatoNome.value = contato.nome || '';
                         if (_state.nfeEditContatoNomeDetalhe) _state.nfeEditContatoNomeDetalhe.value = contato.nome || '';
                         if (_state.nfeEditContatoFantasia) _state.nfeEditContatoFantasia.value = contato.fantasia || '';
-                        if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = contato.tipoPessoa || 'J';
+                        const docClean = (contato.numeroDocumento || '').replace(/\D/g, '');
+                        const tipoCalculado = contato.tipoPessoa || (docClean.length === 11 ? 'F' : 'J');
+                        if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = tipoCalculado;
                         if (_state.nfeEditContatoCnpj) _state.nfeEditContatoCnpj.value = contato.numeroDocumento || '';
                         if (_state.nfeEditContatoIe) _state.nfeEditContatoIe.value = contato.ie || '';
                         if (_state.nfeEditContatoContribuinte) {
-                            _state.nfeEditContatoContribuinte.value = contato.indicadorIe !== undefined ? contato.indicadorIe : 9;
+                            _state.nfeEditContatoContribuinte.value = contato.indicadorIe !== undefined ? contato.indicadorIe : (tipoCalculado === 'F' ? 9 : 9);
                         }
                         _updateIeWarning();
                     }
@@ -749,6 +771,17 @@ export const GerenciarPedidosApp = (function () {
                     firstTd.classList.add('border-l-4', 'border-transparent');
                 }
             }
+        }
+
+        // Limpar qualquer estado ou cache residual de edição de outro pedido anterior
+        if (_state.nfeEditModal && _state.nfeEditModal.classList.contains('hidden')) {
+            _state.currentPedidoBlingBruto = null;
+            if (_state.nfeEditTransportadora) {
+                _state.nfeEditTransportadora.selectedIndex = 0;
+                _state.nfeEditTransportadora.value = '';
+            }
+            _state.nfeEditCurrentTranspId = '';
+            _state.nfeEditCurrentTranspNome = '';
         }
 
         // Salvar o ID do pedido atual no modal
@@ -1703,11 +1736,13 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditContatoNomeDetalhe) _state.nfeEditContatoNomeDetalhe.value = pedidoBling.contato?.nome || '';
         
         // Resetar campos detalhados para evitar lixo de carregamentos anteriores
+        const initialDocClean = (pedidoBling.contato?.numeroDocumento || '').replace(/\D/g, '');
+        const initialTipo = pedidoBling.contato?.tipoPessoa || (initialDocClean.length === 11 ? 'F' : 'J');
         if (_state.nfeEditContatoFantasia) _state.nfeEditContatoFantasia.value = '';
-        if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = 'J';
-        if (_state.nfeEditContatoCnpj) _state.nfeEditContatoCnpj.value = '';
-        if (_state.nfeEditContatoIe) _state.nfeEditContatoIe.value = '';
-        if (_state.nfeEditContatoContribuinte) _state.nfeEditContatoContribuinte.value = '9';
+        if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = initialTipo;
+        if (_state.nfeEditContatoCnpj) _state.nfeEditContatoCnpj.value = pedidoBling.contato?.numeroDocumento || '';
+        if (_state.nfeEditContatoIe) _state.nfeEditContatoIe.value = pedidoBling.contato?.ie || '';
+        if (_state.nfeEditContatoContribuinte) _state.nfeEditContatoContribuinte.value = initialTipo === 'F' ? '9' : '9';
         
         // Esconder detalhes do cliente por padrão ao abrir
         if (_state.nfeEditClientDetails) _state.nfeEditClientDetails.classList.add('hidden');
@@ -1725,11 +1760,13 @@ export const GerenciarPedidosApp = (function () {
                         if (_state.nfeEditContatoNome) _state.nfeEditContatoNome.value = c.nome || '';
                         if (_state.nfeEditContatoNomeDetalhe) _state.nfeEditContatoNomeDetalhe.value = c.nome || '';
                         if (_state.nfeEditContatoFantasia) _state.nfeEditContatoFantasia.value = c.fantasia || '';
-                        if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = c.tipoPessoa || 'J';
+                        const docClean = (c.numeroDocumento || '').replace(/\D/g, '');
+                        const tipoCalculado = c.tipoPessoa || (docClean.length === 11 ? 'F' : 'J');
+                        if (_state.nfeEditContatoTipo) _state.nfeEditContatoTipo.value = tipoCalculado;
                         if (_state.nfeEditContatoCnpj) _state.nfeEditContatoCnpj.value = c.numeroDocumento || '';
                         if (_state.nfeEditContatoIe) _state.nfeEditContatoIe.value = c.ie || '';
                         if (_state.nfeEditContatoContribuinte) {
-                            _state.nfeEditContatoContribuinte.value = c.indicadorIe !== undefined ? c.indicadorIe : 9;
+                            _state.nfeEditContatoContribuinte.value = c.indicadorIe !== undefined ? c.indicadorIe : (tipoCalculado === 'F' ? 9 : 9);
                         }
                         
                         _state.nfeEditCurrentContatoBruto = JSON.parse(JSON.stringify(c));
@@ -2078,6 +2115,13 @@ export const GerenciarPedidosApp = (function () {
         if (_state.nfeEditModal) {
             _state.nfeEditModal.classList.add('hidden');
         }
+        _state.currentPedidoBlingBruto = null;
+        if (_state.nfeEditTransportadora) {
+            _state.nfeEditTransportadora.selectedIndex = 0;
+            _state.nfeEditTransportadora.value = '';
+        }
+        _state.nfeEditCurrentTranspId = '';
+        _state.nfeEditCurrentTranspNome = '';
     }
 
     async function _handleConsultarCnpj() {
@@ -2085,15 +2129,45 @@ export const GerenciarPedidosApp = (function () {
         const cnpjInput = _state.nfeEditContatoCnpj;
         if (!cnpjInput || !btn) return;
 
-        let cnpj = cnpjInput.value.replace(/\D/g, '');
-        if (cnpj.length === 11) {
-            alert("Você digitou um CPF.\nA busca automática de dados (como Endereço e IE) funciona apenas para CNPJ.\n\nVocê pode preencher os dados do cliente manualmente e prosseguir com a emissão da nota sem problemas!");
+        let doc = cnpjInput.value.replace(/\D/g, '');
+        if (doc.length === 11) {
+            // Se for CPF (11 dígitos), ajusta automaticamente o Tipo para Pessoa Física e Contribuinte para Não Contribuinte
+            if (_state.nfeEditContatoTipo) {
+                _state.nfeEditContatoTipo.value = 'F';
+            }
+            if (_state.nfeEditContatoContribuinte) {
+                _state.nfeEditContatoContribuinte.value = '9'; // Não contribuinte
+            }
+            if (_state.nfeEditContatoIe && !_state.nfeEditContatoIe.value.trim()) {
+                _state.nfeEditContatoIe.value = '';
+            }
+            _updateIeWarning();
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "👤 CPF detectado! Tipo da Pessoa alterado para 'Pessoa Física' e Contribuinte para 'Não Contribuinte'.",
+                    duration: 4000,
+                    gravity: "top",
+                    position: "center",
+                    style: { background: "#2563eb" }
+                }).showToast();
+            } else {
+                alert("Você digitou um CPF (11 dígitos).\n\nO Tipo da Pessoa foi alterado automaticamente para 'Pessoa Física' e Contribuinte para 'Não Contribuinte'.\n\n(A busca automática de Inscrição Estadual na SEFAZ aplica-se apenas a empresas com CNPJ).");
+            }
             return;
         }
-        if (cnpj.length !== 14) {
-            alert("Por favor, informe um CNPJ válido com 14 dígitos para a busca automática.");
+
+        if (doc.length !== 14) {
+            alert("Por favor, informe um CNPJ válido com 14 dígitos ou CPF com 11 dígitos para verificação.");
             return;
         }
+
+        // Se for CNPJ (14 dígitos), garante que o Tipo seja Pessoa Jurídica
+        if (_state.nfeEditContatoTipo) {
+            _state.nfeEditContatoTipo.value = 'J';
+        }
+
+        let cnpj = doc;
 
         const originalHtml = btn.innerHTML;
         try {
@@ -2167,11 +2241,13 @@ export const GerenciarPedidosApp = (function () {
 
     function _updateIeWarning() {
         if (!_state.nfeEditContatoIe || !_state.nfeEditIeWarning) return;
+        const tipoPessoa = _state.nfeEditContatoTipo ? _state.nfeEditContatoTipo.value : 'J';
         const ieVal = _state.nfeEditContatoIe.value.trim();
-        if (!ieVal) {
-            _state.nfeEditIeWarning.classList.remove('hidden');
-        } else {
+        // Pessoa Física ('F') não necessita de Inscrição Estadual, portanto não deve exibir aviso de IE não preenchida
+        if (tipoPessoa === 'F' || ieVal) {
             _state.nfeEditIeWarning.classList.add('hidden');
+        } else {
+            _state.nfeEditIeWarning.classList.remove('hidden');
         }
     }
 
@@ -3891,7 +3967,11 @@ export const GerenciarPedidosApp = (function () {
         const orderNumber = modal.dataset.currentOrderNumber;
         if (!orderNumber) return;
 
-        const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
+        const pedido = _allPedidos.find(p => 
+            String(p.id || '') === String(orderNumber) || 
+            String(p.número || '') === String(orderNumber) || 
+            String(p.numero || '') === String(orderNumber)
+        );
         if (!pedido) return;
 
         const printWindow = window.open('', '_blank', 'width=850,height=750');
@@ -3906,65 +3986,88 @@ export const GerenciarPedidosApp = (function () {
         const vendedor = vendedorFull.split(' ')[0];
         const now = new Date().toLocaleString('pt-BR');
 
+        const pedidoId = String(pedido.id || pedido.id_pedido || pedido['id pedido'] || pedido.numero || '').trim();
+        const numPedido = String(pedido.numero || pedido.número || orderNumber || '').trim();
+        const idNota = String(
+            pedido.id_nota || 
+            pedido.idNota || 
+            pedido['id nota'] || 
+            pedido.idnotafiscal || 
+            pedido.id_nota_fiscal || 
+            pedido['id nota fiscal'] || 
+            ''
+        ).trim();
+
+        // Busca a NF-e vinculada EXCLUSIVAMENTE a este pedido
+        const nfeObj = (window._allNFeData || []).find(n => {
+            const nIdPedido = String(n.id_pedido || n.idPedido || '').trim();
+            const nNumPedido = String(n.numero_pedido || n.numeroPedido || '').trim();
+            const nIdNota = String(n.id_nota || n.idNota || n.id || '').trim();
+            const nNumeroNota = String(n.numero || n.numero_da_nota || '').trim();
+
+            if (pedidoId && nIdPedido && nIdPedido === pedidoId) return true;
+            if (numPedido && nNumPedido && nNumPedido === numPedido) return true;
+            if (idNota && nIdNota && nIdNota === idNota) return true;
+            if (idNota && nNumeroNota && nNumeroNota === idNota) return true;
+            return false;
+        });
+
         let nfeNum = '';
-        const pedidoId = pedido.id || pedido.numero || '';
-        const numPedido = pedido.numero || pedido.número || '';
-        const idNota = pedido.id_nota || pedido['id nota'] || pedido.idnotafiscal || '';
-        
-        const nfeObj = (window._allNFeData || []).find(n => 
-            String(n.id_pedido || n.idPedido || '') === String(pedidoId) ||
-            String(n.numero_pedido || '') === String(numPedido) ||
-            (idNota && String(n.id_nota || '') === String(idNota)) ||
-            (idNota && String(n.id || '') === String(idNota))
-        );
-        
         if (nfeObj) {
             const num = nfeObj.numero || nfeObj.numero_da_nota || '';
-            if (num && num !== 'SEFAZ...') {
-                nfeNum = num;
+            if (num && String(num) !== 'SEFAZ...') {
+                nfeNum = String(num);
             }
         }
 
-        // Tenta pegar direto da interface gráfica (DOM) como garantia 100%
-        const nfeDisplayEl = document.getElementById('modal-nfe-numero-display');
-        if (!nfeNum && nfeDisplayEl && nfeDisplayEl.innerText) {
-            const match = nfeDisplayEl.innerText.match(/Nº\s*(\d+)/i);
-            if (match && match[1]) {
-                nfeNum = match[1];
+        // Tenta pegar direto da interface gráfica do modal do pedido aberto como fallback
+        if (!nfeNum) {
+            const nfeDisplayEl = document.getElementById('modal-nfe-numero-display');
+            if (nfeDisplayEl && nfeDisplayEl.innerText) {
+                const match = nfeDisplayEl.innerText.match(/Nº\s*(\d+)/i);
+                if (match && match[1]) {
+                    nfeNum = match[1];
+                }
             }
         }
 
-        // Tentar obter a Transportadora
+        // Tentar obter a Transportadora para ESTE pedido
         let transpNome = '';
         if (pedido.transportadora) transpNome = String(pedido.transportadora);
         else if (pedido.transporte) transpNome = String(pedido.transporte);
         else if (nfeObj && nfeObj.transportadora) transpNome = String(nfeObj.transportadora);
         else if (nfeObj && nfeObj.transporte) transpNome = String(nfeObj.transporte);
 
-        if (!transpNome && _state.currentPedidoBlingBruto && _state.currentPedidoBlingBruto.transporte && _state.currentPedidoBlingBruto.transporte.contato) {
-            transpNome = _state.currentPedidoBlingBruto.transporte.contato.nome || '';
-        }
-
-        const selectTransp = document.getElementById('nfe-edit-transportadora');
-        if (selectTransp && selectTransp.selectedIndex > 0) {
-            const optText = selectTransp.options[selectTransp.selectedIndex].text;
-            if (optText && !optText.toUpperCase().includes('SELECIONE') && !optText.toUpperCase().includes('CARREGANDO')) {
-                transpNome = optText;
+        // Se o modal de edição de NF-e estiver VISÍVEL especificamente para este pedido, considera a seleção do usuário
+        if (!transpNome && _state.nfeEditModal && !_state.nfeEditModal.classList.contains('hidden') && String(_currentModalPedidoId || '') === pedidoId) {
+            const selectTransp = document.getElementById('nfe-edit-transportadora');
+            if (selectTransp && selectTransp.selectedIndex > 0) {
+                const optText = selectTransp.options[selectTransp.selectedIndex].text;
+                if (optText && !optText.toUpperCase().includes('SELECIONE') && !optText.toUpperCase().includes('CARREGANDO')) {
+                    transpNome = optText;
+                }
+            }
+            if (!transpNome && _state.currentPedidoBlingBruto && String(_state.currentPedidoBlingBruto.id || '') === pedidoId) {
+                transpNome = _state.currentPedidoBlingBruto.transporte?.contato?.nome || '';
             }
         }
 
+        // Se ainda não temos a transportadora, busca direto na API de vendas do Bling para este pedido específico
         if (!transpNome) {
             try {
                 const fetchId = pedido.id || pedido.id_pedido || pedido['id pedido'] || orderNumber;
                 const res = await fetch(`${API_URLS.ORDERS_BLING}/vendas/${fetchId}`);
                 if (res.ok) {
                     const result = await res.json();
-                    if (result && result.data && result.data.transporte && result.data.transporte.contato) {
-                        transpNome = result.data.transporte.contato.nome || '';
-                    } else if (result && result.data && result.data.transporte && result.data.transporte.etiqueta) {
-                        transpNome = result.data.transporte.etiqueta.nome || '';
-                    } else if (result && result.data && result.data.transportadora) {
-                        transpNome = result.data.transportadora;
+                    if (result && result.data) {
+                        const bData = result.data;
+                        if (bData.transporte?.contato?.nome) {
+                            transpNome = bData.transporte.contato.nome;
+                        } else if (bData.transporte?.etiqueta?.nome) {
+                            transpNome = bData.transporte.etiqueta.nome;
+                        } else if (bData.transportadora) {
+                            transpNome = bData.transportadora;
+                        }
                     }
                 }
             } catch(e) {
@@ -3973,6 +4076,7 @@ export const GerenciarPedidosApp = (function () {
         }
 
         if (transpNome) {
+            pedido.transportadora = transpNome; // Salva no objeto para cliques subsequentes
             transpNome = transpNome.trim().toUpperCase();
             if (transpNome === 'RETIRADA NA LOJA' || transpNome === 'BALCAO' || transpNome === 'BALCÃO' || transpNome.includes('RETIRADA')) {
                 transpNome = ''; 

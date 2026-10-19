@@ -10,14 +10,14 @@
         import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=110';
         window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js?v=110';
-        import { DashboardApp } from './modulos/dashboard.js?v=113';
+        import { DashboardApp } from './modulos/dashboard.js?v=115';
         window.DashboardApp = DashboardApp;
         import { EstoqueApp } from './modulos/estoque.js?v=110';
         import { SaidaItens } from './modulos/saidaItens.js?v=110';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=110';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=110';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=112';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
-        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=120';
+        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=124';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=110';
         import { TransportadorasApp } from './modulos/transportadoras.js?v=110';

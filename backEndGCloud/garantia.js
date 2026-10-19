@@ -1,5 +1,30 @@
 const express = require('express');
 
+function formatPhoneBR(phone) {
+    if (!phone) return '';
+    let raw = String(phone).trim();
+    let isExplicitDDI = raw.startsWith('+55') || raw.startsWith('+ 55') || raw.startsWith('+');
+    let digits = raw.replace(/\D/g, '');
+    if (!digits) return '';
+
+    if (isExplicitDDI && digits.startsWith('55')) {
+        digits = digits.substring(2);
+    } else if (digits.length > 11 && digits.startsWith('55')) {
+        digits = digits.substring(2);
+    }
+
+    if (digits.length >= 11 && digits.startsWith('0')) {
+        digits = digits.substring(1);
+    }
+
+    digits = digits.substring(0, 11);
+
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.substring(0, 2)}) ${digits.substring(2)}`;
+    if (digits.length <= 10) return `(${digits.substring(0, 2)}) ${digits.substring(2, 6)}-${digits.substring(6)}`;
+    return `(${digits.substring(0, 2)}) ${digits.substring(2, 7)}-${digits.substring(7)}`;
+}
+
 /**
  * Cria o roteador para lidar com os Pedidos de Garantia
  * @param {Function} getInitializedSheetsClient - Factory do cliente Google Sheets
@@ -447,7 +472,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 safeString(formData.cliente),               // C: Razão Social
                 safeString(formData.cpf),                   // D: CPF/CNPJ
                 safeString(formData.nomeContato),           // E: Nome
-                safeString(formData.telefone),              // F: Telefone
+                safeString(formatPhoneBR(formData.telefone)), // F: Telefone
                 safeString(formData.email),                 // G: Email
                 safeString(formData.revenda),               // H: Revenda?
                 safeString(formData.localRevenda),          // I: Local da Revenda
@@ -520,6 +545,9 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 for (let update of req.body.updates) {
                     if (update.column && update.value !== undefined) {
                         let safeValue = update.value;
+                        if (update.column === 'F') {
+                            safeValue = formatPhoneBR(safeValue);
+                        }
                         if (typeof safeValue === 'string' && (safeValue.startsWith('+') || safeValue.startsWith('='))) {
                             safeValue = "'" + safeValue;
                         }

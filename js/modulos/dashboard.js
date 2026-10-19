@@ -492,6 +492,7 @@ export const DashboardApp = (function() {
         }
 
         let pendingPedidos = _allPedidosBling.filter(p => {
+            if (_isGarantiaOrder(p)) return false; // Remessa em Garantia não entra em pendentes de venda
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
             // Apenas pedidos pendentes
             if (!(sit.includes('em aberto') || sit.includes('em produ'))) return false;
@@ -582,6 +583,7 @@ export const DashboardApp = (function() {
         let baseTotal = 0;
         if (Array.isArray(_currentSalesDetails)) {
             _currentSalesDetails.forEach(p => {
+                if (_isGarantiaOrder(p)) return; // Remessa em Garantia não soma na base de vendas
                 const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
                 const isConcluidoReal = (sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago'));
                 if (isConcluidoReal) {
@@ -941,6 +943,7 @@ export const DashboardApp = (function() {
 
         const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
             if (_isTestOrder(p)) return false;
+            if (_isGarantiaOrder(p)) return false; // Remessa em Garantia não conta no ranking de produtos vendidos
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
             // Aceita variações de atendido, concluído, faturado, entregue ou pago (ou provisório)
             const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
@@ -1348,6 +1351,7 @@ export const DashboardApp = (function() {
         });
 
         const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
+            if (_isGarantiaOrder(p)) return false; // Remessa em Garantia não conta nas vendas do produto
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
             const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
             return isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
@@ -1970,6 +1974,60 @@ export const DashboardApp = (function() {
         return _parseCurrencyBRL(val);
     }
 
+    /**
+     * Helper centralizado para obter o objeto NFe correspondente a um pedido.
+     */
+    function _getNfeForOrder(p) {
+        if (!p) return null;
+        if (typeof _allNFeData === 'undefined' || !Array.isArray(_allNFeData) || _allNFeData.length === 0) return null;
+        
+        // 1. Busca direta por id_nota_fiscal
+        const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
+        const nfeId = String(rawNfeId).split('.')[0].trim();
+        if (nfeId) {
+            const found = _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId);
+            if (found) return found;
+        }
+        
+        // 2. Busca por id_pedido ou número do pedido
+        const pId = String(p.id || p.id_pedido || '').trim();
+        const pNum = String(p.numero || p.número || '').trim();
+        if (pId || pNum) {
+            const found = _allNFeData.find(n => {
+                const nIdPedido = String(n.id_pedido || n.idPedido || '').trim();
+                const nNumPedido = String(n.numero_pedido || n.numeroPedido || '').trim();
+                return (pId && nIdPedido && nIdPedido === pId) || (pNum && nNumPedido && nNumPedido === pNum);
+            });
+            if (found) return found;
+        }
+        return null;
+    }
+
+    /**
+     * Helper centralizado para identificar se um pedido/NF-e é "Remessa em Garantia".
+     * Remessas em garantia não devem somar nas métricas de faturamento e vendas da empresa.
+     */
+    function _isGarantiaOrder(p, nfe = null) {
+        if (!p && !nfe) return false;
+
+        // 1. Verifica na NF-e vinculada
+        if (!nfe && p) {
+            nfe = _getNfeForOrder(p);
+        }
+        if (nfe) {
+            const natNfe = String(nfe.natureza_de_operacao || nfe.natureza || '').toLowerCase();
+            if (natNfe.includes('garantia')) return true;
+        }
+
+        // 2. Verifica diretamente no pedido (coluna Natureza de Operação da planilha de vendas)
+        if (p) {
+            const natPed = String(p.natureza_de_operacao || p['natureza de operacao'] || p['natureza de operação'] || p.natureza || '').toLowerCase();
+            if (natPed.includes('garantia')) return true;
+        }
+
+        return false;
+    }
+
     function _renderSalesView() {
         if (!_dom.salesChartCanvas || !_allPedidosBling) return;
 
@@ -1990,6 +2048,7 @@ export const DashboardApp = (function() {
 
         const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
             if (_isTestOrder(p)) return false;
+            if (_isGarantiaOrder(p)) return false; // Remessa em Garantia não soma nas métricas de Vendas (cards, gráficos e tabela mensal)
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
             const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
             return isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
@@ -2266,6 +2325,7 @@ export const DashboardApp = (function() {
             const salesByPeriod = {};
             const liPedidos = _allPedidosBling.filter(p => {
                 if (_isTestOrder(p)) return false;
+                if (_isGarantiaOrder(p)) return false; // Remessa em Garantia não soma nas vendas
                 const sit = (p.situação || p.situacao || p.situao || "").toLowerCase().trim();
                 const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
                 const isConcluido = (isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad'));
@@ -2553,6 +2613,9 @@ export const DashboardApp = (function() {
         }
     
         _currentSalesDetails = _allPedidosBling.filter(p => {
+            // Remessa em Garantia NÃO aparece em Vendas Detalhadas
+            if (_isGarantiaOrder(p)) return false;
+
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
             const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
             if (!(isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago'))) return false;
@@ -2601,24 +2664,44 @@ export const DashboardApp = (function() {
         let totalGarantia = 0;
         const sellerSales = {};
 
+        // Calcula total de garantia do mesmo período e canal (para exibição informativa na linha 'Notas de Garantia')
+        let startGarantia = null, endGarantia = null;
+        if (_currentMonthKey === 'period-total') {
+            startGarantia = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
+            endGarantia = _state.endDate ? new Date(_state.endDate + 'T23:59:59') : null;
+        } else if (_currentMonthKey) {
+            const [gy, gm] = _currentMonthKey.split('-');
+            startGarantia = new Date(parseInt(gy), parseInt(gm) - 1, 1, 0, 0, 0);
+            endGarantia = new Date(parseInt(gy), parseInt(gm), 0, 23, 59, 59, 999);
+        }
+        _allPedidosBling.forEach(p => {
+            const nfe = _getNfeForOrder(p);
+            if (!_isGarantiaOrder(p, nfe)) return;
+            const d = _getOrderDate(p);
+            if (!d || isNaN(d.getTime())) return;
+            const selectedYear = parseInt(_state.selectedYearFilter, 10);
+            if (_currentMonthKey === 'period-total' && selectedYear && !isNaN(selectedYear) && d.getFullYear() !== selectedYear) return;
+            if (startGarantia && d < startGarantia) return;
+            if (endGarantia && d > endGarantia) return;
+            if (_currentChannel && _currentChannel !== 'Total' && _currentChannel !== 'total') {
+                if (_getNormalizedStoreName(p) !== _currentChannel) return;
+            }
+            const orderTotalValue = _getOrderValue(p);
+            const valorGarantia = nfe ? (_parseCurrencyBRL(nfe.valor_da_nota) || orderTotalValue) : orderTotalValue;
+            totalGarantia += valorGarantia;
+        });
+
         _currentSalesDetails.forEach(p => {
-            const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
-            const nfeId = String(rawNfeId).split('.')[0].trim();
-            const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+            const nfe = _getNfeForOrder(p);
+            const orderTotalValue = _getOrderValue(p);
 
             // 1. Total dos Pedidos (Faturado + Pendente)
-            const orderTotalValue = _getOrderValue(p);
             totalPedidos += orderTotalValue;
 
-            // 2. Faturado (Nota Fiscal) e Garantia
+            // 2. Faturado (Nota Fiscal)
             if (nfe) {
                 const valorNota = _parseCurrencyBRL(nfe.valor_da_nota) || 0;
                 totalFaturado += valorNota;
-                
-                const naturezaRaw = nfe.natureza_de_operacao || nfe.natureza || '';
-                if (naturezaRaw && naturezaRaw.toLowerCase().includes('garantia')) {
-                    totalGarantia += valorNota;
-                }
             }
 
             // 3. Frete
@@ -2941,17 +3024,15 @@ export const DashboardApp = (function() {
 
         let html = '';
         data.forEach(p => {
-            const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
-            const nfeId = String(rawNfeId).split('.')[0].trim();
-            const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+            const nfe = _getNfeForOrder(p);
             
             const numeroDisplay = nfe ? nfe.numero_da_nota : '-';
             const linkDanfe = nfe ? nfe.link_danfe : '#';
             const hasNfe = !!nfe;
             
-            // Natureza de Operação — campo "natureza_de_operacao" (col T da planilha)
-            const naturezaRaw = nfe ? (nfe.natureza_de_operacao || nfe.natureza || '') : '';
-            const isGarantia = naturezaRaw && naturezaRaw.toLowerCase().includes('garantia');
+            // Natureza de Operação — campo "natureza_de_operacao" (col T da planilha ou NFe)
+            const isGarantia = _isGarantiaOrder(p, nfe);
+            const naturezaRaw = nfe ? (nfe.natureza_de_operacao || nfe.natureza || '') : (p.natureza_de_operacao || p['natureza de operacao'] || (isGarantia ? 'Remessa em Garantia' : ''));
 
             let vendedorRaw = p.vendedor || (nfe ? nfe.nome_do_vendedor : 'N/A');
             let vendedor = vendedorRaw;
@@ -2997,7 +3078,18 @@ export const DashboardApp = (function() {
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     ${vendedor}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">${totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                    ${isGarantia ? `
+                        <div class="flex flex-col items-end">
+                            <span class="text-gray-500">${totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 uppercase tracking-tight mt-0.5" title="Remessa em Garantia não soma no Total de Vendas">
+                                Garantia (Não Somado)
+                            </span>
+                        </div>
+                    ` : `
+                        <span>${totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    `}
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
                     <div class="flex items-center justify-center space-x-3">
 
@@ -3111,11 +3203,12 @@ export const DashboardApp = (function() {
         let headers, rows;
         if (type === 'notes') {
             headers = ["Nº Pedido", "Nº Nota", "Data", "Cliente", "Vendedor", "Valor Peças", "Valor Serviço", "Valor Total", "Situação", "Origem"];
-            rows = _currentSalesDetails.map(p => {
-                const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
-                const nfeId = String(rawNfeId).split('.')[0].trim();
-                const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
-                
+            rows = [];
+            _currentSalesDetails.forEach(p => {
+                const nfe = _getNfeForOrder(p);
+                // Garantias não aparecem na planilha de vendas baixada
+                if (_isGarantiaOrder(p, nfe)) return;
+
                 const totalValue = _getOrderValue(p);
                 
                 // Calcula divisão entre Peças e Serviços
@@ -3136,11 +3229,6 @@ export const DashboardApp = (function() {
                 let orderPecas = totalValue - orderServicos;
                 if (orderPecas < 0) orderPecas = 0;
 
-                // Valor Garantia
-                const naturezaRaw = nfe ? (nfe.natureza_de_operacao || nfe.natureza || '') : '';
-                const isGarantia = naturezaRaw && naturezaRaw.toLowerCase().includes('garantia');
-                const orderGarantia = isGarantia ? totalValue : 0;
-
                 // Formata data estritamente como DD/MM/AAAA (remove horário se houver)
                 const rawDate = nfe ? nfe.data_de_emissao : (p.data || p.data_criacao || p.data_pedido);
                 let formattedDate = _formatDate(rawDate);
@@ -3148,13 +3236,9 @@ export const DashboardApp = (function() {
                     formattedDate = formattedDate.split(' ')[0];
                 }
                 let numeroPedidoStr = p.numero || p.número || '-';
-                
                 let situacaoStr = p.situação || p.situacao || (nfe ? nfe.situacao : '-');
-                if (isGarantia) {
-                    situacaoStr = 'Atendido G.';
-                }
                 
-                return [
+                rows.push([
                     numeroPedidoStr,
                     nfe ? nfe.numero_da_nota : '-',
                     formattedDate,
@@ -3165,15 +3249,14 @@ export const DashboardApp = (function() {
                     formatCSVNumber(totalValue), 
                     situacaoStr, 
                     _getNormalizedStoreName(p) || (nfe ? nfe.origem_loja : '-')
-                ];
+                ]);
             });
         } else {
             headers = ["Nº Nota", "Data", "Cliente", "Código Item", "Quantidade", "Valor Unitario (Venda)", "Valor Unitario (Custo)", "Total (Venda)", "Total (Custo)"];
             rows = [];
             _currentSalesDetails.forEach(p => {
-                const rawNfeId = p.id_nota_fiscal || p['id nota fiscal'] || "";
-                const nfeId = String(rawNfeId).split('.')[0].trim();
-                const nfe = nfeId ? _allNFeData.find(n => String(n.id_nota || "").split('.')[0].trim() === nfeId) : null;
+                const nfe = _getNfeForOrder(p);
+                if (_isGarantiaOrder(p, nfe)) return; // Remessa em Garantia não entra no relatório de itens vendidos
                 
                 const itensRaw = p.itens || (nfe ? nfe.itens : '');
                 const items = _parseNfeItemsString(itensRaw);

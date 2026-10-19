@@ -1111,11 +1111,12 @@ export const GerenciarGarantiaApp = (function () {
             if (pesoInput && syncPesoBtn) {
                 pesoInput.addEventListener('input', () => {
                     const originalPeso = parseFloat(syncPesoBtn.dataset.originalPeso) || 0;
-                    const currentPeso = parseFloat(String(pesoInput.value).replace(',', '.')) || 0;
+                    const currentPeso = parseFloat(String(pesoInput.value).replace(/\./g, '').replace(',', '.')) || 0;
                     
                     item.peso = currentPeso;
+                    _updateUIPesoTotal();
                     
-                    if (currentPeso !== originalPeso) {
+                    if (Math.abs(currentPeso - originalPeso) > 0.0001) {
                         syncPesoBtn.classList.remove('hidden');
                     } else {
                         syncPesoBtn.classList.add('hidden');
@@ -1124,7 +1125,7 @@ export const GerenciarGarantiaApp = (function () {
 
                 syncPesoBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
-                    const currentPeso = parseFloat(String(pesoInput.value).replace(',', '.')) || 0;
+                    const currentPeso = parseFloat(String(pesoInput.value).replace(/\./g, '').replace(',', '.')) || 0;
                     const originalBtnHtml = syncPesoBtn.innerHTML;
                     
                     syncPesoBtn.innerHTML = `<svg class="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
@@ -2129,6 +2130,9 @@ function _formatItemsString() {
 
             // 4. Filtro Situação Retorno
             let visualRetornoStatus = (d.retornoItem || 'EM ANALISE').toUpperCase();
+            if (visualRetornoStatus === 'FINALIZADO') {
+                visualRetornoStatus = 'RETORNADO';
+            }
             if (currentStatus.includes('RECUSADO')) {
                 visualRetornoStatus = 'CANCELADO';
             }
@@ -2138,7 +2142,15 @@ function _formatItemsString() {
             } else {
                 const normRStatus = normalizeStr(visualRetornoStatus);
                 const normRFilter = normalizeStr(retornoFilter);
-                if (normRStatus.includes(normRFilter)) retMatch = true;
+                if (normRFilter === 'retornado' || normRFilter === 'finalizado') {
+                    retMatch = (normRStatus === 'retornado' || normRStatus === 'finalizado');
+                } else if (normRFilter.includes('nao retornado')) {
+                    retMatch = normRStatus.includes('nao retornado');
+                } else if (normRFilter.includes('nao necessario')) {
+                    retMatch = normRStatus.includes('nao necessario');
+                } else {
+                    retMatch = (normRStatus === normRFilter || normRStatus.includes(normRFilter));
+                }
             }
             if (!retMatch) return false;
 
@@ -2358,31 +2370,35 @@ function _formatItemsString() {
                 }
             }
 
-            const retornoStatus = (req.retornoItem || 'EM ANALISE').toUpperCase();
+            let retornoStatus = (req.retornoItem || 'EM ANALISE').toUpperCase();
+            if (retornoStatus === 'FINALIZADO') retornoStatus = 'RETORNADO';
+
             let retornoBadgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
             if (retornoStatus === 'EM ANALISE') retornoBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
             else if (retornoStatus === 'SOLICITADO') retornoBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
-            else if (retornoStatus === 'FINALIZADO') retornoBadgeClass = 'bg-green-100 text-green-800 border-green-200';
+            else if (retornoStatus === 'RETORNADO') retornoBadgeClass = 'bg-green-100 text-green-800 border-green-200';
             else if (retornoStatus === 'NÃO RETORNADO' || retornoStatus === 'NAO RETORNADO') retornoBadgeClass = 'bg-red-100 text-red-800 border-red-200';
+            else if (retornoStatus === 'NÃO NECESSARIO' || retornoStatus === 'NAO NECESSARIO' || retornoStatus === 'NÃO NECESSÁRIO' || retornoStatus === 'NAO NECESSÁRIO') retornoBadgeClass = 'bg-purple-100 text-purple-800 border-purple-200';
             else if (retornoStatus === 'CANCELADO') retornoBadgeClass = 'bg-red-100 text-red-800 border-red-200';
 
             let retornoDropdownHtml = `
             <div class="relative inline-block text-left" data-dropdown-container>
-                <button type="button" class="retorno-custom-dropdown-btn px-2.5 py-0.5 inline-flex items-center justify-between text-[10px] font-bold rounded-full border ${retornoBadgeClass} min-w-[105px] transition-all hover:shadow-sm">
+                <button type="button" class="retorno-custom-dropdown-btn px-2.5 py-0.5 inline-flex items-center justify-between text-[10px] font-bold rounded-full border ${retornoBadgeClass} min-w-[110px] transition-all hover:shadow-sm">
                     <span class="flex-1 text-center">${retornoStatus}</span>
                     <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
-                <div class="retorno-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
+                <div class="retorno-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
                     <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-yellow-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="EM ANALISE"><span class="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>EM ANALISE</button>
                     <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="SOLICITADO"><span class="w-2 h-2 rounded-full bg-blue-400 shrink-0"></span>SOLICITADO</button>
-                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="FINALIZADO"><span class="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>FINALIZADO</button>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="RETORNADO"><span class="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>RETORNADO</button>
                     <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="NÃO RETORNADO"><span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>NÃO RETORNADO</button>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-purple-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="NÃO NECESSARIO"><span class="w-2 h-2 rounded-full bg-purple-400 shrink-0"></span>NÃO NECESSARIO</button>
                     <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="CANCELADO"><span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>CANCELADO</button>
                 </div>
             </div>`;
 
             if (statusUpper.includes('RECUSADO')) {
-                retornoDropdownHtml = '<span class="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full border bg-red-100 text-red-800 border-red-200 uppercase min-w-[105px] justify-center" title="Garantia Recusada">CANCELADO</span>';
+                retornoDropdownHtml = '<span class="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full border bg-red-100 text-red-800 border-red-200 uppercase min-w-[110px] justify-center" title="Garantia Recusada">CANCELADO</span>';
             }
 
             const idMo = String(req.idServicoMO || '').trim();
@@ -2713,7 +2729,7 @@ function _formatItemsString() {
 
             titleEl.innerText = 'Editar Campo';
             labelEl.innerText = title;
-            inputEl.value = initialValue || '';
+            inputEl.value = (type === 'telefone' && initialValue) ? _formatPhoneBR(initialValue) : (initialValue || '');
             
             // Remove listeners antigos
             const newBtnSave = btnSave.cloneNode(true);
@@ -2760,22 +2776,7 @@ function _formatItemsString() {
                     }
                     e.target.value = v;
                 } else if (type === 'telefone') {
-                    let digits = v.replace(/\D/g, "");
-                    if (digits.startsWith("55")) digits = digits.substring(2);
-                    digits = digits.substring(0, 11);
-                    
-                    if (digits.length === 0) {
-                        v = "";
-                    } else if (digits.length <= 2) {
-                        v = `+55 ${digits}`;
-                    } else if (digits.length <= 6) {
-                        v = `+55 ${digits.substring(0,2)} ${digits.substring(2)}`;
-                    } else if (digits.length <= 10) {
-                        v = `+55 ${digits.substring(0,2)} ${digits.substring(2,6)}-${digits.substring(6)}`;
-                    } else {
-                        v = `+55 ${digits.substring(0,2)} ${digits.substring(2,7)}-${digits.substring(7)}`;
-                    }
-                    e.target.value = v;
+                    e.target.value = _formatPhoneBR(v);
                 }
             });
             
@@ -2784,7 +2785,8 @@ function _formatItemsString() {
 
             newBtnSave.onclick = () => {
                 closeModal();
-                callback(newInput.value);
+                const valToSave = (type === 'telefone') ? _formatPhoneBR(newInput.value) : newInput.value;
+                callback(valToSave);
             };
 
             newInput.addEventListener('keypress', (e) => {
@@ -2859,17 +2861,17 @@ function _formatItemsString() {
         document.getElementById('satg-modal-cpf').innerText = req.cpf || '-';
         injectEditPencil('satg-modal-cpf', 'D', 'cpf', req.cpf, 'cpf');
         
-        const phoneTxt = req.telefone || '-';
+        const phoneTxt = req.telefone ? _formatPhoneBR(req.telefone) : '-';
         document.getElementById('satg-modal-telefone').innerHTML = `<span class="align-middle">${phoneTxt}</span>`;
-        injectEditPencil('satg-modal-telefone', 'F', 'telefone', req.telefone, 'telefone');
+        injectEditPencil('satg-modal-telefone', 'F', 'telefone', phoneTxt, 'telefone');
 
-        if (req.telefone && req.telefone.length > 8) {
-            let phoneClean = req.telefone.replace(/\D/g, '');
-            if (phoneClean) {
-                if (!phoneClean.startsWith('55') && phoneClean.length <= 11) {
-                    phoneClean = '55' + phoneClean;
+        if (req.telefone && req.telefone.length > 7) {
+            let phoneDigits = req.telefone.replace(/\D/g, '');
+            if (phoneDigits) {
+                if ((phoneDigits.length === 12 || phoneDigits.length === 13) && phoneDigits.startsWith('55')) {
+                    phoneDigits = phoneDigits.substring(2);
                 }
-                const wppHtml = `<a href="https://wa.me/${phoneClean}" target="_blank" class="text-green-500 hover:text-green-600 align-middle inline-flex ml-2 transition-transform hover:scale-110" title="Chamar no WhatsApp">
+                const wppHtml = `<a href="https://wa.me/55${phoneDigits}" target="_blank" class="text-green-500 hover:text-green-600 align-middle inline-flex ml-2 transition-transform hover:scale-110" title="Chamar no WhatsApp">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
                 </a>`;
                 document.getElementById('satg-modal-telefone').insertAdjacentHTML('beforeend', wppHtml);
@@ -3340,7 +3342,7 @@ function _formatItemsString() {
                         </div>
                         <div class="field" style="flex: 1; min-width: 140px;">
                             <span class="field-label">Telefone / WhatsApp</span>
-                            <span class="field-value">${req.telefone || '-'}</span>
+                            <span class="field-value">${req.telefone ? _formatPhoneBR(req.telefone) : '-'}</span>
                         </div>
                         <div class="field" style="flex: 1.5; min-width: 150px;">
                             <span class="field-label">E-mail</span>
@@ -3396,6 +3398,365 @@ function _formatItemsString() {
         win.document.open();
         win.document.write(html);
         win.document.close();
+    }
+
+    function _downloadSatGPdfMake(req, filename) {
+        function fieldCard(label, value, options = {}) {
+            return {
+                table: {
+                    widths: ['*'],
+                    body: [[
+                        {
+                            stack: [
+                                { text: String(label || '').toUpperCase(), fontSize: 6.5, bold: true, color: options.labelColor || '#64748b', margin: [0, 0, 0, 2] },
+                                { text: String(value || '-'), fontSize: options.fontSize || 9, bold: options.bold !== undefined ? options.bold : true, color: options.textColor || '#0f172a' }
+                            ],
+                            fillColor: options.bgColor || '#f8fafc'
+                        }
+                    ]]
+                },
+                layout: {
+                    hLineWidth: () => 0.75,
+                    vLineWidth: () => 0.75,
+                    hLineColor: () => options.borderColor || '#e2e8f0',
+                    vLineColor: () => options.borderColor || '#e2e8f0',
+                    paddingLeft: () => 6,
+                    paddingRight: () => 6,
+                    paddingTop: () => 4,
+                    paddingBottom: () => 4
+                }
+            };
+        }
+
+        function sectionHeader(title, rightText = '') {
+            const bodyRow = [
+                { text: title.toUpperCase(), fontSize: 8.5, bold: true, color: '#475569', border: [false, false, false, true], borderColor: ['#e2e8f0', '#e2e8f0', '#cbd5e1', '#cbd5e1'], margin: [0, 5, 0, 3] }
+            ];
+            if (rightText) {
+                bodyRow.push({ text: rightText, fontSize: 8.5, bold: true, color: '#475569', alignment: 'right', border: [false, false, false, true], borderColor: ['#e2e8f0', '#e2e8f0', '#cbd5e1', '#cbd5e1'], margin: [0, 5, 0, 3] });
+            } else {
+                bodyRow.push({ text: '', border: [false, false, false, true], borderColor: ['#e2e8f0', '#e2e8f0', '#cbd5e1', '#cbd5e1'] });
+            }
+            return {
+                table: {
+                    widths: ['*', 'auto'],
+                    body: [bodyRow]
+                },
+                layout: 'noBorders',
+                margin: [0, 6, 0, 4]
+            };
+        }
+
+        const codigoStr = String(req.codigo || '-').startsWith('SAT-G') ? req.codigo : `SAT-G: ${req.codigo || '-'}`;
+        const dataStr = req.data ? (req.data.includes(' ') ? req.data.split(':').slice(0, 2).join(':') : req.data) : '-';
+        const phoneStr = req.telefone ? _formatPhoneBR(req.telefone) : '-';
+
+        let dadosEnvio = null;
+        if (req.idPedido) {
+            const pedido = _pedidosGarantiaData.find(p => String(p.id) === String(req.idPedido) || String(p.numero) === String(req.idPedido));
+            if (pedido && pedido.transportadora) {
+                let nomeTransp = pedido.transportadora;
+                if (typeof _listaTransportadoras !== 'undefined') {
+                    const foundTransp = _listaTransportadoras.find(t => String(t.codigo) === String(pedido.transportadora));
+                    if (foundTransp) nomeTransp = foundTransp.nome;
+                }
+                const fullEndereco = `${pedido.endereco || '-'}${pedido.numeroEndereco ? ', ' + pedido.numeroEndereco : ''}${pedido.complemento ? ' - ' + pedido.complemento : ''} - ${pedido.bairro || '-'}, ${pedido.cidade || '-'}/${pedido.estado || '-'} - CEP: ${pedido.cep || '-'}`;
+                let emb = pedido.embalagem || 'Nenhuma';
+                if (emb !== 'Nenhuma' && emb.includes('/')) {
+                    const p = emb.split('/');
+                    if (p.length === 4) emb = `${p[0]} - ${p[1]}x${p[2]}x${p[3]}`;
+                }
+                const vol = pedido.volume ? ` (${pedido.volume} Vol)` : '';
+                const freteContaMap = {
+                    '0': '0 - CIF',
+                    '1': '1 - FOB',
+                    '2': '2 - Terceiros',
+                    '3': '3 - Próprio Rem.',
+                    '4': '4 - Próprio Dest.',
+                    '9': '9 - Sem Transp.'
+                };
+                const fContaStr = freteContaMap[pedido.freteConta] || pedido.freteConta || '-';
+
+                dadosEnvio = {
+                    transportadora: nomeTransp,
+                    embalagemVol: `${emb}${vol}`,
+                    valorFrete: pedido.valorFrete || '-',
+                    fretePor: fContaStr,
+                    enderecoCompleto: fullEndereco
+                };
+            }
+        }
+
+        let dadosOrcamento = null;
+        if (req.idPedido) {
+            const pedido = _pedidosGarantiaData.find(p => String(p.id) === String(req.idPedido) || String(p.numero) === String(req.idPedido));
+            if (pedido) {
+                const parsedItens = _parseItemsString(pedido.itens);
+                let totalValor = 0;
+                let totalPeso = parseFloat(pedido.pesoTotal || 0);
+                const fmtBRL = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+                const itensLinhas = [];
+                if (parsedItens && parsedItens.length > 0) {
+                    parsedItens.forEach(i => {
+                        const itemRef = String(i.cod || i.id || '').trim();
+                        const detalhe = _itensDetalhadoGarantiaData.find(d => 
+                            (String(d.idPedido) === String(pedido.idPedido) || String(d.idPedido) === String(pedido.numero)) && 
+                            String(d.idProduto).trim() === itemRef
+                        );
+                        const precoItem = parseFloat(i.preco || 0);
+                        const qtdItem = parseInt(i.qtd || 1);
+                        totalValor += (precoItem * qtdItem);
+
+                        const descFinal = detalhe && detalhe.descricao ? detalhe.descricao : (i.desc || i.nome || '-');
+                        const obsFinal = detalhe && detalhe.observacoes ? String(detalhe.observacoes) : '';
+
+                        itensLinhas.push({
+                            codigo: i.cod || '-',
+                            descricao: descFinal,
+                            observacao: obsFinal,
+                            quantidade: qtdItem,
+                            valorFormatado: fmtBRL(precoItem * qtdItem)
+                        });
+                    });
+                }
+
+                let freteVal = 0;
+                if (pedido.valorFrete && String(pedido.freteConta) === '1') {
+                    let fStr = String(pedido.valorFrete).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
+                    freteVal = parseFloat(fStr) || 0;
+                }
+
+                const ipiVal = totalValor * 0.0325;
+                const totalFinal = totalValor + ipiVal + freteVal;
+
+                dadosOrcamento = {
+                    numero: pedido.numero || '-',
+                    itens: itensLinhas,
+                    pesoTotalStr: `${totalPeso.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`,
+                    totalItensFmt: fmtBRL(totalValor),
+                    ipiFmt: fmtBRL(ipiVal),
+                    freteVal: freteVal,
+                    freteFmt: fmtBRL(freteVal),
+                    totalFinalFmt: fmtBRL(totalFinal)
+                };
+            }
+        }
+
+        const content = [];
+
+        // Cabeçalho
+        content.push({ text: 'Solicitação de Garantia SAT-G', fontSize: 16, bold: true, color: '#4F46E5', alignment: 'center', margin: [0, 0, 0, 3] });
+        content.push({ 
+            text: [
+                { text: 'Código: ', color: '#64748b' }, 
+                { text: codigoStr, bold: true, color: '#0f172a' }, 
+                { text: '   |   Data: ', color: '#64748b' }, 
+                { text: dataStr, bold: true, color: '#0f172a' }
+            ], 
+            alignment: 'center', 
+            fontSize: 9.5, 
+            margin: [0, 0, 0, 10] 
+        });
+        content.push({ canvas: [{ type: 'line', x1: 0, y1: 0, x2: 539, y2: 0, lineWidth: 1.5, lineColor: '#e2e8f0' }], margin: [0, 0, 0, 8] });
+
+        // 1. Dados do Cliente
+        content.push(sectionHeader('Dados do Cliente', `CÓD. CLIENTE: ${req.codigoCliente || '-'}`));
+        content.push(fieldCard('Cliente / Empresa', req.cliente));
+        content.push({
+            columns: [
+                { width: '*', ...fieldCard('CPF / CNPJ', req.cpf) },
+                { width: '*', ...fieldCard('Telefone / WhatsApp', phoneStr) },
+                { width: '*', ...fieldCard('E-mail', req.email) }
+            ],
+            columnGap: 5,
+            margin: [0, 4, 0, 4]
+        });
+
+        // 2. Dados de Envio
+        if (dadosEnvio) {
+            content.push(sectionHeader('Dados de Envio'));
+            content.push({
+                columns: [
+                    { width: '38%', ...fieldCard('Transportadora', dadosEnvio.transportadora) },
+                    { width: '28%', ...fieldCard('Embalagem / Vol', dadosEnvio.embalagemVol, { fontSize: 8.5 }) },
+                    { width: '17%', ...fieldCard('Valor Frete', dadosEnvio.valorFrete) },
+                    { width: '17%', ...fieldCard('Frete por', dadosEnvio.fretePor, { fontSize: 8.5 }) }
+                ],
+                columnGap: 5,
+                margin: [0, 0, 0, 4]
+            });
+            content.push(fieldCard('Endereço de Entrega Completo', dadosEnvio.enderecoCompleto, { fontSize: 8.5 }));
+        }
+
+        // 3. Equipamento com Defeito
+        content.push(sectionHeader('Equipamento com Defeito'));
+        content.push({
+            columns: [
+                { width: '50%', ...fieldCard('Equipamento (Modelo e Ano)', req.equipamento) },
+                { width: '25%', ...fieldCard('Nº Série', req.numeroSerie) },
+                { width: '25%', ...fieldCard('Nota Fiscal', req.notaFiscal) }
+            ],
+            columnGap: 5,
+            margin: [0, 0, 0, 4]
+        });
+
+        // Problema Detalhado
+        content.push({
+            table: {
+                widths: ['*'],
+                body: [[
+                    {
+                        stack: [
+                            { text: 'PROBLEMA DETALHADO', fontSize: 6.5, bold: true, color: '#dc2626', margin: [0, 0, 0, 2] },
+                            { text: String(req.problema || '-'), fontSize: 8.5, color: '#7f1d1d' }
+                        ],
+                        fillColor: '#fef2f2'
+                    }
+                ]]
+            },
+            layout: {
+                hLineWidth: () => 0.75,
+                vLineWidth: () => 0.75,
+                hLineColor: () => '#fecaca',
+                vLineColor: () => '#fecaca',
+                paddingLeft: () => 6,
+                paddingRight: () => 6,
+                paddingTop: () => 4,
+                paddingBottom: () => 4
+            },
+            margin: [0, 2, 0, 4]
+        });
+
+        // Avaliação Interna
+        content.push({
+            table: {
+                widths: ['*'],
+                body: [[
+                    {
+                        stack: [
+                            { text: 'AVALIAÇÃO INTERNA (CONSTATAÇÃO DO PROBLEMA) *', fontSize: 6.5, bold: true, color: '#475569', margin: [0, 0, 0, 2] },
+                            { text: String(req.observacao || '-'), fontSize: 8.5, color: '#1e293b' }
+                        ],
+                        fillColor: '#f8fafc'
+                    }
+                ]]
+            },
+            layout: {
+                hLineWidth: () => 0.75,
+                vLineWidth: () => 0.75,
+                hLineColor: () => '#cbd5e1',
+                vLineColor: () => '#cbd5e1',
+                paddingLeft: () => 6,
+                paddingRight: () => 6,
+                paddingTop: () => 4,
+                paddingBottom: () => 4
+            },
+            margin: [0, 2, 0, 6]
+        });
+
+        // 4. Orçamento Vinculado
+        if (dadosOrcamento) {
+            content.push(sectionHeader(`Orçamento Vinculado: ${dadosOrcamento.numero}`));
+            
+            const tableBody = [
+                [
+                    { text: 'PRODUTO', style: 'tableHeader' },
+                    { text: 'QTD', style: 'tableHeader', alignment: 'center' },
+                    { text: 'VALOR', style: 'tableHeader', alignment: 'right' }
+                ]
+            ];
+
+            if (dadosOrcamento.itens && dadosOrcamento.itens.length > 0) {
+                dadosOrcamento.itens.forEach(it => {
+                    const stack = [
+                        { text: it.descricao, fontSize: 8.5, bold: true, color: '#1e293b' }
+                    ];
+                    if (it.observacao) {
+                        stack.push({ text: `Obs: ${it.observacao}`, fontSize: 7.5, color: '#c2410c', bold: true });
+                    }
+                    stack.push({ text: `Cód: ${it.codigo}`, fontSize: 7, color: '#94a3b8' });
+
+                    tableBody.push([
+                        { stack: stack },
+                        { text: String(it.quantidade), alignment: 'center', fontSize: 8.5, color: '#475569' },
+                        { text: it.valorFormatado, alignment: 'right', fontSize: 8.5, bold: true, color: '#1e293b' }
+                    ]);
+                });
+            } else {
+                tableBody.push([
+                    { text: 'Nenhum item encontrado', colSpan: 3, alignment: 'center', color: '#94a3b8', fontSize: 8.5 },
+                    {},
+                    {}
+                ]);
+            }
+
+            // Totais
+            tableBody.push([
+                { text: [{ text: 'Peso Total: ', color: '#64748b' }, { text: dadosOrcamento.pesoTotalStr, bold: true, color: '#1e293b' }, { text: '   |   Total Itens:', color: '#64748b' }], colSpan: 2, fontSize: 8.5, fillColor: '#f8fafc' },
+                {},
+                { text: dadosOrcamento.totalItensFmt, alignment: 'right', fontSize: 8.5, bold: true, fillColor: '#f8fafc' }
+            ]);
+
+            tableBody.push([
+                { text: 'IPI (3,25%):', colSpan: 2, alignment: 'right', fontSize: 8.5, bold: true, color: '#475569', fillColor: '#f8fafc' },
+                {},
+                { text: dadosOrcamento.ipiFmt, alignment: 'right', fontSize: 8.5, bold: true, fillColor: '#f8fafc' }
+            ]);
+
+            if (dadosOrcamento.freteVal > 0) {
+                tableBody.push([
+                    { text: 'Frete (FOB):', colSpan: 2, alignment: 'right', fontSize: 8.5, bold: true, color: '#475569', fillColor: '#f8fafc' },
+                    {},
+                    { text: dadosOrcamento.freteFmt, alignment: 'right', fontSize: 8.5, bold: true, fillColor: '#f8fafc' }
+                ]);
+            }
+
+            tableBody.push([
+                { text: 'Valor Total:', colSpan: 2, alignment: 'right', fontSize: 9.5, bold: true, color: '#15803d', fillColor: '#dcfce7' },
+                {},
+                { text: dadosOrcamento.totalFinalFmt, alignment: 'right', fontSize: 9.5, bold: true, color: '#15803d', fillColor: '#dcfce7' }
+            ]);
+
+            content.push({
+                table: {
+                    headerRows: 1,
+                    widths: ['*', 45, 90],
+                    body: tableBody
+                },
+                layout: {
+                    hLineWidth: (i, node) => i === 0 || i === 1 || i === node.table.body.length ? 1 : 0.5,
+                    vLineWidth: () => 0.5,
+                    hLineColor: () => '#cbd5e1',
+                    vLineColor: () => '#cbd5e1',
+                    paddingLeft: () => 8,
+                    paddingRight: () => 8,
+                    paddingTop: () => 5,
+                    paddingBottom: () => 5
+                },
+                margin: [0, 4, 0, 10]
+            });
+        }
+
+        const docDef = {
+            pageSize: 'A4',
+            pageOrientation: 'portrait',
+            pageMargins: [28, 28, 28, 28],
+            content: content,
+            styles: {
+                tableHeader: {
+                    fillColor: '#1e40af',
+                    color: '#ffffff',
+                    bold: true,
+                    fontSize: 8
+                }
+            },
+            defaultStyle: {
+                fontSize: 8.5
+            }
+        };
+
+        pdfMake.createPdf(docDef).download(filename);
     }
 
     async function _handleDownloadSatG() {
@@ -3512,7 +3873,7 @@ function _formatItemsString() {
                         </div>
                         <div class="field" style="flex: 1; min-width: 140px;">
                             <span class="field-label">Telefone / WhatsApp</span>
-                            <span class="field-value">${req.telefone || '-'}</span>
+                            <span class="field-value">${req.telefone ? _formatPhoneBR(req.telefone) : '-'}</span>
                         </div>
                         <div class="field" style="flex: 1.5; min-width: 150px;">
                             <span class="field-label">E-mail</span>
@@ -3556,6 +3917,20 @@ function _formatItemsString() {
         `;
 
         const filename = `SAT-G: ${req.codigo || '0000'} - ${req.cliente || 'Empresa'}.pdf`;
+
+        // Se a biblioteca pdfMake estiver carregada, gera o PDF em formato vetorial com TEXTO 100% SELECIONÁVEL
+        if (typeof pdfMake !== 'undefined') {
+            try {
+                _downloadSatGPdfMake(req, filename);
+                if (btn) {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
+                return;
+            } catch (errPdfMake) {
+                console.warn("[SAT-G PDF] Erro ao gerar com pdfMake, tentando fallback com html2pdf:", errPdfMake);
+            }
+        }
 
         if (typeof html2pdf !== 'undefined') {
             html2pdf().set({
@@ -4026,6 +4401,32 @@ function _formatItemsString() {
     function resetToSelector() {
         _showView('cards');
     }
+
+    function _formatPhoneBR(phone) {
+        if (!phone) return '';
+        let raw = String(phone).trim();
+        let isExplicitDDI = raw.startsWith('+55') || raw.startsWith('+ 55') || raw.startsWith('+');
+        let digits = raw.replace(/\D/g, '');
+        if (!digits) return '';
+
+        if (isExplicitDDI && digits.startsWith('55')) {
+            digits = digits.substring(2);
+        } else if (digits.length > 11 && digits.startsWith('55')) {
+            digits = digits.substring(2);
+        }
+
+        if (digits.length >= 11 && digits.startsWith('0')) {
+            digits = digits.substring(1);
+        }
+
+        digits = digits.substring(0, 11);
+
+        if (digits.length <= 2) return `(${digits}`;
+        if (digits.length <= 6) return `(${digits.substring(0, 2)}) ${digits.substring(2)}`;
+        if (digits.length <= 10) return `(${digits.substring(0, 2)}) ${digits.substring(2, 6)}-${digits.substring(6)}`;
+        return `(${digits.substring(0, 2)}) ${digits.substring(2, 7)}-${digits.substring(7)}`;
+    }
+
     function _formatWeightInput(inputEl) {
         if (!inputEl) return;
         

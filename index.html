@@ -8,6 +8,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Incluindo a biblioteca html2pdf.js para gerar PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- pdfmake para geração de PDF com texto vetorial selecionável -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
     <!-- Incluindo a biblioteca Chart.js e o plugin de datalabels -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script
@@ -1149,8 +1152,9 @@
                                     <option value="all" selected>Todas</option>
                                     <option value="em analise">Em Análise</option>
                                     <option value="solicitado">Solicitado</option>
-                                    <option value="finalizado">Finalizado</option>
+                                    <option value="retornado">Retornado</option>
                                     <option value="não retornado">Não Retornado</option>
+                                    <option value="não necessario">Não Necessário</option>
                                     <option value="cancelado">Cancelado</option>
                                 </select>
                             </div>
@@ -4220,7 +4224,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script type="module" src="js/main.js?v=1792001800"></script>
+    <script type="module" src="js/main.js?v=1792002105"></script>
     <!-- MODAL LINHA DE PRODUÇÃO -->
     <div id="production-line-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
         <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden">
