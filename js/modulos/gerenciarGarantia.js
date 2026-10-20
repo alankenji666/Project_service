@@ -86,6 +86,7 @@ export const GerenciarGarantiaApp = (function () {
     let _listaResponsaveis = [];
     let _usuariosMap = {};
     let _satgSortRadios;
+    let _satgClearFiltersBtn;
 
     let _satgFilterBtn;
     let _satgFilterDropdown;
@@ -248,6 +249,7 @@ export const GerenciarGarantiaApp = (function () {
 
     function init() {
         _cacheDomElements();
+        _applySavedSatgFilterPreferences();
         if (_overviewCards) {
             _bindEvents();
         _initServicoMoModalEvents();
@@ -437,6 +439,7 @@ export const GerenciarGarantiaApp = (function () {
         _satgRetornoSelect = document.getElementById('satg-retorno-select');
         _satgResponsavelSelect = document.getElementById('satg-responsavel-select');
         _satgSortRadios = document.querySelectorAll('.satg-sort-radio');
+        _satgClearFiltersBtn = document.getElementById('satg-clear-filters-btn');
 
         _satgFilterBtn = document.getElementById('btn-satg-filter');
         _satgFilterDropdown = document.getElementById('satg-filter-dropdown');
@@ -566,7 +569,7 @@ export const GerenciarGarantiaApp = (function () {
             _showView('form');
         };
         if (_btnShowTable) _btnShowTable.onclick = () => _showView('table');
-        if (_btnShowSatg) _btnShowSatg.onclick = () => { _showView('satg'); _fetchSatGData(); };
+        if (_btnShowSatg) _btnShowSatg.onclick = () => { _applySavedSatgFilterPreferences(); _showView('satg'); _fetchSatGData(); };
         if (_btnShowPedidosGarantia) _btnShowPedidosGarantia.onclick = () => { _showView('pedidosGarantia'); _fetchPedidosGarantiaData(); _fetchSatGData(true); };
         
         // Back buttons
@@ -721,6 +724,22 @@ export const GerenciarGarantiaApp = (function () {
             _satgSortRadios.forEach(radio => {
                 radio.addEventListener('change', _applySatgFilters);
             });
+        }
+        if (_satgClearFiltersBtn) {
+            _satgClearFiltersBtn.onclick = () => {
+                if (_satgStatusSelect) _satgStatusSelect.value = 'all';
+                if (_satgOrcamentoSelect) _satgOrcamentoSelect.value = 'all';
+                if (_satgRetornoSelect) _satgRetornoSelect.value = 'all';
+                if (_satgResponsavelSelect) _satgResponsavelSelect.value = 'all';
+                if (_satgSearchInput) _satgSearchInput.value = '';
+                if (_satgSortRadios) {
+                    _satgSortRadios.forEach(r => {
+                        r.checked = (r.value === 'desc');
+                    });
+                }
+                _clearSatgFilterPreferences();
+                _applySatgFilters();
+            };
         }
         if (_btnFecharModalSatg) _btnFecharModalSatg.onclick = _closeSatgModal;
         
@@ -2011,10 +2030,68 @@ function _formatItemsString() {
 
     /**
      * =========================================
-     * Lógica Sat-G
+     * Preferências de Filtro Sat-G (localStorage)
      * =========================================
      */
-    
+    const STORAGE_KEY_SATG_FILTERS = 'mks_satg_filters_prefs';
+
+    function _saveSatgFilterPreferences() {
+        try {
+            let sortOrder = 'desc';
+            if (_satgSortRadios) {
+                _satgSortRadios.forEach(r => {
+                    if (r.checked) sortOrder = r.value;
+                });
+            }
+            const prefs = {
+                status: _satgStatusSelect ? _satgStatusSelect.value : 'all',
+                orcamento: _satgOrcamentoSelect ? _satgOrcamentoSelect.value : 'all',
+                retorno: _satgRetornoSelect ? _satgRetornoSelect.value : 'all',
+                responsavel: _satgResponsavelSelect ? _satgResponsavelSelect.value : 'all',
+                sort: sortOrder
+            };
+            localStorage.setItem(STORAGE_KEY_SATG_FILTERS, JSON.stringify(prefs));
+        } catch (e) {
+            console.warn('Erro ao salvar preferências de filtro SAT-G:', e);
+        }
+    }
+
+    function _loadSatgFilterPreferences() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY_SATG_FILTERS);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function _clearSatgFilterPreferences() {
+        try {
+            localStorage.removeItem(STORAGE_KEY_SATG_FILTERS);
+        } catch (e) {}
+    }
+
+    function _applySavedSatgFilterPreferences() {
+        const prefs = _loadSatgFilterPreferences();
+        if (!prefs) return;
+
+        if (_satgStatusSelect && prefs.status) {
+            _satgStatusSelect.value = prefs.status;
+        }
+        if (_satgOrcamentoSelect && prefs.orcamento) {
+            _satgOrcamentoSelect.value = prefs.orcamento;
+        }
+        if (_satgRetornoSelect && prefs.retorno) {
+            _satgRetornoSelect.value = prefs.retorno;
+        }
+        if (_satgSortRadios && prefs.sort) {
+            _satgSortRadios.forEach(r => {
+                r.checked = (r.value === prefs.sort);
+            });
+        }
+    }
+
     function _getUsuarioNome(idOrCodigoOrNome) {
         if (!idOrCodigoOrNome) return '';
         const val = String(idOrCodigoOrNome).trim();
@@ -2174,8 +2251,13 @@ function _formatItemsString() {
             _satgResponsavelSelect.appendChild(opt);
         });
 
-        if (currentVal && Array.from(_satgResponsavelSelect.options).some(o => o.value.toLowerCase() === currentVal.toLowerCase())) {
-            _satgResponsavelSelect.value = currentVal;
+        const prefs = _loadSatgFilterPreferences();
+        const targetVal = (currentVal && currentVal !== 'all') 
+            ? currentVal 
+            : (prefs && prefs.responsavel ? prefs.responsavel : 'all');
+
+        if (targetVal && Array.from(_satgResponsavelSelect.options).some(o => o.value.toLowerCase() === targetVal.toLowerCase())) {
+            _satgResponsavelSelect.value = targetVal;
         } else {
             _satgResponsavelSelect.value = 'all';
         }
@@ -2242,6 +2324,7 @@ function _formatItemsString() {
     }
 
     function _applySatgFilters() {
+        _saveSatgFilterPreferences();
         const query = _satgSearchInput ? _satgSearchInput.value.toLowerCase().trim() : '';
         const statusFilter = _satgStatusSelect ? _satgStatusSelect.value.toLowerCase() : 'all';
         const orcamentoFilter = _satgOrcamentoSelect ? _satgOrcamentoSelect.value.toLowerCase() : 'all';
