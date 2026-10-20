@@ -1,6 +1,6 @@
 {
-  "version": "1.0.3",
-  "deployId": "1792496132501",
-  "updatedAt": "2026-10-20T08:35:00-03:00",
-  "notes": "Persistência automática dos filtros de SAT-G e botão Limpar Filtros."
+  "version": "1.0.4",
+  "deployId": "1792497351359",
+  "updatedAt": "2026-10-20T08:55:00-03:00",
+  "notes": "Remoção do botão de atualizar legado do cabeçalho."
 }
