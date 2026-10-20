@@ -2811,15 +2811,6 @@ function _formatItemsString() {
                         const pStatus = pedidoVinculado ? pedidoVinculado.situacao.toUpperCase() : '';
                         if (newStatus.toUpperCase() === pStatus) return;
                         
-                        let transportadora = undefined;
-                        if (newStatus.toUpperCase() === 'ENVIADO') {
-                            const transpPrompt = prompt("Informe o nome da Transportadora:");
-                            if (transpPrompt === null) {
-                                return; // Cancelou
-                            }
-                            transportadora = transpPrompt.trim();
-                        }
-                        
                         pedBtn.classList.add('animate-pulse', 'opacity-50');
                         pedBtn.disabled = true;
                         try {
@@ -2827,7 +2818,7 @@ function _formatItemsString() {
                             const res = await fetch(updateUrl, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ idPedido: req.idPedido, situacao: newStatus, transportadora })
+                                body: JSON.stringify({ idPedido: req.idPedido, situacao: newStatus })
                             });
                             if (!res.ok) throw new Error();
                             await _fetchPedidosGarantiaData();
@@ -3444,7 +3435,10 @@ function _formatItemsString() {
                             </div>
                         </td>
                         <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:center;color:#475569;">${qtdItem}</td>
-                        ${hidePrices ? '' : `<td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;color:#1e293b;">${fmtBRL(precoItem * qtdItem)}</td>`}
+                        ${hidePrices ? '' : `
+                            <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;color:#475569;">${fmtBRL(precoItem)}</td>
+                            <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;color:#1e293b;">${fmtBRL(precoItem * qtdItem)}</td>
+                        `}
                     </tr>
                 `;
             });
@@ -3472,7 +3466,7 @@ function _formatItemsString() {
             } else {
                 totalFooter = `
                     <tr style="background:#f8fafc;">
-                        <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:13px;color:#475569;">
+                        <td colspan="3" style="padding:12px 14px;font-weight:700;font-size:13px;color:#475569;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <span style="color: #4b5563; font-size: 12px; font-weight: normal;">Peso Total: <b style="color: #1e293b;">${totalPeso.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg</b></span>
                                 <span>Total Itens:</span>
@@ -3481,7 +3475,7 @@ function _formatItemsString() {
                         <td style="padding:12px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">${fmtBRL(totalValor)}</td>
                     </tr>
                     <tr style="background:#f8fafc; border-top: 1px solid #e2e8f0;">
-                        <td colspan="2" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
+                        <td colspan="3" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
                             IPI (3,25%):
                         </td>
                         <td style="padding:8px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">
@@ -3490,7 +3484,7 @@ function _formatItemsString() {
                     </tr>
                     ${freteVal > 0 ? `
                     <tr style="background:#f8fafc; border-top: 1px solid #e2e8f0;">
-                        <td colspan="2" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
+                        <td colspan="3" style="padding:8px 14px;font-weight:700;font-size:13px;color:#475569; text-align: right;">
                             Frete (FOB):
                         </td>
                         <td style="padding:8px 14px;font-weight:700;font-size:14px;color:#475569;text-align:right;">
@@ -3498,7 +3492,7 @@ function _formatItemsString() {
                         </td>
                     </tr>` : ''}
                     <tr style="background:#dcfce7; border-top: 1px solid #bbf7d0;">
-                        <td colspan="2" style="padding:12px 14px;font-weight:700;font-size:14px;color:#166534; text-align: right;">
+                        <td colspan="3" style="padding:12px 14px;font-weight:700;font-size:14px;color:#166534; text-align: right;">
                             Valor Total:
                         </td>
                         <td style="padding:12px 14px;font-weight:700;font-size:15px;color:#166534;text-align:right;">
@@ -3509,7 +3503,7 @@ function _formatItemsString() {
             }
         }
 
-        const colSpanTotal = hidePrices ? 2 : 3;
+        const colSpanTotal = hidePrices ? 2 : 4;
 
         return `
             <div class="section" style="margin-top: 40px;">
@@ -3521,8 +3515,11 @@ function _formatItemsString() {
                         <thead>
                             <tr>
                                 <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: left;">Produto</th>
-                                <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: center; width: 60px;">Qtd</th>
-                                ${hidePrices ? '' : '<th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: right; width: 100px;">Valor</th>'}
+                                <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: center; width: 50px;">Qtd</th>
+                                ${hidePrices ? '' : `
+                                    <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: right; width: 95px;">Vl. Unitário</th>
+                                    <th style="background: #1e40af; color: #fff; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: right; width: 95px;">Valor Total</th>
+                                `}
                             </tr>
                         </thead>
                         <tbody>
@@ -3833,7 +3830,8 @@ function _formatItemsString() {
                             descricao: descFinal,
                             observacao: obsFinal,
                             quantidade: qtdItem,
-                            valorFormatado: fmtBRL(precoItem * qtdItem)
+                            valorUnitarioFormatado: fmtBRL(precoItem),
+                            valorTotalFormatado: fmtBRL(precoItem * qtdItem)
                         });
                     });
                 }
@@ -3980,7 +3978,8 @@ function _formatItemsString() {
                 [
                     { text: 'PRODUTO', style: 'tableHeader' },
                     { text: 'QTD', style: 'tableHeader', alignment: 'center' },
-                    { text: 'VALOR', style: 'tableHeader', alignment: 'right' }
+                    { text: 'VL. UNITÁRIO', style: 'tableHeader', alignment: 'right' },
+                    { text: 'VALOR TOTAL', style: 'tableHeader', alignment: 'right' }
                 ]
             ];
 
@@ -3997,12 +3996,14 @@ function _formatItemsString() {
                     tableBody.push([
                         { stack: stack },
                         { text: String(it.quantidade), alignment: 'center', fontSize: 8.5, color: '#475569' },
-                        { text: it.valorFormatado, alignment: 'right', fontSize: 8.5, bold: true, color: '#1e293b' }
+                        { text: it.valorUnitarioFormatado, alignment: 'right', fontSize: 8.5, color: '#475569' },
+                        { text: it.valorTotalFormatado, alignment: 'right', fontSize: 8.5, bold: true, color: '#1e293b' }
                     ]);
                 });
             } else {
                 tableBody.push([
-                    { text: 'Nenhum item encontrado', colSpan: 3, alignment: 'center', color: '#94a3b8', fontSize: 8.5 },
+                    { text: 'Nenhum item encontrado', colSpan: 4, alignment: 'center', color: '#94a3b8', fontSize: 8.5 },
+                    {},
                     {},
                     {}
                 ]);
@@ -4010,27 +4011,31 @@ function _formatItemsString() {
 
             // Totais
             tableBody.push([
-                { text: [{ text: 'Peso Total: ', color: '#64748b' }, { text: dadosOrcamento.pesoTotalStr, bold: true, color: '#1e293b' }, { text: '   |   Total Itens:', color: '#64748b' }], colSpan: 2, fontSize: 8.5, fillColor: '#f8fafc' },
+                { text: [{ text: 'Peso Total: ', color: '#64748b' }, { text: dadosOrcamento.pesoTotalStr, bold: true, color: '#1e293b' }, { text: '   |   Total Itens:', color: '#64748b' }], colSpan: 3, fontSize: 8.5, fillColor: '#f8fafc' },
+                {},
                 {},
                 { text: dadosOrcamento.totalItensFmt, alignment: 'right', fontSize: 8.5, bold: true, fillColor: '#f8fafc' }
             ]);
 
             tableBody.push([
-                { text: 'IPI (3,25%):', colSpan: 2, alignment: 'right', fontSize: 8.5, bold: true, color: '#475569', fillColor: '#f8fafc' },
+                { text: 'IPI (3,25%):', colSpan: 3, alignment: 'right', fontSize: 8.5, bold: true, color: '#475569', fillColor: '#f8fafc' },
+                {},
                 {},
                 { text: dadosOrcamento.ipiFmt, alignment: 'right', fontSize: 8.5, bold: true, fillColor: '#f8fafc' }
             ]);
 
             if (dadosOrcamento.freteVal > 0) {
                 tableBody.push([
-                    { text: 'Frete (FOB):', colSpan: 2, alignment: 'right', fontSize: 8.5, bold: true, color: '#475569', fillColor: '#f8fafc' },
+                    { text: 'Frete (FOB):', colSpan: 3, alignment: 'right', fontSize: 8.5, bold: true, color: '#475569', fillColor: '#f8fafc' },
+                    {},
                     {},
                     { text: dadosOrcamento.freteFmt, alignment: 'right', fontSize: 8.5, bold: true, fillColor: '#f8fafc' }
                 ]);
             }
 
             tableBody.push([
-                { text: 'Valor Total:', colSpan: 2, alignment: 'right', fontSize: 9.5, bold: true, color: '#15803d', fillColor: '#dcfce7' },
+                { text: 'Valor Total:', colSpan: 3, alignment: 'right', fontSize: 9.5, bold: true, color: '#15803d', fillColor: '#dcfce7' },
+                {},
                 {},
                 { text: dadosOrcamento.totalFinalFmt, alignment: 'right', fontSize: 9.5, bold: true, color: '#15803d', fillColor: '#dcfce7' }
             ]);
@@ -4038,7 +4043,7 @@ function _formatItemsString() {
             content.push({
                 table: {
                     headerRows: 1,
-                    widths: ['*', 45, 90],
+                    widths: ['*', 35, 75, 75],
                     body: tableBody
                 },
                 layout: {

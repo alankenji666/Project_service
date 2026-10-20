@@ -1,6 +1,6 @@
 {
-  "version": "1.0.4",
-  "deployId": "1792497351359",
-  "updatedAt": "2026-10-20T08:55:00-03:00",
-  "notes": "Remoção do botão de atualizar legado do cabeçalho."
+  "version": "1.0.5",
+  "deployId": "1792504500000",
+  "updatedAt": "2026-10-20T10:55:00-03:00",
+  "notes": "Impressão da SAT-G com Valor Unitário e Valor Total; remoção do prompt de transportadora ao marcar Orçamento como Enviado."
 }
