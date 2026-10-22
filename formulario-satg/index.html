@@ -34,6 +34,10 @@
                 </h2>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div id="campo-codigo-cliente-container" class="hidden">
+                        <label class="label-text">Cód. Cliente *</label>
+                        <input type="text" id="codigoCliente" class="input-field" placeholder="Código do cliente">
+                    </div>
                     <div>
                         <label class="label-text">Razão Social / Nome Completo *</label>
                         <input type="text" id="cliente" required class="input-field"  placeholder="Empresa ou Nome">
@@ -50,7 +54,7 @@
                         <label class="label-text">Telefone / WhatsApp *</label>
                         <input type="text" id="telefone" required class="input-field"  placeholder="(00) 00000-0000">
                     </div>
-                    <div class="md:col-span-2">
+                    <div id="campo-email-container" class="md:col-span-2">
                         <label class="label-text">Email</label>
                         <input type="email" id="email" class="input-field"  placeholder="email@exemplo.com">
                     </div>
@@ -269,6 +273,6 @@
     </div>
 
     <!-- Script de envio -->
-    <script src="js/form.js"></script>
+    <script src="js/form.js?v=2"></script>
 </body>
 </html>

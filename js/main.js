@@ -15,9 +15,9 @@
         import { EstoqueApp } from './modulos/estoque.js?v=110';
         import { SaidaItens } from './modulos/saidaItens.js?v=110';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=110';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=112';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=114';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
-        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=125';
+        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=129';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=110';
         import { TransportadorasApp } from './modulos/transportadoras.js?v=110';
@@ -1402,6 +1402,7 @@ const data = filteredProducts.map(product => {
                     _orderObservationTextarea.value = '';
                     _updateObservationCharCount();
                     _orderObservationModal.classList.remove('hidden');
+                    _orderObservationModal.style.display = 'flex';
                     _orderObservationTextarea.focus();
 
                     // Buscar dados atualizados do servidor em background para pegar obs de outros dispositivos
@@ -1483,6 +1484,7 @@ const data = filteredProducts.map(product => {
                     }
 
                     _orderObservationModal.classList.add('hidden');
+                    _orderObservationModal.style.display = 'none';
                     _showMessageModal("Sucesso", "Observação salva com sucesso!");
 
                 } catch (error) {
@@ -1536,8 +1538,8 @@ const data = filteredProducts.map(product => {
              * @param {string} orderCode - O código da requisição.
              * @param {string} codigoService - O código do produto.
              */
-            function _openRequisitionObservationModal(orderCode, codigoService) {
-                const item = _findRequisitionItem(orderCode, codigoService);
+            function _openRequisitionObservationModal(orderCode, codigoService, requisitionType = null) {
+                const item = _findRequisitionItem(orderCode, codigoService, requisitionType);
                 if (!item) {
                     _showMessageModal("Erro", "Item de requisição não encontrado.");
                     return;
@@ -1546,11 +1548,13 @@ const data = filteredProducts.map(product => {
                 if (_requisitionObservationModal) {
                     _requisitionObservationModal.dataset.orderCode = orderCode;
                     _requisitionObservationModal.dataset.codigoService = codigoService;
+                    if (requisitionType) _requisitionObservationModal.dataset.requisitionType = requisitionType;
                     _requisitionObservationModalInfo.innerHTML = `Observações para o item <b>${item.descricao}</b> (${item.codigoService}) na Requisição <b>${orderCode}</b>`;
                     _renderRequisitionObservationChat(item.observacao);
                     _requisitionObservationTextarea.value = '';
                     _updateRequisitionObservationCharCount();
                     _requisitionObservationModal.classList.remove('hidden');
+                    _requisitionObservationModal.style.display = 'flex';
                     _requisitionObservationTextarea.focus();
                 }
             }
@@ -1565,7 +1569,7 @@ const data = filteredProducts.map(product => {
 
                 if (!orderCode || !codigoService || !newObservation.trim()) return;
 
-                const itemToUpdate = _findRequisitionItem(orderCode, codigoService);
+                const itemToUpdate = _findRequisitionItem(orderCode, codigoService, _requisitionObservationModal?.dataset?.requisitionType);
                 if (!itemToUpdate) {
                     _showMessageModal("Erro", "Item de requisição não encontrado para salvar.");
                     return;
@@ -2776,8 +2780,8 @@ const data = filteredProducts.map(product => {
                             <td class="px-3 py-4 whitespace-nowrap">
                                 <div class="flex items-center space-x-1.5">
                                     <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 order-item-checkbox" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-requisition-type="${item.requisitionType}" ${isOk ? 'checked disabled' : ''}>
-                                    <span class="requisition-observation-status-icon cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-all flex items-center justify-center" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-observation='${JSON.stringify(item.observacao || [])}' title="${hasObservation ? 'Clique para ver/adicionar observações (possui observações)' : 'Clique para ver/adicionar observações'}">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ${hasObservation ? 'text-red-500' : 'text-gray-400'} hover:scale-110 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                                    <span class="requisition-observation-status-icon cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-all flex items-center justify-center" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-requisition-type="${item.requisitionType || ''}" data-observation='${JSON.stringify(item.observacao || [])}' title="${hasObservation ? 'Clique para ver/adicionar observações (possui observações)' : 'Clique para ver/adicionar observações'}">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none ${hasObservation ? 'text-red-500' : 'text-gray-400'} hover:scale-110 transition-transform" viewBox="0 0 20 20" fill="currentColor">
                                             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
                                         </svg>
                                     </span>
@@ -2962,14 +2966,14 @@ const data = filteredProducts.map(product => {
                             const obsIcon = event.target.closest('.requisition-observation-status-icon');
                             if (obsIcon) {
                                 _hideProductTooltip();
-                                const { orderCode, codigoService } = obsIcon.dataset;
-                                _openRequisitionObservationModal(orderCode, codigoService);
+                                const { orderCode, codigoService, requisitionType } = obsIcon.dataset;
+                                _openRequisitionObservationModal(orderCode, codigoService, requisitionType);
                                 return;
                             }
                             const viewBtn = event.target.closest('.view-requisition-observation-btn');
                             if (viewBtn) {
-                                const { orderCode, codigoService } = viewBtn.dataset;
-                                _openRequisitionObservationModal(orderCode, codigoService);
+                                const { orderCode, codigoService, requisitionType } = viewBtn.dataset;
+                                _openRequisitionObservationModal(orderCode, codigoService, requisitionType);
                                 return;
                             }
                             const editDescBtn = event.target.closest('.edit-description-btn');
@@ -4738,9 +4742,24 @@ function _printReportSolicitation() {
                         }
                     });
                 }
+                const _closeOrderObservation = () => {
+                    if (_orderObservationModal) {
+                        _orderObservationModal.classList.add('hidden');
+                        _orderObservationModal.style.display = 'none';
+                    }
+                };
                 if (_cancelOrderObservationBtn) {
-                    _cancelOrderObservationBtn.addEventListener('click', () => {
-                        if (_orderObservationModal) _orderObservationModal.classList.add('hidden');
+                    _cancelOrderObservationBtn.addEventListener('click', _closeOrderObservation);
+                }
+                const closeOrderObsX = document.getElementById('close-order-observation-modal-x');
+                if (closeOrderObsX) {
+                    closeOrderObsX.addEventListener('click', _closeOrderObservation);
+                }
+                if (_orderObservationModal) {
+                    _orderObservationModal.addEventListener('click', (e) => {
+                        if (e.target === _orderObservationModal) {
+                            _closeOrderObservation();
+                        }
                     });
                 }
                 if (_orderObservationTextarea) {
@@ -4888,23 +4907,31 @@ if (_generateProductReportBtn) {
 
 
 
-                // NOVO: Event listeners para o modal de observação
-                if (_cancelOrderObservationBtn) {
-                    _cancelOrderObservationBtn.addEventListener('click', () => {
-                        if (_orderObservationModal) _orderObservationModal.classList.add('hidden');
-                    });
-                }
-                if (_orderObservationTextarea) {
-                    _orderObservationTextarea.addEventListener('input', _updateObservationCharCount);
-                }
-                if (_saveOrderObservationBtn) {
-                    _saveOrderObservationBtn.addEventListener('click', _saveOrderObservation);
-                }
 
                 // NOVO: Event listeners para o modal de observação de requisição
                 if (_cancelRequisitionObservationBtn) {
                     _cancelRequisitionObservationBtn.addEventListener('click', () => {
-                        if (_requisitionObservationModal) _requisitionObservationModal.classList.add('hidden');
+                        if (_requisitionObservationModal) {
+                            _requisitionObservationModal.classList.add('hidden');
+                            _requisitionObservationModal.style.display = 'none';
+                        }
+                    });
+                }
+                const closeReqObsX = document.getElementById('close-requisition-observation-modal-x');
+                if (closeReqObsX) {
+                    closeReqObsX.addEventListener('click', () => {
+                        if (_requisitionObservationModal) {
+                            _requisitionObservationModal.classList.add('hidden');
+                            _requisitionObservationModal.style.display = 'none';
+                        }
+                    });
+                }
+                if (_requisitionObservationModal) {
+                    _requisitionObservationModal.addEventListener('click', (e) => {
+                        if (e.target === _requisitionObservationModal) {
+                            _requisitionObservationModal.classList.add('hidden');
+                            _requisitionObservationModal.style.display = 'none';
+                        }
                     });
                 }
                 if (_requisitionObservationTextarea) {

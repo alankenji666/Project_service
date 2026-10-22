@@ -69,6 +69,7 @@ export const GerenciarGarantiaApp = (function () {
     let _satgObservationCharCount;
     let _saveSatgObservationBtn;
     let _cancelSatgObservationBtn;
+    let _closeSatgObservationModalX;
     
     // Referências do DOM - Pedidos Garantia
     let _pedidosGarantiaContainer;
@@ -434,6 +435,7 @@ export const GerenciarGarantiaApp = (function () {
         _satgObservationCharCount = document.getElementById('satg-observation-char-count');
         _saveSatgObservationBtn = document.getElementById('save-satg-observation-btn');
         _cancelSatgObservationBtn = document.getElementById('cancel-satg-observation-btn');
+        _closeSatgObservationModalX = document.getElementById('close-satg-observation-modal-x');
         
                 _satgTopFilterBar = document.getElementById('satg-top-filter-bar');
         _satgStatusSelect = document.getElementById('satg-status-select');
@@ -548,7 +550,9 @@ export const GerenciarGarantiaApp = (function () {
         if (btnNovaSatgManual) {
             btnNovaSatgManual.onclick = () => {
                 iframeModal.classList.remove('hidden');
-                iframe.src = "https://project-service-3fkn.vercel.app";
+                const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                const baseUrl = isLocal ? 'formulario-satg/index.html' : 'https://project-service-3fkn.vercel.app';
+                iframe.src = `${baseUrl}?origem=interno&t=${Date.now()}`;
                 iframe.onload = () => {
                     iframe.classList.remove('opacity-0');
                     if (iframeLoader) iframeLoader.classList.add('hidden');
@@ -859,8 +863,14 @@ export const GerenciarGarantiaApp = (function () {
         
         // Modal Sat-G Observacao
         if (_cancelSatgObservationBtn) {
-            _cancelSatgObservationBtn.onclick = () => {
-                if (_satgObservationModal) _satgObservationModal.classList.add('hidden');
+            _cancelSatgObservationBtn.onclick = _closeSatgObservationModal;
+        }
+        if (_closeSatgObservationModalX) {
+            _closeSatgObservationModalX.onclick = _closeSatgObservationModal;
+        }
+        if (_satgObservationModal) {
+            _satgObservationModal.onclick = (e) => {
+                if (e.target === _satgObservationModal) _closeSatgObservationModal();
             };
         }
         if (_satgObservationTextarea) {
@@ -2074,6 +2084,19 @@ function _formatItemsString() {
     }
 
     /**
+     * Verifica se uma solicitação Sat-G está marcada como finalizada.
+     * Suporta formato de objeto ({ finalizado: '...' }) ou valor direto.
+     */
+    function _isSatgFinalizado(item) {
+        if (!item) return false;
+        const val = (typeof item === 'object' && item !== null && 'finalizado' in item) ? item.finalizado : item;
+        if (!val) return false;
+        if (typeof val === 'boolean') return val;
+        const str = String(val).toLowerCase().trim();
+        return str.includes('finalizado') || str.includes('sim') || str === 'true' || str.startsWith('(');
+    }
+
+    /**
      * =========================================
      * Preferências de Filtro Sat-G (localStorage)
      * =========================================
@@ -2082,13 +2105,20 @@ function _formatItemsString() {
 
     function _saveSatgFilterPreferences() {
         try {
+            let activeRadio = 'desc';
+            if (_satgSortRadios) {
+                _satgSortRadios.forEach(r => {
+                    if (r.checked) activeRadio = r.value;
+                });
+            }
             const prefs = {
                 status: _satgStatusSelect ? _satgStatusSelect.value : 'all',
                 orcamento: _satgOrcamentoSelect ? _satgOrcamentoSelect.value : 'all',
                 retorno: _satgRetornoSelect ? _satgRetornoSelect.value : 'all',
                 responsavel: _satgResponsavelSelect ? _satgResponsavelSelect.value : 'all',
                 sort: _satgSortDirection,
-                sortColumn: _satgSortColumn
+                sortColumn: _satgSortColumn,
+                activeRadio: activeRadio
             };
             localStorage.setItem(STORAGE_KEY_SATG_FILTERS, JSON.stringify(prefs));
         } catch (e) {
@@ -2111,6 +2141,11 @@ function _formatItemsString() {
             localStorage.removeItem(STORAGE_KEY_SATG_FILTERS);
             _satgSortColumn = 'data';
             _satgSortDirection = 'desc';
+            if (_satgSortRadios) {
+                _satgSortRadios.forEach(r => {
+                    r.checked = (r.value === 'desc');
+                });
+            }
         } catch (e) {}
     }
 
@@ -2127,16 +2162,20 @@ function _formatItemsString() {
         if (_satgRetornoSelect && prefs.retorno) {
             _satgRetornoSelect.value = prefs.retorno;
         }
+        if (_satgResponsavelSelect && prefs.responsavel) {
+            _satgResponsavelSelect.value = prefs.responsavel;
+        }
         if (prefs.sortColumn) {
             _satgSortColumn = prefs.sortColumn;
         }
         if (prefs.sort) {
             _satgSortDirection = prefs.sort;
-            if (_satgSortRadios) {
-                _satgSortRadios.forEach(r => {
-                    r.checked = (_satgSortColumn === 'data' && r.value === prefs.sort);
-                });
-            }
+        }
+        if (_satgSortRadios) {
+            const targetRadio = prefs.activeRadio || (prefs.sort === 'asc' ? 'asc' : 'desc');
+            _satgSortRadios.forEach(r => {
+                r.checked = (r.value === targetRadio);
+            });
         }
     }
 
@@ -2367,7 +2406,7 @@ function _formatItemsString() {
             }
             
             if (_satgBadgeCount) {
-                const aguardandoCount = _satgData.filter(d => d.status.toUpperCase() === 'EM ANALISE').length;
+                const aguardandoCount = _satgData.filter(d => !_isSatgFinalizado(d) && String(d.status || '').toUpperCase() === 'EM ANALISE').length;
                 if (aguardandoCount > 0) {
                     _satgBadgeCount.innerText = aguardandoCount;
                     _satgBadgeCount.classList.remove('hidden');
@@ -2408,6 +2447,14 @@ function _formatItemsString() {
         };
 
         let filtered = _satgData.filter(d => {
+            // 0. Filtro Finalizados vs Ativas (Novas / Urgentes)
+            const isFin = _isSatgFinalizado(d);
+            if (sortOrder === 'finalizados') {
+                if (!isFin) return false;
+            } else {
+                if (isFin) return false;
+            }
+
             // 1. Filtro Texto (Busca)
             const textMatch = !query || 
                               String(d.codigo).toLowerCase().includes(query) ||
@@ -2547,8 +2594,8 @@ function _formatItemsString() {
             } else if (_satgSortColumn === 'servico_mo') {
                 res = getVisualServicoMo(a).localeCompare(getVisualServicoMo(b), 'pt-BR');
             } else if (_satgSortColumn === 'finalizado') {
-                const finA = (a.finalizado && String(a.finalizado).toLowerCase().includes('finalizado')) ? 1 : 0;
-                const finB = (b.finalizado && String(b.finalizado).toLowerCase().includes('finalizado')) ? 1 : 0;
+                const finA = _isSatgFinalizado(a) ? 1 : 0;
+                const finB = _isSatgFinalizado(b) ? 1 : 0;
                 res = finA - finB;
             }
 
@@ -2710,7 +2757,7 @@ function _formatItemsString() {
         }
 
         pagedData.forEach(req => {
-            const isFinalizado = Boolean(req.finalizado && String(req.finalizado).toLowerCase().includes('finalizado'));
+            const isFinalizado = _isSatgFinalizado(req);
             const tr = document.createElement('tr');
             tr.className = "hover:bg-purple-50/50 transition-colors border-b border-gray-50 last:border-0" + (isFinalizado ? " bg-green-50/20" : "");
             
@@ -2836,12 +2883,19 @@ function _formatItemsString() {
                 </div>
             </div>`;
 
+            const hasSatgObs = Boolean(
+                req.observacaoSatg && (
+                    (Array.isArray(req.observacaoSatg) && req.observacaoSatg.length > 0) ||
+                    (typeof req.observacaoSatg === 'string' && req.observacaoSatg.trim() !== '' && req.observacaoSatg.trim() !== '[]')
+                )
+            );
+
             tr.innerHTML = `
                 <td class="w-12 px-2.5 py-2.5 whitespace-nowrap text-center text-xs font-medium">
                     <div class="flex items-center justify-center gap-1.5">
-                        <input type="checkbox" class="satg-finalizado-checkbox h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer" data-row-index="${req.rowIndex}" ${isFinalizado ? 'checked' : ''} title="${isFinalizado ? 'Finalizado: ' + req.finalizado + ' (clique para reabrir)' : 'Clique para finalizar esta solicitação'}">
-                        <span class="btn-observacao-satg cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-colors inline-flex items-center justify-center" data-row-index="${req.rowIndex}" title="Adicionar/Ver Observação">
-                            <svg class="h-4 w-4 ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'text-red-500' : 'text-gray-400'} hover:scale-110 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                        <input type="checkbox" class="satg-finalizado-checkbox h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer" data-row-index="${req.rowIndex}" ${isFinalizado ? 'checked' : ''} title="${isFinalizado ? 'Finalizado' + (req.finalizado ? ': ' + req.finalizado : '') + ' (clique para reabrir)' : 'Clique para finalizar esta solicitação'}">
+                        <span class="btn-observacao-satg cursor-pointer p-1 rounded-full hover:bg-gray-200 transition-colors inline-flex items-center justify-center" data-row-index="${req.rowIndex}" title="${hasSatgObs ? 'Ver / Adicionar Observação (possui anotações)' : 'Adicionar Observação'}">
+                            <svg class="h-4 w-4 ${hasSatgObs ? 'text-red-500' : 'text-gray-400'} hover:scale-110 transition-transform pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
                                 <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
                             </svg>
                         </span>
@@ -3086,8 +3140,10 @@ function _formatItemsString() {
             const btnObs = tr.querySelector('.btn-observacao-satg');
             if (btnObs) {
                 btnObs.onclick = (e) => {
+                    e.preventDefault();
                     e.stopPropagation();
-                    if (typeof _openSatgObservationModal === 'function') _openSatgObservationModal(req);
+                    const targetReq = req || _satgData.find(d => String(d.rowIndex) === String(btnObs.dataset.rowIndex));
+                    if (targetReq) _openSatgObservationModal(targetReq);
                 };
             }
 
@@ -3160,6 +3216,23 @@ function _formatItemsString() {
 
             _satgTableContent.appendChild(tr);
         });
+
+        // Delegação de eventos garantida na tabela para observação
+        if (_satgTableContent && !_satgTableContent.dataset.obsDelegationBound) {
+            _satgTableContent.dataset.obsDelegationBound = 'true';
+            _satgTableContent.addEventListener('click', (e) => {
+                const btn = e.target.closest('.btn-observacao-satg');
+                if (btn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const rIdx = btn.dataset.rowIndex;
+                    const targetReq = _satgData.find(d => String(d.rowIndex) === String(rIdx));
+                    if (targetReq) {
+                        _openSatgObservationModal(targetReq);
+                    }
+                }
+            });
+        }
     }
 
     function _openSatgModal(req) {
@@ -4736,32 +4809,91 @@ function _formatItemsString() {
         return html;
     }
 
+    function _ensureSatgObservationModalElements() {
+        if (!_satgObservationModal || !document.body.contains(_satgObservationModal)) {
+            _satgObservationModal = document.getElementById('satg-observation-modal');
+        }
+        if (!_satgObservationModalInfo) _satgObservationModalInfo = document.getElementById('satg-observation-modal-info');
+        if (!_satgObservationHistory) _satgObservationHistory = document.getElementById('satg-observation-history');
+        if (!_satgObservationTextarea) _satgObservationTextarea = document.getElementById('satg-observation-textarea');
+        if (!_satgObservationCharCount) _satgObservationCharCount = document.getElementById('satg-observation-char-count');
+        if (!_saveSatgObservationBtn) _saveSatgObservationBtn = document.getElementById('save-satg-observation-btn');
+        if (!_cancelSatgObservationBtn) _cancelSatgObservationBtn = document.getElementById('cancel-satg-observation-btn');
+        if (!_closeSatgObservationModalX) _closeSatgObservationModalX = document.getElementById('close-satg-observation-modal-x');
+
+        if (_cancelSatgObservationBtn) {
+            _cancelSatgObservationBtn.onclick = _closeSatgObservationModal;
+        }
+        if (_closeSatgObservationModalX) {
+            _closeSatgObservationModalX.onclick = _closeSatgObservationModal;
+        }
+        if (_satgObservationModal) {
+            _satgObservationModal.onclick = (e) => {
+                if (e.target === _satgObservationModal) _closeSatgObservationModal();
+            };
+        }
+        if (_satgObservationTextarea) {
+            _satgObservationTextarea.oninput = () => {
+                if (_satgObservationCharCount) {
+                    _satgObservationCharCount.innerText = _satgObservationTextarea.value.length;
+                }
+            };
+        }
+        if (_saveSatgObservationBtn) {
+            _saveSatgObservationBtn.onclick = async () => {
+                await _saveSatgObservation();
+            };
+        }
+    }
+
+    function _closeSatgObservationModal() {
+        _ensureSatgObservationModalElements();
+        if (_satgObservationModal) {
+            _satgObservationModal.classList.add('hidden');
+            _satgObservationModal.style.display = 'none';
+        }
+    }
+
     function _openSatgObservationModal(req) {
-        if (!_satgObservationModal) return;
+        if (!req) {
+            console.warn('[SatG Observation] Chamado sem req válido');
+            return;
+        }
+        _ensureSatgObservationModalElements();
+        if (!_satgObservationModal) {
+            console.error('[SatG Observation] Modal #satg-observation-modal não encontrado no DOM!');
+            return;
+        }
         
         _satgObservationModal.dataset.rowIndex = req.rowIndex;
-        _satgObservationModalInfo.innerHTML = `Editando observação para SAT-G <b>${req.codigo || 'N/A'}</b> - ${req.cliente || 'N/A'}`;
+        if (_satgObservationModalInfo) {
+            _satgObservationModalInfo.innerHTML = `Editando observação para SAT-G <b>${req.codigo || 'N/A'}</b> - ${req.cliente || 'N/A'}`;
+        }
         
         let history = [];
         try {
-            if (req.observacaoSatg && req.observacaoSatg.startsWith('[')) {
+            if (typeof req.observacaoSatg === 'string' && req.observacaoSatg.startsWith('[')) {
                 history = JSON.parse(req.observacaoSatg);
-            } else if (req.observacaoSatg && req.observacaoSatg.trim() !== '') {
-                // Legado: era só uma string
+            } else if (Array.isArray(req.observacaoSatg)) {
+                history = [...req.observacaoSatg];
+            } else if (req.observacaoSatg && typeof req.observacaoSatg === 'string' && req.observacaoSatg.trim() !== '') {
                 history = [req.observacaoSatg];
             }
         } catch (e) {
             console.error("Erro ao fazer parse do histórico Sat-G", e);
             if (req.observacaoSatg) {
-                history = [req.observacaoSatg];
+                history = [String(req.observacaoSatg)];
             }
         }
 
         _renderSatgObservationHistory(history);
-        _satgObservationTextarea.value = '';
+        if (_satgObservationTextarea) _satgObservationTextarea.value = '';
         if (_satgObservationCharCount) _satgObservationCharCount.innerText = '0';
         _satgObservationModal.classList.remove('hidden');
-        _satgObservationTextarea.focus();
+        _satgObservationModal.style.display = 'flex';
+        if (_satgObservationTextarea) {
+            setTimeout(() => _satgObservationTextarea.focus(), 50);
+        }
     }
 
     function _showConfirmation(title, message) {
@@ -4796,6 +4928,9 @@ function _formatItemsString() {
     }
 
     function _renderSatgObservationHistory(history) {
+        if (!_satgObservationHistory) _satgObservationHistory = document.getElementById('satg-observation-history');
+        if (!_satgObservationHistory) return;
+
         if (!history || history.length === 0) {
             _satgObservationHistory.innerHTML = '<p class="text-center text-gray-500 py-4">Nenhuma observação registrada.</p>';
             return;
@@ -4808,22 +4943,24 @@ function _formatItemsString() {
                 const parts = obs.split(' - ');
                 timestamp = parts.length > 1 ? parts[0] : '';
                 message = parts.length > 1 ? parts.slice(1).join(' - ') : obs;
-            } else {
-                message = obs.text || '';
-                timestamp = obs.date || '';
+            } else if (obs && typeof obs === 'object') {
+                message = obs.text || obs.message || obs.observacao || '';
+                timestamp = obs.date || obs.data || obs.timestamp || '';
                 try {
-                    if (timestamp && timestamp.includes('T')) {
+                    if (timestamp && typeof timestamp === 'string' && timestamp.includes('T')) {
                         const d = new Date(timestamp);
                         timestamp = d.toLocaleDateString('pt-BR') + ', ' + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
                     }
                 } catch(e) {}
+            } else {
+                message = String(obs || '');
             }
 
             return `
             <div class="relative group p-3 rounded-lg bg-blue-100 text-gray-800 max-w-md self-start mb-3">
                 <button class="delete-obs-satg-btn absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded-full bg-red-100 hover:bg-red-200 text-red-500 hover:text-red-700" 
                     data-obs-index="${idx}" title="Excluir esta observação">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3 pointer-events-none">
                         <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
                     </svg>
                 </button>
@@ -4839,16 +4976,21 @@ function _formatItemsString() {
 
         _satgObservationHistory.querySelectorAll('.delete-obs-satg-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
                 const confirmed = await _showConfirmation('Excluir Observação', 'Tem certeza que deseja excluir esta mensagem? Esta ação não pode ser desfeita.');
                 if (!confirmed) return;
                 
                 const idx = parseInt(btn.dataset.obsIndex, 10);
-                const rowIndex = _satgObservationModal.dataset.rowIndex;
+                const rowIndex = _satgObservationModal ? _satgObservationModal.dataset.rowIndex : null;
                 const req = _satgData.find(d => String(d.rowIndex) === String(rowIndex));
                 if (req) {
                     let currHistory = [];
                     try {
-                        currHistory = JSON.parse(req.observacaoSatg);
+                        if (typeof req.observacaoSatg === 'string' && req.observacaoSatg.startsWith('[')) {
+                            currHistory = JSON.parse(req.observacaoSatg);
+                        } else if (Array.isArray(req.observacaoSatg)) {
+                            currHistory = [...req.observacaoSatg];
+                        }
                         if (Array.isArray(currHistory)) {
                             currHistory.splice(idx, 1);
                             const newObservacaoJSON = currHistory.length > 0 ? JSON.stringify(currHistory) : '';
@@ -4874,8 +5016,9 @@ function _formatItemsString() {
     }
 
     async function _saveSatgObservation() {
-        const rowIndex = _satgObservationModal.dataset.rowIndex;
-        const newText = _satgObservationTextarea.value.trim();
+        _ensureSatgObservationModalElements();
+        const rowIndex = _satgObservationModal ? _satgObservationModal.dataset.rowIndex : null;
+        const newText = _satgObservationTextarea ? _satgObservationTextarea.value.trim() : '';
         if (!rowIndex || !newText) return;
 
         const req = _satgData.find(d => String(d.rowIndex) === String(rowIndex));
@@ -4884,9 +5027,11 @@ function _formatItemsString() {
         // Tenta ler o historico existente
         let history = [];
         try {
-            if (req.observacaoSatg && req.observacaoSatg.startsWith('[')) {
+            if (typeof req.observacaoSatg === 'string' && req.observacaoSatg.startsWith('[')) {
                 history = JSON.parse(req.observacaoSatg);
-            } else if (req.observacaoSatg && req.observacaoSatg.trim() !== '') {
+            } else if (Array.isArray(req.observacaoSatg)) {
+                history = [...req.observacaoSatg];
+            } else if (req.observacaoSatg && typeof req.observacaoSatg === 'string' && req.observacaoSatg.trim() !== '') {
                 history = [req.observacaoSatg]; // fallback for legacy strings
             }
         } catch (e) {}
@@ -4898,9 +5043,11 @@ function _formatItemsString() {
 
         const newObservacaoJSON = JSON.stringify(history);
 
-        const originalBtnText = _saveSatgObservationBtn.innerText;
-        _saveSatgObservationBtn.innerText = 'Salvando...';
-        _saveSatgObservationBtn.disabled = true;
+        const originalBtnText = _saveSatgObservationBtn ? _saveSatgObservationBtn.innerText : 'Salvar';
+        if (_saveSatgObservationBtn) {
+            _saveSatgObservationBtn.innerText = 'Salvando...';
+            _saveSatgObservationBtn.disabled = true;
+        }
 
         try {
             const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
@@ -4913,16 +5060,18 @@ function _formatItemsString() {
             // Atualizar cache local 
             req.observacaoSatg = newObservacaoJSON;
             
-            _satgObservationTextarea.value = '';
+            if (_satgObservationTextarea) _satgObservationTextarea.value = '';
             if (_satgObservationCharCount) _satgObservationCharCount.innerText = '0';
-            _satgObservationModal.classList.add('hidden');
+            _closeSatgObservationModal();
             
             _fetchSatGData();
         } catch (err) {
             alert('Erro ao salvar observação');
         } finally {
-            _saveSatgObservationBtn.innerText = originalBtnText;
-            _saveSatgObservationBtn.disabled = false;
+            if (_saveSatgObservationBtn) {
+                _saveSatgObservationBtn.innerText = originalBtnText;
+                _saveSatgObservationBtn.disabled = false;
+            }
         }
     }
 
@@ -5131,10 +5280,21 @@ function _formatItemsString() {
     }
 
 
+    function openObservationModal(rowIndex) {
+        const req = _satgData.find(d => String(d.rowIndex) === String(rowIndex));
+        if (req) {
+            _openSatgObservationModal(req);
+        } else {
+            console.warn('[SAT-G] Solicitação não encontrada para rowIndex:', rowIndex);
+        }
+    }
+
     return {
         init,
         render,
         refreshSatG: _fetchSatGData,
-        resetToSelector
+        resetToSelector,
+        openObservationModal,
+        openSatgObservationModal: _openSatgObservationModal
     };
 })();

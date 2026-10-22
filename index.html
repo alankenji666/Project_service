@@ -2412,16 +2412,12 @@
             <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
                 <h2 id="modal-order-title" class="text-xl font-bold text-gray-800">Detalhes do Pedido</h2>
                 <div class="flex items-center gap-2 flex-wrap justify-end">
-                    <!-- Toggle Com/Sem Valor -->
-                    <label class="flex items-center gap-1.5 cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors text-sm text-gray-600 font-medium" title="Mostrar/ocultar coluna de valores">
-                        <input type="checkbox" id="modal-toggle-valores" checked class="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer">
-                        Com Valor
-                    </label>
-                    <!-- Botão de Ação: Emitir NF-e -->
+                    <!-- Botão de Ação: Editar Pedido -->
                     <button id="modal-emitir-nfe-btn"
-                        class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 font-medium">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        Emitir NF-e
+                        class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 font-medium"
+                        title="Editar informações antes de emitir a Nota Fiscal Eletrônica (NF-e)">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        Editar Pedido
                     </button>
 
                     <!-- Dropdown de Situação Customizado -->
@@ -2543,12 +2539,32 @@
     <div id="nfe-edit-modal"
         class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col relative">
-            <!-- Cabeçalho -->
-            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
-                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                    Editar Pedido e Emissão de NF-e
-                </h3>
+            <!-- Cabeçalho com Seleção de Tipo de Emissão (NF-e / NF-s) -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0 bg-white">
+                <div class="flex items-center gap-4 flex-wrap">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        <span>Editar Pedido</span>
+                    </h3>
+
+                    <!-- Botões de Modo: Emitir NF-e / Emitir NF-s -->
+                    <div class="inline-flex p-1 bg-gray-100 rounded-lg gap-1 border border-gray-200">
+                        <button id="nfe-mode-nfe-btn" type="button"
+                            class="px-3.5 py-1.5 rounded-md text-xs font-bold transition-all shadow-sm bg-blue-600 text-white flex items-center gap-1.5 cursor-pointer"
+                            title="Emissão de NF-e (Produtos e Pedido)">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Emitir NF-e
+                        </button>
+                        <button id="nfe-mode-nfs-btn" type="button"
+                            class="px-3.5 py-1.5 rounded-md text-xs font-bold transition-all text-gray-600 hover:text-gray-900 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title="Emitir Nota Fiscal de Serviço (NF-s)">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                            <span>Emitir NF-s</span>
+                            <span id="nfe-mode-nfs-badge" class="hidden ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded-full font-bold"></span>
+                        </button>
+                    </div>
+                </div>
+
                 <button id="close-nfe-edit-modal-btn" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -2557,7 +2573,9 @@
             </div>
             
             <!-- Conteúdo editável com scroll -->
-            <div class="overflow-y-auto p-6 flex-1 space-y-6 text-left">
+            <div class="overflow-y-auto p-6 flex-1 text-left">
+                <!-- VIEW 1: NF-e (Padrão) -->
+                <div id="nfe-edit-view-nfe" class="space-y-6">
                 <!-- Seção 1: Dados do Cliente e Operação -->
                 <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Dados Gerais da Nota</h4>
@@ -2851,39 +2869,129 @@
                         </table>
                     </div>
                 </div>
+                <!-- FIM VIEW 1: NF-e -->
+                </div>
+
+                <!-- VIEW 2: NF-s (Nota Fiscal de Serviços) -->
+                <div id="nfe-edit-view-nfs" class="space-y-6 hidden">
+                    <!-- Banner Informativo -->
+                    <div class="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
+                        <div class="p-2 bg-purple-100 text-purple-700 rounded-lg flex-shrink-0">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-sm font-bold text-purple-900">Emissão de Nota Fiscal de Serviços (NF-s)</h4>
+                            <p class="text-xs text-purple-700 mt-0.5">
+                                Os itens de serviço deste pedido (código iniciado em <strong>7</strong>) foram identificados e separados abaixo para emissão da NF-s.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Dados do Tomador do Serviço (Cliente) -->
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Tomador dos Serviços (Cliente)</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                            <div class="md:col-span-6">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">Razão Social / Nome</label>
+                                <input type="text" id="nfs-edit-cliente-nome" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100 text-gray-700" readonly>
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">CPF / CNPJ</label>
+                                <input type="text" id="nfs-edit-cliente-doc" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100 text-gray-700" readonly>
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="block text-xs font-semibold text-gray-500 mb-1">Cidade / UF</label>
+                                <input type="text" id="nfs-edit-cliente-cidade-uf" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100 text-gray-700" readonly>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Itens de Serviço -->
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Itens de Serviço (Código 7xxx)</h4>
+                            <span id="nfs-edit-count-badge" class="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full"></span>
+                        </div>
+                        <div class="border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase w-[120px]">Código (SKU)</th>
+                                        <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Discriminação do Serviço</th>
+                                        <th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase w-[90px]">Qtd</th>
+                                        <th class="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase w-[120px]">Valor Unit. (R$)</th>
+                                        <th class="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase w-[130px]">Total (R$)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nfs-edit-itens-tbody" class="bg-white divide-y divide-gray-100">
+                                    <!-- Preenchido dinamicamente via JS com itens de código 7xxx -->
+                                </tbody>
+                            </table>
+
+                            <!-- Resumo dos Valores do Serviço -->
+                            <div class="bg-gray-50 border-t border-gray-100 p-4 flex justify-between items-center text-sm">
+                                <span class="text-xs text-gray-500 font-medium">Apenas serviços tributados pelo município constam nesta nota.</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-gray-500 font-semibold">Total dos Serviços:</span>
+                                    <span id="nfs-edit-total-servicos" class="text-purple-700 font-bold text-lg">R$ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Observações / Discriminação Adicional -->
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Discriminação Detalhada / Observações da NF-s</label>
+                        <textarea id="nfs-edit-observacoes" rows="4" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="Observações que constarão na nota fiscal de serviços..."></textarea>
+                    </div>
+                </div>
+                <!-- FIM VIEW 2: NF-s -->
             </div>
 
             <!-- Rodapé / Ações -->
-            <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0 bg-gray-50 rounded-b-xl">
+            <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between flex-shrink-0 bg-gray-50 rounded-b-xl">
+                <!-- Botão Cancelar (comum) -->
                 <button id="cancel-nfe-edit-btn" class="px-5 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg text-sm font-semibold transition-colors">
                     Cancelar
                 </button>
-                <button id="save-order-edit-btn" class="px-5 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border border-indigo-300 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-sm" title="Salva as alterações feitas no pedido diretamente no Bling, sem emitir a NF-e.">
-                    <!-- Spinner de salvamento -->
-                    <svg id="save-order-spinner" class="animate-spin h-3.5 w-3.5 mr-1 hidden" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
-                    Salvar Pedido no Bling
-                </button>
-                <button id="draft-nfe-edit-btn" class="hidden px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold transition-colors items-center gap-1.5 shadow-md" title="Cria a NF-e no Bling sem enviar à SEFAZ. Use para conferir os dados antes da emissão definitiva.">
-                    <!-- Spinner de rascunho -->
-                    <svg id="nfe-draft-spinner" class="animate-spin h-3.5 w-3.5 mr-1 hidden" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    Criar Rascunho (só confere)
-                </button>
-                <button id="confirm-nfe-edit-btn" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-md">
-                    <!-- Spinner de envio -->
-                    <svg id="nfe-edit-spinner" class="animate-spin h-3.5 w-3.5 mr-1 hidden" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    🚀 Salvar e Emitir NF-e
-                </button>
+
+                <!-- Ações para modo NF-e -->
+                <div id="nfe-footer-actions" class="flex items-center gap-3">
+                    <button id="save-order-edit-btn" class="px-5 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border border-indigo-300 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-sm" title="Salva as alterações feitas no pedido diretamente no Bling, sem emitir a NF-e.">
+                        <!-- Spinner de salvamento -->
+                        <svg id="save-order-spinner" class="animate-spin h-3.5 w-3.5 mr-1 hidden" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                        Salvar Pedido no Bling
+                    </button>
+                    <button id="draft-nfe-edit-btn" class="hidden px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold transition-colors items-center gap-1.5 shadow-md" title="Cria a NF-e no Bling sem enviar à SEFAZ. Use para conferir os dados antes da emissão definitiva.">
+                        <!-- Spinner de rascunho -->
+                        <svg id="nfe-draft-spinner" class="animate-spin h-3.5 w-3.5 mr-1 hidden" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Criar Rascunho (só confere)
+                    </button>
+                    <button id="confirm-nfe-edit-btn" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-md">
+                        <!-- Spinner de envio -->
+                        <svg id="nfe-edit-spinner" class="animate-spin h-3.5 w-3.5 mr-1 hidden" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        🚀 Salvar e Emitir NF-e
+                    </button>
+                </div>
+
+                <!-- Ações para modo NF-s -->
+                <div id="nfs-footer-actions" class="hidden flex items-center gap-3">
+                    <button id="confirm-nfs-emit-btn" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-md" title="Emitir Nota Fiscal de Serviços">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                        🚀 Emitir NF-s
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -3286,7 +3394,7 @@
 
     <!-- NOVO: Modal para editar observação do Pedido -->
     <div id="order-observation-modal"
-        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80] p-4">
         <div class="bg-white rounded-lg shadow-xl max-w-lg w-full flex flex-col max-h-[90vh]">
             <!-- Header -->
             <div class="p-4 border-b flex items-center justify-between">
@@ -3298,6 +3406,9 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
+                </button>
+                <button id="close-order-observation-modal-x" class="ml-2 text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="Fechar">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
             <!-- Chat History -->
@@ -3324,7 +3435,7 @@
 
     <!-- Modal para observação do SAT-G -->
     <div id="satg-observation-modal"
-        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80] p-4">
+        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[90] p-4">
         <div class="bg-white rounded-lg shadow-xl max-w-lg w-full flex flex-col max-h-[90vh]">
             <!-- Header -->
             <div class="p-4 border-b flex items-center justify-between">
@@ -3332,6 +3443,9 @@
                     <h3 class="text-xl font-bold text-gray-800">Histórico de Observações</h3>
                     <p id="satg-observation-modal-info" class="text-sm text-gray-600 mt-1"></p>
                 </div>
+                <button id="close-satg-observation-modal-x" class="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors ml-2" title="Fechar">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
             </div>
             <!-- Chat History -->
             <div id="satg-observation-history" class="flex-grow p-4 space-y-4 overflow-y-auto bg-gray-50 min-h-[150px]">
@@ -3357,12 +3471,17 @@
 
     <!-- NOVO: Modal para observação da Requisição -->
     <div id="requisition-observation-modal"
-        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+        class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[90] p-4">
         <div class="bg-white rounded-lg shadow-xl max-w-lg w-full flex flex-col max-h-[90vh]">
             <!-- Header -->
-            <div class="p-4 border-b">
-                <h3 class="text-xl font-bold text-gray-800">Histórico de Observações do Item</h3>
-                <p id="requisition-observation-modal-info" class="text-sm text-gray-600 mt-1"></p>
+            <div class="p-4 border-b flex items-center justify-between">
+                <div class="flex-1">
+                    <h3 class="text-xl font-bold text-gray-800">Histórico de Observações do Item</h3>
+                    <p id="requisition-observation-modal-info" class="text-sm text-gray-600 mt-1"></p>
+                </div>
+                <button id="close-requisition-observation-modal-x" class="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors ml-2" title="Fechar">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
             </div>
             <!-- Chat History -->
             <div id="requisition-observation-history" class="flex-grow p-4 space-y-4 overflow-y-auto bg-gray-50">
@@ -4358,7 +4477,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script type="module" src="js/main.js?v=1792420001"></script>
+    <script type="module" src="js/main.js?v=1792697500"></script>
     <!-- MODAL LINHA DE PRODUÇÃO -->
     <div id="production-line-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
         <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden">

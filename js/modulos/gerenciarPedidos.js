@@ -230,6 +230,23 @@ export const GerenciarPedidosApp = (function () {
         _state.nfeDraftSpinner = document.getElementById('nfe-draft-spinner');
         _state.saveOrderEditBtn = document.getElementById('save-order-edit-btn');
         _state.saveOrderSpinner = document.getElementById('save-order-spinner');
+
+        // Elementos de Modo do Modal de Edição (NF-e vs NF-s)
+        _state.nfeModeNfeBtn = document.getElementById('nfe-mode-nfe-btn');
+        _state.nfeModeNfsBtn = document.getElementById('nfe-mode-nfs-btn');
+        _state.nfeModeNfsBadge = document.getElementById('nfe-mode-nfs-badge');
+        _state.nfeEditViewNfe = document.getElementById('nfe-edit-view-nfe');
+        _state.nfeEditViewNfs = document.getElementById('nfe-edit-view-nfs');
+        _state.nfeFooterActions = document.getElementById('nfe-footer-actions');
+        _state.nfsFooterActions = document.getElementById('nfs-footer-actions');
+        _state.nfsEditClienteNome = document.getElementById('nfs-edit-cliente-nome');
+        _state.nfsEditClienteDoc = document.getElementById('nfs-edit-cliente-doc');
+        _state.nfsEditClienteCidadeUf = document.getElementById('nfs-edit-cliente-cidade-uf');
+        _state.nfsEditItensTbody = document.getElementById('nfs-edit-itens-tbody');
+        _state.nfsEditTotalServicos = document.getElementById('nfs-edit-total-servicos');
+        _state.nfsEditCountBadge = document.getElementById('nfs-edit-count-badge');
+        _state.nfsEditObservacoes = document.getElementById('nfs-edit-observacoes');
+        _state.confirmNfsEmitBtn = document.getElementById('confirm-nfs-emit-btn');
     }
 
     function _bindEvents() {
@@ -412,10 +429,6 @@ export const GerenciarPedidosApp = (function () {
             });
         }
 
-        const toggleValoresChk = document.getElementById('modal-toggle-valores');
-        if (toggleValoresChk) {
-            toggleValoresChk.addEventListener('change', _handleModalToggleValores);
-        }
 
         const printDropdownBtn = document.getElementById('modal-print-dropdown-btn');
         const printDropdownMenu = document.getElementById('modal-print-dropdown-menu');
@@ -552,9 +565,24 @@ export const GerenciarPedidosApp = (function () {
             });
         }
 
-        // Botão de Emitir NF-e
+        // Botão de Editar Pedido (no modal de detalhes)
         if (_state.modalEmitirNfeBtn) {
             _state.modalEmitirNfeBtn.addEventListener('click', _handleEmitirNfe);
+        }
+
+        // Alternância de abas/modos dentro de Editar Pedido (NF-e vs NF-s)
+        if (_state.nfeModeNfeBtn) {
+            _state.nfeModeNfeBtn.addEventListener('click', () => _switchNfeEditMode('nfe'));
+        }
+        if (_state.nfeModeNfsBtn) {
+            _state.nfeModeNfsBtn.addEventListener('click', () => {
+                if (!_state.nfeModeNfsBtn.disabled) {
+                    _switchNfeEditMode('nfs');
+                }
+            });
+        }
+        if (_state.confirmNfsEmitBtn) {
+            _state.confirmNfsEmitBtn.addEventListener('click', _handleEmitirNfs);
         }
 
         // Eventos do Modal de Edição de NF-e
@@ -880,21 +908,18 @@ export const GerenciarPedidosApp = (function () {
                 `;
                 btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
                 btn.classList.add('bg-green-600', 'hover:bg-green-700');
-                btn.title = "Nota Fiscal já foi emitida (ID: " + idNota + ")";
+                btn.title = "Nota Fiscal (NF-e) já foi emitida (ID: " + idNota + ")";
             } else {
                 btn.innerHTML = `
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                     Editar Pedido
                 `;
                 btn.classList.remove('bg-green-600', 'hover:bg-green-700');
                 btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                btn.title = "Editar informações e Gerar Nota Fiscal Eletrônica no Bling";
+                btn.title = "Editar informações antes de emitir a Nota Fiscal Eletrônica (NF-e)";
             }
         }
 
-        // Reset toggle com valor
-        const toggleChk = document.getElementById('modal-toggle-valores');
-        if (toggleChk) toggleChk.checked = true;
 
         // Reset dropdown de impressão e submenu
         const printMenu = document.getElementById('modal-print-dropdown-menu');
@@ -1725,6 +1750,32 @@ export const GerenciarPedidosApp = (function () {
         if (lastChild) lastChild.innerHTML = icon;
     }
 
+    function _pedidoHasService(pedido) {
+        if (!pedido) return false;
+        if (Array.isArray(pedido.itens)) {
+            return pedido.itens.some(i => String(i.codigo || i.sku || i.codigo_produto || '').trim().startsWith('7'));
+        }
+        const raw = pedido.itens || pedido.Itens || '';
+        if (typeof raw === 'string' && raw) {
+            if (/\(\s*7[0-9a-zA-Z_-]*/.test(raw)) return true;
+            const list = _parseItens(raw, pedido.detalhesProducao || {}, pedido.id || pedido.numero);
+            if (list && list.length > 0) {
+                return list.some(item => String(item.codigo || '').trim().startsWith('7'));
+            }
+        }
+        return false;
+    }
+
+    function _handleEmitirNfs() {
+        const orderNumber = _state.currentPedidoBlingBruto?.numero || _currentModalPedidoId || '';
+
+        _showCustomAlert(
+            'Emissão de NF-s',
+            `Serviços do Pedido Nº ${orderNumber} separados e validados com sucesso!\nA integração de envio da Nota Fiscal de Serviço (NF-s) está preparada para a próxima etapa.`,
+            true
+        );
+    }
+
     async function _handleEmitirNfe() {
         const idPedido = _currentModalPedidoId;
         if (!idPedido) return;
@@ -1972,11 +2023,144 @@ export const GerenciarPedidosApp = (function () {
             }
         }
 
+        // Detectar se o pedido possui serviços (código iniciado com 7)
+        const serviceItems = (pedidoBling.itens || []).filter(item => {
+            const cod = String(item.codigo || item.sku || '').trim();
+            return cod.startsWith('7');
+        });
+        const hasService = serviceItems.length > 0;
+
+        if (_state.nfeModeNfsBtn) {
+            if (hasService) {
+                _state.nfeModeNfsBtn.disabled = false;
+                _state.nfeModeNfsBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+                _state.nfeModeNfsBtn.classList.add('cursor-pointer');
+                _state.nfeModeNfsBtn.title = `Pedido possui ${serviceItems.length} serviço(s) para emissão de NF-s`;
+                if (_state.nfeModeNfsBadge) {
+                    _state.nfeModeNfsBadge.textContent = `${serviceItems.length}`;
+                    _state.nfeModeNfsBadge.classList.remove('hidden');
+                }
+            } else {
+                _state.nfeModeNfsBtn.disabled = true;
+                _state.nfeModeNfsBtn.classList.add('opacity-40', 'cursor-not-allowed');
+                _state.nfeModeNfsBtn.classList.remove('cursor-pointer');
+                _state.nfeModeNfsBtn.title = 'Este pedido não possui serviços (código iniciado em 7)';
+                if (_state.nfeModeNfsBadge) {
+                    _state.nfeModeNfsBadge.classList.add('hidden');
+                }
+            }
+        }
+
+        // Preencher a aba NF-s com os serviços identificados
+        _populateNfsView(pedidoBling, serviceItems);
+
+        // Sempre inicializar exibindo a tela padrão de NF-e
+        _switchNfeEditMode('nfe');
+
         // Exibir o modal
         _updateFreteFields(); // Aplica visibilidade inicial dos campos de transporte
         _updateVolumesWarning(); // Aplica estado inicial do warning de volumes
         _calculateTotals(); // Calcula totais iniciais
         _state.nfeEditModal.classList.remove('hidden');
+    }
+
+    function _switchNfeEditMode(mode) {
+        _state.currentNfeEditMode = mode;
+        if (mode === 'nfs') {
+            if (_state.nfeEditViewNfe) _state.nfeEditViewNfe.classList.add('hidden');
+            if (_state.nfeEditViewNfs) _state.nfeEditViewNfs.classList.remove('hidden');
+            if (_state.nfeFooterActions) _state.nfeFooterActions.classList.add('hidden');
+            if (_state.nfsFooterActions) _state.nfsFooterActions.classList.remove('hidden');
+
+            if (_state.nfeModeNfeBtn) {
+                _state.nfeModeNfeBtn.className = 'px-3.5 py-1.5 rounded-md text-xs font-bold transition-all text-gray-600 hover:text-gray-900 bg-transparent flex items-center gap-1.5 cursor-pointer';
+            }
+            if (_state.nfeModeNfsBtn) {
+                _state.nfeModeNfsBtn.className = 'px-3.5 py-1.5 rounded-md text-xs font-bold transition-all shadow-sm bg-purple-600 text-white flex items-center gap-1.5 cursor-pointer';
+            }
+        } else {
+            if (_state.nfeEditViewNfe) _state.nfeEditViewNfe.classList.remove('hidden');
+            if (_state.nfeEditViewNfs) _state.nfeEditViewNfs.classList.add('hidden');
+            if (_state.nfeFooterActions) _state.nfeFooterActions.classList.remove('hidden');
+            if (_state.nfsFooterActions) _state.nfsFooterActions.classList.add('hidden');
+
+            if (_state.nfeModeNfeBtn) {
+                _state.nfeModeNfeBtn.className = 'px-3.5 py-1.5 rounded-md text-xs font-bold transition-all shadow-sm bg-blue-600 text-white flex items-center gap-1.5 cursor-pointer';
+            }
+            if (_state.nfeModeNfsBtn) {
+                const hasDisabled = _state.nfeModeNfsBtn.disabled;
+                _state.nfeModeNfsBtn.className = `px-3.5 py-1.5 rounded-md text-xs font-bold transition-all text-gray-600 hover:text-gray-900 bg-transparent flex items-center gap-1.5 ${hasDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`;
+            }
+        }
+    }
+
+    function _populateNfsView(pedidoBling, serviceItems) {
+        if (_state.nfsEditClienteNome) {
+            _state.nfsEditClienteNome.value = pedidoBling.contato?.nome || '';
+        }
+        if (_state.nfsEditClienteDoc) {
+            _state.nfsEditClienteDoc.value = pedidoBling.contato?.numeroDocumento || '';
+        }
+        if (_state.nfsEditClienteCidadeUf) {
+            const cidade = pedidoBling.contato?.endereco?.geral?.municipio || pedidoBling.transporte?.etiqueta?.municipio || '';
+            const uf = pedidoBling.contato?.endereco?.geral?.uf || pedidoBling.transporte?.etiqueta?.uf || '';
+            _state.nfsEditClienteCidadeUf.value = cidade ? (uf ? `${cidade} - ${uf}` : cidade) : uf;
+        }
+        if (_state.nfsEditCountBadge) {
+            _state.nfsEditCountBadge.textContent = `${serviceItems.length} serviço${serviceItems.length > 1 ? 's' : ''}`;
+        }
+
+        if (_state.nfsEditItensTbody) {
+            _state.nfsEditItensTbody.innerHTML = '';
+            let totalServ = 0;
+            const formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            if (serviceItems.length === 0) {
+                _state.nfsEditItensTbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+                            Nenhum item de serviço (código iniciado em 7) encontrado neste pedido.
+                        </td>
+                    </tr>
+                `;
+            } else {
+                serviceItems.forEach(item => {
+                    const qtd = parseFloat(item.quantidade) || 0;
+                    const valor = parseFloat(item.valor) || 0;
+                    const total = qtd * valor;
+                    totalServ += total;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="px-4 py-3 font-mono text-xs font-semibold text-purple-700 bg-purple-50/50">
+                            ${item.codigo || item.sku || '-'}
+                        </td>
+                        <td class="px-4 py-3 font-medium text-gray-800">
+                            ${item.descricao || '-'}
+                        </td>
+                        <td class="px-4 py-3 text-center text-gray-700 font-semibold">
+                            ${qtd}
+                        </td>
+                        <td class="px-4 py-3 text-right text-gray-700">
+                            ${formatter.format(valor)}
+                        </td>
+                        <td class="px-4 py-3 text-right font-bold text-gray-900">
+                            ${formatter.format(total)}
+                        </td>
+                    `;
+                    _state.nfsEditItensTbody.appendChild(tr);
+                });
+            }
+
+            if (_state.nfsEditTotalServicos) {
+                _state.nfsEditTotalServicos.textContent = formatter.format(totalServ);
+            }
+        }
+
+        if (_state.nfsEditObservacoes) {
+            const descricoes = serviceItems.map(i => `${i.descricao} (Qtd: ${i.quantidade})`).join('; ');
+            _state.nfsEditObservacoes.value = descricoes ? `Prestação de serviços: ${descricoes}` : '';
+        }
     }
 
     function _addNfeEditItemRow(item = {}) {
@@ -3670,18 +3854,6 @@ export const GerenciarPedidosApp = (function () {
 
     // --- LOGICA DE EDIÇÃO RÁPIDA DE ITEM ---
 
-    function _handleModalToggleValores(e) {
-        const showValor = e.target.checked;
-        // Mostrar/ocultar a última coluna (valor) em thead e tbody
-        const modal = document.getElementById('order-details-modal');
-        if (!modal) return;
-        const thValor = modal.querySelectorAll('table thead th:last-child');
-        const tdValor = modal.querySelectorAll('table tbody td:last-child');
-        [...thValor, ...tdValor].forEach(el => {
-            el.style.display = showValor ? '' : 'none';
-        });
-    }
-
     function _handleModalPrint(showValorParam = null) {
         const modal = document.getElementById('order-details-modal');
         if (!modal) return;
@@ -3691,13 +3863,8 @@ export const GerenciarPedidosApp = (function () {
         const pedido = _allPedidos.find(p => (p.id === orderNumber) || (p.número === orderNumber) || (p.numero === orderNumber));
         if (!pedido) return;
 
-        // Verificar se valor deve ser incluído
-        let showValor;
-        if (showValorParam !== null && showValorParam !== undefined) {
-            showValor = Boolean(showValorParam);
-        } else {
-            showValor = document.getElementById('modal-toggle-valores')?.checked !== false;
-        }
+        // Verificar se valor deve ser incluído (se não especificado, padrão true)
+        const showValor = showValorParam !== null && showValorParam !== undefined ? Boolean(showValorParam) : true;
 
         // Dados do pedido
         const numero     = pedido.número || pedido.numero || orderNumber;
@@ -4932,7 +5099,7 @@ export const GerenciarPedidosApp = (function () {
                             <span class="edit-order-observation-btn cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block" 
                                 data-target-id="${numero}" 
                                 title="Adicionar/Ver Observação">
-                               <svg class="h-5 w-5 ${(p.observacao || p.observação) ? 'text-red-500' : 'text-gray-300'} order-obs-icon-${numero}" viewBox="0 0 20 20" fill="currentColor">
+                               <svg class="h-5 w-5 pointer-events-none ${(p.observacao || p.observação) ? 'text-red-500' : 'text-gray-300'} order-obs-icon-${numero}" viewBox="0 0 20 20" fill="currentColor">
                                    <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
                                </svg>
                             </span>

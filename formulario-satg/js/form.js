@@ -3,6 +3,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const successScreen = document.getElementById('success-screen');
     const btnSubmit = document.getElementById('btn-submit');
 
+    // Detecção de Modo Agente Interno
+    const urlParams = new URLSearchParams(window.location.search);
+    const isInterno = urlParams.get('origem') === 'interno' || 
+                      urlParams.get('modo') === 'interno' || 
+                      urlParams.get('agente') === 'interno' ||
+                      window.self !== window.top; // Se estiver embutido no modal iframe
+
+    const campoCodigoClienteContainer = document.getElementById('campo-codigo-cliente-container');
+    const inputCodigoCliente = document.getElementById('codigoCliente');
+    const campoEmailContainer = document.getElementById('campo-email-container');
+
+    if (isInterno) {
+        if (campoCodigoClienteContainer) campoCodigoClienteContainer.classList.remove('hidden');
+        if (inputCodigoCliente) {
+            inputCodigoCliente.required = true;
+            inputCodigoCliente.setAttribute('required', 'required');
+        }
+        if (campoEmailContainer) campoEmailContainer.classList.remove('md:col-span-2');
+    } else {
+        if (campoCodigoClienteContainer) campoCodigoClienteContainer.classList.add('hidden');
+        if (inputCodigoCliente) {
+            inputCodigoCliente.required = false;
+            inputCodigoCliente.removeAttribute('required');
+            inputCodigoCliente.value = '';
+        }
+        if (campoEmailContainer) campoEmailContainer.classList.add('md:col-span-2');
+    }
+
     function maskPhoneInput(rawInput) {
         let raw = String(rawInput || '');
         let isExplicitDDI = raw.trim().startsWith('+55') || raw.trim().startsWith('+ 55') || raw.trim().startsWith('+');
@@ -39,6 +67,15 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        if (isInterno) {
+            const codClienteVal = (inputCodigoCliente ? inputCodigoCliente.value : '').trim();
+            if (!codClienteVal) {
+                alert('O campo "Cód. Cliente" é obrigatório.');
+                if (inputCodigoCliente) inputCodigoCliente.focus();
+                return;
+            }
+        }
+
         const originalBtnText = btnSubmit.innerHTML;
         btnSubmit.innerHTML = `<svg class="animate-spin h-5 w-5 mr-3 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Enviando...`;
         btnSubmit.disabled = true;
@@ -46,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Montar objeto com os dados
             const payload = {
+                codigoCliente: (inputCodigoCliente ? inputCodigoCliente.value.trim() : ''),
                 cliente: document.getElementById('cliente').value,
                 cpf: document.getElementById('cpf').value,
                 nomeContato: document.getElementById('nomeContato').value,
