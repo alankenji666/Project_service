@@ -2672,7 +2672,7 @@ const data = filteredProducts.map(product => {
                         <thead class="bg-gray-50 read-only-disable">
                             <tr>
                                 ${itemDisplayHeaders.map(header => `
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${header.sortable ? 'sortable-header' : ''}" data-sort="${header.key}">
+                                    <th scope="col" class="${header.key === 'checkbox' ? 'px-3' : 'px-6'} py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${header.sortable ? 'sortable-header' : ''}" data-sort="${header.key}">
                                         <div class="flex items-center">${header.label} ${header.sortable ? _renderOrderSortIcon(header.key) : ''}</div>
                                     </th>
                                 `).join('')}
@@ -2773,14 +2773,11 @@ const data = filteredProducts.map(product => {
 
                         itemsHtml += `
                         <tr class="${rowClass}">
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="flex items-center space-x-2">
+                            <td class="px-3 py-4 whitespace-nowrap">
+                                <div class="flex items-center space-x-1.5">
                                     <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 order-item-checkbox" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-requisition-type="${item.requisitionType}" ${isOk ? 'checked disabled' : ''}>
-                                    <button class="view-requisition-observation-btn text-gray-500 hover:text-blue-600 p-1 rounded-full" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" title="Visualizar Observações">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                                    </button>
-                                    <span class="requisition-observation-status-icon cursor-pointer" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-observation='${JSON.stringify(item.observacao || [])}' title="${hasObservation ? 'Este item possui observações' : 'Nenhuma observação'}">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ${hasObservation ? 'text-red-500' : 'text-gray-400'}" viewBox="0 0 20 20" fill="currentColor">
+                                    <span class="requisition-observation-status-icon cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-all flex items-center justify-center" data-order-code="${item.orderCode}" data-codigo-service="${item.codigoService}" data-observation='${JSON.stringify(item.observacao || [])}' title="${hasObservation ? 'Clique para ver/adicionar observações (possui observações)' : 'Clique para ver/adicionar observações'}">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ${hasObservation ? 'text-red-500' : 'text-gray-400'} hover:scale-110 transition-transform" viewBox="0 0 20 20" fill="currentColor">
                                             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
                                         </svg>
                                     </span>
@@ -2962,10 +2959,18 @@ const data = filteredProducts.map(product => {
 
                         // NOVO: Listeners para observações de requisição e edição descrição
                         tableBody.addEventListener('click', (event) => {
+                            const obsIcon = event.target.closest('.requisition-observation-status-icon');
+                            if (obsIcon) {
+                                _hideProductTooltip();
+                                const { orderCode, codigoService } = obsIcon.dataset;
+                                _openRequisitionObservationModal(orderCode, codigoService);
+                                return;
+                            }
                             const viewBtn = event.target.closest('.view-requisition-observation-btn');
                             if (viewBtn) {
                                 const { orderCode, codigoService } = viewBtn.dataset;
                                 _openRequisitionObservationModal(orderCode, codigoService);
+                                return;
                             }
                             const editDescBtn = event.target.closest('.edit-description-btn');
                             if (editDescBtn) {

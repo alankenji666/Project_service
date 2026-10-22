@@ -420,32 +420,78 @@ export const GerenciarPedidosApp = (function () {
         const printDropdownBtn = document.getElementById('modal-print-dropdown-btn');
         const printDropdownMenu = document.getElementById('modal-print-dropdown-menu');
         const printOrderBtn = document.getElementById('modal-print-order-btn');
+        const printOrderSubmenu = document.getElementById('modal-print-order-submenu');
+        const printOrderChevron = document.getElementById('modal-print-order-chevron');
+        const printOrderComPrecoBtn = document.getElementById('modal-print-order-com-preco-btn');
+        const printOrderSemPrecoBtn = document.getElementById('modal-print-order-sem-preco-btn');
         const printMarkerBtn = document.getElementById('modal-print-marker-btn');
+
+        const closePrintDropdown = () => {
+            if (printDropdownMenu) printDropdownMenu.classList.add('hidden');
+            if (printOrderSubmenu) printOrderSubmenu.classList.add('hidden');
+            if (printOrderBtn) {
+                printOrderBtn.classList.remove('bg-blue-50', 'text-blue-700');
+            }
+            if (printOrderChevron) {
+                printOrderChevron.classList.remove('rotate-90', '-rotate-90', 'text-blue-600');
+            }
+        };
 
         if (printDropdownBtn && printDropdownMenu) {
             printDropdownBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                const isOpening = printDropdownMenu.classList.contains('hidden');
                 printDropdownMenu.classList.toggle('hidden');
+                if (!isOpening) {
+                    if (printOrderSubmenu) printOrderSubmenu.classList.add('hidden');
+                    if (printOrderBtn) printOrderBtn.classList.remove('bg-blue-50', 'text-blue-700');
+                    if (printOrderChevron) printOrderChevron.classList.remove('rotate-90', '-rotate-90', 'text-blue-600');
+                }
             });
 
             // Fechar dropdown ao clicar fora
             document.addEventListener('click', (e) => {
-                if (!printDropdownBtn.contains(e.target) && !printDropdownMenu.contains(e.target)) {
-                    printDropdownMenu.classList.add('hidden');
+                if (!printDropdownBtn.contains(e.target) && 
+                    !printDropdownMenu.contains(e.target) && 
+                    !(printOrderSubmenu && printOrderSubmenu.contains(e.target))) {
+                    closePrintDropdown();
                 }
             });
         }
 
-        if (printOrderBtn) {
-            printOrderBtn.addEventListener('click', () => {
-                printDropdownMenu.classList.add('hidden');
-                _handleModalPrint();
+        if (printOrderBtn && printOrderSubmenu) {
+            printOrderBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = printOrderSubmenu.classList.toggle('hidden');
+                if (isHidden) {
+                    printOrderBtn.classList.remove('bg-blue-50', 'text-blue-700');
+                    if (printOrderChevron) printOrderChevron.classList.remove('rotate-90', '-rotate-90', 'text-blue-600');
+                } else {
+                    printOrderBtn.classList.add('bg-blue-50', 'text-blue-700');
+                    if (printOrderChevron) printOrderChevron.classList.add('rotate-90', 'text-blue-600');
+                }
+            });
+        }
+
+        if (printOrderComPrecoBtn) {
+            printOrderComPrecoBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closePrintDropdown();
+                _handleModalPrint(true);
+            });
+        }
+
+        if (printOrderSemPrecoBtn) {
+            printOrderSemPrecoBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closePrintDropdown();
+                _handleModalPrint(false);
             });
         }
 
         if (printMarkerBtn) {
             printMarkerBtn.addEventListener('click', () => {
-                printDropdownMenu.classList.add('hidden');
+                closePrintDropdown();
                 _handlePrintMarker(false);
             });
         }
@@ -850,6 +896,16 @@ export const GerenciarPedidosApp = (function () {
         const toggleChk = document.getElementById('modal-toggle-valores');
         if (toggleChk) toggleChk.checked = true;
 
+        // Reset dropdown de impressão e submenu
+        const printMenu = document.getElementById('modal-print-dropdown-menu');
+        if (printMenu) printMenu.classList.add('hidden');
+        const printSubmenu = document.getElementById('modal-print-order-submenu');
+        if (printSubmenu) printSubmenu.classList.add('hidden');
+        const printOrderBtnEl = document.getElementById('modal-print-order-btn');
+        if (printOrderBtnEl) printOrderBtnEl.classList.remove('bg-blue-50', 'text-blue-700');
+        const chevron = document.getElementById('modal-print-order-chevron');
+        if (chevron) chevron.classList.remove('rotate-90', '-rotate-90', 'text-blue-600', 'rotate-180');
+
         const numero = pedido.número || pedido.numero || orderNumber;
         title.innerText = `Pedido Nº ${numero}`;
 
@@ -935,6 +991,7 @@ export const GerenciarPedidosApp = (function () {
             
             let baseFilename = `DANFE - ${shortClientName}${numeroNotaStr}${orcamentoStr}`;
             let safeFilenameForDownload = baseFilename.replace(/[<>:"/\\|?*]/g, '_') + '.pdf';
+            let safeFilenameXmlForDownload = `XML ${baseFilename}`.replace(/[<>:"/\\|?*]/g, '_') + '.xml';
             
             // Tenta extrair a chave do link se não veio diretamente (comum no webhook do Bling)
             let finalChaveAcesso = chaveAcesso;
@@ -944,8 +1001,10 @@ export const GerenciarPedidosApp = (function () {
             }
 
             let baixarPdfUrl = '';
+            let baixarXmlUrl = '';
             if (finalChaveAcesso) {
                 baixarPdfUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-danfe?chaveAcesso=${finalChaveAcesso}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
+                baixarXmlUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-xml?chaveAcesso=${finalChaveAcesso}&filename=${encodeURIComponent(safeFilenameXmlForDownload)}`;
             } else if (linkDanfe && linkDanfe !== '#') {
                 baixarPdfUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-pdf?url=${encodeURIComponent(linkDanfe)}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
             }
@@ -956,6 +1015,10 @@ export const GerenciarPedidosApp = (function () {
                 <a href="#" onclick="event.preventDefault(); window.downloadDanfeWithSpinner('${baixarPdfUrl}', '${safeFilenameForDownload.replace(/'/g, "\\'")}', this)" class="flex items-center gap-1.5 text-[10px] bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors font-bold uppercase shadow-sm" title="Baixar PDF do DANFE com o nome do cliente">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                     Baixar DANFE
+                </a>
+                <a href="#" onclick="event.preventDefault(); window.downloadXmlWithSpinner('${baixarXmlUrl}', '${safeFilenameXmlForDownload.replace(/'/g, "\\'")}', this)" class="flex items-center gap-1.5 text-[10px] bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg hover:bg-amber-200 transition-colors font-bold uppercase shadow-sm" title="Baixar arquivo XML da NF-e">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Baixar XML
                 </a>`;
             } else if (!finalChaveAcesso && String(numeroNota).toLowerCase() !== 'processando...') {
                 baixarBtnHtml = `
@@ -3619,7 +3682,7 @@ export const GerenciarPedidosApp = (function () {
         });
     }
 
-    function _handleModalPrint() {
+    function _handleModalPrint(showValorParam = null) {
         const modal = document.getElementById('order-details-modal');
         if (!modal) return;
         const orderNumber = modal.dataset.currentOrderNumber;
@@ -3629,7 +3692,12 @@ export const GerenciarPedidosApp = (function () {
         if (!pedido) return;
 
         // Verificar se valor deve ser incluído
-        const showValor = document.getElementById('modal-toggle-valores')?.checked !== false;
+        let showValor;
+        if (showValorParam !== null && showValorParam !== undefined) {
+            showValor = Boolean(showValorParam);
+        } else {
+            showValor = document.getElementById('modal-toggle-valores')?.checked !== false;
+        }
 
         // Dados do pedido
         const numero     = pedido.número || pedido.numero || orderNumber;
@@ -6255,6 +6323,40 @@ window.downloadDanfeWithSpinner = async function(url, filename, btn) {
         window.URL.revokeObjectURL(downloadUrl);
     } catch (e) {
         alert('Erro ao baixar DANFE: ' + e.message);
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.classList.remove('opacity-75', 'cursor-wait');
+        btn.style.pointerEvents = 'auto';
+    }
+};
+
+window.downloadXmlWithSpinner = async function(url, filename, btn) {
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<svg class="animate-spin w-3 h-3 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> BAIXANDO...`;
+    btn.classList.add('opacity-75', 'cursor-wait');
+    btn.style.pointerEvents = 'none';
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            let errorMsg = 'Falha no download do XML.';
+            try {
+                const errData = await response.json();
+                if (errData && errData.message) errorMsg = errData.message;
+            } catch (_) {}
+            throw new Error(errorMsg);
+        }
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (e) {
+        alert('Erro ao baixar XML: ' + e.message);
     } finally {
         btn.innerHTML = originalHtml;
         btn.classList.remove('opacity-75', 'cursor-wait');

@@ -400,7 +400,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:AI` // Até AI (coluna 35)
+                range: `${sheetName}!A2:AJ` // Até AJ (coluna 36 - Finalizado)
             });
 
             const rows = response.data.values || [];
@@ -442,7 +442,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     tipoEquipamento: row[31] || '',             // AF (Tipo Equipamento)
                     codigoCliente: row[32] || '',              // AG (Cod Cliente)
                     idServicoMO: row[33] || '',                // AH (ID Serviço M.O vinculado)
-                    responsavel: row[34] || ''                 // AI (Responsável)
+                    responsavel: row[34] || '',                // AI (Responsável)
+                    finalizado: row[35] || ''                  // AJ (Finalizado)
                 };
             });
 
@@ -543,12 +544,13 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 safeString(formData.tipoEquipamento),       // AF: Tipo Equipamento
                 safeString(formData.codigoCliente),         // AG: Cod Cliente
                 '',                                         // AH: ID Serviço (M.O)
-                safeString(formData.responsavel || '')      // AI: Responsável
+                safeString(formData.responsavel || ''),     // AI: Responsável
+                ''                                          // AJ: Finalizado
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: `${sheetName}!A:AI`,
+                range: `${sheetName}!A:AJ`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
@@ -572,7 +574,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
     // Atualiza o Status e Observação de um pedido na SatG
     router.post('/satg/update', async (req, res, next) => {
         try {
-            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg, acaoPecas, servicoMO, idServicoMO, responsavel } = req.body;
+            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg, acaoPecas, servicoMO, idServicoMO, responsavel, finalizado } = req.body;
             
             if (!rowIndex) {
                 return res.status(400).json({ error: true, message: 'rowIndex é obrigatório.' });
@@ -684,6 +686,15 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     range: `${sheetName}!AI${rowIndex}`,
                     valueInputOption: 'USER_ENTERED',
                     resource: { values: [['']] }
+                });
+            }
+
+            if (finalizado !== undefined) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!AJ${rowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[finalizado]] }
                 });
             }
 

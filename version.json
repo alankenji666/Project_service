@@ -1,6 +1,6 @@
 {
-  "version": "1.0.5",
-  "deployId": "1792504500000",
-  "updatedAt": "2026-10-20T10:55:00-03:00",
-  "notes": "Impressão da SAT-G com Valor Unitário e Valor Total; remoção do prompt de transportadora ao marcar Orçamento como Enviado."
+  "version": "1.0.8",
+  "deployId": "1792678200000",
+  "updatedAt": "2026-10-22T11:15:00-03:00",
+  "notes": "Menu de impressão do pedido atualizado com submenu lateral expandindo para a direita contendo 'Imprimir Pedido (Com Preço)' e 'Imprimir Pedido (Sem Preço)'."
 }

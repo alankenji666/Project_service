@@ -87,6 +87,8 @@ export const GerenciarGarantiaApp = (function () {
     let _usuariosMap = {};
     let _satgSortRadios;
     let _satgClearFiltersBtn;
+    let _satgSortColumn = 'data';
+    let _satgSortDirection = 'desc';
 
     let _satgFilterBtn;
     let _satgFilterDropdown;
@@ -722,9 +724,50 @@ export const GerenciarGarantiaApp = (function () {
         if (_satgResponsavelSelect) _satgResponsavelSelect.addEventListener('change', _applySatgFilters);
         if (_satgSortRadios) {
             _satgSortRadios.forEach(radio => {
-                radio.addEventListener('change', _applySatgFilters);
+                radio.addEventListener('change', () => {
+                    if (radio.value === 'finalizados') {
+                        _satgSortColumn = 'data';
+                        _satgSortDirection = 'desc';
+                    } else {
+                        _satgSortColumn = 'data';
+                        _satgSortDirection = radio.value;
+                    }
+                    _saveSatgFilterPreferences();
+                    _applySatgFilters();
+                });
             });
         }
+
+        // Ordenação por clique nos cabeçalhos da tabela SAT-G
+        const satgSortHeaders = document.querySelectorAll('#satg-table th[data-sort]');
+        satgSortHeaders.forEach(th => {
+            th.addEventListener('click', () => {
+                const col = th.dataset.sort;
+                if (_satgSortColumn === col) {
+                    _satgSortDirection = _satgSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    _satgSortColumn = col;
+                    // Se for data, padrão é mais recentes (desc); para texto/status, padrão é A-Z (asc)
+                    _satgSortDirection = (col === 'data') ? 'desc' : 'asc';
+                }
+
+                // Sincroniza radios Novas/Urgentes caso ordenado por data e não esteja no filtro Finalizados
+                if (_satgSortRadios) {
+                    const isFinActive = Array.from(_satgSortRadios).some(r => r.checked && r.value === 'finalizados');
+                    if (!isFinActive) {
+                        _satgSortRadios.forEach(r => {
+                            if (r.value !== 'finalizados') {
+                                r.checked = (_satgSortColumn === 'data' && r.value === _satgSortDirection);
+                            }
+                        });
+                    }
+                }
+
+                _saveSatgFilterPreferences();
+                _applySatgFilters();
+            });
+        });
+
         if (_satgClearFiltersBtn) {
             _satgClearFiltersBtn.onclick = () => {
                 if (_satgStatusSelect) _satgStatusSelect.value = 'all';
@@ -732,6 +775,8 @@ export const GerenciarGarantiaApp = (function () {
                 if (_satgRetornoSelect) _satgRetornoSelect.value = 'all';
                 if (_satgResponsavelSelect) _satgResponsavelSelect.value = 'all';
                 if (_satgSearchInput) _satgSearchInput.value = '';
+                _satgSortColumn = 'data';
+                _satgSortDirection = 'desc';
                 if (_satgSortRadios) {
                     _satgSortRadios.forEach(r => {
                         r.checked = (r.value === 'desc');
@@ -2037,18 +2082,13 @@ function _formatItemsString() {
 
     function _saveSatgFilterPreferences() {
         try {
-            let sortOrder = 'desc';
-            if (_satgSortRadios) {
-                _satgSortRadios.forEach(r => {
-                    if (r.checked) sortOrder = r.value;
-                });
-            }
             const prefs = {
                 status: _satgStatusSelect ? _satgStatusSelect.value : 'all',
                 orcamento: _satgOrcamentoSelect ? _satgOrcamentoSelect.value : 'all',
                 retorno: _satgRetornoSelect ? _satgRetornoSelect.value : 'all',
                 responsavel: _satgResponsavelSelect ? _satgResponsavelSelect.value : 'all',
-                sort: sortOrder
+                sort: _satgSortDirection,
+                sortColumn: _satgSortColumn
             };
             localStorage.setItem(STORAGE_KEY_SATG_FILTERS, JSON.stringify(prefs));
         } catch (e) {
@@ -2069,6 +2109,8 @@ function _formatItemsString() {
     function _clearSatgFilterPreferences() {
         try {
             localStorage.removeItem(STORAGE_KEY_SATG_FILTERS);
+            _satgSortColumn = 'data';
+            _satgSortDirection = 'desc';
         } catch (e) {}
     }
 
@@ -2085,11 +2127,34 @@ function _formatItemsString() {
         if (_satgRetornoSelect && prefs.retorno) {
             _satgRetornoSelect.value = prefs.retorno;
         }
-        if (_satgSortRadios && prefs.sort) {
-            _satgSortRadios.forEach(r => {
-                r.checked = (r.value === prefs.sort);
-            });
+        if (prefs.sortColumn) {
+            _satgSortColumn = prefs.sortColumn;
         }
+        if (prefs.sort) {
+            _satgSortDirection = prefs.sort;
+            if (_satgSortRadios) {
+                _satgSortRadios.forEach(r => {
+                    r.checked = (_satgSortColumn === 'data' && r.value === prefs.sort);
+                });
+            }
+        }
+    }
+
+    function _updateSatgSortIcons() {
+        const headers = document.querySelectorAll('#satg-table th[data-sort]');
+        headers.forEach(th => {
+            const icon = th.querySelector('.satg-sort-icon');
+            if (!icon) return;
+            if (th.dataset.sort === _satgSortColumn) {
+                icon.textContent = _satgSortDirection === 'asc' ? '▲' : '▼';
+                th.classList.add('text-blue-700');
+                th.classList.remove('text-gray-500');
+            } else {
+                icon.textContent = '';
+                th.classList.remove('text-blue-700');
+                th.classList.add('text-gray-500');
+            }
+        });
     }
 
     function _getUsuarioNome(idOrCodigoOrNome) {
@@ -2267,7 +2332,7 @@ function _formatItemsString() {
         if (!_satgTableContent) return;
         
         if (!isSilent) {
-            _satgTableContent.innerHTML = '<tr><td colspan="7" class="text-center py-8"><div class="flex flex-col items-center"><svg class="animate-spin h-8 w-8 text-purple-500 mb-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-sm text-gray-500">Buscando solicitações...</span></div></td></tr>';
+            _satgTableContent.innerHTML = '<tr><td colspan="8" class="text-center py-8"><div class="flex flex-col items-center"><svg class="animate-spin h-8 w-8 text-purple-500 mb-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-sm text-gray-500">Buscando solicitações...</span></div></td></tr>';
         }
 
         try {
@@ -2319,7 +2384,7 @@ function _formatItemsString() {
         _applySatgFilters();
         } catch (error) {
             console.error('Erro ao buscar SatG:', error);
-            _satgTableContent.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
+            _satgTableContent.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
         }
     }
 
@@ -2425,20 +2490,82 @@ function _formatItemsString() {
             return true;
         });
 
-        // Ordenar os dados
-        filtered.sort((a, b) => {
-            const dateA = _parseDate(a.data).getTime();
-            const dateB = _parseDate(b.data).getTime();
-            if (sortOrder === 'asc') {
-                return dateA - dateB; // Antigas primeiro
-            } else {
-                return dateB - dateA; // Recentes primeiro
+        // Funções auxiliares para valores visuais das colunas para ordenação
+        const getVisualOrcamento = (d) => {
+            const currentStatus = String(d.status || '').toUpperCase();
+            if (currentStatus.includes('RECUSADO')) return 'CANCELADO';
+            if (!d.idPedido) return 'EM ANALISE';
+            const pVinculado = typeof _pedidosGarantiaData !== 'undefined' ? _pedidosGarantiaData.find(p => String(p.idPedido || p.numero || p.id || '') === String(d.idPedido)) : null;
+            if (pVinculado && pVinculado.situacao) {
+                let pStatus = pVinculado.situacao.toUpperCase();
+                if (pStatus === 'PENDENTE') pStatus = 'EM ANALISE';
+                return pStatus;
             }
+            return 'PROCESSANDO';
+        };
+
+        const getVisualRetorno = (d) => {
+            const currentStatus = String(d.status || '').toUpperCase();
+            let visualRetornoStatus = (d.retornoItem || 'EM ANALISE').toUpperCase();
+            if (visualRetornoStatus === 'FINALIZADO') visualRetornoStatus = 'RETORNADO';
+            if (currentStatus.includes('RECUSADO')) visualRetornoStatus = 'CANCELADO';
+            return visualRetornoStatus;
+        };
+
+        const getVisualServicoMo = (d) => {
+            const idMo = String(d.idServicoMO || '').trim();
+            const servicoMoObj = idMo && typeof _servicosMoData !== 'undefined' ? _servicosMoData.find(m => String(m.idServicoMO || '').trim() === idMo) : null;
+            const situacaoMoUpper = servicoMoObj ? String(servicoMoObj.situacao || '').toUpperCase() : '';
+            const isMoAtivo = servicoMoObj && situacaoMoUpper && situacaoMoUpper !== 'CANCELADO';
+            if (!isMoAtivo) return 'NÃO POSSUI';
+            if (situacaoMoUpper === 'FINALIZADO') return 'FINALIZADO';
+            return 'EM ANDAMENTO';
+        };
+
+        // Ordenar os dados por coluna selecionada
+        filtered.sort((a, b) => {
+            let res = 0;
+            if (_satgSortColumn === 'data') {
+                const dateA = _parseDate(a.data).getTime();
+                const dateB = _parseDate(b.data).getTime();
+                res = dateA - dateB;
+                if (res === 0) {
+                    res = String(a.codigo || '').localeCompare(String(b.codigo || ''), 'pt-BR', { numeric: true });
+                }
+            } else if (_satgSortColumn === 'cliente') {
+                const cliA = String(a.cliente || '').trim().toLowerCase();
+                const cliB = String(b.cliente || '').trim().toLowerCase();
+                res = cliA.localeCompare(cliB, 'pt-BR');
+            } else if (_satgSortColumn === 'garantia') {
+                const statA = String(a.status || '').toUpperCase();
+                const statB = String(b.status || '').toUpperCase();
+                res = statA.localeCompare(statB, 'pt-BR');
+            } else if (_satgSortColumn === 'orcamento') {
+                res = getVisualOrcamento(a).localeCompare(getVisualOrcamento(b), 'pt-BR');
+            } else if (_satgSortColumn === 'retorno') {
+                res = getVisualRetorno(a).localeCompare(getVisualRetorno(b), 'pt-BR');
+            } else if (_satgSortColumn === 'servico_mo') {
+                res = getVisualServicoMo(a).localeCompare(getVisualServicoMo(b), 'pt-BR');
+            } else if (_satgSortColumn === 'finalizado') {
+                const finA = (a.finalizado && String(a.finalizado).toLowerCase().includes('finalizado')) ? 1 : 0;
+                const finB = (b.finalizado && String(b.finalizado).toLowerCase().includes('finalizado')) ? 1 : 0;
+                res = finA - finB;
+            }
+
+            // Desempate por data mais recente caso os valores sejam iguais
+            if (res === 0) {
+                const dateA = _parseDate(a.data).getTime();
+                const dateB = _parseDate(b.data).getTime();
+                return dateB - dateA;
+            }
+
+            return _satgSortDirection === 'asc' ? res : -res;
         });
 
         _filteredSatgData = filtered;
 
         _satgCurrentPage = 1;
+        _updateSatgSortIcons();
         _renderSatgTable();
     }
 
@@ -2583,8 +2710,9 @@ function _formatItemsString() {
         }
 
         pagedData.forEach(req => {
+            const isFinalizado = Boolean(req.finalizado && String(req.finalizado).toLowerCase().includes('finalizado'));
             const tr = document.createElement('tr');
-            tr.className = "hover:bg-purple-50/50 transition-colors border-b border-gray-50 last:border-0";
+            tr.className = "hover:bg-purple-50/50 transition-colors border-b border-gray-50 last:border-0" + (isFinalizado ? " bg-green-50/20" : "");
             
             let badgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
             const statusUpper = String(req.status || '').toUpperCase();
@@ -2709,6 +2837,16 @@ function _formatItemsString() {
             </div>`;
 
             tr.innerHTML = `
+                <td class="w-12 px-2.5 py-2.5 whitespace-nowrap text-center text-xs font-medium">
+                    <div class="flex items-center justify-center gap-1.5">
+                        <input type="checkbox" class="satg-finalizado-checkbox h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer" data-row-index="${req.rowIndex}" ${isFinalizado ? 'checked' : ''} title="${isFinalizado ? 'Finalizado: ' + req.finalizado + ' (clique para reabrir)' : 'Clique para finalizar esta solicitação'}">
+                        <span class="btn-observacao-satg cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-colors inline-flex items-center justify-center" data-row-index="${req.rowIndex}" title="Adicionar/Ver Observação">
+                            <svg class="h-4 w-4 ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'text-red-500' : 'text-gray-400'} hover:scale-110 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
+                            </svg>
+                        </span>
+                    </div>
+                </td>
                 <td class="px-2.5 py-2.5 whitespace-nowrap text-xs text-gray-600 font-medium">
                     <div class="font-bold text-gray-800 text-xs">${req.codigo || '-'}</div>
                     <div class="text-[11px] text-gray-500">${req.data ? (req.data.includes(' ') ? req.data.split(':').slice(0, 2).join(':') : req.data) : '-'}</div>
@@ -2749,11 +2887,6 @@ function _formatItemsString() {
                         </button>` 
                         : ''
                     }
-                    <span class="btn-observacao-satg cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors inline-block ml-0.5" title="Adicionar/Ver Observação">
-                        <svg class="h-4 w-4 ${req.observacaoSatg && req.observacaoSatg.length > 5 ? 'text-red-500' : 'text-gray-300'}" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
-                        </svg>
-                    </span>
                 </td>
             `;
 
@@ -2964,6 +3097,65 @@ function _formatItemsString() {
             const btnVerPedido = tr.querySelector('.btn-ver-pedido');
             if (btnVerPedido) {
                 btnVerPedido.onclick = () => _openEditPedidoForm(req.idPedido);
+            }
+
+            const chkFinalizado = tr.querySelector('.satg-finalizado-checkbox');
+            if (chkFinalizado) {
+                chkFinalizado.addEventListener('change', async (e) => {
+                    const isChecking = e.target.checked;
+                    
+                    if (isChecking) {
+                        const confirmFinalizar = confirm(`Deseja finalizar esta solicitação SAT-G (${req.codigo || 'Sem código'})?`);
+                        if (!confirmFinalizar) {
+                            e.target.checked = false;
+                            return;
+                        }
+                        
+                        const now = new Date();
+                        const dia = String(now.getDate()).padStart(2, '0');
+                        const mes = String(now.getMonth() + 1).padStart(2, '0');
+                        const ano = now.getFullYear();
+                        const finalizadoStr = `(${dia}/${mes}/${ano}|finalizado)`;
+                        
+                        chkFinalizado.disabled = true;
+                        try {
+                            const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: finalizadoStr })
+                            });
+                            if (!res.ok) throw new Error();
+                            req.finalizado = finalizadoStr;
+                            _fetchSatGData();
+                        } catch (err) {
+                            alert('Erro ao finalizar solicitação SAT-G');
+                            chkFinalizado.checked = false;
+                            chkFinalizado.disabled = false;
+                        }
+                    } else {
+                        const confirmReabrir = confirm(`Deseja desmarcar como finalizado e reabrir esta solicitação SAT-G (${req.codigo || 'Sem código'})?`);
+                        if (!confirmReabrir) {
+                            e.target.checked = true;
+                            return;
+                        }
+                        
+                        chkFinalizado.disabled = true;
+                        try {
+                            const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: '' })
+                            });
+                            if (!res.ok) throw new Error();
+                            req.finalizado = '';
+                            _fetchSatGData();
+                        } catch (err) {
+                            alert('Erro ao reabrir solicitação SAT-G');
+                            chkFinalizado.checked = true;
+                            chkFinalizado.disabled = false;
+                        }
+                    }
+                });
             }
 
             _satgTableContent.appendChild(tr);
