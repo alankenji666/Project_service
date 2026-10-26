@@ -1,6 +1,6 @@
 {
-  "version": "1.0.13",
-  "deployId": "1792756000000",
-  "updatedAt": "2026-10-23T08:35:00-03:00",
-  "notes": "Correção na edição de orçamento para preservar e sincronizar a situação real (ex: Aguardando Peça) sem retornar para Em Análise."
+  "version": "1.0.14",
+  "deployId": "1792765000000",
+  "updatedAt": "2026-10-26T11:25:00-03:00",
+  "notes": "Ajuste no template de resposta de e-mail DANFE para exibir 'NFe. e NFs.' no assunto e mensagem quando o pedido contiver serviços e peças."
 }

@@ -1072,7 +1072,7 @@ export const GerenciarPedidosApp = (function () {
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                                     Visualizar DANFE
                                 </a>
-                                <a href="#" onclick="event.preventDefault(); window.openEmailDanfeModal('${baixarPdfUrl}', '${finalChaveAcesso || ''}', '${linkDanfe || ''}', '${safeFilenameForDownload.replace(/'/g, "\\'")}', '${pedido.email || pedido.contato_email || pedido['e-mail'] || ''}', '${numeroNota}', '${safeClientName}', '${numero}', '${orcValue}', '${vendedorName.replace(/'/g, "\\'")}')" class="flex items-center gap-1.5 text-[10px] bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors font-bold uppercase shadow-sm">
+                                <a href="#" onclick="event.preventDefault(); window.openEmailDanfeModal('${baixarPdfUrl}', '${finalChaveAcesso || ''}', '${linkDanfe || ''}', '${safeFilenameForDownload.replace(/'/g, "\\'")}', '${pedido.email || pedido.contato_email || pedido['e-mail'] || ''}', '${numeroNota}', '${safeClientName}', '${numero}', '${orcValue}', '${vendedorName.replace(/'/g, "\\'")}', ${_pedidoHasService(pedido)})" class="flex items-center gap-1.5 text-[10px] bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors font-bold uppercase shadow-sm">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                                     Enviar E-mail
                                 </a>
@@ -1765,6 +1765,7 @@ export const GerenciarPedidosApp = (function () {
         }
         return false;
     }
+    window._pedidoHasService = _pedidoHasService;
 
     function _handleEmitirNfs() {
         const orderNumber = _state.currentPedidoBlingBruto?.numero || _currentModalPedidoId || '';
@@ -6621,17 +6622,45 @@ window.toggleDanfeModalTab = function(tabName) {
     }
 };
 
-window.openEmailDanfeModal = function(baixarPdfUrl, chaveAcesso, linkDanfe, filename, contatoEmail, numeroNota, cliente, numeroBling, orcamento, vendedor) {
+window.openEmailDanfeModal = function(baixarPdfUrl, chaveAcesso, linkDanfe, filename, contatoEmail, numeroNota, cliente, numeroBling, orcamento, vendedor, hasService) {
     const modal = document.getElementById('email-danfe-modal');
     if (!modal) return;
 
     if (window.toggleDanfeModalTab) window.toggleDanfeModalTab('email');
 
+    // Aba 2 (Solicitar Coleta) & Detecção de Serviços
+    let pedido = null;
+    if (window._allPedidos) {
+        pedido = window._allPedidos.find(p => 
+            String(p.numero || p.número || '') === String(numeroBling) ||
+            String(p.id_pedido || p.id || '') === String(numeroBling)
+        );
+    }
+
+    if (typeof hasService !== 'boolean') {
+        if (typeof window._pedidoHasService === 'function' && pedido) {
+            hasService = window._pedidoHasService(pedido);
+        } else if (pedido) {
+            const raw = pedido.itens || pedido.Itens || '';
+            if (Array.isArray(pedido.itens)) {
+                hasService = pedido.itens.some(i => String(i.codigo || i.sku || i.codigo_produto || '').trim().startsWith('7'));
+            } else if (typeof raw === 'string' && raw) {
+                hasService = /\(\s*7[0-9a-zA-Z_-]*/.test(raw);
+            }
+        }
+        hasService = !!hasService;
+    }
+
     document.getElementById('email-danfe-to').value = contatoEmail || '';
     
     const primeiroNomeVendedor = (vendedor && vendedor !== '-') ? vendedor.split(' ')[0] : 'Vendedor';
     const orcStr = orcamento ? ` - Orç.: ${orcamento}` : '';
-    document.getElementById('email-danfe-subject').value = `${primeiroNomeVendedor} - Pedido N.: ${numeroBling || ''} - NFe.: ${numeroNota || ''}${orcStr}`;
+
+    if (hasService) {
+        document.getElementById('email-danfe-subject').value = `${primeiroNomeVendedor} - Pedido N.: ${numeroBling || ''} - NFe. e NFs.${orcStr}`;
+    } else {
+        document.getElementById('email-danfe-subject').value = `${primeiroNomeVendedor} - Pedido N.: ${numeroBling || ''} - NFe.: ${numeroNota || ''}${orcStr}`;
+    }
     
     const hour = new Date().getHours();
     let saudacaoStr = 'Bom dia';
@@ -6647,15 +6676,17 @@ window.openEmailDanfeModal = function(baixarPdfUrl, chaveAcesso, linkDanfe, file
         displayFilename = displayFilename.substring(0, displayFilename.length - 4); // Remove ".pdf"
     }
 
-    document.getElementById('email-danfe-message').value = `${saudacao},\n\nSegue a NFe.: ${displayFilename}\n\natt.:`;
+    if (hasService) {
+        let displayFilenameSemNfe = displayFilename.replace(/\s*-\s*Nf-?e\.?:?\s*[^\s-]+/i, '').trim();
+        if (orcamento && !displayFilenameSemNfe.toLowerCase().includes('orc')) {
+            displayFilenameSemNfe += ` - Orc. ${orcamento}`;
+        }
+        document.getElementById('email-danfe-message').value = `${saudacao},\n\nSegue a NFe. e NFs.: ${displayFilenameSemNfe}\n\natt.:`;
+    } else {
+        document.getElementById('email-danfe-message').value = `${saudacao},\n\nSegue a NFe.: ${displayFilename}\n\natt.:`;
+    }
     
     document.getElementById('email-danfe-filename').innerText = filename || 'DANFE.pdf';
-
-    // Aba 2 (Solicitar Coleta)
-    let pedido = null;
-    if (window._allPedidos) {
-        pedido = window._allPedidos.find(p => String(p.numero || p.número || '') === String(numeroBling));
-    }
     
     const freteMap = { 0: "CIF", 1: "FOB", 2: "Terceiros", 9: "Sem Frete" };
     let nomeCliente = cliente || '';

@@ -15,7 +15,7 @@
         import { EstoqueApp } from './modulos/estoque.js?v=110';
         import { SaidaItens } from './modulos/saidaItens.js?v=110';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=110';
-        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=114';
+        import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=115';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
         import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=130';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
