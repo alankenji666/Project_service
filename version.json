@@ -1,6 +1,6 @@
 {
-  "version": "1.0.12",
-  "deployId": "1792697500000",
-  "updatedAt": "2026-10-22T16:50:00-03:00",
-  "notes": "Campo obrigatório Cód. Cliente adicionado exclusivamente no modal Preencher Nova Sat-G (Agente Interno)."
+  "version": "1.0.13",
+  "deployId": "1792756000000",
+  "updatedAt": "2026-10-23T08:35:00-03:00",
+  "notes": "Correção na edição de orçamento para preservar e sincronizar a situação real (ex: Aguardando Peça) sem retornar para Em Análise."
 }

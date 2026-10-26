@@ -123,12 +123,28 @@ export const GerenciarGarantiaApp = (function () {
     const _satgPageSize = 20;
     let _currentSatgRowIndex = null;
     let _currentEditPedidoId = null;
+    let _currentEditPedidoSituacao = null;
     let _currentSatgReqForOrder = null; // Guarda o SatG vinculado ao formulário atual
     let _pedidosGarantiaData = [];
     let _itensDetalhadoGarantiaData = [];
     let _eventsBound = false;
     let _formHasChanges = false;
     let _btnBackFromFormArrow = null;
+
+    const _normalizeStr = (str) => {
+        return (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    };
+
+    const _findPedidoVinculado = (idRef) => {
+        if (!idRef || !_pedidosGarantiaData || _pedidosGarantiaData.length === 0) return null;
+        const refStr = String(idRef).trim();
+        const cleanRef = refStr.replace('GAR-', '');
+        return _pedidosGarantiaData.find(p => {
+            const pId = String(p.idPedido || p.numero || p.id || '').trim();
+            const pClean = pId.replace('GAR-', '');
+            return pId === refStr || (cleanRef && pClean === cleanRef);
+        }) || null;
+    };
 
     /**
      * Inicializa o módulo, cacheia elementos e configura eventos.
@@ -529,6 +545,7 @@ export const GerenciarGarantiaApp = (function () {
         if (btnSubmit) btnSubmit.innerHTML = 'Criar Pedido de Garantia';
 
         _currentEditPedidoId = null;
+        _currentEditPedidoSituacao = null;
         _formHasChanges = false;
     }
 
@@ -1629,8 +1646,10 @@ function _formatItemsString() {
                 url = API_URLS.GARANTIA_PEDIDO_UPDATE || API_URLS.GARANTIA_PEDIDO; // Fallback to same URL if missing
                 payload.idPedido = _currentEditPedidoId;
                 const situacaoDropdown = document.getElementById('garantia-situacao');
-                if (situacaoDropdown) {
+                if (situacaoDropdown && situacaoDropdown.value) {
                     payload.situacao = situacaoDropdown.value;
+                } else if (_currentEditPedidoSituacao) {
+                    payload.situacao = _currentEditPedidoSituacao;
                 }
             }
 
@@ -1695,6 +1714,7 @@ function _formatItemsString() {
             
             if (isEdit) {
                 await _fetchPedidosGarantiaData();
+                _applySatgFilters();
             } else {
                 _fetchPedidosGarantiaData();
                 _showView('satg');
@@ -1772,11 +1792,7 @@ function _formatItemsString() {
             return sId === cleanRef && sId !== '';
         });
         
-        const pedido = _pedidosGarantiaData.find(p => 
-            String(p.idPedido || '') === refStr || 
-            String(p.numero || '') === refStr || 
-            String(p.id || '') === refStr
-        );
+        const pedido = _findPedidoVinculado(idPedido);
 
         if (!pedido) {
             alert('Pedido não encontrado para edição.');
@@ -1784,7 +1800,8 @@ function _formatItemsString() {
         }
 
         _resetGarantiaForm();
-        _currentEditPedidoId = idPedido;
+        _currentEditPedidoId = pedido.idPedido || idPedido;
+        _currentEditPedidoSituacao = pedido.situacao || '';
 
         // Preencher Envio
         const chkEnvio = document.getElementById('garantia-possui-envio');
@@ -1901,9 +1918,42 @@ function _formatItemsString() {
 
         const situacaoDropdown = document.getElementById('garantia-situacao');
         if (situacaoDropdown && pedido.situacao) {
-            const validOptions = Array.from(situacaoDropdown.options).map(o => o.value);
-            if (validOptions.includes(pedido.situacao)) {
-                situacaoDropdown.value = pedido.situacao;
+            const rawSit = String(pedido.situacao || '').trim();
+            const normSit = _normalizeStr(rawSit);
+            let matched = false;
+
+            for (let opt of situacaoDropdown.options) {
+                const optValNorm = _normalizeStr(opt.value);
+                const optTextNorm = _normalizeStr(opt.text);
+
+                // Trata equivalências: pendente / em aberto / em analise
+                const isEquivPendente = (normSit.includes('pendente') || normSit.includes('aberto') || normSit.includes('analise')) && 
+                                        (optValNorm.includes('analise') || optValNorm.includes('pendente'));
+
+                if (optValNorm === normSit || optTextNorm === normSit || isEquivPendente) {
+                    situacaoDropdown.value = opt.value;
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched) {
+                for (let opt of situacaoDropdown.options) {
+                    const optValNorm = _normalizeStr(opt.value);
+                    if (optValNorm.includes(normSit) || normSit.includes(optValNorm)) {
+                        situacaoDropdown.value = opt.value;
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!matched && rawSit) {
+                const customOpt = document.createElement('option');
+                customOpt.value = rawSit;
+                customOpt.text = rawSit;
+                situacaoDropdown.add(customOpt);
+                situacaoDropdown.value = rawSit;
             }
         }
 
@@ -2481,7 +2531,7 @@ function _formatItemsString() {
             if (currentStatus.includes('RECUSADO')) {
                 visualOrcamentoStatus = 'CANCELADO';
             } else if (d.idPedido) {
-                const pVinculado = typeof _pedidosGarantiaData !== 'undefined' ? _pedidosGarantiaData.find(p => String(p.idPedido || p.numero || p.id || '') === String(d.idPedido)) : null;
+                const pVinculado = typeof _pedidosGarantiaData !== 'undefined' ? _findPedidoVinculado(d.idPedido) : null;
                 if (pVinculado && pVinculado.situacao) {
                     visualOrcamentoStatus = pVinculado.situacao.toUpperCase();
                     if (visualOrcamentoStatus === 'PENDENTE') visualOrcamentoStatus = 'EM ANALISE';
@@ -2542,7 +2592,7 @@ function _formatItemsString() {
             const currentStatus = String(d.status || '').toUpperCase();
             if (currentStatus.includes('RECUSADO')) return 'CANCELADO';
             if (!d.idPedido) return 'EM ANALISE';
-            const pVinculado = typeof _pedidosGarantiaData !== 'undefined' ? _pedidosGarantiaData.find(p => String(p.idPedido || p.numero || p.id || '') === String(d.idPedido)) : null;
+            const pVinculado = typeof _pedidosGarantiaData !== 'undefined' ? _findPedidoVinculado(d.idPedido) : null;
             if (pVinculado && pVinculado.situacao) {
                 let pStatus = pVinculado.situacao.toUpperCase();
                 if (pStatus === 'PENDENTE') pStatus = 'EM ANALISE';
@@ -2773,7 +2823,7 @@ function _formatItemsString() {
             let pedidoVinculado = null;
             let pBadgeClass = '';
             if (req.idPedido) {
-                pedidoVinculado = _pedidosGarantiaData.find(p => String(p.idPedido || p.numero || p.id || '') === String(req.idPedido));
+                pedidoVinculado = _findPedidoVinculado(req.idPedido);
                 if (pedidoVinculado && pedidoVinculado.situacao) {
                     pBadgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
                     let pStatus = pedidoVinculado.situacao.toUpperCase();
@@ -3002,10 +3052,11 @@ function _formatItemsString() {
                         pedBtn.disabled = true;
                         try {
                             const updateUrl = API_URLS.GARANTIA_PEDIDO_UPDATE || API_URLS.GARANTIA_PEDIDO; 
+                            const targetId = (pedidoVinculado && pedidoVinculado.idPedido) ? pedidoVinculado.idPedido : req.idPedido;
                             const res = await fetch(updateUrl, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ idPedido: req.idPedido, situacao: newStatus })
+                                body: JSON.stringify({ idPedido: targetId, situacao: newStatus })
                             });
                             if (!res.ok) throw new Error();
                             await _fetchPedidosGarantiaData();
