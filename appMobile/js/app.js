@@ -1,4 +1,5 @@
 import { API_URLS } from './apiConfig.js';
+import { initMobileNfe, openMobileNfeModal, getDanfeLinkForOrder, updateNfeMobileContext } from './nfeMobile.js';
 
 // --- DOM Elements ---
 const menuView = document.getElementById('menu-view');
@@ -77,6 +78,8 @@ const pedidosDetalhesHeader = document.getElementById('pedidos-detalhes-header')
 const pedidosDetalhesContent = document.getElementById('pedidos-detalhes-content');
 const closePedidosDetalhesModalBtn = document.getElementById('close-pedidos-detalhes-modal-btn');
 const openObsFromDetalhesBtn = document.getElementById('open-obs-from-detalhes-btn');
+const openNfeFromDetalhesBtn = document.getElementById('open-nfe-from-detalhes-btn');
+const viewDanfeFromDetalhesBtn = document.getElementById('view-danfe-from-detalhes-btn');
 const imageZoomModal = document.getElementById('image-zoom-modal');
 const imageZoomImg = document.getElementById('image-zoom-img');
 const closeImageZoomBtn = document.getElementById('close-image-zoom-btn');
@@ -401,6 +404,7 @@ async function fetchAllProducts() {
         const data = await res.json();
         if (data.error || !data.data) throw new Error(data.message || 'Formato de dados inválido.');
         allProducts = data.data;
+        updateNfeMobileContext({ allProducts });
         return true;
     } catch (error) {
         alert(`Falha ao carregar produtos: ${error.message}`);
@@ -816,6 +820,7 @@ async function fetchPedidos(silent = false) {
         if (!response.ok) throw new Error("Erro ao buscar pedidos.");
         const result = await response.json();
         allPedidos = result.data || [];
+        updateNfeMobileContext({ allPedidos });
         
         // Garantir parsing de observação em todos os pedidos trazidos
         allPedidos.forEach(order => {
@@ -992,6 +997,33 @@ function openOrderDetailsModal(orderId) {
     }
 
     pedidosDetalhesContent.innerHTML = itemsHtml;
+
+    // Configurar botões de NF-e e DANFE
+    if (openNfeFromDetalhesBtn) {
+        openNfeFromDetalhesBtn.onclick = () => {
+            updateNfeMobileContext({ allProducts, allPedidos });
+            openMobileNfeModal(order.id || order.id_pedido || orderId);
+        };
+    }
+
+    if (viewDanfeFromDetalhesBtn) {
+        const danfeUrl = getDanfeLinkForOrder(order);
+        if (danfeUrl) {
+            viewDanfeFromDetalhesBtn.classList.remove('hidden');
+            viewDanfeFromDetalhesBtn.href = danfeUrl;
+            if (openNfeFromDetalhesBtn) {
+                const span = openNfeFromDetalhesBtn.querySelector('span');
+                if (span) span.textContent = 'Editar / Ver Dados da NF-e';
+            }
+        } else {
+            viewDanfeFromDetalhesBtn.classList.add('hidden');
+            if (openNfeFromDetalhesBtn) {
+                const span = openNfeFromDetalhesBtn.querySelector('span');
+                if (span) span.textContent = 'Emitir / Editar NF-e';
+            }
+        }
+    }
+
     pedidosDetalhesModal.classList.remove('hidden');
 }
 
@@ -1584,6 +1616,21 @@ function initializeApp() {
     
     // Zoom Modal
     closeImageZoomBtn.addEventListener('click', () => imageZoomModal.classList.add('hidden'));
+
+    // Inicializar Módulo de NF-e Mobile
+    initMobileNfe({
+        allProducts,
+        allPedidos,
+        onOrderUpdated: async (updatedOrderId) => {
+            await fetchPedidos(true);
+            updateNfeMobileContext({ allProducts, allPedidos });
+            if (currentObsOrderId && String(currentObsOrderId) === String(updatedOrderId)) {
+                openOrderDetailsModal(currentObsOrderId);
+            }
+        },
+        showLoading: (txt) => toggleLoading(true, txt),
+        hideLoading: () => toggleLoading(false)
+    });
 
     showView('menu-view');
     

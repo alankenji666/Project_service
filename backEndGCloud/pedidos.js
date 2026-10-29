@@ -645,10 +645,13 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 
                 console.log(`[Bling] NF-e ${idNota} enviada para processamento.`);
 
-                // NOVO: Atualizar situação do pedido para "Atendido" (9) após envio da NFe
+                // Atualizar situação do pedido após envio da NFe (Atendido P. 37589 se tiver serviços, ou Atendido 9)
+                const targetSituacaoId = (req.body && req.body.situacaoId) ? req.body.situacaoId : (req.body && req.body.hasService ? 37589 : 9);
+                const situacaoLabel = targetSituacaoId === 37589 ? 'Atendido P.' : 'Atendido';
+
                 try {
-                    console.log(`[Bling] Atualizando situação do pedido ${idPedido} para Atendido (9) após gerar NFe...`);
-                    await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/situacoes/9`, {}, {
+                    console.log(`[Bling] Atualizando situação do pedido ${idPedido} para ${situacaoLabel} (${targetSituacaoId}) após gerar NFe...`);
+                    await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/situacoes/${targetSituacaoId}`, {}, {
                         headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
                     });
                     
@@ -660,12 +663,12 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                     }).catch(e => console.log("[Webhook Local] Erro na sync:", e.message));
 
                 } catch (errSituacao) {
-                    console.warn(`[Bling Warning] NFe enviada, mas falha ao alterar situação do pedido para Atendido:`, errSituacao.message);
+                    console.warn(`[Bling Warning] NFe enviada, mas falha ao alterar situação do pedido para ${situacaoLabel}:`, errSituacao.message);
                 }
 
                 return res.status(200).send({ 
                     status: 'success', 
-                    message: "NF-e gerada e enviada com sucesso! O pedido foi atualizado para Atendido.",
+                    message: `NF-e gerada e enviada com sucesso! O pedido foi atualizado para ${situacaoLabel}.`,
                     data: { idNota, response: resEnvio.data } 
                 });
             } catch (err) {
@@ -682,8 +685,11 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                     if (situacao === 6 || situacao === 3 || situacao === 1 || errMsg.includes('emitir')) {
                         console.log(`[Bling] A nota ${idNota} já estava autorizada/emitida ou na fila (situação ${situacao}). Retornando sucesso!`);
                         
+                        const targetSituacaoId = (req.body && req.body.situacaoId) ? req.body.situacaoId : (req.body && req.body.hasService ? 37589 : 9);
+                        const situacaoLabel = targetSituacaoId === 37589 ? 'Atendido P.' : 'Atendido';
+
                         try {
-                            await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/situacoes/9`, {}, {
+                            await httpClient.patch(`${BLING_API_BASE_URL}/pedidos/vendas/${idPedido}/situacoes/${targetSituacaoId}`, {}, {
                                 headers: { 'Authorization': `Bearer ${accessToken}`, 'enable-jwt': '1' }
                             });
                             const port = process.env.PORT || 8080;
@@ -694,7 +700,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
 
                         return res.status(200).send({ 
                             status: 'success', 
-                            message: "NF-e gerada e processada automaticamente pelo Bling com sucesso! O pedido foi atualizado para Atendido.",
+                            message: `NF-e gerada e processada automaticamente pelo Bling com sucesso! O pedido foi atualizado para ${situacaoLabel}.`,
                             data: { idNota, autoEmitted: true } 
                         });
                     }

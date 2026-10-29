@@ -323,9 +323,19 @@
             </div>
             
             <!-- Footer Actions -->
-            <div class="p-4 bg-white border-t rounded-b-2xl sm:rounded-b-xl safe-area-bottom shrink-0">
-                <button id="open-obs-from-detalhes-btn" class="w-full px-4 py-3 bg-orange-100 text-orange-700 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-orange-200 transition-colors">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+            <div class="p-4 bg-white border-t rounded-b-2xl sm:rounded-b-xl safe-area-bottom shrink-0 flex flex-col gap-2">
+                <!-- Botão Emitir / Editar NF-e -->
+                <button id="open-nfe-from-detalhes-btn" class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98]">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span>Emitir / Editar NF-e</span>
+                </button>
+                <!-- Botão Ver DANFE (se já emitida) -->
+                <a id="view-danfe-from-detalhes-btn" href="#" target="_blank" class="hidden w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span>Visualizar DANFE (PDF)</span>
+                </a>
+                <button id="open-obs-from-detalhes-btn" class="w-full px-4 py-2.5 bg-orange-50 text-orange-700 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-orange-100 transition-colors text-sm border border-orange-200">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
                     Ver Observações / Chat
                 </button>
             </div>
@@ -367,6 +377,342 @@
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path></svg>
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE EDIÇÃO DE PEDIDO E EMISSÃO DE NF-e (MOBILE) -->
+    <div id="mobile-nfe-modal" class="fixed hidden inset-0 bg-black bg-opacity-60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+        <div class="bg-gray-100 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-lg flex flex-col h-[94vh] sm:h-[88vh] overflow-hidden">
+            
+            <!-- Header -->
+            <div class="bg-white px-4 py-3 border-b flex items-center justify-between shrink-0 shadow-sm">
+                <div class="flex items-center gap-2">
+                    <div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-800 leading-tight" id="mobile-nfe-title">Editar Pedido</h3>
+                        <p class="text-[11px] text-gray-500" id="mobile-nfe-subtitle">Emissão de Nota Fiscal</p>
+                    </div>
+                </div>
+
+                <!-- Modos NF-e / NF-s -->
+                <div class="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                    <button type="button" id="mobile-nfe-mode-nfe-btn" class="px-2.5 py-1 text-xs font-bold rounded-md bg-blue-600 text-white shadow-sm transition-all">NF-e</button>
+                    <button type="button" id="mobile-nfe-mode-nfs-btn" class="px-2.5 py-1 text-xs font-bold rounded-md text-gray-600 hover:text-gray-900 transition-all disabled:opacity-40 flex items-center gap-1">
+                        <span>NF-s</span>
+                        <span id="mobile-nfe-mode-nfs-badge" class="hidden px-1 bg-purple-200 text-purple-800 text-[9px] rounded-full font-bold"></span>
+                    </button>
+                </div>
+
+                <button type="button" id="mobile-nfe-close-btn" class="p-2 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full transition-colors ml-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <!-- Conteúdo Scrollável -->
+            <div class="overflow-y-auto p-4 space-y-4 flex-grow">
+                <!-- VIEW NF-e -->
+                <div id="mobile-nfe-view-nfe" class="space-y-4">
+                    
+                    <!-- Card 1: Dados Gerais da Nota -->
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            Dados Gerais
+                        </h4>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Cliente</label>
+                            <input type="text" id="mobile-nfe-contato-nome" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Natureza de Operação</label>
+                            <select id="mobile-nfe-natureza-id" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                                <option value="15107272436">Venda de mercadoria</option>
+                                <option value="15107272437">Venda de mercadoria a não contribuinte</option>
+                                <option value="15108636006">Remessa em Garantia</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Data Pedido</label>
+                                <input type="date" id="mobile-nfe-data" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Data Saída</label>
+                                <input type="date" id="mobile-nfe-data-saida" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Data Prevista</label>
+                                <input type="date" id="mobile-nfe-data-prevista" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <!-- Acordeão Detalhes do Cliente -->
+                        <div class="border-t border-gray-100 pt-2">
+                            <button type="button" id="mobile-nfe-client-toggle-btn" class="w-full flex items-center justify-between text-xs text-blue-600 font-bold py-1">
+                                <span class="flex items-center gap-1.5">
+                                    <svg id="mobile-nfe-client-chevron" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                    <span>Ver/Editar Detalhes Fiscais do Cliente</span>
+                                </span>
+                                <span id="mobile-nfe-ie-warning" class="hidden px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[9px] rounded font-bold">Sem IE</span>
+                            </button>
+
+                            <div id="mobile-nfe-client-details" class="hidden space-y-3 pt-3 border-t border-gray-100 mt-2">
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label class="block text-[10px] font-semibold text-gray-500 mb-1">Código</label>
+                                        <input type="number" id="mobile-nfe-contato-id" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-gray-50" readonly>
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label class="block text-[10px] font-semibold text-gray-500 mb-1">Fantasia</label>
+                                        <input type="text" id="mobile-nfe-contato-fantasia" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label class="block text-[10px] font-semibold text-gray-500 mb-1">Tipo</label>
+                                        <select id="mobile-nfe-contato-tipo" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
+                                            <option value="J">Jurídica</option>
+                                            <option value="F">Física</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label class="block text-[10px] font-semibold text-gray-500 mb-1">CNPJ / CPF</label>
+                                        <div class="flex gap-1">
+                                            <input type="text" id="mobile-nfe-contato-cnpj" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg">
+                                            <button type="button" id="mobile-nfe-consultar-cnpj-btn" class="px-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 shrink-0" title="Consultar IE na SEFAZ">
+                                                🔍
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-[10px] font-semibold text-gray-500 mb-1">Inscrição Estadual</label>
+                                        <input type="text" id="mobile-nfe-contato-ie" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-semibold text-gray-500 mb-1">Contribuinte</label>
+                                        <select id="mobile-nfe-contato-contribuinte" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
+                                            <option value="1">1 - Contribuinte</option>
+                                            <option value="2">2 - Isento</option>
+                                            <option value="9">9 - Não contribuinte</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Itens da Nota Fiscal -->
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                                Itens da Nota
+                            </h4>
+                            <button type="button" id="mobile-nfe-add-item-btn" class="px-2.5 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100 flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                Item
+                            </button>
+                        </div>
+
+                        <!-- Lista de Itens -->
+                        <div id="mobile-nfe-itens-container" class="space-y-3">
+                            <!-- Cards de itens renderizados dinamicamente -->
+                        </div>
+
+                        <!-- Frete, Desconto e Outras Despesas -->
+                        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
+                            <div>
+                                <label class="block text-[10px] font-semibold text-gray-500 mb-1">Frete (R$)</label>
+                                <input type="text" id="mobile-nfe-frete" class="w-full px-2 py-1.5 text-xs text-right border border-gray-300 rounded-lg" placeholder="R$ 0,00">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-gray-500 mb-1">Desconto (R$)</label>
+                                <input type="text" id="mobile-nfe-desconto" class="w-full px-2 py-1.5 text-xs text-right border border-gray-300 rounded-lg" placeholder="R$ 0,00">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-gray-500 mb-1">Outras Desp. (R$)</label>
+                                <input type="text" id="mobile-nfe-outras-despesas" class="w-full px-2 py-1.5 text-xs text-right border border-gray-300 rounded-lg" placeholder="R$ 0,00">
+                            </div>
+                        </div>
+
+                        <!-- Resumo dos Totais -->
+                        <div class="bg-gray-50 p-3 rounded-lg border border-gray-100 space-y-1.5 text-xs">
+                            <div class="flex justify-between items-center text-gray-600">
+                                <span>Total Peças (+ Frete):</span>
+                                <span id="mobile-nfe-total-pecas" class="font-bold text-gray-800">R$ 0,00</span>
+                            </div>
+                            <div class="flex justify-between items-center text-gray-600">
+                                <span>Total Serviços:</span>
+                                <span id="mobile-nfe-total-servicos" class="font-bold text-gray-800">R$ 0,00</span>
+                            </div>
+                            <div class="flex justify-between items-center text-base pt-1.5 border-t border-gray-200">
+                                <span class="font-bold text-gray-800">Total da Nota:</span>
+                                <span id="mobile-nfe-total-pedido" class="font-extrabold text-blue-600">R$ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Transporte e Volumes -->
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                            Transporte
+                        </h4>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Frete por Conta</label>
+                            <select id="mobile-nfe-frete-por-conta" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white">
+                                <option value="0">0 - CIF (Remetente)</option>
+                                <option value="1">1 - FOB (Destinatário)</option>
+                                <option value="2">2 - Terceiros</option>
+                                <option value="3">3 - Próprio Remetente</option>
+                                <option value="4">4 - Próprio Destinatário</option>
+                                <option value="9">9 - Sem Transporte</option>
+                            </select>
+                        </div>
+
+                        <div id="mobile-nfe-transportadora-container">
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Transportadora</label>
+                            <select id="mobile-nfe-transportadora" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white">
+                                <option value="">Carregando...</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-semibold text-gray-500 mb-1">Volumes</label>
+                                <input type="number" id="mobile-nfe-volumes" class="w-full px-2 py-1.5 text-xs text-center border border-gray-300 rounded-lg" placeholder="0">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-gray-500 mb-1">Peso Bruto (kg)</label>
+                                <input type="number" step="0.001" id="mobile-nfe-peso-bruto" class="w-full px-2 py-1.5 text-xs text-center border border-gray-300 rounded-lg" placeholder="0.000">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-gray-500 mb-1">Peso Líq. (kg)</label>
+                                <input type="number" step="0.001" id="mobile-nfe-peso-liquido" class="w-full px-2 py-1.5 text-xs text-center border border-gray-300 rounded-lg" placeholder="0.000">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: Parcelas e Pagamento -->
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                                Parcelas
+                            </h4>
+                            <button type="button" id="mobile-nfe-add-parcela-btn" class="px-2.5 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100 flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                Parcela
+                            </button>
+                        </div>
+
+                        <!-- Atalho rápido de parcelas (dias) -->
+                        <div class="flex items-center gap-2 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                            <span class="text-[11px] text-amber-800 font-semibold shrink-0">Dias:</span>
+                            <input type="text" id="mobile-nfe-manual-parcelas-input" placeholder="ex: 28,35,70 ou 0" class="w-full px-2 py-1 text-xs border border-amber-300 rounded bg-white">
+                            <button type="button" id="mobile-nfe-manual-parcelas-btn" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded shrink-0">Gerar</button>
+                        </div>
+
+                        <!-- Lista de Parcelas -->
+                        <div id="mobile-nfe-parcelas-container" class="space-y-2">
+                            <!-- Parcelas dinâmicas -->
+                        </div>
+                    </div>
+
+                    <!-- Card 5: Observações -->
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+                            Observações da Nota
+                        </h4>
+                        
+                        <div class="space-y-2">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Observação do Pedido (Original)</label>
+                                <textarea id="mobile-nfe-observacoes-original" rows="2" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-gray-50 text-gray-500" readonly disabled></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Observação Fiscal da NF-e</label>
+                                <textarea id="mobile-nfe-observacoes" rows="3" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Informações complementares da nota..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW NF-s (Serviços) -->
+                <div id="mobile-nfe-view-nfs" class="space-y-4 hidden">
+                    <div class="bg-purple-50 p-4 rounded-xl border border-purple-200 text-xs text-purple-800">
+                        <h4 class="font-bold text-sm mb-1 flex items-center gap-1.5 text-purple-900">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                            Nota Fiscal de Serviços (NF-s)
+                        </h4>
+                        <p>Itens de serviço (código iniciado em 7) separados para faturamento municipal.</p>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Itens de Serviço</h4>
+                        <div id="mobile-nfs-itens-container" class="space-y-2">
+                            <!-- Itens de serviço -->
+                        </div>
+                        <div class="flex justify-between items-center pt-2 border-t border-gray-100 text-sm">
+                            <span class="font-bold text-gray-700">Total dos Serviços:</span>
+                            <span id="mobile-nfs-total-servicos" class="font-extrabold text-purple-700">R$ 0,00</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                        <label class="block text-xs font-semibold text-gray-500">Discriminação / Observações da NF-s</label>
+                        <textarea id="mobile-nfs-observacoes" rows="3" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="Observações da nota de serviço..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer / Ações Fixas -->
+            <div class="bg-white p-3 border-t flex items-center justify-between gap-2 shrink-0 safe-area-bottom shadow-lg">
+                <button type="button" id="mobile-nfe-cancel-btn" class="px-3 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 transition-colors">
+                    Cancelar
+                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="mobile-nfe-save-btn" class="px-3 py-2.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold hover:bg-indigo-100 flex items-center gap-1 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                        <span>Salvar</span>
+                    </button>
+                    <button type="button" id="mobile-nfe-emit-btn" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md active:scale-[0.98] transition-all">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <span>Salvar e Emitir NF-e</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay de Console da Emissão NF-e (Mobile) -->
+    <div id="mobile-nfe-console-overlay" class="fixed hidden inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
+        <div class="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-sm p-5 text-gray-200 font-mono text-xs flex flex-col">
+            <h4 class="text-sm font-bold text-white mb-3 text-center border-b border-gray-800 pb-2">Processamento de Emissão</h4>
+            
+            <div id="mobile-nfe-console-logs" class="space-y-2 py-3 min-h-[140px] max-h-[220px] overflow-y-auto">
+                <!-- Logs aqui -->
+            </div>
+
+            <div id="mobile-nfe-console-success-area" class="hidden mt-3 pt-3 border-t border-gray-800 flex flex-col gap-2">
+                <a id="mobile-nfe-danfe-link" href="#" target="_blank" class="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-center text-sm flex items-center justify-center gap-2 shadow-md">
+                    <span>📄 Visualizar DANFE (PDF)</span>
+                </a>
+                <button type="button" id="mobile-nfe-console-ok-btn" class="w-full py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl text-center text-xs">
+                    Concluir
+                </button>
             </div>
         </div>
     </div>

@@ -405,7 +405,7 @@ export const GerenciarGarantiaApp = (function () {
         if (selConta) { selConta.value = ''; selConta.classList.add('hidden'); }
         const cont = document.getElementById('garantia-envio-container');
         if (cont) cont.classList.add('hidden');
-        ['garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado', 'garantia-valor-frete', 'garantia-peso-total', 'garantia-tipo-embalagem', 'garantia-altura', 'garantia-largura', 'garantia-comprimento', 'garantia-frete-conta'].forEach(id => {
+        ['garantia-destinatario', 'garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 'garantia-estado', 'garantia-valor-frete', 'garantia-peso-total', 'garantia-tipo-embalagem', 'garantia-altura', 'garantia-largura', 'garantia-comprimento', 'garantia-frete-conta'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
@@ -509,7 +509,7 @@ export const GerenciarGarantiaApp = (function () {
         if (cont) cont.classList.add('hidden');
         
         [
-            'garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 
+            'garantia-destinatario', 'garantia-transportadora', 'garantia-volume', 'garantia-cep', 'garantia-endereco', 
             'garantia-numero-envio', 'garantia-complemento', 'garantia-bairro', 'garantia-cidade', 
             'garantia-estado', 'garantia-valor-frete', 'garantia-peso-total',
             'garantia-tipo-embalagem', 'garantia-altura', 'garantia-largura', 'garantia-comprimento',
@@ -653,6 +653,10 @@ export const GerenciarGarantiaApp = (function () {
                         containerEnvio.classList.remove('hidden');
                     } else {
                         containerEnvio.classList.add('hidden');
+                    }
+                    const destEl = document.getElementById('garantia-destinatario');
+                    if (destEl && !destEl.value && _inputCliente && _inputCliente.value) {
+                        destEl.value = _inputCliente.value.trim();
                     }
                 } else {
                     if (selectFreteConta) {
@@ -1531,6 +1535,7 @@ function _formatItemsString() {
         const chkE = document.getElementById('garantia-possui-envio');
         if (chkE && chkE.checked) {
             let requiredFields = [
+                { id: 'garantia-destinatario', name: 'Destinatário' },
                 { id: 'garantia-frete-conta', name: 'Frete por conta' },
                 { id: 'garantia-transportadora', name: 'Transportadora' },
                 { id: 'garantia-volume', name: 'Volume' },
@@ -1540,8 +1545,9 @@ function _formatItemsString() {
                 { id: 'garantia-numero-envio', name: 'Número' },
                 { id: 'garantia-bairro', name: 'Bairro' },
                 { id: 'garantia-cidade', name: 'Cidade' },
-                { id: 'garantia-estado', name: 'Estado (UF)' }
-            , { id: 'garantia-tipo-embalagem', name: 'Tipo Embalagem' }];
+                { id: 'garantia-estado', name: 'Estado (UF)' },
+                { id: 'garantia-tipo-embalagem', name: 'Tipo Embalagem' }
+            ];
             const tipoEmbEl = document.getElementById('garantia-tipo-embalagem');
             if (tipoEmbEl && tipoEmbEl.value && tipoEmbEl.value !== 'Nenhuma') {
                 requiredFields.push({ id: 'garantia-altura', name: 'Altura (m)' });
@@ -1607,6 +1613,7 @@ function _formatItemsString() {
 
             const chkE = document.getElementById('garantia-possui-envio');
             if (chkE && chkE.checked) {
+                payload.destinatario = document.getElementById('garantia-destinatario').value.trim();
                 payload.transportadora = document.getElementById('garantia-transportadora').value.trim();
                 payload.volume = document.getElementById('garantia-volume').value.trim();
                 payload.valorFrete = document.getElementById('garantia-valor-frete').value.trim();
@@ -1625,6 +1632,7 @@ function _formatItemsString() {
                 payload.embalagem = (tEmb && tEmb !== 'Nenhuma') ? `${tEmb}/${alt}/${larg}/${comp}` : tEmb;
                 payload.freteConta = document.getElementById('garantia-frete-conta').value;
             } else {
+                payload.destinatario = '';
                 payload.transportadora = '';
                 payload.volume = '';
                 payload.valorFrete = '';
@@ -1807,7 +1815,7 @@ function _formatItemsString() {
         const chkEnvio = document.getElementById('garantia-possui-envio');
         const contEnvio = document.getElementById('garantia-envio-container');
         if (chkEnvio) {
-            const hasEnvio = pedido.transportadora || pedido.volume || pedido.cep || pedido.cidade || pedido.bairro || pedido.freteConta;
+            const hasEnvio = pedido.transportadora || pedido.volume || pedido.cep || pedido.cidade || pedido.bairro || pedido.freteConta || pedido.destinatario;
             chkEnvio.checked = !!hasEnvio;
             const selC = document.getElementById('garantia-frete-conta');
               if (selC) selC.value = (pedido.freteConta !== undefined && pedido.freteConta !== null) ? String(pedido.freteConta) : '';
@@ -1823,6 +1831,8 @@ function _formatItemsString() {
                 if (contEnvio) contEnvio.classList.add('hidden');
             }
             
+            const destEl = document.getElementById('garantia-destinatario');
+            if (destEl) destEl.value = pedido.destinatario || pedido.cliente || '';
             document.getElementById('garantia-transportadora').value = pedido.transportadora || '';
             document.getElementById('garantia-volume').value = pedido.volume || '';
             document.getElementById('garantia-valor-frete').value = formatMoneyBR(pedido.valorFrete) || '';
@@ -3892,6 +3902,13 @@ function _formatItemsString() {
                 htmlEnvio = `
                 <div class="section">
                     <div class="section-title">Dados de Envio</div>
+                    ${pedido.destinatario ? `
+                    <div class="grid" style="margin-bottom: 8px;">
+                        <div class="field" style="flex: 1;">
+                            <span class="field-label">Destinatário</span>
+                            <span class="field-value">${pedido.destinatario}</span>
+                        </div>
+                    </div>` : ''}
                     <div class="grid" style="margin-bottom: 8px;">
                         <div class="field" style="flex: 2;">
                             <span class="field-label">Transportadora</span>
@@ -4108,6 +4125,7 @@ function _formatItemsString() {
                 const fContaStr = freteContaMap[pedido.freteConta] || pedido.freteConta || '-';
 
                 dadosEnvio = {
+                    destinatario: pedido.destinatario || '',
                     transportadora: nomeTransp,
                     embalagemVol: `${emb}${vol}`,
                     valorFrete: pedido.valorFrete || '-',
@@ -4207,6 +4225,9 @@ function _formatItemsString() {
         // 2. Dados de Envio
         if (dadosEnvio) {
             content.push(sectionHeader('Dados de Envio'));
+            if (dadosEnvio.destinatario) {
+                content.push(fieldCard('Destinatário', dadosEnvio.destinatario, { fontSize: 8.5 }));
+            }
             content.push({
                 columns: [
                     { width: '38%', ...fieldCard('Transportadora', dadosEnvio.transportadora) },
@@ -4442,6 +4463,13 @@ function _formatItemsString() {
                 htmlEnvio = `
                 <div class="section">
                     <div class="section-title">Dados de Envio</div>
+                    ${pedido.destinatario ? `
+                    <div class="grid" style="margin-bottom: 8px;">
+                        <div class="field" style="flex: 1;">
+                            <span class="field-label">Destinatário</span>
+                            <span class="field-value">${pedido.destinatario}</span>
+                        </div>
+                    </div>` : ''}
                     <div class="grid" style="margin-bottom: 8px;">
                         <div class="field" style="flex: 2;">
                             <span class="field-label">Transportadora</span>

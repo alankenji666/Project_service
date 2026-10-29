@@ -17,7 +17,7 @@ export const API_URLS = {
     ORDERS_FABRICA: "https://script.google.com/macros/s/AKfycbwKsLHoAhfLxEcq6nyu9lCHybh3EOGqEku-shgdoomSg8SAyL9VcUsWWjzVPmvcSkvOTA/exec",
     SAIDAS_FABRICA: "https://script.google.com/macros/s/AKfycbxEJwbvF9f0NBQ_ueTsXSSXxeOrr7AiGl58v6UKgJQ1NGI9ZOwrpS8vXYkwgRWe285n/exec",
     SAIDAS_GARANTIA: "https://script.google.com/macros/s/AKfycbz5szPRjcuugJ3JZjGozdXMhcUiYzmKnAMqoqvOywWCpm7935YH6p-Fay-M0CZPni89sQ/exec",
-    NFE: "https://script.google.com/macros/s/AKfycbwetL7dn2Zmsr6ZPlE6x6B2JTahGOyhfENK6AoL-2HwEvffyTejBuHvIp7S_kgHI3_t/exec",
+    NFE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/nfe-lista",
 
     // APIs de Ações (Cloud Functions)
     WEBHOOK_LAUNCH: "https://bling-proxy-api-255108547424.southamerica-east1.run.app",

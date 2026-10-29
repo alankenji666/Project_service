@@ -112,7 +112,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 req.body.complemento || '', // Z
                 req.body.valorFrete || '', // AA
                 req.body.embalagem || '', // AB
-                req.body.freteConta || '' // AC
+                req.body.freteConta || '', // AC
+                req.body.destinatario || '' // AD
             ];
 
             // Verifica se a planilha está vazia para adicionar o cabeçalho
@@ -124,12 +125,12 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 
                 if (!headerCheck.data.values || headerCheck.data.values.length === 0 || !headerCheck.data.values[0][0]) {
                     const cabecalhos = [
-                        'Conferido', 'ID Pedido', 'Número', 'Número Loja', 'Data', 'Data Saída', 'Situação', 'Contato Nome', 'CPF/CNPJ', 'Total Produtos', 'Total Pedido', 'Vendedor', 'Loja', 'ID Nota Fiscal', 'Observação', 'Itens', 'Observação 2', 'Orçamento', 'Equipamento'
+                        'Conferido', 'ID Pedido', 'Número', 'Número Loja', 'Data', 'Data Saída', 'Situação', 'Contato Nome', 'CPF/CNPJ', 'Total Produtos', 'Total Pedido', 'Vendedor', 'Loja', 'ID Nota Fiscal', 'Observação', 'Itens', 'Observação 2', 'Orçamento', 'Equipamento', 'Transportadora', 'Volume', 'Peso Total', 'CEP', 'Cidade', 'Estado', 'Bairro', 'Endereço', 'Número', 'Complemento', 'Valor Frete', 'Embalagem', 'Frete por conta', 'Destinatário'
                     ];
                     
                     await sheets.spreadsheets.values.update({
                         spreadsheetId,
-                        range: `${sheetName}!A1:S1`,
+                        range: `${sheetName}!A1:AD1`,
                         valueInputOption: 'USER_ENTERED',
                         resource: {
                             values: [cabecalhos]
@@ -143,7 +144,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
 
             const response = await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: `${sheetName}!A:S`,
+                range: `${sheetName}!A:AD`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
@@ -179,7 +180,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:AC` // Busca até a coluna U (Transportadora agora está em U)
+                range: `${sheetName}!A2:AD`
             });
 
             const rows = response.data.values || [];
@@ -211,7 +212,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     complemento: row[25] || '',
                     valorFrete: row[26] || '',
                     embalagem: row[27] || '',
-                    freteConta: row[28] || ''
+                    freteConta: row[28] || '',
+                    destinatario: row[29] || ''
                 };
             });
 
@@ -316,6 +318,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             addUpdate('AA', req.body.valorFrete);
             addUpdate('AB', req.body.embalagem);
             addUpdate('AC', req.body.freteConta);
+            addUpdate('AD', req.body.destinatario);
 
             if (updates.length > 0) {
                 const data = updates.map(u => ({
