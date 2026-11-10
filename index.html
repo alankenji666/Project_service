@@ -1185,6 +1185,7 @@
                                     <option value="em analise">Em Análise</option>
                                     <option value="aprovado">Aprovado</option>
                                     <option value="recusado">Recusado</option>
+                                    <option value="nao qualidade">Não Qualidade</option>
                                 </select>
                             </div>
                             <!-- Situação Orçamento -->
@@ -1279,6 +1280,10 @@
                                     <label class="flex items-center p-2 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors">
                                         <input type="checkbox" class="satg-filter-checkbox h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" value="RECUSADO">
                                         <span class="ml-3 text-sm text-gray-700 font-medium">Recusados / Arquivados</span>
+                                    </label>
+                                    <label class="flex items-center p-2 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors">
+                                        <input type="checkbox" class="satg-filter-checkbox h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" value="NÃO QUALIDADE" checked>
+                                        <span class="ml-3 text-sm text-gray-700 font-medium">Não Qualidade</span>
                                     </label>
                                 </div>
                             </div>
@@ -1661,7 +1666,7 @@
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                             Transportadoras
                         </button>
-                        <button id="pedidos-linha-producao-btn" class="hidden px-5 py-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform active:scale-95 flex items-center gap-2 font-black text-xs uppercase tracking-widest border-2 border-blue-400">
+                        <button id="pedidos-linha-producao-btn" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform active:scale-95 flex items-center gap-2 font-black text-xs uppercase tracking-widest border-2 border-blue-400">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                             Linha de Produção
                         </button>
@@ -4490,12 +4495,21 @@
                     <h2 class="text-2xl font-black text-gray-800">Linha de Produção</h2>
                     <p class="text-sm text-gray-500">Itens agregados de todos os pedidos "Em Produção"</p>
                 </div>
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-2 mr-2">
+                <div class="flex items-center gap-3 flex-wrap justify-end">
+                    <div class="flex items-center gap-2">
                         <label for="filter-responsavel-lp" class="text-sm font-bold text-gray-600">Responsável:</label>
                         <select id="filter-responsavel-lp" class="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors">
                             <option value="TODOS">Todos</option>
                             <option value="SEM_RESP">Sem Responsável</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label for="filter-status-lp" class="text-sm font-bold text-gray-600">Situação:</label>
+                        <select id="filter-status-lp" class="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors">
+                            <option value="TODOS">Todos</option>
+                            <option value="EM PRODUÇÃO">Em Produção</option>
+                            <option value="AGUARDANDO RETIRADA">Aguardando Retirada</option>
+                            <option value="FINALIZADO">Finalizado</option>
                         </select>
                     </div>
                     <button id="print-production-line-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-all shadow-md">

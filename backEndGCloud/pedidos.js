@@ -224,7 +224,17 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                     }
                 }
             }
-            if (typeof notifySync === 'function') notifySync('orderItemStatusUpdated', { pedidoId, itemCodigo, newStatus: finalStatus, newDescription: finalDesc, itemIndex, quantidade: finalQty, dataPedido: finalDate, responsavel: finalResp });
+            if (typeof notifySync === 'function') notifySync('orderItemStatusUpdated', { 
+                pedidoId, 
+                numeroPedido: numeroPedido || (req.body && req.body.numeroPedido) || pedidoId,
+                itemCodigo, 
+                newStatus: finalStatus, 
+                newDescription: finalDesc, 
+                itemIndex, 
+                quantidade: finalQty, 
+                dataPedido: finalDate, 
+                responsavel: finalResp 
+            });
             res.status(200).send({ status: 'success' });
         } catch (error) { next(error); }
     });

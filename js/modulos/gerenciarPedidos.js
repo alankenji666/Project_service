@@ -20,6 +20,47 @@ export const GerenciarPedidosApp = (function () {
     let _lastHoveredRowId = null;
     let _currentModalPedidoId = null; // ID do pedido aberto no modal
     let _enrichedProductsMap = {}; // Mapa para cachear dados de produtos do modal
+    let _pedidosBroadcast = null;
+
+    function _initCrossTabSync() {
+        if (_pedidosBroadcast) return;
+        if (typeof BroadcastChannel !== 'undefined') {
+            try {
+                _pedidosBroadcast = new BroadcastChannel('mks_pedidos_sync_channel');
+                _pedidosBroadcast.onmessage = (event) => {
+                    if (event.data && event.data.type === 'orderItemStatusUpdated') {
+                        console.log('[BroadcastChannel] Atualização de item recebida:', event.data);
+                        GerenciarPedidosApp.updateOrderItemStatusRealTime(event.data.data, true);
+                    }
+                };
+            } catch (e) {
+                console.warn('[BroadcastChannel] Falha ao inicializar canal:', e);
+            }
+        }
+
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'mks_pedidos_item_sync' && event.newValue) {
+                try {
+                    const parsed = JSON.parse(event.newValue);
+                    if (parsed && parsed.data && (Date.now() - parsed.ts < 10000)) {
+                        console.log('[LocalStorage Sync] Atualização de item recebida:', parsed);
+                        GerenciarPedidosApp.updateOrderItemStatusRealTime(parsed.data, true);
+                    }
+                } catch (e) {}
+            }
+        });
+    }
+
+    function _broadcastItemStatusChange(data) {
+        try {
+            if (_pedidosBroadcast) {
+                _pedidosBroadcast.postMessage({ type: 'orderItemStatusUpdated', data });
+            }
+            localStorage.setItem('mks_pedidos_item_sync', JSON.stringify({ ts: Date.now(), data }));
+        } catch (e) {
+            console.warn('[Broadcast] Falha ao enviar broadcast:', e);
+        }
+    }
 
     function _getVendedorName(vendedor) {
         if (!vendedor) return '-';
@@ -151,11 +192,13 @@ export const GerenciarPedidosApp = (function () {
 
         // Elementos da Linha de Produção
         _state.linhaProducaoBtn = document.getElementById('pedidos-linha-producao-btn');
+        if (_state.linhaProducaoBtn) _state.linhaProducaoBtn.classList.remove('hidden');
         _state.linhaProducaoModal = document.getElementById('production-line-modal');
         _state.linhaProducaoContent = document.getElementById('production-line-modal-content');
         _state.linhaProducaoCloseBtn = document.getElementById('close-production-line-modal-btn');
         _state.linhaProducaoPrintBtn = document.getElementById('print-production-line-btn');
         _state.linhaProducaoFilterResp = document.getElementById('filter-responsavel-lp');
+        _state.linhaProducaoFilterStatus = document.getElementById('filter-status-lp');
 
         // Elementos do Modal de Detalhes do Pedido
         _state.modalStatusCurrentText = document.getElementById('modal-status-current-text');
@@ -250,6 +293,7 @@ export const GerenciarPedidosApp = (function () {
     }
 
     function _bindEvents() {
+        _initCrossTabSync();
         // Eventos para Transportadoras
         if (_transportadorasBtn) _transportadorasBtn.addEventListener('click', _openTransportadorasModal);
 
@@ -772,6 +816,7 @@ export const GerenciarPedidosApp = (function () {
         if (_state.linhaProducaoCloseBtn) _state.linhaProducaoCloseBtn.addEventListener('click', () => _state.linhaProducaoModal.classList.add('hidden'));
         if (_state.linhaProducaoPrintBtn) _state.linhaProducaoPrintBtn.addEventListener('click', _printProductionLine);
         if (_state.linhaProducaoFilterResp) _state.linhaProducaoFilterResp.addEventListener('change', _showProductionLine);
+        if (_state.linhaProducaoFilterStatus) _state.linhaProducaoFilterStatus.addEventListener('change', _showProductionLine);
     }
 
     function _handleSelectAllToggle(e) {
@@ -1103,8 +1148,8 @@ export const GerenciarPedidosApp = (function () {
                 itensHtml = `
                 <div class="mt-6">
                     <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Itens do Pedido</h3>
-                    <div id="pedido-modal-itens-container">
-                        <table class="min-w-full divide-y divide-gray-200 text-sm rounded-lg overflow-hidden">
+                    <div id="pedido-modal-itens-container" class="pb-28">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm rounded-lg">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Produto</th>
@@ -1205,7 +1250,7 @@ export const GerenciarPedidosApp = (function () {
         modal.classList.remove('hidden');
     }
 
-    function _parseItens(raw, producaoData = {}, pedidoId = '') {
+    function _parseItens(raw, producaoData = {}, pedidoId = '', altPedidoId = '') {
         const results = [];
         if (!raw) return results;
 
@@ -1238,8 +1283,13 @@ export const GerenciarPedidosApp = (function () {
                 }
 
                 // BUSCA NA ABA DE PRODUÇÃO (Prioridade Total)
-                const key = `${pedidoId}-${index}`;
-                const extra = producaoData[key];
+                const key1 = `${pedidoId}-${index}`;
+                const key2 = altPedidoId ? `${altPedidoId}-${index}` : null;
+                let extra = producaoData[key1] || (key2 ? producaoData[key2] : null);
+                if (!extra && producaoData && typeof producaoData === 'object') {
+                    const found = Object.entries(producaoData).find(([k]) => k.endsWith(`-${index}`));
+                    if (found) extra = found[1];
+                }
                 
                 results.push({
                     codigo: sku,
@@ -1270,6 +1320,9 @@ export const GerenciarPedidosApp = (function () {
             document.addEventListener('click', () => {
                 document.querySelectorAll('.pedido-item-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
             });
+            window.addEventListener('scroll', () => {
+                document.querySelectorAll('.pedido-item-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+            }, true);
             window._pedidoItemDropdownListener = true;
         }
         
@@ -1289,15 +1342,57 @@ export const GerenciarPedidosApp = (function () {
 
         return `
         <div class="relative inline-block text-left" data-dropdown-container>
-            <button type="button" onclick="event.stopPropagation(); document.querySelectorAll('.pedido-item-custom-dropdown-menu:not(.hidden)').forEach(m => { if(m !== this.nextElementSibling) m.classList.add('hidden') }); this.nextElementSibling.classList.toggle('hidden');" class="px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${pBadgeClass} min-w-[120px] transition-all cursor-pointer shadow-sm">
+            <button type="button" onclick="GerenciarPedidosApp.toggleItemStatusDropdown(this, event)" class="px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${pBadgeClass} min-w-[120px] transition-all cursor-pointer shadow-sm">
                 <span class="flex-1 text-center">${currentStatus}</span>
                 <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
-            <div class="pedido-item-custom-dropdown-menu absolute right-0 mt-1.5 w-40 bg-white border border-gray-100 rounded-xl shadow-xl z-[60] hidden overflow-hidden py-1">
+            <div class="pedido-item-custom-dropdown-menu absolute right-0 w-40 bg-white border border-gray-100 rounded-xl shadow-xl z-[70] hidden overflow-hidden py-1">
                 ${dropdownOptions}
             </div>
         </div>`;
     }
+
+    function _toggleItemStatusDropdown(btn, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const menu = btn.nextElementSibling;
+        if (!menu) return;
+
+        // Fecha todos os outros menus abertos
+        document.querySelectorAll('.pedido-item-custom-dropdown-menu:not(.hidden)').forEach(m => {
+            if (m !== menu) m.classList.add('hidden');
+        });
+
+        const isOpening = menu.classList.contains('hidden');
+        if (isOpening) {
+            // Mede espaço abaixo vs acima
+            const modalContent = btn.closest('#modal-order-content') || btn.closest('.overflow-y-auto') || document.body;
+            const btnRect = btn.getBoundingClientRect();
+            const contentRect = modalContent.getBoundingClientRect();
+            
+            // Espaço restante abaixo do botão até a borda inferior visível do container ou da viewport
+            const bottomLimit = Math.min(contentRect.bottom, window.innerHeight);
+            const spaceBelow = bottomLimit - btnRect.bottom;
+            const menuHeight = 100; // altura do menu com 2 itens + margens
+
+            if (spaceBelow < menuHeight) {
+                // Sem espaço abaixo: abre para CIMA (dropup)
+                menu.style.bottom = 'calc(100% + 6px)';
+                menu.style.top = 'auto';
+            } else {
+                // Espaço suficiente: abre para BAIXO
+                menu.style.top = 'calc(100% + 6px)';
+                menu.style.bottom = 'auto';
+            }
+
+            menu.classList.remove('hidden');
+        } else {
+            menu.classList.add('hidden');
+        }
+    }
+    window.togglePedidoItemDropdown = _toggleItemStatusDropdown;
 
     async function _enrichItensWithProductData(itensList) {
         try {
@@ -1572,24 +1667,6 @@ export const GerenciarPedidosApp = (function () {
         const idPedido = _currentModalPedidoId;
         if (!idPedido || !idSituacao) return;
 
-        // TRAVA DE SEGURANÇA: Se o status for Atendido (9), verifica itens em produção
-        if (idSituacao === "9" || idSituacao === 9) {
-            const pedido = _allPedidos.find(p => String(p.id) === String(idPedido) || String(p.numero) === String(idPedido) || String(p.número) === String(idPedido));
-            if (pedido) {
-                const finalId = pedido.id || pedido.id_pedido || idPedido;
-                const itens = _parseItens(pedido.itens || '', pedido.detalhesProducao || {}, finalId);
-                const temItemProducao = itens.some(item => {
-                    const s = String(item.status || 'OK').toUpperCase().trim();
-                    return s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
-                });
-
-                if (temItemProducao) {
-                    await _showCustomAlert('Bloqueado', 'Não é possível marcar como <strong>Atendido</strong> enquanto houver itens individuais <strong>Em Produção</strong> neste pedido.', false);
-                    return;
-                }
-            }
-        }
-        
         if (!confirm(`Deseja alterar a situação do pedido para "${label}"?`)) {
             return;
         }
@@ -4676,24 +4753,9 @@ export const GerenciarPedidosApp = (function () {
         if (allIds.length === 0) return;
 
         // Filtrar pedidos que já possuem o status alvo para evitar erro no Bling
-        let skippedDueToProduction = 0;
         const idsToUpdate = allIds.filter(id => {
             const p = _allPedidos.find(p => String(p.id) === String(id) || String(p.numero) === String(id) || String(p.número) === String(id));
             if (!p) return true; 
-            
-            // TRAVA DE SEGURANÇA: Se for Atendido (9), não permite se houver item em produção
-            if (newStatusId === 9 || String(newStatusId) === "9") {
-                const finalId = p.id || p.id_pedido || id;
-                const itens = _parseItens(p.itens || '', p.detalhesProducao || {}, finalId);
-                const temItemProducao = itens.some(item => {
-                    const s = String(item.status || 'OK').toUpperCase().trim();
-                    return s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
-                });
-                if (temItemProducao) {
-                    skippedDueToProduction++;
-                    return false;
-                }
-            }
 
             const situacaoAtual = (p.situação || p.situacao || '').toLowerCase();
             const labelLower = label.toLowerCase();
@@ -4707,21 +4769,13 @@ export const GerenciarPedidosApp = (function () {
         });
 
         if (idsToUpdate.length === 0) {
-            if (skippedDueToProduction > 0) {
-                alert(`Ação cancelada. Os ${skippedDueToProduction} pedido(s) selecionado(s) possuem itens "Em Produção" e não podem ser finalizados.`);
-            } else {
-                alert(`Todos os ${allIds.length} pedidos selecionados já estão com a situação "${label}".`);
-            }
+            alert(`Todos os ${allIds.length} pedidos selecionados já estão com a situação "${label}".`);
             return;
         }
 
         let msg = idsToUpdate.length === allIds.length 
             ? `Mudar ${idsToUpdate.length} pedido(s) para "${label}"?`
             : `Mudar ${idsToUpdate.length} pedido(s) para "${label}"?\n(${allIds.length - idsToUpdate.length} pedidos serão ignorados).`;
-
-        if (skippedDueToProduction > 0) {
-            msg += `\n\nOBS: ${skippedDueToProduction} pedido(s) foram bloqueados por possuírem itens em produção.`;
-        }
 
         if (!confirm(msg)) return;
 
@@ -4879,6 +4933,147 @@ export const GerenciarPedidosApp = (function () {
         return new Date(dateStr);
     }
 
+    function _updatePedidoItemInCache(pedido, itemIndex, newStatus, newDescription, responsavel, dataPedido) {
+        if (!pedido) return;
+        if (!pedido.detalhesProducao) pedido.detalhesProducao = {};
+        
+        const pid = String(pedido.id || pedido.id_pedido || '');
+        const pnum = String(pedido.numero || pedido.número || pedido.numero_pedido || '');
+        const idxStr = String(itemIndex);
+
+        // Atualiza todas as chaves existentes ou potenciais para esse item
+        const keysToUpdate = new Set();
+        if (pid) keysToUpdate.add(`${pid}-${idxStr}`);
+        if (pnum) keysToUpdate.add(`${pnum}-${idxStr}`);
+        
+        // Procura qualquer chave existente em detalhesProducao que termine com -idxStr
+        Object.keys(pedido.detalhesProducao).forEach(k => {
+            if (k.endsWith(`-${idxStr}`)) keysToUpdate.add(k);
+        });
+
+        keysToUpdate.forEach(k => {
+            const prev = pedido.detalhesProducao[k] || {};
+            pedido.detalhesProducao[k] = {
+                status: newStatus !== undefined ? newStatus : (prev.status || 'OK'),
+                descricao: newDescription !== undefined ? newDescription : (prev.descricao || ''),
+                data: dataPedido !== undefined ? dataPedido : (prev.data || ''),
+                responsavel: responsavel !== undefined ? responsavel : (prev.responsavel || '')
+            };
+        });
+
+        // Se itens for string, atualiza o status inline na string também
+        const rawItens = typeof pedido.itens === 'string' ? pedido.itens : (typeof pedido.Itens === 'string' ? pedido.Itens : null);
+        if (rawItens && newStatus !== undefined) {
+            try {
+                const itemStrings = String(rawItens).split(/(?=\([^,]+,\s*\d+)/).filter(Boolean);
+                const items = [];
+                itemStrings.forEach((s, i) => {
+                    let c = s.trim();
+                    if (c.startsWith('(')) c = c.substring(1);
+                    if (c.endsWith(')')) { if (((c.match(/\(/g) || []).length < (c.match(/\)/g) || []).length)) c = c.substring(0, c.length - 1); }
+                    const p = c.split(',').map(x => x.trim());
+                    if (p.length >= 3) {
+                        let v = p[2];
+                        if (v.includes('|')) v = v.split('|')[0];
+                        let st = (String(i) === idxStr) ? newStatus : (p[2].includes('|') ? p[2].split('|')[1] : 'OK');
+                        items.push(`(${p[0]}, ${p[1]}, ${v}|${st})`);
+                    } else {
+                        items.push(s);
+                    }
+                });
+                if (items.length > 0) {
+                    const updatedStr = items.join(' ');
+                    pedido.itens = updatedStr;
+                    if (pedido.Itens) pedido.Itens = updatedStr;
+                }
+            } catch (e) {
+                console.warn('[Cache] Erro ao sincronizar itens string:', e);
+            }
+        }
+    }
+
+    function _updateOrderRowStatus(p) {
+        if (!p) return;
+        const numero = p.numero || p.número || p.id;
+        if (!numero) return;
+
+        // Se estiver filtrado por 'producao', re-filtra para que o pedido entre ou saia da lista instantaneamente
+        if (_statusSelect && _statusSelect.value === 'producao') {
+            _filterPedidos();
+            return;
+        }
+
+        // Se a linha estiver renderizada na tabela atual, atualiza o status diretamente no DOM
+        const row = document.getElementById(`pedido-row-${numero}`);
+        if (row) {
+            const statusTd = row.querySelector('.order-cell-status');
+            if (statusTd) {
+                const situacao = _getStatusLabel(p.situação || p.situacao || p.situao || '');
+                const sitLower = situacao.toLowerCase();
+                let badgeClass = 'bg-gray-100 text-gray-800';
+                if (sitLower.includes('atendid') || sitLower.includes('entregue') || sitLower.includes('conclu')) badgeClass = 'bg-green-100 text-green-800';
+                else if (sitLower.includes('cancel')) badgeClass = 'bg-red-100 text-red-800';
+                else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento') || sitLower.includes('analise')) badgeClass = 'bg-yellow-100 text-yellow-800';
+                else if (sitLower.includes('produ')) badgeClass = 'bg-blue-100 text-blue-800';
+
+                const hasItemProducao = _pedidoHasItemEmProducao(p);
+                const itemProdBadge = (hasItemProducao && !sitLower.includes('produ')) 
+                    ? `<span class="ml-1.5 inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-blue-100 text-blue-800 border border-blue-200" title="Possui item em produção">Item em Produção</span>` 
+                    : '';
+
+                statusTd.innerHTML = `<span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${situacao}</span>${itemProdBadge}`;
+                
+                // Feedback visual sutil de atualização
+                row.classList.add('row-update-flash');
+                setTimeout(() => row.classList.remove('row-update-flash'), 1500);
+            }
+        }
+    }
+
+    function _pedidoHasItemEmProducao(p) {
+        if (!p) return false;
+
+        const finalId = String(p.id || p.id_pedido || p.numero || p.número || '').trim();
+        const altId = String(p.numero || p.número || p.numero_pedido || '').trim();
+
+        // 1. Verificação se itens é array
+        if (Array.isArray(p.itens) && p.itens.length > 0) {
+            return p.itens.some((item, idx) => {
+                const key1 = `${finalId}-${idx}`;
+                const key2 = `${altId}-${idx}`;
+                const extra = (p.detalhesProducao && (p.detalhesProducao[key1] || p.detalhesProducao[key2])) || 
+                              (p.detalhesProducao && Object.entries(p.detalhesProducao).find(([k]) => k.endsWith(`-${idx}`))?.[1]);
+                let st = String((extra && extra.status) || item.status || '').toUpperCase().trim();
+                if (st === 'CRIADO' || st === 'PENDENTE' || st === 'FINALIZADO' || st === 'OK') return false;
+                return st === 'EM PRODUÇÃO' || st === 'PRODUCAO' || st === 'EM PRODUCAO';
+            });
+        }
+
+        // 2. Verificação nos itens string via _parseItens
+        const raw = typeof p.itens === 'string' ? p.itens : (typeof p.Itens === 'string' ? p.Itens : '');
+        if (raw) {
+            const itens = _parseItens(raw, p.detalhesProducao || {}, finalId, altId);
+            if (itens && itens.length > 0) {
+                return itens.some(item => {
+                    let st = String(item.status || '').toUpperCase().trim();
+                    if (st === 'CRIADO' || st === 'PENDENTE' || st === 'FINALIZADO' || st === 'OK') return false;
+                    return st === 'EM PRODUÇÃO' || st === 'PRODUCAO' || st === 'EM PRODUCAO';
+                });
+            }
+        }
+
+        // 3. Fallback: se itens não estiver disponível, analisa detalhesProducao diretamente
+        if (p.detalhesProducao && typeof p.detalhesProducao === 'object') {
+            return Object.values(p.detalhesProducao).some(d => {
+                const s = String(d?.status || '').toUpperCase().trim();
+                if (s === 'CRIADO' || s === 'PENDENTE' || s === 'FINALIZADO' || s === 'OK') return false;
+                return s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
+            });
+        }
+
+        return false;
+    }
+
     function _filterPedidos() {
         if (!_searchInput) return;
         const term = (_searchInput.value || '').toLowerCase();
@@ -4933,7 +5128,7 @@ export const GerenciarPedidosApp = (function () {
                 } else if (sel === 'aberto') {
                     statusMatch = (sitNormalized.includes('abert') || sitNormalized.includes('pendent') || sitNormalized.includes('andamento'));
                 } else if (sel === 'producao') {
-                    statusMatch = sitNormalized.includes('produ');
+                    statusMatch = sitNormalized.includes('produ') || _pedidoHasItemEmProducao(p);
                 } else if (sel === 'cancelado') {
                     statusMatch = sitNormalized.includes('cancel');
                 }
@@ -5065,6 +5260,11 @@ export const GerenciarPedidosApp = (function () {
                 else if (sitLower.includes('pendent') || sitLower.includes('abert') || sitLower.includes('andamento') || sitLower.includes('analise')) badgeClass = 'bg-yellow-100 text-yellow-800';
                 else if (sitLower.includes('produ')) badgeClass = 'bg-blue-100 text-blue-800';
 
+                const hasItemProducao = _pedidoHasItemEmProducao(p);
+                const itemProdBadge = (hasItemProducao && !sitLower.includes('produ')) 
+                    ? `<span class="ml-1.5 inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-blue-100 text-blue-800 border border-blue-200" title="Possui item em produção">Item em Produção</span>` 
+                    : '';
+
                 // Verificação de Pedido Novo e Pedido de outro mês
                 const isNewOrder = newOrders.includes(String(numero)) || newOrders.includes(String(p.id));
                 
@@ -5093,7 +5293,7 @@ export const GerenciarPedidosApp = (function () {
                         <td class="px-6 py-4 text-sm text-gray-900 max-w-[250px] truncate cursor-pointer clickable-cell" title="${cliente}">${cliente}</td>
                         <td class="px-6 py-4 text-sm text-gray-500 cursor-pointer clickable-cell">${vendedor}</td>
                         <td class="order-cell-status px-6 py-4 whitespace-nowrap cursor-pointer clickable-cell">
-                            <span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${situacao}</span>
+                            <span class="px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${badgeClass}">${situacao}</span>${itemProdBadge}
                         </td>
                         <td class="order-cell-total px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-right cursor-pointer clickable-cell">${totalFormatted}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
@@ -5196,12 +5396,8 @@ export const GerenciarPedidosApp = (function () {
     }
 
     function _updateLinhaProducaoBtnVisibility() {
-        if (!_statusSelect || !_state.linhaProducaoBtn) return;
-        if (_statusSelect.value === 'producao') {
-            _state.linhaProducaoBtn.classList.remove('hidden');
-        } else {
-            _state.linhaProducaoBtn.classList.add('hidden');
-        }
+        if (!_state.linhaProducaoBtn) return;
+        _state.linhaProducaoBtn.classList.remove('hidden');
     }
 
     /**
@@ -5282,7 +5478,7 @@ export const GerenciarPedidosApp = (function () {
             }
         }
 
-        // Aplicar o filtro se não for TODOS
+        // Aplicar o filtro de Responsável se não for TODOS
         if (_state.linhaProducaoFilterResp && _state.linhaProducaoFilterResp.value !== 'TODOS') {
             const activeFilter = _state.linhaProducaoFilterResp.value;
             if (activeFilter === 'SEM_RESP') {
@@ -5290,6 +5486,16 @@ export const GerenciarPedidosApp = (function () {
             } else {
                 itemsArray = itemsArray.filter(item => item.responsavel && item.responsavel.trim() === activeFilter);
             }
+        }
+
+        // Aplicar o filtro de Situação se não for TODOS
+        if (_state.linhaProducaoFilterStatus && _state.linhaProducaoFilterStatus.value !== 'TODOS') {
+            const activeStatus = _state.linhaProducaoFilterStatus.value.toUpperCase().trim();
+            itemsArray = itemsArray.filter(item => {
+                let st = String(item.status || '').toUpperCase().trim();
+                if (st === 'PRODUCAO' || st === 'EM PRODUCAO') st = 'EM PRODUÇÃO';
+                return st === activeStatus;
+            });
         }
 
         // Ordenar por data (Mais antigos primeiro)
@@ -5303,8 +5509,8 @@ export const GerenciarPedidosApp = (function () {
             _state.linhaProducaoContent.innerHTML = `
                 <div class="flex flex-col items-center justify-center py-20 text-gray-400">
                     <svg class="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-                    <p class="text-xl font-medium">Nenhum item marcado como "Em Produção"</p>
-                    <p class="text-sm">Marque itens individuais dentro dos pedidos para que apareçam aqui.</p>
+                    <p class="text-xl font-medium">Nenhum item encontrado</p>
+                    <p class="text-sm">Tente ajustar os filtros de responsável ou situação.</p>
                 </div>`;
             _state.linhaProducaoModal.classList.remove('hidden');
             return;
@@ -5562,6 +5768,7 @@ export const GerenciarPedidosApp = (function () {
 
     return {
         openOrderDetailsModal: _openOrderDetailsModal,
+        toggleItemStatusDropdown: _toggleItemStatusDropdown,
         handleItemClick: handleItemClick,
         handleEditItemDescription: async function(pedidoId, itemCodigo, index, event) {
             if (event) {
@@ -5651,16 +5858,19 @@ export const GerenciarPedidosApp = (function () {
                         throw new Error(errorText || 'Erro no servidor');
                     }
                     
-                    // ATUALIZAÇÃO DO CACHE LOCAL: Crucial para ver a mudança na hora
+                    // ATUALIZAÇÃO DO CACHE LOCAL & UI
                     if (pedido) {
-                        // Atualiza os dados de produção no cache local
-                        if (!pedido.detalhesProducao) pedido.detalhesProducao = {};
-                        const key = `${pedidoId}-${index}`;
-                        pedido.detalhesProducao[key] = {
-                            status: pedido.detalhesProducao[key]?.status || 'OK',
-                            descricao: novaDesc,
+                        _updatePedidoItemInCache(pedido, index, item.status || 'OK', novaDesc, novoResp);
+                        _updateOrderRowStatus(pedido);
+                        _broadcastItemStatusChange({
+                            pedidoId: finalPedidoId,
+                            numeroPedido: finalNumPedido,
+                            itemCodigo,
+                            newStatus: item.status || 'OK',
+                            itemIndex: index,
+                            newDescription: novaDesc,
                             responsavel: novoResp
-                        };
+                        });
                         
                         // Atualiza a visualização no modal sem fechar
                         const descEl = document.getElementById(`desc-${itemCodigo}-${index}`);
@@ -5670,9 +5880,6 @@ export const GerenciarPedidosApp = (function () {
                     if (typeof Toastify !== 'undefined') {
                         Toastify({ text: "Descrição atualizada!", duration: 2500, style: { background: "#10b981" } }).showToast();
                     }
-                    
-                    // Atualiza a visualização da tabela ao fundo
-                    _filterPedidos();
                     
                     // Recarrega o modal de detalhes para mostrar o novo nome na lista
                     _openOrderDetailsModal(pedidoId);
@@ -5879,17 +6086,19 @@ export const GerenciarPedidosApp = (function () {
                     throw new Error(errorText || 'Erro ao atualizar status do item');
                 }
 
-                // ATUALIZAÇÃO DO CACHE LOCAL
+                // ATUALIZAÇÃO DO CACHE LOCAL & UI
                 if (pCache) {
-                    if (!pCache.detalhesProducao) pCache.detalhesProducao = {};
-                    const keyId = `${pedidoId}-${index}`;
-                    const keyNum = `${pCache.numero || pCache.numero_pedido}-${index}`;
-                    pCache.detalhesProducao[keyId] = {
-                        status: explicitStatus,
-                        descricao: currentDesc,
+                    _updatePedidoItemInCache(pCache, index, explicitStatus, currentDesc, currentResp);
+                    _updateOrderRowStatus(pCache);
+                    _broadcastItemStatusChange({
+                        pedidoId,
+                        numeroPedido: pCache.numero || pCache.numero_pedido || pedidoId,
+                        itemCodigo,
+                        newStatus: explicitStatus,
+                        itemIndex: index,
+                        newDescription: currentDesc,
                         responsavel: currentResp
-                    };
-                    pCache.detalhesProducao[keyNum] = pCache.detalhesProducao[keyId];
+                    });
                 }
 
                 if (typeof Toastify !== 'undefined') {
@@ -5922,14 +6131,6 @@ export const GerenciarPedidosApp = (function () {
             document.querySelectorAll('.pedido-item-custom-dropdown-menu').forEach(m => m.classList.add('hidden'));
 
             const pCache = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
-            
-            if (newStatus === 'EM PRODUÇÃO' && pCache) {
-                const sit = String(pCache.situação || pCache.situacao || '').toLowerCase().trim();
-                if (sit.includes('atendid')) {
-                    _showCustomAlert('Ação não permitida', 'Não é possivel alterar o item para "Em Produção", o pedido está como "Atendido"', false);
-                    return;
-                }
-            }
 
             let currentDesc = '';
             let currentResp = '';
@@ -5987,14 +6188,20 @@ export const GerenciarPedidosApp = (function () {
                         throw new Error(errTxt || 'Erro ao atualizar status do item');
                     }
 
-                    // Sincronização de Cache
+                    // Sincronização de Cache & UI
+                    const finalSt = newStatus === 'OK' ? 'FINALIZADO' : newStatus;
                     if (pCache) {
-                        if (!pCache.detalhesProducao) pCache.detalhesProducao = {};
-                        pCache.detalhesProducao[`${pedidoId}-${index}`] = { 
-                            status: newStatus === 'OK' ? 'FINALIZADO' : newStatus, 
-                            descricao: currentDesc,
+                        _updatePedidoItemInCache(pCache, index, finalSt, currentDesc, finalResponsavel);
+                        _updateOrderRowStatus(pCache);
+                        _broadcastItemStatusChange({
+                            pedidoId,
+                            numeroPedido: pCache.numero || pCache.numero_pedido || pedidoId,
+                            itemCodigo,
+                            newStatus: finalSt,
+                            itemIndex: index,
+                            newDescription: currentDesc,
                             responsavel: finalResponsavel
-                        };
+                        });
                     }
 
                     _openOrderDetailsModal(pedidoId);
@@ -6034,15 +6241,6 @@ export const GerenciarPedidosApp = (function () {
             // Busca o pedido no cache
             const pCache = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
             
-            // Bloqueia se o pedido já estiver Atendido e o usuário tentar colocar o item Em Produção
-            if (newStatus === 'EM PRODUÇÃO' && pCache) {
-                const sit = String(pCache.situação || pCache.situacao || '').toLowerCase().trim();
-                if (sit.includes('atendid')) {
-                    _showCustomAlert('Ação não permitida', 'Não é possivel alterar o item para "Em Produção", o pedido está como "Atendido"', false);
-                    return;
-                }
-            }
-
             const btn = document.getElementById(`status-badge-${pedidoId}-${index}`);
             
             // Optimistic UI Update
@@ -6103,10 +6301,18 @@ export const GerenciarPedidosApp = (function () {
                     btn.setAttribute('onclick', `GerenciarPedidosApp.handleToggleItemStatus('${pedidoId}', '${itemCodigo}', '${newStatus}', ${index}, event)`);
                 }
 
-                // Sincronização de Cache
+                // Sincronização de Cache & UI
                 if (pCache) {
-                    if (!pCache.detalhesProducao) pCache.detalhesProducao = {};
-                    pCache.detalhesProducao[`${pedidoId}-${index}`] = { status: newStatus, descricao: currentDesc };
+                    _updatePedidoItemInCache(pCache, index, newStatus, currentDesc);
+                    _updateOrderRowStatus(pCache);
+                    _broadcastItemStatusChange({
+                        pedidoId,
+                        numeroPedido: pCache.numero || pCache.numero_pedido || pedidoId,
+                        itemCodigo,
+                        newStatus,
+                        itemIndex: index,
+                        newDescription: currentDesc
+                    });
                 }
 
                 // AUTO-UPDATE de Pedido Global desativado temporariamente para evitar erros de API no Bling
@@ -6169,10 +6375,14 @@ export const GerenciarPedidosApp = (function () {
                 // Atualiza o cache local para refletir na UI sem refresh
                 const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
                 if (pedido) {
-                    if (!pedido.detalhesProducao) pedido.detalhesProducao = {};
-                    const key = `${pedidoId}-${itemIndex}`;
-                    if (!pedido.detalhesProducao[key]) pedido.detalhesProducao[key] = { status: 'OK', descricao: '' };
-                    pedido.detalhesProducao[key].data = dateToSave;
+                    _updatePedidoItemInCache(pedido, itemIndex, undefined, undefined, undefined, dateToSave);
+                    _broadcastItemStatusChange({
+                        pedidoId,
+                        numeroPedido: pedido.numero || numeroPedido || pedidoId,
+                        itemCodigo,
+                        itemIndex,
+                        dataPedido: dateToSave
+                    });
                 }
 
                 if (typeof Toastify !== 'undefined') {
@@ -6188,28 +6398,37 @@ export const GerenciarPedidosApp = (function () {
                 _showProductionLine(); // Restaura o estado anterior
             }
         },
-        updateOrderItemStatusRealTime: function(data) {
-            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, dataPedido, responsavel } = data;
-            console.log(`[GerenciarPedidos] Sincronizando status/data/resp do item ${itemCodigo} no pedido ${pedidoId}`);
+        updateOrderItemStatusRealTime: function(data, isLocalBroadcast = false) {
+            if (!data) return;
+            const { pedidoId, numeroPedido, itemCodigo, newStatus, itemIndex, newDescription, dataPedido, responsavel } = data;
+            console.log(`[GerenciarPedidos] Sincronizando status/data/resp do item ${itemCodigo} no pedido ${pedidoId || numeroPedido}`);
 
-            // 1. Atualizar no cache local
-            const pedido = _allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
+            // 1. Atualizar no cache local & atualizar linha da tabela
+            const pedido = _allPedidos.find(p => 
+                (pedidoId && (String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId))) ||
+                (numeroPedido && (String(p.numero) === String(numeroPedido) || String(p.id) === String(numeroPedido)))
+            );
+            
             if (pedido) {
-                if (!pedido.detalhesProducao) pedido.detalhesProducao = {};
-                const key = `${pedidoId}-${itemIndex}`;
-                pedido.detalhesProducao[key] = {
-                    status: newStatus || pedido.detalhesProducao[key]?.status || 'OK',
-                    descricao: newDescription !== undefined ? newDescription : (pedido.detalhesProducao[key]?.descricao || ''),
-                    data: dataPedido !== undefined ? dataPedido : (pedido.detalhesProducao[key]?.data || ''),
-                    responsavel: responsavel !== undefined ? responsavel : (pedido.detalhesProducao[key]?.responsavel || '')
-                };
+                _updatePedidoItemInCache(pedido, itemIndex, newStatus, newDescription, responsavel, dataPedido);
+                _updateOrderRowStatus(pedido);
             }
 
             // 2. Atualizar a UI se o modal estiver aberto para este pedido
-            if (_currentModalPedidoId && String(_currentModalPedidoId) === String(pedidoId)) {
-                const btn = document.getElementById(`status-badge-${pedidoId}-${itemIndex}`);
+            const currentModalMatch = _currentModalPedidoId && pedido && (
+                String(_currentModalPedidoId) === String(pedido.id) || 
+                String(_currentModalPedidoId) === String(pedido.numero) ||
+                (pedidoId && String(_currentModalPedidoId) === String(pedidoId)) ||
+                (numeroPedido && String(_currentModalPedidoId) === String(numeroPedido))
+            );
+
+            if (currentModalMatch) {
+                const targetPid = _currentModalPedidoId;
+                const btn = document.getElementById(`status-badge-${targetPid}-${itemIndex}`) || 
+                            document.getElementById(`status-badge-${pedido?.id}-${itemIndex}`) ||
+                            document.getElementById(`status-badge-${pedido?.numero}-${itemIndex}`);
                 if (btn) {
-                    const isProducao = newStatus === 'EM PRODUÇÃO' || newStatus === 'PRODUCAO' || newStatus === 'EM PRODUCAO';
+                    const isProducao = String(newStatus || '').toUpperCase().includes('PRODU');
                     const badgeClass = isProducao 
                         ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' 
                         : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200';
@@ -6223,8 +6442,7 @@ export const GerenciarPedidosApp = (function () {
                         : '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
                     
                     btn.innerHTML = `${icon}<span>${label}</span>`;
-                    // Atualiza o onclick para refletir o novo status atual
-                    btn.setAttribute('onclick', `GerenciarPedidosApp.handleToggleItemStatus('${pedidoId}', '${itemCodigo}', '${newStatus}', ${itemIndex}, event)`);
+                    btn.setAttribute('onclick', `GerenciarPedidosApp.handleToggleItemStatus('${targetPid}', '${itemCodigo}', '${newStatus}', ${itemIndex}, event)`);
                 }
             }
 
@@ -6232,8 +6450,24 @@ export const GerenciarPedidosApp = (function () {
             const lpModal = document.getElementById('production-line-modal');
             if (lpModal && !lpModal.classList.contains('hidden')) {
                 console.log('[LinhaProducao] Atualizando em tempo real...');
-                // Dispara o re-render da linha de produção
                 _showProductionLine();
+            }
+
+            // 4. Toast notification se a atualização veio externamente (outro navegador ou broadcast)
+            if (!isLocalBroadcast && pedido && typeof Toastify !== 'undefined') {
+                const isProd = String(newStatus || '').toUpperCase().includes('PRODU');
+                Toastify({
+                    text: `Pedido #${pedido.numero || pedido.id}: item ${itemCodigo || ''} ${isProd ? 'entrou em Produção' : 'marcado como OK'}`,
+                    duration: 3500,
+                    gravity: "bottom",
+                    position: "right",
+                    style: { 
+                        background: isProd ? "#2563eb" : "#10b981",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                        fontWeight: "600"
+                    }
+                }).showToast();
             }
         },
         updateOrderNfeInfoRealTime: function(nfeData) {

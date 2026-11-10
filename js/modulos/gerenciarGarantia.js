@@ -909,7 +909,7 @@ export const GerenciarGarantiaApp = (function () {
         if (_btnSalvarObsSatg) {
             _btnSalvarObsSatg.onclick = () => {
                 const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
-                if (req && (req.idPedido || req.pedidoGerado)) {
+                if (req && (req.idPedido || req.pedidoGerado || String(req.status || '').toUpperCase().includes('QUALIDADE'))) {
                     _updateSatgStatus(null);
                 } else {
                     _updateSatgStatus('EM ANALISE');
@@ -2533,6 +2533,8 @@ function _formatItemsString() {
                 statusMatch = currentStatus.includes('APROVADO');
             } else if (statusFilter === 'recusado') {
                 statusMatch = currentStatus.includes('RECUSADO') || currentStatus.includes('ARQUIVADO');
+            } else if (statusFilter === 'nao qualidade' || statusFilter === 'não qualidade') {
+                statusMatch = currentStatus.includes('QUALIDADE');
             }
             if (!statusMatch) return false;
 
@@ -2825,6 +2827,7 @@ function _formatItemsString() {
             const statusUpper = String(req.status || '').toUpperCase();
             if (statusUpper.includes('APROVADO')) badgeClass = 'bg-green-100 text-green-800 border-green-200';
             else if (statusUpper.includes('RECUSADO')) badgeClass = 'bg-red-100 text-red-800 border-red-200';
+            else if (statusUpper.includes('QUALIDADE')) badgeClass = 'bg-orange-100 text-orange-800 border-orange-200';
             
             let pedidoStatusBadge = '<span class="px-2.5 py-1 inline-flex text-[11px] font-bold rounded-full border bg-yellow-100 text-yellow-800 border-yellow-200 uppercase" title="Aguardando vínculo">EM ANALISE</span>';
             if (statusUpper.includes('RECUSADO')) {
@@ -2974,10 +2977,11 @@ function _formatItemsString() {
                             <span class="flex-1 text-center">${statusUpper}</span>
                             <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
-                        <div class="satg-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-40 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
+                        <div class="satg-custom-dropdown-menu absolute left-1/2 -translate-x-1/2 mt-1.5 w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 hidden overflow-hidden py-1">
                             <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-yellow-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="EM ANALISE"><span class="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>EM ANALISE</button>
                             <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-green-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="APROVADO"><span class="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>APROVADO</button>
                             <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="RECUSADO"><span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>RECUSADO</button>
+                            <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-orange-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="NÃO QUALIDADE"><span class="w-2 h-2 rounded-full bg-orange-500 shrink-0"></span>NÃO QUALIDADE</button>
                         </div>
                     </div>
                 </td>
@@ -3010,10 +3014,26 @@ function _formatItemsString() {
             if (garBtn && garMenu) {
                 garBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    const isOpening = garMenu.classList.contains('hidden');
                     document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden), .servico-mo-custom-dropdown-menu:not(.hidden)').forEach(m => {
                         if (m !== garMenu) m.classList.add('hidden');
                     });
-                    garMenu.classList.toggle('hidden');
+                    if (isOpening) {
+                        const tableWrapper = garBtn.closest('.overflow-x-auto') || document.body;
+                        const btnRect = garBtn.getBoundingClientRect();
+                        const wrapRect = tableWrapper.getBoundingClientRect();
+                        const bottomLimit = Math.min(wrapRect.bottom, window.innerHeight);
+                        if (bottomLimit - btnRect.bottom < 160 && btnRect.top - wrapRect.top > 160) {
+                            garMenu.classList.remove('mt-1.5');
+                            garMenu.classList.add('mb-1.5', 'bottom-full');
+                        } else {
+                            garMenu.classList.remove('mb-1.5', 'bottom-full');
+                            garMenu.classList.add('mt-1.5');
+                        }
+                        garMenu.classList.remove('hidden');
+                    } else {
+                        garMenu.classList.add('hidden');
+                    }
                 });
                 garMenu.querySelectorAll('button').forEach(btn => {
                     btn.addEventListener('click', async (e) => {
@@ -4627,7 +4647,7 @@ function _formatItemsString() {
         }
     }
 
-    async function _updateSatgStatus(status = null) {
+    async function _updateSatgStatus(status = null, isFromCreatePedido = false) {
         if (!_currentSatgRowIndex) return;
         
         const observacao = document.getElementById('satg-modal-observacao').value.trim();
@@ -4638,7 +4658,7 @@ function _formatItemsString() {
         const elAcaoPecas = document.getElementById('satg-modal-acao-pecas');
         if (elAcaoPecas) payload.acaoPecas = elAcaoPecas.value.trim();
 
-        if (status === 'APROVADO' || status === 'RECUSADO') {
+        if (status === 'APROVADO' || status === 'RECUSADO' || status === 'NÃO QUALIDADE') {
             const respSelect = document.getElementById('satg-modal-responsavel-select');
             if (respSelect && respSelect.value) {
                 payload.responsavel = respSelect.value;
@@ -4666,7 +4686,7 @@ function _formatItemsString() {
 
             if (!res.ok) throw new Error('Erro ao atualizar SatG');
             
-            if (status !== 'APROVADO') {
+            if (status !== 'APROVADO' && !isFromCreatePedido) {
                 alert('Atualizado com sucesso!');
                 _closeSatgModal();
                 _fetchSatGData(); // Recarrega os dados
@@ -4682,8 +4702,12 @@ function _formatItemsString() {
     }
 
     function _handleAprovarPedidoSatg() {
-        // Atualiza a planilha primeiro com APROVADO e a observação
-        _updateSatgStatus('APROVADO').then(() => {
+        const reqActual = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
+        const currentSt = reqActual ? String(reqActual.status || '').toUpperCase() : '';
+        const targetStatus = currentSt.includes('QUALIDADE') ? 'NÃO QUALIDADE' : 'APROVADO';
+
+        // Atualiza a planilha primeiro preservando NÃO QUALIDADE ou definindo APROVADO e a observação
+        _updateSatgStatus(targetStatus, true).then(() => {
             // Agora preenche o formulário de "Criar Pedido" com os dados do cliente e redireciona a view
             const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
             if (req) {
