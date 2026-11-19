@@ -229,6 +229,12 @@ function _bindEvents() {
         manualParcelasBtn.addEventListener('click', _handleManualParcelas);
     }
 
+    // IA Parse de Observações
+    const aiParseBtn = document.getElementById('mobile-nfe-ai-parse-btn');
+    if (aiParseBtn) {
+        aiParseBtn.addEventListener('click', _handleAiParse);
+    }
+
     // Ações do Rodapé
     const saveBtn = document.getElementById('mobile-nfe-save-btn');
     if (saveBtn) {
@@ -250,6 +256,15 @@ function _bindEvents() {
             if (_state.onOrderUpdated && _state.currentOrderId) {
                 _state.onOrderUpdated(_state.currentOrderId);
             }
+        });
+    }
+
+    const consoleSendEmailBtn = document.getElementById('mobile-nfe-send-email-btn');
+    if (consoleSendEmailBtn) {
+        consoleSendEmailBtn.addEventListener('click', () => {
+            const idPed = _state.currentOrderId;
+            const pedidoAtual = _state.allPedidos.find(p => String(p.id) === String(idPed) || String(p.numero) === String(idPed)) || _state.currentOrder || { id: idPed };
+            openMobileEmailDanfeModal(pedidoAtual);
         });
     }
 }
@@ -887,7 +902,8 @@ function _generateParcelasWithDays(days) {
     const numParcelas = days.length;
     const baseValor = Math.floor((totalNota / numParcelas) * 100) / 100;
     let somaCalculada = 0;
-    const baseDateStr = new Date().toISOString().substring(0, 10);
+    const dataInput = document.getElementById('mobile-nfe-data');
+    const baseDateStr = dataInput && dataInput.value ? dataInput.value : new Date().toISOString().substring(0, 10);
 
     container.innerHTML = '';
 
@@ -906,6 +922,239 @@ function _generateParcelasWithDays(days) {
             formaPagamento: { id: formaPagamentoId },
             observacoes: ''
         });
+    }
+}
+
+// --- Detecção de Dias nas Observações (Fallback) ---
+
+function _parseDaysFromObservacoes(obsText) {
+    if (!obsText) return null;
+
+    // Detectar "À VISTA" ou "A VISTA" -> 1 parcela na data atual (0 dias)
+    if (/\bà\s*vista\b|\ba\s*vista\b/i.test(obsText)) {
+        return [0]; // 0 dias = vencimento hoje
+    }
+    
+    // Expressão regular para encontrar "Condições Pagto: - FATURADO" ou "FATURAMENTO"
+    const regex = /(?:Condi[çc][õo]es\s+Pagto:?\s*-?\s*)?(?:FATURAD[OA]|FATURAMENTO)\s+([0-9\s/,\-a-zA-Z]+)/i;
+    const match = obsText.match(regex);
+    if (!match) {
+        // Tenta pegar diretamente se houver apenas a condição (ex: 30/45/60)
+        const fallbackRegex = /(?:Condi[çc][õo]es\s+Pagto:?\s*-?\s*)([0-9\s/]+)/i;
+        const fallbackMatch = obsText.match(fallbackRegex);
+        if (!fallbackMatch) return null;
+        
+        const parts = fallbackMatch[1].split(/[^0-9]+/);
+        const days = parts.map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p >= 0);
+        return days.length > 0 ? days : null;
+    }
+    
+    const rawVal = match[1];
+    // Divide o valor extraído em partes numéricas
+    const parts = rawVal.split(/[^0-9]+/);
+    const days = parts.map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p >= 0);
+    
+    return days.length > 0 ? days : null;
+}
+
+// --- Notificação Visual Flutuante (Toast Mobile) ---
+
+function _showMobileToast(message, isError = false) {
+    let toast = document.getElementById('mobile-nfe-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'mobile-nfe-toast';
+        toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[100] max-w-[90%] px-4 py-2.5 rounded-xl text-white text-xs font-semibold shadow-xl transition-all duration-300 pointer-events-none text-center';
+        document.body.appendChild(toast);
+    }
+    toast.style.background = isError 
+        ? 'linear-gradient(to right, #dc2626, #b91c1c)' 
+        : 'linear-gradient(to right, #9333ea, #7e22ce)';
+    toast.textContent = message;
+    toast.classList.remove('opacity-0', 'pointer-events-none');
+    toast.classList.add('opacity-100');
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0', 'pointer-events-none');
+    }, 3000);
+}
+
+// --- Ajuste de Parcelas, Volumes e Observação com IA ---
+
+async function _handleAiParse() {
+    const obsOriginalEl = document.getElementById('mobile-nfe-observacoes-original');
+    const obsText = obsOriginalEl ? obsOriginalEl.value : '';
+
+    if (!obsText || !obsText.trim()) {
+        alert('Não há observação original para analisar.');
+        return;
+    }
+
+    const btn = document.getElementById('mobile-nfe-ai-parse-btn');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.innerHTML = `<svg class="animate-spin -ml-0.5 mr-1 h-3 w-3 inline text-purple-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processando...`;
+        btn.disabled = true;
+    }
+
+    try {
+        const backendUrl = API_URLS && API_URLS.ORDERS_BLING 
+            ? API_URLS.ORDERS_BLING.replace('/pedidos', '')
+            : "https://bling-proxy-api-255108547424.southamerica-east1.run.app";
+
+        const response = await fetch(`${backendUrl}/bling/parse-observation-ai`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: obsText })
+        });
+
+        if (!response.ok) throw new Error('Falha ao processar IA');
+        const result = await response.json();
+        const data = result.data || {};
+
+        // 1. Volume
+        if (data.volume !== null && data.volume !== undefined) {
+            const volInput = document.getElementById('mobile-nfe-volumes');
+            if (volInput) volInput.value = data.volume;
+        }
+
+        // 2. Pesos
+        if (data.peso !== null && data.peso !== undefined) {
+            const pesoBruto = document.getElementById('mobile-nfe-peso-bruto');
+            const pesoLiq = document.getElementById('mobile-nfe-peso-liquido');
+            if (pesoBruto) pesoBruto.value = data.peso;
+            if (pesoLiq) pesoLiq.value = data.peso;
+        }
+
+        // 3. Parcelas
+        if (data.parcelas && Array.isArray(data.parcelas) && data.parcelas.length > 0) {
+            let parcelasFinais = data.parcelas;
+
+            // Sanitização: Se a IA falhou e devolveu "30456075" (apenas 1 parcela com número gigante)
+            if (parcelasFinais.length === 1 && parcelasFinais[0] > 1000) {
+                console.warn('[AI Fallback] IA falhou ao separar as datas. Usando Regex local para parcelas...');
+                const localDays = _parseDaysFromObservacoes(obsText);
+                if (localDays && localDays.length > 0) {
+                    parcelasFinais = localDays;
+                } else {
+                    const strVal = String(parcelasFinais[0]);
+                    if (strVal.length % 2 === 0) {
+                        parcelasFinais = strVal.match(/.{1,2}/g).map(Number);
+                    }
+                }
+            }
+
+            _generateParcelasWithDays(parcelasFinais);
+        }
+
+        // 4. Frete por conta
+        const freteContaSelect = document.getElementById('mobile-nfe-frete-por-conta');
+        if (data.freteConta !== null && data.freteConta !== undefined) {
+            if (freteContaSelect) {
+                freteContaSelect.value = data.freteConta;
+                freteContaSelect.dispatchEvent(new Event('change'));
+            }
+        }
+
+        // 5. Transportadora
+        if (data.transportadora) {
+            if (freteContaSelect) {
+                const transpLower = String(data.transportadora).toLowerCase();
+                // Regra: Se a transportadora for Sedex, forçar CIF (0). Senão, manter 0 se antes era 9.
+                if (transpLower.includes('sedex')) {
+                    freteContaSelect.value = 0;
+                    freteContaSelect.dispatchEvent(new Event('change'));
+                } else if (parseInt(freteContaSelect.value) === 9) {
+                    freteContaSelect.value = 0;
+                    freteContaSelect.dispatchEvent(new Event('change'));
+                }
+            }
+
+            if (!_state.transportadorasLoaded) {
+                await _loadTransportadoras();
+            }
+
+            const transpSelect = document.getElementById('mobile-nfe-transportadora');
+            if (transpSelect) {
+                const nome = String(data.transportadora).toUpperCase();
+                if (nome === 'RETIRADA' || nome === 'CLIENTE RETIRA') {
+                    const opt = Array.from(transpSelect.options).find(o => o.text.toUpperCase().includes('RETIRADA'));
+                    if (opt) transpSelect.value = opt.value;
+                } else if (nome.includes('BRASPRESS')) {
+                    const optTambore = Array.from(transpSelect.options).find(o => o.text.toUpperCase().includes('BRASPRESS') && o.text.toUpperCase().includes('TAMBORE'));
+                    if (optTambore) {
+                        transpSelect.value = optTambore.value;
+                    } else {
+                        const opt = Array.from(transpSelect.options).find(o => o.text.toUpperCase().includes('BRASPRESS'));
+                        transpSelect.value = opt ? opt.value : '';
+                    }
+                } else {
+                    const opt = Array.from(transpSelect.options).find(o => (o.text.toUpperCase().includes(nome) || nome.includes(o.text.toUpperCase())) && o.text.trim() !== '' && !o.text.toUpperCase().includes('SELECIONE'));
+                    if (opt) {
+                        transpSelect.value = opt.value;
+                    } else {
+                        transpSelect.value = '';
+                    }
+                }
+            }
+        }
+
+        // 6. Formatar Observação Fiscal igual ao Desktop
+        const obsEl = document.getElementById('mobile-nfe-observacoes');
+        const currentObs = obsEl ? obsEl.value : '';
+        const orcMatch = currentObs.match(/Orçamento:\s*([^\n]+)/i);
+        let orcamento = orcMatch ? orcMatch[1].trim() : '';
+        if (!orcamento && _state.currentOrder) {
+            orcamento = _state.currentOrder.orcamento || _state.currentOrder['orcamento'] || '';
+        }
+
+        let vendedorNome = '';
+        if (_state.currentPedidoBlingBruto && _state.currentPedidoBlingBruto.vendedor) {
+            const v = _state.currentPedidoBlingBruto.vendedor;
+            const rawVendedor = typeof v === 'object' && v.nome ? v.nome : (typeof v === 'object' && v.id ? v.id : v);
+            const fullVendedor = _getVendedorName(rawVendedor);
+            if (fullVendedor && fullVendedor !== '-') {
+                vendedorNome = fullVendedor.split(' ')[0];
+            }
+        } else if (_state.currentOrder && _state.currentOrder.vendedor) {
+            const fullVendedor = _getVendedorName(_state.currentOrder.vendedor);
+            if (fullVendedor && fullVendedor !== '-') {
+                vendedorNome = fullVendedor.split(' ')[0];
+            }
+        }
+
+        if (obsEl) {
+            let novaObs = 'A venda é realizada com reserva de domínio, nos termos do art. 521 do Código Civil, até a quitação integral. Em caso de mora, a VENDEDORA poderá cobrar os valores em atraso ou requerer a apreensão e depósito judicial do bem.\n\n';
+            if (orcamento && String(orcamento).trim() !== '-' && String(orcamento).trim() !== '0') {
+                novaObs += `Orçamento: ${String(orcamento).trim()}\n`;
+            }
+            if (vendedorNome) {
+                novaObs += `Vendedor: ${vendedorNome}\n`;
+            }
+            obsEl.value = novaObs.trim();
+        }
+
+        if (window.Toastify) {
+            Toastify({
+                text: "Dados extraídos pela IA e preenchidos!",
+                duration: 3000,
+                gravity: "top",
+                position: 'center',
+                style: { background: 'linear-gradient(to right, #9333ea, #7e22ce)' }
+            }).showToast();
+        } else {
+            _showMobileToast("✨ Dados extraídos pela IA e preenchidos!");
+        }
+
+    } catch (error) {
+        console.error('[nfeMobile] Erro ao chamar IA:', error);
+        alert('Erro ao processar dados com IA. Verifique se o backend está atualizado.');
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     }
 }
 
@@ -1444,6 +1693,14 @@ async function _handleEmitNfe() {
             danfeLink.href = pdfUrl;
             danfeLink.classList.remove('hidden');
         }
+        const consoleSendEmailBtn = document.getElementById('mobile-nfe-send-email-btn');
+        if (consoleSendEmailBtn) {
+            if (pdfUrl) {
+                consoleSendEmailBtn.classList.remove('hidden');
+            } else {
+                consoleSendEmailBtn.classList.add('hidden');
+            }
+        }
         if (successArea) successArea.classList.remove('hidden');
 
     } catch (netErr) {
@@ -1451,5 +1708,367 @@ async function _handleEmitNfe() {
         log(`Atenção: A nota pode ter sido enviada. Verifique no Bling.`, 'info');
         if (successArea) successArea.classList.remove('hidden');
         if (danfeLink) danfeLink.classList.add('hidden');
+        const consoleSendEmailBtn = document.getElementById('mobile-nfe-send-email-btn');
+        if (consoleSendEmailBtn) consoleSendEmailBtn.classList.add('hidden');
     }
+}
+
+// --- Envio de DANFE por E-mail (Mobile) ---
+
+export async function openMobileEmailDanfeModal(orderOrId) {
+    const modal = document.getElementById('mobile-email-danfe-modal');
+    if (!modal) return;
+
+    let order = typeof orderOrId === 'object' && orderOrId !== null
+        ? orderOrId
+        : (_state.allPedidos || []).find(p => String(p.id) === String(orderOrId) || String(p.numero) === String(orderOrId));
+
+    if (!order) {
+        alert('Pedido não encontrado para envio de e-mail.');
+        return;
+    }
+
+    if (!_state.allNfeData || _state.allNfeData.length === 0) {
+        await fetchNfeListData();
+    }
+
+    const idNota = String(order.id_nota_fiscal || order.id_nota || order['id nota'] || order.idnotafiscal || '').trim();
+    const orderIdStr = String(order.id || order.id_pedido || '').trim();
+    const orderNumStr = String(order.numero || order.numero_pedido || '').trim();
+
+    let nfe = (_state.allNfeData || []).find(n => {
+        const nId = String(n.id_nota || n.id || '').trim();
+        const nPedId = String(n.id_pedido || n.idPedido || '').trim();
+        const nPedNum = String(n.numero_pedido || n.numeroPedido || '').trim();
+        return (idNota && idNota !== '0' && nId === idNota) ||
+               (orderIdStr && nPedId && nPedId === orderIdStr) ||
+               (orderNumStr && nPedNum && nPedNum === orderNumStr);
+    });
+
+    const numeroNota = (nfe && (nfe.numero || nfe.numero_da_nota || nfe.numero_nota)) || '-';
+    let linkDanfe = (nfe && (nfe.link_danfe || nfe['Link DANFE'] || nfe.linkDanfe || nfe.link)) || '';
+    if (!linkDanfe || linkDanfe === '#') {
+        linkDanfe = getDanfeLinkForOrder(order) || '';
+    }
+
+    let chaveAcesso = (nfe && (nfe.chave_acesso || nfe.chaveAcesso || nfe.chave_de_acesso || nfe['Chave de Acesso'])) || '';
+    if (!chaveAcesso && linkDanfe && linkDanfe !== '#') {
+        const matchChave = linkDanfe.match(/chave=([^&]+)/) || linkDanfe.match(/chaveAcesso=([^&]+)/);
+        if (matchChave) chaveAcesso = matchChave[1];
+    }
+
+    // Nome curto do cliente para o arquivo (até 2 palavras)
+    const rawName = (order.contato_nome || order['contato nome'] || order.cliente || order.nome || (nfe && (nfe.cliente || nfe.nome_cliente)) || 'Cliente').trim();
+    const rawWords = rawName.split(/\s+/);
+    let resultWords = [];
+    let validNamesCount = 0;
+    for (let word of rawWords) {
+        resultWords.push(word);
+        if (word.length > 3 && /[a-zA-Z]/.test(word)) validNamesCount++;
+        if (validNamesCount >= 2) break;
+    }
+    const shortClientName = resultWords.length > 0 ? resultWords.join(' ') : 'Cliente';
+    const orcValue = order.orcamento || order.orçamento || '';
+    const orcamentoStr = (orcValue && String(orcValue) !== '0' && String(orcValue) !== '-') ? ` - Orc. ${orcValue}` : '';
+    const numeroNotaStr = (numeroNota && numeroNota !== '-') ? ` - Nfe. ${numeroNota}` : '';
+
+    const baseFilename = `DANFE - ${shortClientName}${numeroNotaStr}${orcamentoStr}`;
+    const safeFilenameForDownload = baseFilename.replace(/[<>:"/\\|?*]/g, '_') + '.pdf';
+
+    let baixarPdfUrl = '';
+    if (chaveAcesso) {
+        baixarPdfUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-danfe?chaveAcesso=${chaveAcesso}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
+    } else if (linkDanfe && linkDanfe !== '#') {
+        baixarPdfUrl = `${API_URLS.WEBHOOK_LAUNCH}/proxy-pdf?url=${encodeURIComponent(linkDanfe)}&filename=${encodeURIComponent(safeFilenameForDownload)}`;
+    }
+
+    // Detecção de Serviços
+    let hasService = false;
+    if (Array.isArray(order.itens)) {
+        hasService = order.itens.some(i => String(i.codigo || i.sku || i.codigo_produto || '').trim().startsWith('7'));
+    } else if (typeof order.itens === 'string' && order.itens) {
+        hasService = /\(\s*7[0-9a-zA-Z_-]*/.test(order.itens);
+    }
+
+    // Vendedor
+    let vendedorVal = order.vendedor;
+    if (typeof vendedorVal === 'object' && vendedorVal?.id) vendedorVal = vendedorVal.id;
+    const fullVendedor = _getVendedorName(vendedorVal);
+    const primeiroNomeVendedor = (fullVendedor && fullVendedor !== '-') ? fullVendedor.split(' ')[0] : 'Vendedor';
+
+    // 1. ABA 1: Enviar DANFE
+    const emailToInput = document.getElementById('mobile-email-danfe-to');
+    const emailSubjectInput = document.getElementById('mobile-email-danfe-subject');
+    const emailMessageTextarea = document.getElementById('mobile-email-danfe-message');
+    const filenameEl = document.getElementById('mobile-email-danfe-filename');
+
+    const initialEmail = order.email || order.contato_email || order['e-mail'] || '';
+    if (emailToInput) emailToInput.value = initialEmail;
+
+    // Se o pedido não tiver e-mail em memória e tiver contato.id, busca em segundo plano
+    if (!initialEmail && (order.contato?.id || order.id_contato || order.id)) {
+        const cId = order.contato?.id || order.id_contato;
+        if (cId) {
+            fetch(`${API_URLS.ORDERS_BLING}/contatos/${cId}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(cData => {
+                    if (cData?.data?.email && emailToInput && !emailToInput.value) {
+                        emailToInput.value = cData.data.email;
+                    }
+                })
+                .catch(e => console.warn('[Mobile Email] Erro ao buscar e-mail do contato:', e));
+        }
+    }
+
+    const orcStr = (orcValue && String(orcValue) !== '0' && String(orcValue) !== '-') ? ` - Orç.: ${orcValue}` : '';
+    const numeroBling = order.numero || order.numero_pedido || '';
+    if (emailSubjectInput) {
+        if (hasService) {
+            emailSubjectInput.value = `${primeiroNomeVendedor} - Pedido N.: ${numeroBling} - NFe. e NFs.${orcStr}`;
+        } else {
+            emailSubjectInput.value = `${primeiroNomeVendedor} - Pedido N.: ${numeroBling} - NFe.: ${numeroNota || ''}${orcStr}`;
+        }
+    }
+
+    const hour = new Date().getHours();
+    let saudacaoStr = 'Bom dia';
+    if (hour >= 12 && hour < 18) saudacaoStr = 'Boa tarde';
+    else if (hour >= 18) saudacaoStr = 'Boa noite';
+    const saudacao = `${saudacaoStr} ${primeiroNomeVendedor}`;
+
+    let displayFilename = safeFilenameForDownload;
+    if (displayFilename.startsWith('DANFE - ')) displayFilename = displayFilename.substring(8);
+    if (displayFilename.toLowerCase().endsWith('.pdf')) displayFilename = displayFilename.substring(0, displayFilename.length - 4);
+
+    if (emailMessageTextarea) {
+        if (hasService) {
+            let displayFilenameSemNfe = displayFilename.replace(/\s*-\s*Nf-?e\.?:?\s*[^\s-]+/i, '').trim();
+            if (orcValue && !displayFilenameSemNfe.toLowerCase().includes('orc')) {
+                displayFilenameSemNfe += ` - Orc. ${orcValue}`;
+            }
+            emailMessageTextarea.value = `${saudacao},\n\nSegue a NFe. e NFs.: ${displayFilenameSemNfe}\n\natt.:`;
+        } else {
+            emailMessageTextarea.value = `${saudacao},\n\nSegue a NFe.: ${displayFilename}\n\natt.:`;
+        }
+    }
+
+    if (filenameEl) filenameEl.textContent = safeFilenameForDownload;
+
+    // 2. ABA 2: Solicitar Coleta
+    const coletaToInput = document.getElementById('mobile-email-coleta-to');
+    const coletaSubjectInput = document.getElementById('mobile-email-coleta-subject');
+    const coletaMessageTextarea = document.getElementById('mobile-email-coleta-message');
+
+    if (coletaToInput) coletaToInput.value = '';
+    if (coletaSubjectInput) coletaSubjectInput.value = `Solicitação de Coleta - NFe ${numeroNota || ''} - Marksell / Itapevi-SP`;
+
+    let nomeCliente = order.contato_nome || order['contato nome'] || order.cliente || order.nome || 'Cliente';
+    let cnpj = order.contato?.numeroDocumento || order.cpf_cnpj || order['cpf cnpj'] || order['cpf/cnpj'] || (nfe && (nfe.cnpjcpf_cliente || nfe.cnpj)) || '';
+    let enderecoStr = '';
+    let cidadeUf = '';
+    let cep = '';
+    let modalidadeFrete = 'FOB';
+    let volumes = '1';
+    let pesoTotal = '0';
+
+    const freteMap = { 0: "CIF", 1: "FOB", 2: "Terceiros", 9: "Sem Frete" };
+    if (order.transporte?.fretePorConta !== undefined) {
+        modalidadeFrete = freteMap[order.transporte.fretePorConta] || 'FOB';
+    }
+    if (order.transporte?.volumes && order.transporte.volumes.length > 0) {
+        volumes = order.transporte.volumes.reduce((sum, v) => sum + (parseFloat(v.quantidade) || 0), 0).toString();
+        pesoTotal = order.transporte.volumes.reduce((sum, v) => sum + (parseFloat(v.pesoBruto) || 0), 0).toFixed(1);
+    }
+
+    const buildColetaTemplate = (nc, c, e, cid, ce, mf, v, pt) => {
+        return `Boa tarde, tudo bem?
+
+Gostaria de agendar uma coleta conforme as informações abaixo:
+
+REMETENTE (Local de Coleta):
+Razão Social: Marksell
+CNPJ: 21.331.638/0001-85
+Endereço: Rua João Dias Ribeiro, 409 - Térreo, Sala 01, Polo Industrial
+Cidade/UF: Itapevi - SP
+CEP: 06693-810
+
+DESTINATÁRIO / PAGADOR DO FRETE:
+Razão Social: ${nc}
+CNPJ: ${c}
+Endereço: ${e.trim()}
+Cidade/UF: ${cid.trim()}
+CEP: ${ce}
+
+DADOS DA CARGA E FRETE:
+Nota Fiscal: ${numeroNota || ''} (arquivo em anexo)
+Modalidade de Frete: ${mf} (Pago pelo Destinatário - ${nc})
+Volumes: ${v}
+Dimensões (L x C x A): 32 cm x 68 cm x 15 cm
+Peso Total: ${pt} kg
+
+Ficamos no aguardo da confirmação.
+Obrigado!`;
+    };
+
+    if (coletaMessageTextarea) {
+        coletaMessageTextarea.value = buildColetaTemplate(nomeCliente, cnpj, enderecoStr, cidadeUf, cep, modalidadeFrete, volumes, pesoTotal);
+    }
+
+    // Busca assíncrona para complementar dados de endereço caso necessário
+    const fetchId = order.id || order.id_pedido || order.numero;
+    if (fetchId && (!enderecoStr || pesoTotal === '0' || !cnpj)) {
+        fetch(`${API_URLS.ORDERS_BLING}/vendas/${fetchId}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (data && data.data) {
+                    const bPedido = data.data;
+                    if (!cnpj) cnpj = bPedido.contato?.numeroDocumento || '';
+                    const end = bPedido.transporte?.enderecoEntrega || bPedido.contato?.endereco;
+                    if (end) {
+                        enderecoStr = `${end.endereco || ''}, ${end.numero || ''} ${end.complemento ? ' - ' + end.complemento : ''} - ${end.bairro || ''}`;
+                        cidadeUf = `${end.municipio || ''} - ${end.uf || ''}`;
+                        cep = end.cep || '';
+                    }
+                    if (bPedido.transporte?.volumes) {
+                        pesoTotal = bPedido.transporte.volumes.reduce((sum, v) => sum + (parseFloat(v.pesoBruto) || 0), 0).toFixed(1);
+                        volumes = bPedido.transporte.volumes.reduce((sum, v) => sum + (parseFloat(v.quantidade) || 0), 0).toString();
+                    }
+                    if (coletaMessageTextarea) {
+                        coletaMessageTextarea.value = buildColetaTemplate(nomeCliente, cnpj, enderecoStr, cidadeUf, cep, modalidadeFrete, volumes, pesoTotal);
+                    }
+                }
+            })
+            .catch(err => console.warn('[Mobile Email] Aviso ao buscar dados complementares:', err));
+    }
+
+    // 3. Configurar Ações dos Botões do Modal
+    const downloadBtn = document.getElementById('mobile-email-danfe-download-btn');
+    if (downloadBtn) {
+        downloadBtn.onclick = () => {
+            const targetUrl = baixarPdfUrl || linkDanfe;
+            if (targetUrl && targetUrl !== '#') {
+                window.open(targetUrl, '_blank');
+            } else {
+                alert('Link do PDF não disponível para download.');
+            }
+        };
+    }
+
+    const tabBtnEmail = document.getElementById('mobile-tab-btn-email');
+    const tabBtnColeta = document.getElementById('mobile-tab-btn-coleta');
+    const tabContentEmail = document.getElementById('mobile-tab-content-email');
+    const tabContentColeta = document.getElementById('mobile-tab-content-coleta');
+    const btnText = document.getElementById('mobile-email-btn-text');
+
+    function switchEmailTab(tab) {
+        if (tab === 'email') {
+            tabContentEmail?.classList.remove('hidden');
+            tabContentColeta?.classList.add('hidden');
+            tabBtnEmail?.classList.add('border-indigo-600', 'text-indigo-600');
+            tabBtnEmail?.classList.remove('border-transparent', 'text-gray-500');
+            tabBtnColeta?.classList.remove('border-indigo-600', 'text-indigo-600');
+            tabBtnColeta?.classList.add('border-transparent', 'text-gray-500');
+            if (btnText) btnText.textContent = 'Enviar E-mail';
+        } else {
+            tabContentEmail?.classList.add('hidden');
+            tabContentColeta?.classList.remove('hidden');
+            tabBtnColeta?.classList.add('border-indigo-600', 'text-indigo-600');
+            tabBtnColeta?.classList.remove('border-transparent', 'text-gray-500');
+            tabBtnEmail?.classList.remove('border-indigo-600', 'text-indigo-600');
+            tabBtnEmail?.classList.add('border-transparent', 'text-gray-500');
+            if (btnText) btnText.textContent = 'Solicitar Coleta';
+        }
+    }
+
+    if (tabBtnEmail) tabBtnEmail.onclick = () => switchEmailTab('email');
+    if (tabBtnColeta) tabBtnColeta.onclick = () => switchEmailTab('coleta');
+    switchEmailTab('email');
+
+    // Botão Enviar E-mail
+    const confirmBtn = document.getElementById('mobile-email-danfe-confirm-btn');
+    const spinner = document.getElementById('mobile-email-danfe-spinner');
+
+    if (confirmBtn) {
+        confirmBtn.onclick = async () => {
+            const isColeta = !tabContentColeta?.classList.contains('hidden');
+            const toEmail = isColeta ? coletaToInput?.value.trim() : emailToInput?.value.trim();
+            const subject = isColeta ? coletaSubjectInput?.value.trim() : emailSubjectInput?.value.trim();
+            const message = isColeta ? coletaMessageTextarea?.value.trim() : emailMessageTextarea?.value.trim();
+
+            if (!toEmail) {
+                alert('Por favor, informe ao menos um e-mail de destino.');
+                return;
+            }
+
+            if (spinner) spinner.classList.remove('hidden');
+            if (btnText) btnText.textContent = 'Enviando...';
+            confirmBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_URLS.WEBHOOK_LAUNCH}/proxy-email-danfe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chaveAcesso: chaveAcesso,
+                        linkDanfe: linkDanfe,
+                        toEmail: toEmail,
+                        subject: subject,
+                        text: message,
+                        filename: safeFilenameForDownload
+                    })
+                });
+
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.message || 'Erro ao enviar e-mail.');
+
+                _showMobileToast('✅ E-mail enviado com sucesso!');
+                modal.classList.add('hidden');
+            } catch (err) {
+                console.error('[Mobile Email] Erro ao enviar:', err);
+                alert(err.message || 'Erro ao enviar e-mail.');
+            } finally {
+                if (spinner) spinner.classList.add('hidden');
+                if (btnText) btnText.textContent = isColeta ? 'Solicitar Coleta' : 'Enviar E-mail';
+                confirmBtn.disabled = false;
+            }
+        };
+    }
+
+    // Fechar Modal
+    const closeBtn = document.getElementById('mobile-email-danfe-close-btn');
+    const cancelBtn = document.getElementById('mobile-email-danfe-cancel-btn');
+    if (closeBtn) closeBtn.onclick = () => modal.classList.add('hidden');
+    if (cancelBtn) cancelBtn.onclick = () => modal.classList.add('hidden');
+
+    // Botões de copiar
+    const copyBtns = [
+        { btnId: 'mobile-copy-email-subject-btn', inputId: 'mobile-email-danfe-subject' },
+        { btnId: 'mobile-copy-email-message-btn', inputId: 'mobile-email-danfe-message' },
+        { btnId: 'mobile-copy-coleta-subject-btn', inputId: 'mobile-email-coleta-subject' },
+        { btnId: 'mobile-copy-coleta-message-btn', inputId: 'mobile-email-coleta-message' }
+    ];
+    copyBtns.forEach(({ btnId, inputId }) => {
+        const b = document.getElementById(btnId);
+        if (b) {
+            b.onclick = async () => {
+                const inputEl = document.getElementById(inputId);
+                if (!inputEl) return;
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(inputEl.value);
+                    } else {
+                        inputEl.select();
+                        document.execCommand('copy');
+                    }
+                    _showMobileToast('✅ Texto copiado!');
+                } catch {
+                    inputEl.select();
+                    document.execCommand('copy');
+                    _showMobileToast('✅ Texto copiado!');
+                }
+            };
+        }
+    });
+
+    modal.classList.remove('hidden');
 }

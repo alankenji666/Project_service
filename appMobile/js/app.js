@@ -1,5 +1,5 @@
 import { API_URLS } from './apiConfig.js';
-import { initMobileNfe, openMobileNfeModal, getDanfeLinkForOrder, updateNfeMobileContext } from './nfeMobile.js';
+import { initMobileNfe, openMobileNfeModal, getDanfeLinkForOrder, updateNfeMobileContext, openMobileEmailDanfeModal } from './nfeMobile.js';
 
 // --- DOM Elements ---
 const menuView = document.getElementById('menu-view');
@@ -1006,17 +1006,28 @@ function openOrderDetailsModal(orderId) {
         };
     }
 
+    const sendDanfeEmailFromDetalhesBtn = document.getElementById('send-danfe-email-from-detalhes-btn');
     if (viewDanfeFromDetalhesBtn) {
         const danfeUrl = getDanfeLinkForOrder(order);
         if (danfeUrl) {
             viewDanfeFromDetalhesBtn.classList.remove('hidden');
             viewDanfeFromDetalhesBtn.href = danfeUrl;
+            if (sendDanfeEmailFromDetalhesBtn) {
+                sendDanfeEmailFromDetalhesBtn.classList.remove('hidden');
+                sendDanfeEmailFromDetalhesBtn.onclick = () => {
+                    updateNfeMobileContext({ allProducts, allPedidos });
+                    openMobileEmailDanfeModal(order);
+                };
+            }
             if (openNfeFromDetalhesBtn) {
                 const span = openNfeFromDetalhesBtn.querySelector('span');
                 if (span) span.textContent = 'Editar / Ver Dados da NF-e';
             }
         } else {
             viewDanfeFromDetalhesBtn.classList.add('hidden');
+            if (sendDanfeEmailFromDetalhesBtn) {
+                sendDanfeEmailFromDetalhesBtn.classList.add('hidden');
+            }
             if (openNfeFromDetalhesBtn) {
                 const span = openNfeFromDetalhesBtn.querySelector('span');
                 if (span) span.textContent = 'Emitir / Editar NF-e';

@@ -4,7 +4,7 @@
 importScripts('js/apiConfig-sw.js');
 
 // 1. Definições do Cache
-const CACHE_NAME = 'ajusta-estoque-app-v1';
+const CACHE_NAME = 'ajusta-estoque-app-v3';
 const CACHE_FILES = [
     './ajustaEstoqueApp.html',
     '../css/styles.css',
@@ -92,7 +92,18 @@ self.addEventListener('install', (event) => {
 // 3. Ativação do Service Worker
 self.addEventListener('activate', (event) => {
     console.log('[Service Worker] Ativando...');
-    event.waitUntil(self.clients.claim());
+    event.waitUntil(
+        caches.keys().then((keyList) => {
+            return Promise.all(
+                keyList.map((key) => {
+                    if (key !== CACHE_NAME) {
+                        console.log('[Service Worker] Removendo cache antigo:', key);
+                        return caches.delete(key);
+                    }
+                })
+            );
+        }).then(() => self.clients.claim())
+    );
 });
 
 // 4. Interceptação de Requisições (Estratégia Cache-First para GET)
