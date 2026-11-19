@@ -146,6 +146,19 @@ export const GerenciarGarantiaApp = (function () {
         }) || null;
     };
 
+    const _findSatgVinculadoCurrent = () => {
+        if (_currentSatgReqForOrder) return _currentSatgReqForOrder;
+        const refId = _currentEditPedidoId || (_inputNumero ? _inputNumero.value.trim() : '');
+        if (!refId || !_satgData || _satgData.length === 0) return null;
+        const refStr = String(refId).trim();
+        const cleanRef = refStr.replace('GAR-', '');
+        return _satgData.find(s => {
+            const sId = String(s.idPedido || '').trim();
+            const sClean = sId.replace('GAR-', '');
+            return (sId && (sId === refStr || (cleanRef && sClean === cleanRef)));
+        }) || null;
+    };
+
     /**
      * Inicializa o módulo, cacheia elementos e configura eventos.
      */
@@ -574,6 +587,17 @@ export const GerenciarGarantiaApp = (function () {
                     iframe.classList.remove('opacity-0');
                     if (iframeLoader) iframeLoader.classList.add('hidden');
                 };
+            };
+        }
+
+        const btnLpGarantia = document.getElementById('btn-garantia-linha-producao');
+        if (btnLpGarantia) {
+            btnLpGarantia.onclick = () => {
+                if (typeof window.GerenciarPedidosApp !== 'undefined' && window.GerenciarPedidosApp.openLinhaProducaoModal) {
+                    window.GerenciarPedidosApp.openLinhaProducaoModal('GARANTIA');
+                } else if (typeof GerenciarPedidosApp !== 'undefined' && GerenciarPedidosApp.openLinhaProducaoModal) {
+                    GerenciarPedidosApp.openLinhaProducaoModal('GARANTIA');
+                }
             };
         }
 
@@ -1063,17 +1087,85 @@ export const GerenciarGarantiaApp = (function () {
         }
         
         filtrados.forEach(p => {
+            // Obter imagem do produto
+            let imgSrc = '';
+            if (Array.isArray(p.url_imagens_externas) && p.url_imagens_externas.length > 0) {
+                imgSrc = p.url_imagens_externas[0];
+            } else if (typeof p.url_imagens_externas === 'string' && p.url_imagens_externas.trim()) {
+                imgSrc = p.url_imagens_externas.trim();
+            } else if (p.imagem) {
+                imgSrc = p.imagem;
+            } else if (p.imagem_url) {
+                imgSrc = p.imagem_url;
+            } else if (p.link_da_imagem) {
+                imgSrc = p.link_da_imagem;
+            } else if (Array.isArray(p.anexos) && p.anexos.length > 0) {
+                imgSrc = p.anexos[0].url || p.anexos[0].link || '';
+            }
+
+            // Fallback caso outro registro no cache tenha a imagem para o mesmo código
+            if (!imgSrc && p.codigo && allProdutos) {
+                const match = allProdutos.find(other => 
+                    other !== p && 
+                    String(other.codigo || '').trim() === String(p.codigo || '').trim() && 
+                    ((Array.isArray(other.url_imagens_externas) && other.url_imagens_externas.length > 0) || other.imagem || other.imagem_url)
+                );
+                if (match) {
+                    imgSrc = (Array.isArray(match.url_imagens_externas) && match.url_imagens_externas[0]) || match.imagem || match.imagem_url || '';
+                }
+            }
+
+            const estoqueVal = parseFloat(p.estoque) || 0;
+            const estoqueColorClass = estoqueVal > 0 ? 'text-emerald-600' : 'text-gray-500';
+            const custoVal = parseFloat(p.preco_de_custo) || parseFloat(p.preco || 0);
+
             const div = document.createElement('div');
-            div.className = 'p-3 hover:bg-blue-50 border border-transparent hover:border-blue-100 rounded-lg cursor-pointer transition-colors flex justify-between items-center';
+            div.className = 'p-2.5 sm:p-3 hover:bg-blue-50/70 border border-gray-100 hover:border-blue-200 rounded-xl cursor-pointer transition-all flex justify-between items-center gap-3 group shadow-sm bg-white';
             div.innerHTML = `
-                <div>
-                    <p class="font-bold text-gray-800 text-sm">${p.codigo || '-'} - ${p.descricao || 'Sem descrição'}</p>
-                    <p class="text-xs text-gray-500">Estoque: ${p.estoque || 0}</p>
+                <div class="flex items-center gap-3.5 min-w-0 flex-1">
+                    <div class="thumb-container w-14 h-14 rounded-xl bg-white border border-gray-200 flex-shrink-0 flex items-center justify-center overflow-hidden p-1 shadow-sm relative ${imgSrc ? 'cursor-zoom-in hover:border-blue-400 hover:shadow-md transition-all' : ''}" title="${imgSrc ? 'Clique para ampliar a imagem' : 'Sem foto'}">
+                        ${imgSrc 
+                            ? `<img src="${imgSrc}" class="w-full h-full object-contain pointer-events-none" alt="" onerror="this.parentElement.className='w-14 h-14 rounded-xl bg-gray-50 border border-gray-200 flex-shrink-0 flex flex-col items-center justify-center text-gray-400 p-1'; this.parentElement.title='Sem foto'; this.parentElement.innerHTML='<svg class=\\'w-5 h-5\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'/></svg><span class=\\'text-[9px] font-medium leading-tight mt-0.5\\'>Sem foto</span>';">`
+                            : `<div class="flex flex-col items-center justify-center text-gray-400">
+                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                 </svg>
+                                 <span class="text-[9px] font-medium leading-tight mt-0.5">Sem foto</span>
+                               </div>`
+                        }
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="font-bold text-gray-800 text-sm leading-snug group-hover:text-blue-700 transition-colors">
+                            <span class="text-blue-600 font-mono font-semibold">${p.codigo || '-'}</span>
+                            <span class="text-gray-400 font-normal mx-1">-</span>
+                            <span>${p.descricao || 'Sem descrição'}</span>
+                        </p>
+                        <div class="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                            <span>Estoque: <strong class="${estoqueColorClass}">${p.estoque || 0}</strong></span>
+                            ${custoVal > 0 ? `<span class="text-gray-300">•</span> <span>Custo: <strong class="text-gray-700">${custoVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></span>` : ''}
+                        </div>
+                    </div>
                 </div>
-                <button type="button" class="text-blue-600 font-bold text-sm bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition-colors">
+                <button type="button" class="text-blue-600 font-bold text-sm bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-3.5 py-2 rounded-lg transition-colors flex-shrink-0 border border-blue-200 group-hover:border-blue-600">
                     Selecionar
                 </button>
             `;
+
+            if (imgSrc) {
+                const thumbContainer = div.querySelector('.thumb-container');
+                if (thumbContainer) {
+                    thumbContainer.onclick = (e) => {
+                        e.stopPropagation();
+                        const modal = document.getElementById('generic-image-modal');
+                        const modalImg = document.getElementById('generic-image-modal-img');
+                        if (modal && modalImg) {
+                            modalImg.src = imgSrc;
+                            modal.classList.remove('hidden');
+                            modal.classList.add('flex');
+                        }
+                    };
+                }
+            }
             
             div.onclick = () => {
                 const qtdStr = prompt(`Quantidade para adicionar: ${p.descricao || 'Produto'}`, "1");
@@ -1085,7 +1177,8 @@ export const GerenciarGarantiaApp = (function () {
                             desc: p.descricao,
                             qtd: qtd,
                             peso: parseFloat(p.peso_bruto || p.peso_liquido || 0),
-                            preco: parseFloat(p.preco_de_custo) || parseFloat(p.preco || 0)
+                            preco: parseFloat(p.preco_de_custo) || parseFloat(p.preco || 0),
+                            status: 'OK'
                         });
                         _formHasChanges = true;
                         _renderOrderItems();
@@ -1110,13 +1203,285 @@ export const GerenciarGarantiaApp = (function () {
     }
 
     /**
+     * Envia ou atualiza o status de um item de garantia na Linha de Produção
+     */
+    async function _sendGarantiaItemToProducao(item, index, status = 'EM PRODUÇÃO') {
+        const satgObj = _findSatgVinculadoCurrent();
+        const satgCodigo = satgObj ? (satgObj.codigo || '') : '';
+        const idPedido = _currentEditPedidoId || (_inputNumero ? _inputNumero.value.trim() : '');
+        const hoje = new Date();
+        const dataIso = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+        const cliente = _inputCliente ? _inputCliente.value.trim() : (satgObj ? satgObj.cliente : '');
+
+        // Na Linha de Produção, ao voltar para FINALIZADO / OK deve registrar como FINALIZADO
+        const backendStatus = (status === 'OK' || status === 'FINALIZADO') ? 'FINALIZADO' : status;
+
+        try {
+            const res = await fetch(API_URLS.UPDATE_ITEM_STATUS, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pedidoId: idPedido,
+                    numeroPedido: idPedido,
+                    orcamento: satgCodigo,
+                    itemCodigo: item.cod || item.id || item.desc,
+                    newStatus: backendStatus,
+                    itemIndex: index,
+                    newDescription: item.descricaoPersonalizada || item.desc || '',
+                    responsavel: item.responsavel ? String(item.responsavel).trim().toUpperCase() : '',
+                    quantidade: item.qtd || 1,
+                    dataPedido: dataIso,
+                    origem: 'Garantia',
+                    cliente: cliente
+                })
+            });
+            if (!res.ok) throw new Error('Falha ao atualizar status de produção');
+            if (window._showToast) {
+                window._showToast(backendStatus === 'FINALIZADO' ? 'Item marcado como Finalizado na Linha de Produção!' : 'Item enviado para Linha de Produção!', 'success');
+            }
+            if (typeof window.GerenciarPedidosApp !== 'undefined' && window.GerenciarPedidosApp.fetchPedidos) {
+                window.GerenciarPedidosApp.fetchPedidos(true);
+            }
+        } catch (err) {
+            console.error('Erro ao enviar item de garantia para produção:', err);
+        }
+    }
+
+    /**
+     * Alterna o dropdown do status do item (OK / EM PRODUÇÃO)
+     */
+    function _toggleGarantiaItemStatusDropdown(btn, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const menu = btn.nextElementSibling;
+        if (!menu) return;
+
+        // Fecha todos os outros menus abertos
+        document.querySelectorAll('.garantia-item-custom-dropdown-menu:not(.hidden)').forEach(m => {
+            if (m !== menu) m.classList.add('hidden');
+        });
+
+        const isOpening = menu.classList.contains('hidden');
+        if (isOpening) {
+            // Mede espaço abaixo vs acima
+            const modalContent = btn.closest('#garantia-form-container') || btn.closest('.overflow-y-auto') || btn.closest('#modal-garantia-form') || document.body;
+            const btnRect = btn.getBoundingClientRect();
+            const contentRect = modalContent.getBoundingClientRect();
+            
+            // Espaço restante abaixo do botão até a borda inferior visível do container ou da viewport
+            const bottomLimit = Math.min(contentRect.bottom, window.innerHeight);
+            const spaceBelow = bottomLimit - btnRect.bottom;
+            const menuHeight = 100; // altura do menu com 2 itens + margens
+
+            if (spaceBelow < menuHeight) {
+                // Sem espaço abaixo: abre para CIMA (dropup)
+                menu.style.bottom = 'calc(100% + 6px)';
+                menu.style.top = 'auto';
+            } else {
+                // Espaço suficiente: abre para BAIXO
+                menu.style.top = 'calc(100% + 6px)';
+                menu.style.bottom = 'auto';
+            }
+
+            menu.classList.remove('hidden');
+        } else {
+            menu.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Retorna a lista de nomes de responsáveis disponíveis na Linha de Produção
+     * Somente quem já está com o nome em algum item da Linha de Produção, todos em MAIÚSCULAS.
+     */
+    function _getResponsaveisOptions() {
+        let list = [];
+        if (typeof window.GerenciarPedidosApp !== 'undefined' && typeof window.GerenciarPedidosApp.getAllResponsaveisList === 'function') {
+            try {
+                list = window.GerenciarPedidosApp.getAllResponsaveisList() || [];
+            } catch (e) {
+                console.warn('[GerenciarGarantia] Erro ao obter responsáveis da Linha de Produção:', e);
+            }
+        }
+        if (!list || list.length === 0) {
+            try {
+                const cached = JSON.parse(localStorage.getItem('mks_lp_responsaveis_cache') || '[]');
+                if (Array.isArray(cached) && cached.length > 0) {
+                    list = cached;
+                }
+            } catch (e) {}
+        }
+        if (!list || list.length === 0) {
+            list = ['CLEITON', 'KAKA', 'MARCAO', 'SILVIO'];
+        }
+
+        const uniqueUpper = Array.from(new Set(
+            list.map(r => String(r || '').trim().toUpperCase())
+                .filter(r => r && r !== '-' && r !== 'SEM_RESP' && r !== 'SEM RESPONSÁVEL' && r !== 'SEM RESPONSAVEL')
+        )).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+        return uniqueUpper;
+    }
+
+    /**
+     * Altera a situação do item selecionada via dropdown (OK / EM PRODUÇÃO)
+     * Na coluna SITUAÇÃO exibe 'OK', mas na planilha/backend registra como 'FINALIZADO'
+     */
+    function _handleGarantiaDropdownItemStatus(index, newStatus, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        document.querySelectorAll('.garantia-item-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+
+        const item = _currentOrderItems[index];
+        if (!item) return;
+
+        let targetStatus = String(newStatus || 'OK').toUpperCase().trim();
+        if (targetStatus === 'PRODUCAO' || targetStatus === 'EM PRODUCAO') targetStatus = 'EM PRODUÇÃO';
+        if (targetStatus !== 'EM PRODUÇÃO') targetStatus = 'OK';
+
+        let currentStatus = String(item.status || 'OK').toUpperCase().trim();
+        if (currentStatus === 'PRODUCAO' || currentStatus === 'EM PRODUCAO') currentStatus = 'EM PRODUÇÃO';
+        if (currentStatus !== 'EM PRODUÇÃO') currentStatus = 'OK';
+
+        if (targetStatus === currentStatus) return;
+
+        if (targetStatus === 'EM PRODUÇÃO') {
+            // 1. Somente pedidos com vínculo a SAT-G podem entrar na Linha de Produção
+            const satgObj = _findSatgVinculadoCurrent();
+            if (!satgObj) {
+                alert('Este orçamento não possui vínculo com uma solicitação SAT-G.\n\nSomente itens de orçamentos vinculados a uma SAT-G podem ser enviados para a Linha de Produção.');
+                return;
+            }
+
+            // Selecionar responsável via dropdown (somente nomes da Linha de Produção, em MAIÚSCULAS)
+            const respOptions = _getResponsaveisOptions();
+            let currentResp = String(item.responsavel || '').trim().toUpperCase();
+            if (currentResp && !respOptions.includes(currentResp)) {
+                currentResp = '';
+            }
+
+            const proceedWithResponsible = async (selectedResp) => {
+                const upperResp = String(selectedResp || '').trim().toUpperCase();
+                item.responsavel = upperResp;
+
+                const isUnsaved = _formHasChanges || !_currentEditPedidoId;
+                if (isUnsaved) {
+                    const salvarAgora = confirm('Antes de enviar para produção o orçamento precisa estar salvo.\n\nDeseja Salvar agora?');
+                    if (salvarAgora) {
+                        item.status = 'EM PRODUÇÃO';
+                        _renderOrderItems();
+                        const submitBtn = document.getElementById('btn-submit-garantia');
+                        if (submitBtn) submitBtn.click();
+                    } else {
+                        item.status = 'EM PRODUÇÃO';
+                        _formHasChanges = true;
+                        _renderOrderItems();
+                        if (window._showToast) {
+                            window._showToast(`Situação marcada como EM PRODUÇÃO${upperResp ? ' (' + upperResp + ')' : ''}. O item será registrado na produção ao salvar o orçamento.`, 'info');
+                        }
+                    }
+                } else {
+                    item.status = 'EM PRODUÇÃO';
+                    _renderOrderItems();
+                    await _sendGarantiaItemToProducao(item, index, 'EM PRODUÇÃO');
+                }
+            };
+
+            if (window._promptGeneric) {
+                window._promptGeneric(
+                    "Responsável pela Produção",
+                    "Selecione o responsável pelo item:",
+                    proceedWithResponsible,
+                    "select",
+                    currentResp,
+                    respOptions
+                );
+            } else {
+                const ans = prompt("Informe o responsável pela produção:", currentResp || respOptions[0] || "");
+                if (ans) proceedWithResponsible(ans);
+            }
+        } else {
+            // Voltando para OK (na planilha e linha de produção registra como FINALIZADO)
+            item.status = 'OK';
+            if (!_formHasChanges && _currentEditPedidoId) {
+                _renderOrderItems();
+                _sendGarantiaItemToProducao(item, index, 'FINALIZADO');
+            } else {
+                _formHasChanges = true;
+                _renderOrderItems();
+            }
+        }
+    }
+
+    /**
+     * Alterna a situação do item entre OK e EM PRODUÇÃO (mantido para compatibilidade)
+     */
+    function _handleGarantiaItemStatusToggle(index) {
+        const item = _currentOrderItems[index];
+        if (!item) return;
+        const currentStatus = String(item.status || 'OK').toUpperCase().trim();
+        const isEmProducao = currentStatus === 'EM PRODUÇÃO' || currentStatus === 'PRODUCAO' || currentStatus === 'EM PRODUCAO';
+        const targetStatus = isEmProducao ? 'OK' : 'EM PRODUÇÃO';
+        _handleGarantiaDropdownItemStatus(index, targetStatus);
+    }
+
+    /**
+     * Cria o HTML do badge com dropdown de situação do item (OK / EM PRODUÇÃO)
+     * Na coluna SITUAÇÃO exibe OK, e quando selecionado OK salva como FINALIZADO na planilha.
+     */
+    function _createGarantiaItemStatusBadge(status, index) {
+        let s = String(status || 'OK').toUpperCase().trim();
+        if (s === 'CRIADO' || s === 'PENDENTE' || s === 'FINALIZADO') s = 'OK';
+        let currentStatus = s;
+        if (currentStatus === 'PRODUCAO' || currentStatus === 'EM PRODUCAO') currentStatus = 'EM PRODUÇÃO';
+
+        if (!window._garantiaItemDropdownListener) {
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.garantia-item-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+            });
+            window.addEventListener('scroll', () => {
+                document.querySelectorAll('.garantia-item-custom-dropdown-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+            }, true);
+            window._garantiaItemDropdownListener = true;
+        }
+
+        const statusOptions = ['OK', 'EM PRODUÇÃO'];
+        if (!statusOptions.includes(currentStatus)) {
+            currentStatus = 'OK';
+        }
+
+        let pBadgeClass = 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200';
+        if (currentStatus === 'EM PRODUÇÃO') pBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200';
+
+        let dropdownOptions = statusOptions.map(opt => {
+            let dotColor = 'bg-green-400';
+            if (opt === 'EM PRODUÇÃO') dotColor = 'bg-blue-400';
+            return `<button type="button" onclick="GerenciarGarantiaApp.handleDropdownItemStatus(${index}, '${opt}', event)" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 garantia-item-dropdown-option"><span class="w-2 h-2 rounded-full ${dotColor}"></span>${opt}</button>`;
+        }).join('');
+
+        return `
+        <div class="relative inline-block text-left" data-dropdown-container>
+            <button type="button" onclick="GerenciarGarantiaApp.toggleItemStatusDropdown(this, event)" class="px-3 py-1 inline-flex items-center justify-between text-[11px] font-bold rounded-full border ${pBadgeClass} min-w-[120px] transition-all cursor-pointer shadow-sm">
+                <span class="flex-1 text-center">${currentStatus}</span>
+                <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div class="garantia-item-custom-dropdown-menu absolute right-0 w-40 bg-white border border-gray-100 rounded-xl shadow-xl z-[70] hidden overflow-hidden py-1">
+                ${dropdownOptions}
+            </div>
+        </div>`;
+    }
+
+    /**
      * Atualiza a UI da lista de itens
      */
     function _renderOrderItems() {
         _itemsList.innerHTML = '';
         
         if (_currentOrderItems.length === 0) {
-            _itemsList.innerHTML = '<tr><td colspan="6" id="garantia-items-empty" class="px-4 py-8 text-sm text-gray-500 italic text-center">Nenhum item adicionado.</td></tr>';
+            _itemsList.innerHTML = '<tr><td colspan="7" id="garantia-items-empty" class="px-4 py-8 text-sm text-gray-500 italic text-center">Nenhum item adicionado.</td></tr>';
             _updateUIPesoTotal();
             _updateUITotalValues();
             return;
@@ -1159,6 +1524,8 @@ export const GerenciarGarantiaApp = (function () {
                 ? `<img src="${imgSrc}" class="w-12 h-12 rounded-lg object-cover bg-gray-100 flex-shrink-0 border border-gray-200" title="Ver imagem">` 
                 : `<div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-[10px] border border-gray-200">Sem img</div>`;
 
+            const statusBadgeHtml = _createGarantiaItemStatusBadge(item.status, index);
+
             tr.innerHTML = `
                 <td class="px-4 py-3">
                     <div class="flex items-start gap-3">
@@ -1166,12 +1533,16 @@ export const GerenciarGarantiaApp = (function () {
                         <div class="flex flex-col">
                             <span class="font-medium text-gray-800">${item.desc || 'Sem descrição'}</span>
                             <span class="text-xs text-gray-400 mt-0.5">${item.cod || '-'}</span>
+                            ${item.responsavel ? `<div class="mt-1"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100"><svg class="w-3 h-3 mr-1 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>Resp: ${item.responsavel}</span></div>` : ''}
                             ${badgePersonalizado}
                         </div>
                     </div>
                 </td>
                 <td class="px-4 py-3 text-center">
                     <span class="font-black text-gray-800">${item.qtd}</span>
+                </td>
+                <td class="px-4 py-3 text-center" onclick="event.stopPropagation()">
+                    ${statusBadgeHtml}
                 </td>
                 <td class="px-4 py-3">
                     <div class="flex items-center gap-2 justify-center" onclick="event.stopPropagation()">
@@ -1481,17 +1852,17 @@ export const GerenciarGarantiaApp = (function () {
                     <td></td>
                 </tr>
                 <tr class="bg-slate-50 border-t border-slate-200">
-                    <td colspan="4" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">IPI (3,25%):</td>
+                    <td colspan="5" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">IPI (3,25%):</td>
                     <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(ipiVal)}</td>
                     <td></td>
                 </tr>
                 <tr class="bg-slate-50 border-t border-slate-200">
-                    <td colspan="4" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Frete:</td>
+                    <td colspan="5" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Frete:</td>
                     <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(freteVal)}</td>
                     <td></td>
                 </tr>
                 <tr class="bg-green-50 border-t border-green-200">
-                    <td colspan="4" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
+                    <td colspan="5" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
                     <td class="px-4 py-3 text-right font-black text-green-700 text-base">${fmt(totalItens + ipiVal + freteVal)}</td>
                     <td></td>
                 </tr>
@@ -1499,17 +1870,17 @@ export const GerenciarGarantiaApp = (function () {
         } else {
             html += `
                 <tr class="bg-slate-50">
-                    <td colspan="4" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Itens:</td>
+                    <td colspan="5" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Itens:</td>
                     <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(totalItens)}</td>
                     <td></td>
                 </tr>
                 <tr class="bg-slate-50 border-t border-slate-200">
-                    <td colspan="4" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">IPI (3,25%):</td>
+                    <td colspan="5" class="px-4 py-2 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">IPI (3,25%):</td>
                     <td class="px-4 py-2 text-right font-bold text-slate-700 text-sm">${fmt(ipiVal)}</td>
                     <td></td>
                 </tr>
                 <tr class="bg-green-50 border-t border-green-200">
-                    <td colspan="4" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
+                    <td colspan="5" class="px-4 py-3 text-right text-[12px] font-black text-green-800 uppercase tracking-wider">Valor Total:</td>
                     <td class="px-4 py-3 text-right font-black text-green-700 text-base">${fmt(totalItens + ipiVal)}</td>
                     <td></td>
                 </tr>
@@ -1519,9 +1890,11 @@ export const GerenciarGarantiaApp = (function () {
         tfoot.innerHTML = html;
     }
 
-function _formatItemsString() {
+    function _formatItemsString() {
         return _currentOrderItems.map(item => {
-            return `(${item.cod || item.desc}, ${item.qtd.toFixed(2)}, ${(item.preco || 0).toFixed(2)}|OK)`;
+            const rawSt = String(item.status || '').toUpperCase().trim();
+            const st = (rawSt === 'EM PRODUÇÃO' || rawSt === 'PRODUCAO' || rawSt === 'EM PRODUCAO') ? 'EM PRODUÇÃO' : 'FINALIZADO';
+            return `(${item.cod || item.desc}, ${item.qtd.toFixed(2)}, ${(item.preco || 0).toFixed(2)}|${st})`;
         }).join(' ');
     }
 
@@ -1529,7 +1902,7 @@ function _formatItemsString() {
      * Submete o formulário de pedido de garantia
      */
     async function _submitGarantiaPedido(e) {
-        e.preventDefault();
+        if (e && e.preventDefault) e.preventDefault();
 
         // VALIDAÇÃO DE ENVIO
         const chkE = document.getElementById('garantia-possui-envio');
@@ -1715,6 +2088,51 @@ function _formatItemsString() {
                     console.warn("Falha ao vincular o pedido ao Sat-G:", e);
                 }
             }
+
+            // Sincronizar itens em produção com Linha de Produção
+            const satgObj = _findSatgVinculadoCurrent() || _currentSatgReqForOrder;
+            if (satgObj) {
+                const idParaProducao = isEdit ? _currentEditPedidoId : (data.idPedido || payload.numero || data.id || (_inputNumero ? _inputNumero.value.trim() : ''));
+                const hoje = new Date();
+                const dataIso = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+                const clienteNome = (_inputCliente ? _inputCliente.value.trim() : '') || payload.nomeContato || (satgObj ? satgObj.cliente : '');
+                const satgCod = satgObj.codigo || '';
+
+                for (let idx = 0; idx < _currentOrderItems.length; idx++) {
+                    const it = _currentOrderItems[idx];
+                    const st = String(it.status || 'FINALIZADO').toUpperCase().trim();
+                    const isEmProd = (st === 'EM PRODUÇÃO' || st === 'PRODUCAO' || st === 'EM PRODUCAO');
+                    const targetSt = isEmProd ? 'EM PRODUÇÃO' : (isEdit ? 'FINALIZADO' : '');
+
+                    if (targetSt) {
+                        try {
+                            await fetch(API_URLS.UPDATE_ITEM_STATUS, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    pedidoId: idParaProducao,
+                                    numeroPedido: idParaProducao,
+                                    orcamento: satgCod,
+                                    itemCodigo: it.cod || it.id || it.desc,
+                                    newStatus: targetSt,
+                                    itemIndex: idx,
+                                    newDescription: it.descricaoPersonalizada || it.desc || '',
+                                    responsavel: it.responsavel ? String(it.responsavel).trim().toUpperCase() : '',
+                                    quantidade: it.qtd || 1,
+                                    dataPedido: dataIso,
+                                    origem: 'Garantia',
+                                    cliente: clienteNome
+                                })
+                            });
+                        } catch (errProd) {
+                            console.error('[Garantia] Erro ao sincronizar item na produção:', errProd);
+                        }
+                    }
+                }
+                if (typeof window.GerenciarPedidosApp !== 'undefined' && window.GerenciarPedidosApp.fetchPedidos) {
+                    window.GerenciarPedidosApp.fetchPedidos(true);
+                }
+            }
             
             const editedId = _currentEditPedidoId;
             _resetGarantiaForm();
@@ -1762,11 +2180,19 @@ function _formatItemsString() {
             if (precoEStatus.includes('|')) {
                 const s = precoEStatus.split('|');
                 precoStr = s[0].trim();
-                if (s[1]) status = s[1].trim();
+                if (s[1]) {
+                    const rawSt = s[1].trim().toUpperCase();
+                    if (rawSt === 'PRODUCAO' || rawSt === 'EM PRODUCAO' || rawSt === 'EM PRODUÇÃO') status = 'EM PRODUÇÃO';
+                    else status = 'OK';
+                }
             } else if (precoEStatus.includes(' ')) {
                 const s = precoEStatus.split(' ');
                 precoStr = s[0].trim();
-                if (s[1]) status = s[1].trim();
+                if (s[1]) {
+                    const rawSt = s[1].trim().toUpperCase();
+                    if (rawSt === 'PRODUCAO' || rawSt === 'EM PRODUCAO' || rawSt === 'EM PRODUÇÃO') status = 'EM PRODUÇÃO';
+                    else status = 'OK';
+                }
             }
             
             let desc = codigo;
@@ -1970,17 +2396,41 @@ function _formatItemsString() {
         // Populate items
         _currentOrderItems = _parseItemsString(pedido.itens);
         
-        // NOVO: Preencher as descrições e observações customizadas
-        if (_currentOrderItems.length > 0 && _itensDetalhadoGarantiaData.length > 0) {
-            _currentOrderItems.forEach(item => {
+        // NOVO: Preencher as descrições e observações customizadas e responsáveis da produção
+        const garItems = (typeof window.GerenciarPedidosApp !== 'undefined' && window.GerenciarPedidosApp.getAllGarantiaProducaoItems)
+            ? window.GerenciarPedidosApp.getAllGarantiaProducaoItems()
+            : [];
+
+        if (_currentOrderItems.length > 0) {
+            _currentOrderItems.forEach((item, idx) => {
                 const itemRef = String(item.cod || item.id || '').trim();
-                const detalhe = _itensDetalhadoGarantiaData.find(d => 
-                    (String(d.idPedido) === refStr || String(d.idPedido) === cleanRef) && 
-                    String(d.idProduto).trim() === itemRef
+                if (_itensDetalhadoGarantiaData.length > 0) {
+                    const detalhe = _itensDetalhadoGarantiaData.find(d => 
+                        (String(d.idPedido) === refStr || String(d.idPedido) === cleanRef) && 
+                        String(d.idProduto).trim() === itemRef
+                    );
+                    if (detalhe) {
+                        item.descricaoPersonalizada = detalhe.descricao;
+                        item.observacaoItem = detalhe.observacoes;
+                    }
+                }
+                const gi = garItems.find(g => 
+                    (String(g.pedidoId) === refStr || String(g.pedidoId) === cleanRef) && 
+                    (String(g.itemIndex) === String(idx) || String(g.sku || g.codigo || '').trim() === itemRef)
                 );
-                if (detalhe) {
-                    item.descricaoPersonalizada = detalhe.descricao;
-                    item.observacaoItem = detalhe.observacoes;
+                if (gi) {
+                    if (gi.responsavel) {
+                        item.responsavel = String(gi.responsavel).trim().toUpperCase();
+                    }
+                    if (gi.status) {
+                        let giSt = String(gi.status).toUpperCase().trim();
+                        if (giSt === 'PRODUCAO' || giSt === 'EM PRODUCAO' || giSt === 'EM PRODUÇÃO') giSt = 'EM PRODUÇÃO';
+                        else giSt = 'OK';
+                        item.status = giSt;
+                    }
+                }
+                if (!item.status || item.status !== 'EM PRODUÇÃO') {
+                    item.status = 'OK';
                 }
             });
         }
@@ -2603,14 +3053,15 @@ function _formatItemsString() {
         const getVisualOrcamento = (d) => {
             const currentStatus = String(d.status || '').toUpperCase();
             if (currentStatus.includes('RECUSADO')) return 'CANCELADO';
-            if (!d.idPedido) return 'EM ANALISE';
-            const pVinculado = typeof _pedidosGarantiaData !== 'undefined' ? _findPedidoVinculado(d.idPedido) : null;
-            if (pVinculado && pVinculado.situacao) {
-                let pStatus = pVinculado.situacao.toUpperCase();
-                if (pStatus === 'PENDENTE') pStatus = 'EM ANALISE';
-                return pStatus;
+            if (d.idPedido) {
+                const pVinculado = typeof _pedidosGarantiaData !== 'undefined' ? _findPedidoVinculado(d.idPedido) : null;
+                if (pVinculado && pVinculado.situacao) {
+                    let pStatus = pVinculado.situacao.toUpperCase();
+                    if (pStatus === 'PENDENTE') pStatus = 'EM ANALISE';
+                    return pStatus;
+                }
             }
-            return 'PROCESSANDO';
+            return 'EM ANALISE';
         };
 
         const getVisualRetorno = (d) => {
@@ -2829,18 +3280,21 @@ function _formatItemsString() {
             else if (statusUpper.includes('RECUSADO')) badgeClass = 'bg-red-100 text-red-800 border-red-200';
             else if (statusUpper.includes('QUALIDADE')) badgeClass = 'bg-orange-100 text-orange-800 border-orange-200';
             
+            const isNaoQualidade = statusUpper.includes('QUALIDADE');
+
             let pedidoStatusBadge = '<span class="px-2.5 py-1 inline-flex text-[11px] font-bold rounded-full border bg-yellow-100 text-yellow-800 border-yellow-200 uppercase" title="Aguardando vínculo">EM ANALISE</span>';
             if (statusUpper.includes('RECUSADO')) {
                 pedidoStatusBadge = '<span class="px-2.5 py-1 inline-flex text-[11px] font-bold rounded-full border bg-red-100 text-red-800 border-red-200 uppercase" title="Garantia Recusada">CANCELADO</span>';
             }
             let pedidoVinculado = null;
             let pBadgeClass = '';
-            if (req.idPedido) {
-                pedidoVinculado = _findPedidoVinculado(req.idPedido);
-                if (pedidoVinculado && pedidoVinculado.situacao) {
+            if (req.idPedido || isNaoQualidade) {
+                pedidoVinculado = req.idPedido ? _findPedidoVinculado(req.idPedido) : null;
+                let pStatus = (pedidoVinculado && pedidoVinculado.situacao) ? pedidoVinculado.situacao.toUpperCase() : (isNaoQualidade ? 'EM ANALISE' : '');
+                if (pStatus === 'PENDENTE') pStatus = 'EM ANALISE';
+
+                if (pStatus) {
                     pBadgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
-                    let pStatus = pedidoVinculado.situacao.toUpperCase();
-                    if (pStatus === 'PENDENTE') pStatus = 'EM ANALISE';
                     if (pStatus.includes('EM ANDAMENTO')) pBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
                     else if (pStatus.includes('EM ANALISE')) pBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
                     else if (pStatus.includes('AGUARDANDO')) pBadgeClass = 'bg-orange-100 text-orange-800 border-orange-200';
@@ -2871,7 +3325,7 @@ function _formatItemsString() {
                             ${dropdownOptions}
                         </div>
                     </div>`;
-                } else {
+                } else if (req.idPedido) {
                     pedidoStatusBadge = `<span class="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full border bg-gray-100 text-gray-800 border-gray-200 uppercase min-w-[105px] justify-center" title="Sincronizando...">PROCESSANDO...</span>`;
                 }
             }
@@ -3045,12 +3499,39 @@ function _formatItemsString() {
                         garBtn.classList.add('animate-pulse', 'opacity-50');
                         garBtn.disabled = true;
                         try {
-                            const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ rowIndex: req.rowIndex, status: newStatus })
-                            });
-                            if (!res.ok) throw new Error();
+                            // Se o usuário selecionou NÃO QUALIDADE e ainda não possui orçamento vinculado,
+                            // auto-cria o orçamento como 'EM ANALISE' para liberar Orçamento, Retorno e Serviço imediatamente!
+                            if (newStatus === 'NÃO QUALIDADE' && !req.idPedido) {
+                                const idGerado = 'GAR-' + Math.floor(Date.now() / 1000).toString();
+                                await fetch(API_URLS.GARANTIA_PEDIDO, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        idPedido: idGerado,
+                                        numero: idGerado,
+                                        situacao: 'EM ANALISE',
+                                        cliente: req.cliente || '',
+                                        cpfCnpj: req.cpf || '',
+                                        observacao: req.problema || 'Não Qualidade',
+                                        equipamento: req.equipamento || req.produto || '',
+                                        itens: ''
+                                    })
+                                });
+                                await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, status: newStatus, idPedido: idGerado })
+                                });
+                                req.idPedido = idGerado;
+                                await _fetchPedidosGarantiaData();
+                            } else {
+                                const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, status: newStatus })
+                                });
+                                if (!res.ok) throw new Error();
+                            }
                             _fetchSatGData();
                         } catch (err) {
                             alert("Erro ao atualizar status da Garantia");
@@ -3062,7 +3543,7 @@ function _formatItemsString() {
 
             const pedBtn = tr.querySelector('.pedido-custom-dropdown-btn');
             const pedMenu = tr.querySelector('.pedido-custom-dropdown-menu');
-            if (pedBtn && pedMenu && req.idPedido) {
+            if (pedBtn && pedMenu && (req.idPedido || isNaoQualidade)) {
                 pedBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     document.querySelectorAll('.satg-custom-dropdown-menu:not(.hidden), .pedido-custom-dropdown-menu:not(.hidden), .retorno-custom-dropdown-menu:not(.hidden), .servico-mo-custom-dropdown-menu:not(.hidden)').forEach(m => {
@@ -3075,24 +3556,49 @@ function _formatItemsString() {
                         e.stopPropagation();
                         pedMenu.classList.add('hidden');
                         const newStatus = btn.dataset.value;
-                        const pStatus = pedidoVinculado ? pedidoVinculado.situacao.toUpperCase() : '';
+                        const pStatus = pedidoVinculado ? (pedidoVinculado.situacao || '').toUpperCase() : '';
                         if (newStatus.toUpperCase() === pStatus) return;
                         
                         pedBtn.classList.add('animate-pulse', 'opacity-50');
                         pedBtn.disabled = true;
                         try {
-                            const updateUrl = API_URLS.GARANTIA_PEDIDO_UPDATE || API_URLS.GARANTIA_PEDIDO; 
-                            const targetId = (pedidoVinculado && pedidoVinculado.idPedido) ? pedidoVinculado.idPedido : req.idPedido;
-                            const res = await fetch(updateUrl, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ idPedido: targetId, situacao: newStatus })
-                            });
-                            if (!res.ok) throw new Error();
+                            if (req.idPedido || (pedidoVinculado && pedidoVinculado.idPedido)) {
+                                const updateUrl = API_URLS.GARANTIA_PEDIDO_UPDATE || API_URLS.GARANTIA_PEDIDO; 
+                                const targetId = (pedidoVinculado && pedidoVinculado.idPedido) ? pedidoVinculado.idPedido : req.idPedido;
+                                const res = await fetch(updateUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ idPedido: targetId, situacao: newStatus })
+                                });
+                                if (!res.ok) throw new Error();
+                            } else {
+                                // Cria orçamento vinculado sob demanda se ainda não possuía (NÃO QUALIDADE)
+                                const idGerado = 'GAR-' + Math.floor(Date.now() / 1000).toString();
+                                await fetch(API_URLS.GARANTIA_PEDIDO, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        idPedido: idGerado,
+                                        numero: idGerado,
+                                        situacao: newStatus,
+                                        cliente: req.cliente || '',
+                                        cpfCnpj: req.cpf || '',
+                                        observacao: req.problema || 'Não Qualidade',
+                                        equipamento: req.equipamento || req.produto || '',
+                                        itens: ''
+                                    })
+                                });
+                                await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, idPedido: idGerado })
+                                });
+                                req.idPedido = idGerado;
+                            }
                             await _fetchPedidosGarantiaData();
                             _fetchSatGData();
                         } catch (err) {
-                            alert("Erro ao atualizar status do Pedido");
+                            alert("Erro ao atualizar status do Orçamento");
                             _fetchSatGData();
                         }
                     });
@@ -3175,7 +3681,29 @@ function _formatItemsString() {
 
                         if (!isMoAtivo) {
                             if (chosenVal === 'Não Possui') return;
-                            _openServicoMoModal(req, servicoMoObj || null, chosenVal);
+                            
+                            servicoMoBtn.classList.add('animate-pulse', 'opacity-50');
+                            servicoMoBtn.disabled = true;
+                            try {
+                                const idMoGerado = 'MO-' + Math.floor(Date.now() / 1000).toString();
+                                await fetch(API_URLS.GARANTIA_SERVICOS_MO, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        idServicoMO: idMoGerado,
+                                        situacao: chosenVal,
+                                        deslocamento: '',
+                                        descricao: req.problema || 'Serviço M.O',
+                                        valorMO: '',
+                                        satgRowIndex: req.rowIndex
+                                    })
+                                });
+                                req.idServicoMO = idMoGerado;
+                                await _fetchSatGData();
+                            } catch (err) {
+                                alert('Erro ao salvar situação do Serviço (M.O)');
+                                _fetchSatGData();
+                            }
                         } else {
                             if (chosenVal === 'Não Possui') {
                                 const confirmCancel = confirm('Deseja cancelar o Serviço (M.O) vinculado a esta solicitação Sat-G?');
@@ -5392,12 +5920,86 @@ function _formatItemsString() {
         }
     }
 
+    /**
+     * Atualização em tempo real quando o status de um item de garantia é alterado na Linha de Produção
+     */
+    function _updateItemStatusRealTime(data) {
+        if (!data) return;
+        const targetPid = String(data.pedidoId || data.numeroPedido || '').trim();
+        const targetSku = String(data.itemCodigo || '').trim();
+        const targetIdx = (data.itemIndex !== undefined && data.itemIndex !== null && data.itemIndex !== '') ? String(data.itemIndex) : '';
+        const newStatus = data.newStatus ? String(data.newStatus).toUpperCase().trim() : '';
+        const newResp = data.responsavel !== undefined ? String(data.responsavel).trim().toUpperCase() : undefined;
+
+        let normalizedStatus = 'OK';
+        if (newStatus === 'PRODUCAO' || newStatus === 'EM PRODUCAO' || newStatus === 'EM PRODUÇÃO') {
+            normalizedStatus = 'EM PRODUÇÃO';
+        } else {
+            normalizedStatus = 'OK';
+        }
+
+        // 1. Atualizar o item no pedido em edição se o formulário estiver aberto
+        const isEditingCurrent = _currentEditPedidoId && (
+            String(_currentEditPedidoId).trim() === targetPid || 
+            String(_currentEditPedidoId).trim().replace('GAR-', '') === targetPid.replace('GAR-', '')
+        );
+
+        if (isEditingCurrent && _currentOrderItems && _currentOrderItems.length > 0) {
+            let matchedItem = null;
+            if (targetIdx !== '' && _currentOrderItems[parseInt(targetIdx)]) {
+                matchedItem = _currentOrderItems[parseInt(targetIdx)];
+            } else if (targetSku) {
+                matchedItem = _currentOrderItems.find(it => String(it.cod || it.id || '').trim() === targetSku);
+            }
+
+            if (matchedItem) {
+                matchedItem.status = normalizedStatus;
+                if (newResp !== undefined) matchedItem.responsavel = newResp;
+                if (data.newDescription !== undefined) {
+                    matchedItem.descricaoPersonalizada = data.newDescription;
+                }
+                _renderOrderItems();
+            }
+        }
+
+        // 2. Atualizar em _pedidosGarantiaData para refletir ao reabrir
+        if (_pedidosGarantiaData && _pedidosGarantiaData.length > 0) {
+            const pedido = _pedidosGarantiaData.find(p => {
+                const pid = String(p.idPedido || p.numero || p.id || '').trim();
+                return pid === targetPid || pid.replace('GAR-', '') === targetPid.replace('GAR-', '');
+            });
+            if (pedido && pedido.itens) {
+                const parsed = _parseItemsString(pedido.itens);
+                let changed = false;
+                parsed.forEach((it, idx) => {
+                    const match = (targetIdx !== '' && String(idx) === targetIdx) || (targetSku && String(it.cod || it.id || '').trim() === targetSku);
+                    if (match) {
+                        it.status = normalizedStatus;
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    pedido.itens = parsed.map(it => `(${it.cod || it.desc}, ${it.qtd.toFixed(2)}, ${(it.preco || 0).toFixed(2)}|${it.status === 'EM PRODUÇÃO' ? 'EM PRODUÇÃO' : 'FINALIZADO'})`).join(' ');
+                }
+            }
+        }
+    }
+
     return {
         init,
         render,
         refreshSatG: _fetchSatGData,
         resetToSelector,
         openObservationModal,
-        openSatgObservationModal: _openSatgObservationModal
+        openSatgObservationModal: _openSatgObservationModal,
+        toggleItemStatusDropdown: _toggleGarantiaItemStatusDropdown,
+        handleDropdownItemStatus: _handleGarantiaDropdownItemStatus,
+        handleItemStatusToggle: _handleGarantiaItemStatusToggle,
+        updateItemStatusRealTime: _updateItemStatusRealTime
     };
 })();
+
+if (typeof window !== 'undefined') {
+    window.GerenciarGarantiaApp = GerenciarGarantiaApp;
+    window.toggleGarantiaItemDropdown = GerenciarGarantiaApp.toggleItemStatusDropdown;
+}

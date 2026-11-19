@@ -4,6 +4,9 @@ import { API_URLS } from '../apiConfig.js?v=22';
 // Importa Chart e o plugin, que estão disponíveis globalmente a partir dos scripts no index.
 const Chart = window.Chart;
 const ChartDataLabels = window.ChartDataLabels;
+if (Chart && ChartDataLabels) {
+    Chart.register(ChartDataLabels);
+}
 
 export const DashboardApp = (function() {
     // --- Private State & Variables ---
@@ -125,7 +128,14 @@ export const DashboardApp = (function() {
         selectedRankingItems: [], // Novo: Itens selecionados no ranking para o relatório
         tempContabilizados: new Set(), // Novo: Pedidos contabilizados provisoriamente
         requisicaoEstimadaSort: { key: 'requisicao', direction: 'desc' },
-        requisicaoEstimadaShowZerados: true
+        requisicaoEstimadaShowZerados: true,
+        ecommerceSort: { key: 'descricao', direction: 'asc' },
+        ecommerceSearchQuery: '',
+        ecommerceScope: 'ecommerce', // 'ecommerce' ou 'all'
+        ecommerceCustoFilter: 'all', // 'all', 'com-custo', 'sem-custo'
+        ecommerceShowZerados: true,
+        ecommerceCurrentPage: 1,
+        ecommercePageSize: 25
     };
 
     let _dom = {}; // Cache for DOM elements
@@ -428,6 +438,24 @@ export const DashboardApp = (function() {
         _dom.ratioLabelServices = document.getElementById('ratio-label-services');
         _dom.summarySellerList = document.getElementById('summary-seller-list');
         _dom.monthlySummaryBtn = document.getElementById('sales-details-monthly-summary-btn');
+
+        // NOVO: Cache dos elementos do Dashboard de Produtos E-commerce
+        _dom.selectEcommerceBtn = document.getElementById('select-ecommerce-dashboard');
+        _dom.ecommerceContainer = document.getElementById('dashboard-ecommerce-container');
+        _dom.backToSelectorFromEcommerceBtn = document.getElementById('back-to-selector-from-ecommerce-btn');
+        _dom.ecommerceSearchInput = document.getElementById('ecommerce-search-input');
+        _dom.ecommerceFilterScope = document.getElementById('ecommerce-filter-scope');
+        _dom.ecommerceFilterCusto = document.getElementById('ecommerce-filter-custo');
+        _dom.ecommerceShowZeradosCb = document.getElementById('ecommerce-show-zerados-cb');
+        _dom.btnExportEcommerceExcel = document.getElementById('btn-export-ecommerce-excel');
+        _dom.ecommerceProductsTbody = document.getElementById('ecommerce-products-tbody');
+        _dom.ecommerceProductsCountBadge = document.getElementById('ecommerce-products-count-badge');
+        _dom.ecommerceSummaryTotalItems = document.getElementById('ecommerce-summary-total-items');
+        _dom.ecommerceSummaryAvgVenda = document.getElementById('ecommerce-summary-avg-venda');
+        _dom.ecommerceSummaryWithCost = document.getElementById('ecommerce-summary-with-cost');
+        _dom.ecommerceSummaryInStock = document.getElementById('ecommerce-summary-in-stock');
+        _dom.ecommercePaginationInfo = document.getElementById('ecommerce-pagination-info');
+        _dom.ecommercePaginationControls = document.getElementById('ecommerce-pagination-controls');
     }
 
     // --- Navigation Functions ---
@@ -438,6 +466,7 @@ export const DashboardApp = (function() {
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
+        if (_dom.ecommerceContainer) _dom.ecommerceContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
         _setDateRange('all');
     }
@@ -446,6 +475,7 @@ export const DashboardApp = (function() {
         if (!_dom.vendasContainer.classList.contains('hidden')) _renderSalesView();
         if (!_dom.rankingContainer.classList.contains('hidden')) _renderRankingDashboard();
         if (_dom.garantiaContainer && !_dom.garantiaContainer.classList.contains('hidden')) _renderGarantiaDashboardView();
+        if (_dom.ecommerceContainer && !_dom.ecommerceContainer.classList.contains('hidden')) _renderEcommerceDashboard();
         
         // Atualiza também o modal de detalhes de vendas se ele estiver visível
         if (_dom.salesDetailsModal && !_dom.salesDetailsModal.classList.contains('hidden')) {
@@ -459,7 +489,7 @@ export const DashboardApp = (function() {
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.remove('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
-        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
+        if (_dom.ecommerceContainer) _dom.ecommerceContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
         _state.activeEstoqueFilter = 'all';
         _state.estoqueCurrentPage = 1; // Reseta para a primeira página
@@ -471,9 +501,27 @@ export const DashboardApp = (function() {
         if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
+        if (_dom.ecommerceContainer) _dom.ecommerceContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.remove('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
         _renderRankingDashboard();
+    }
+
+    function _showEcommerceDashboard() {
+        if (_dom.selectorContainer) _dom.selectorContainer.classList.add('hidden');
+        if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
+        if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
+        if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
+        if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
+        if (_dom.ecommerceContainer) _dom.ecommerceContainer.classList.remove('hidden');
+        if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
+        _state.ecommerceCurrentPage = 1;
+        
+        if (!_state.ecommerceActiveLiSkus || _state.ecommerceActiveLiSkus.size === 0) {
+            _syncLojaIntegradaProducts(false);
+        } else {
+            _renderEcommerceDashboard();
+        }
     }
 
     function _openPendingOrdersModal() {
@@ -604,6 +652,7 @@ export const DashboardApp = (function() {
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
+        if (_dom.ecommerceContainer) _dom.ecommerceContainer.classList.add('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
 
         try {
@@ -627,6 +676,7 @@ export const DashboardApp = (function() {
                 if (_dom.selectEstoqueBtn) _dom.selectEstoqueBtn.classList.toggle('hidden', !showEstoque);
                 if (_dom.selectRankingBtn) _dom.selectRankingBtn.classList.toggle('hidden', !showRanking);
                 if (_dom.selectGarantiaBtn) _dom.selectGarantiaBtn.classList.remove('hidden'); // Sempre visivel para quem tem acesso a dashboard
+                if (_dom.selectEcommerceBtn) _dom.selectEcommerceBtn.classList.remove('hidden');
             }
         } catch (e) {
             console.error("Erro ao aplicar permissões granulares dos dashboards:", e);
@@ -911,6 +961,17 @@ export const DashboardApp = (function() {
     // --- Sales Dashboard Logic ---
 
     // --- Ranking Dashboard Logic ---
+    function _isEcommerceOrder(p) {
+        if (!p) return false;
+        if (typeof _getNormalizedStoreName === 'function' && _getNormalizedStoreName(p) === 'Loja Integrada') {
+            return true;
+        }
+        const loja = String(p.loja || p.origem_loja || p.origem || p.canal || '').toLowerCase();
+        const vendedor = String(p.vendedor || '').toLowerCase();
+        return loja.includes('loja integrada') || loja.includes('e-commerce') || loja.includes('ecommerce') ||
+               vendedor.includes('loja integrada') || vendedor.includes('e-commerce') || vendedor.includes('ecommerce');
+    }
+
     function _calculateRankingData(ignoreFilters = false) {
         const ranking = {};
         const activeFilter = ignoreFilters ? 'all' : _state.activeRankingFilter;
@@ -921,7 +982,8 @@ export const DashboardApp = (function() {
             'Estoque - Terceiros': { id: 'Estoque - Terceiros', label: 'Terceiros', total: 0, count: 0, color: '#8b5cf6' },
             'Estoque - Fábrica': { id: 'Estoque - Fábrica', label: 'Fábrica', total: 0, count: 0, color: '#10b981' },
             'Sob Demanda - Fábrica': { id: 'Sob Demanda - Fábrica', label: 'Sob Demanda', total: 0, count: 0, color: '#f59e0b' },
-            'Serviços': { id: 'Serviços', label: 'Serviços', total: 0, count: 0, color: '#ef4444' }
+            'Serviços': { id: 'Serviços', label: 'Serviços', total: 0, count: 0, color: '#ef4444' },
+            'E-Commerce': { id: 'E-Commerce', label: 'E-Commerce', total: 0, count: 0, color: '#0d9488' }
         };
 
         const startDate = _state.startDate ? new Date(_state.startDate + 'T00:00:00') : null;
@@ -1008,9 +1070,22 @@ export const DashboardApp = (function() {
                 categoryTotals['all'].total += valorTotalItem;
                 categoryTotals['all'].count += item.quantidade;
 
+                const isItemEcommerce = (
+                    _isEcommerceOrder(p) ||
+                    tags.some(t => {
+                        const s = String(t).toLowerCase();
+                        return s.includes('e-commerce') || s.includes('ecommerce') || s.includes('loja integrada');
+                    })
+                );
+
                 Object.keys(categoryTotals).forEach(catId => {
                     if (catId === 'Serviços') {
                         if (cod.startsWith('7') || tags.includes('Serviço')) {
+                            categoryTotals[catId].total += valorTotalItem;
+                            categoryTotals[catId].count += item.quantidade;
+                        }
+                    } else if (catId === 'E-Commerce') {
+                        if (isItemEcommerce) {
                             categoryTotals[catId].total += valorTotalItem;
                             categoryTotals[catId].count += item.quantidade;
                         }
@@ -1031,6 +1106,8 @@ export const DashboardApp = (function() {
                 if (activeFilter !== 'all') {
                     if (activeFilter === 'Serviços') {
                         if (!cod.startsWith('7') && !tags.includes('Serviço')) return;
+                    } else if (activeFilter === 'E-Commerce') {
+                        if (!isItemEcommerce) return;
                     } else if (!tags.includes(activeFilter)) {
                         return;
                     }
@@ -1094,7 +1171,12 @@ export const DashboardApp = (function() {
 
                 // Verifica se o produto bate com a busca e não está no ranking (já vendido)
                 const matchesSearch = desc.includes(searchQuery) || cod.includes(searchQuery);
-                const matchesCategory = activeFilter === 'all' || tags.includes(activeFilter);
+                const matchesCategory = activeFilter === 'all' ||
+                    (activeFilter === 'Serviços' ? (cod.startsWith('7') || tags.includes('Serviço')) :
+                    (activeFilter === 'E-Commerce' ? (_isEcommerceProduct(p) || tags.some(t => {
+                        const s = String(t).toLowerCase();
+                        return s.includes('e-commerce') || s.includes('ecommerce') || s.includes('loja integrada');
+                    })) : tags.includes(activeFilter)));
                 
                 if (matchesSearch && matchesCategory && !ranking[p.codigo]) {
                     sortedRanking.push({
@@ -1158,6 +1240,10 @@ export const DashboardApp = (function() {
             const ctx = _dom.rankingSalesChartCanvas.getContext('2d');
             if (_state.charts.ranking) _state.charts.ranking.destroy();
 
+            const activeCat = data.categories.find(c => c.id === activeFilter);
+            const barBgColor = (activeCat && activeCat.id !== 'all') ? `${activeCat.color}b3` : 'rgba(249, 115, 22, 0.7)';
+            const barBorderColor = (activeCat && activeCat.id !== 'all') ? activeCat.color : 'rgb(249, 115, 22)';
+
             _state.charts.ranking = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -1166,8 +1252,8 @@ export const DashboardApp = (function() {
                     datasets: [{
                         label: 'Qtd. Vendida',
                         data: top15.map(d => d.quantidade),
-                        backgroundColor: 'rgba(249, 115, 22, 0.7)',
-                        borderColor: 'rgb(249, 115, 22)',
+                        backgroundColor: barBgColor,
+                        borderColor: barBorderColor,
                         borderWidth: 1,
                         borderRadius: 6,
                         barThickness: 20 // Deixa as barras mais elegantes
@@ -1180,7 +1266,7 @@ export const DashboardApp = (function() {
                     layout: {
                         padding: {
                             left: 20,
-                            right: 40,
+                            right: 65,
                             top: 10,
                             bottom: 10
                         }
@@ -1204,14 +1290,17 @@ export const DashboardApp = (function() {
                             display: true,
                             anchor: 'end',
                             align: 'right',
-                            color: '#4b5563',
-                            font: { weight: 'bold', size: 11 },
-                            formatter: (val) => val
+                            offset: 6,
+                            clip: false,
+                            color: '#374151',
+                            font: { weight: 'bold', size: 12 },
+                            formatter: (val) => `${Number(val).toLocaleString('pt-BR')} un.`
                         }
                     },
                     scales: {
                         x: { 
-                            beginAtZero: true, 
+                            beginAtZero: true,
+                            grace: '8%',
                             grid: { display: false },
                             ticks: { display: false } // Remove números do eixo X para limpar o visual
                         },
@@ -1351,6 +1440,7 @@ export const DashboardApp = (function() {
         });
 
         const pedidosBase = Array.from(uniqueOrdersMap.values()).filter(p => {
+            if (_isTestOrder(p)) return false;
             if (_isGarantiaOrder(p)) return false; // Remessa em Garantia não conta nas vendas do produto
             const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
             const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
@@ -1379,8 +1469,18 @@ export const DashboardApp = (function() {
             return true;
         });
 
+        const productInfo = _allProducts.find(prod => prod.codigo === codigo);
+        const tags = productInfo ? (productInfo.grupo_de_tags_tags || []) : [];
+        const isProductTaggedEcommerce = tags.some(t => {
+            const s = String(t).toLowerCase();
+            return s.includes('e-commerce') || s.includes('ecommerce') || s.includes('loja integrada');
+        });
+
         const salesDetails = [];
         filteredPedidos.forEach(p => {
+            if (_state.activeRankingFilter === 'E-Commerce' && !_isEcommerceOrder(p) && !isProductTaggedEcommerce) {
+                return;
+            }
             const items = _parseNfeItemsString(p.itens || p.Itens || '');
             const matchingItems = items.filter(it => it.codigo === codigo);
             
@@ -1435,8 +1535,9 @@ export const DashboardApp = (function() {
         });
 
         // Configura UI do modal
+        const filterSuffix = _state.activeRankingFilter === 'E-Commerce' ? ' (E-Commerce)' : '';
         if (_dom.rankingProductModalTitle) _dom.rankingProductModalTitle.textContent = descricao;
-        if (_dom.rankingProductModalSubtitle) _dom.rankingProductModalSubtitle.textContent = `Código: ${codigo} - ${salesDetails.length} aparições em pedidos no período.`;
+        if (_dom.rankingProductModalSubtitle) _dom.rankingProductModalSubtitle.textContent = `Código: ${codigo} - ${salesDetails.length} aparições em pedidos no período${filterSuffix}.`;
 
         if (salesDetails.length === 0) {
             if (_dom.rankingProductModalContent) _dom.rankingProductModalContent.innerHTML = '';
@@ -3385,6 +3486,52 @@ export const DashboardApp = (function() {
         _dom.backToSelectorFromRankingBtn?.addEventListener('click', _showSelector);
         _dom.selectGarantiaBtn?.addEventListener('click', _showGarantiaDashboard);
         _dom.backToSelectorFromGarantiaBtn?.addEventListener('click', _showSelector);
+        _dom.selectEcommerceBtn?.addEventListener('click', _showEcommerceDashboard);
+        _dom.backToSelectorFromEcommerceBtn?.addEventListener('click', _showSelector);
+
+        // Listeners do Dashboard de Produtos E-commerce
+        _dom.ecommerceSearchInput?.addEventListener('input', (e) => {
+            _state.ecommerceSearchQuery = (e.target.value || '').toLowerCase().trim();
+            _state.ecommerceCurrentPage = 1;
+            _renderEcommerceDashboard();
+        });
+
+        _dom.ecommerceFilterScope?.addEventListener('change', (e) => {
+            _state.ecommerceScope = e.target.value;
+            _state.ecommerceCurrentPage = 1;
+            _renderEcommerceDashboard();
+        });
+
+        _dom.ecommerceFilterCusto?.addEventListener('change', (e) => {
+            _state.ecommerceCustoFilter = e.target.value;
+            _state.ecommerceCurrentPage = 1;
+            _renderEcommerceDashboard();
+        });
+
+        _dom.ecommerceShowZeradosCb?.addEventListener('change', (e) => {
+            _state.ecommerceShowZerados = e.target.checked;
+            _state.ecommerceCurrentPage = 1;
+            _renderEcommerceDashboard();
+        });
+
+        _dom.btnExportEcommerceExcel?.addEventListener('click', _exportEcommerceProductsToExcel);
+        _dom.btnSyncEcommerceLi?.addEventListener('click', () => _syncLojaIntegradaProducts(true));
+
+        const ecommerceHeaders = document.querySelectorAll('#ecommerce-products-table th[data-sort]');
+        if (ecommerceHeaders) {
+            ecommerceHeaders.forEach(th => {
+                th.addEventListener('click', () => {
+                    const key = th.dataset.sort;
+                    if (_state.ecommerceSort.key === key) {
+                        _state.ecommerceSort.direction = _state.ecommerceSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        _state.ecommerceSort.key = key;
+                        _state.ecommerceSort.direction = (key === 'preco_custo' || key === 'preco_venda' || key === 'margem' || key === 'estoque') ? 'desc' : 'asc';
+                    }
+                    _renderEcommerceDashboard();
+                });
+            });
+        }
 
         // Modal de Tabela de Preços (Estoque)
         _dom.btnEstoqueTabelaPrecos?.addEventListener('click', _openTabelaPrecosModal);
@@ -4348,6 +4495,7 @@ async function _showGarantiaDashboard() {
         if (_dom.vendasContainer) _dom.vendasContainer.classList.add('hidden');
         if (_dom.estoqueContainer) _dom.estoqueContainer.classList.add('hidden');
         if (_dom.rankingContainer) _dom.rankingContainer.classList.add('hidden');
+        if (_dom.ecommerceContainer) _dom.ecommerceContainer.classList.add('hidden');
         if (_dom.garantiaContainer) _dom.garantiaContainer.classList.remove('hidden');
         if (_dom.filterBar) _dom.filterBar.classList.remove('hidden');
 
@@ -5075,8 +5223,1115 @@ async function _showGarantiaDashboard() {
         printWindow.document.close();
     }
 
- 
-return {
+    // =========================================================================
+    // --- DASHBOARD DE PRODUTOS E-COMMERCE ---
+    // =========================================================================
+
+    let _cachedEcommerceOrderSkus = null;
+
+    function _getEcommerceOrderSkus() {
+        if (_cachedEcommerceOrderSkus) return _cachedEcommerceOrderSkus;
+        const set = new Set();
+        if (Array.isArray(_allLojaIntegradaOrders)) {
+            _allLojaIntegradaOrders.forEach(o => {
+                if (o.itens) {
+                    const matches = String(o.itens).match(/SKU:\s*([^)]+)/gi);
+                    if (matches) {
+                        matches.forEach(m => set.add(m.replace(/SKU:\s*/i, '').trim()));
+                    }
+                }
+            });
+        }
+        if (Array.isArray(_allPedidosBling)) {
+            _allPedidosBling.forEach(p => {
+                const isEcom = (p.loja && String(p.loja).includes('Loja')) || (p.vendedor && String(p.vendedor).toLowerCase().includes('commerce'));
+                if (isEcom && p.itens) {
+                    const matches = String(p.itens).match(/\(([^,)]+)/g);
+                    if (matches) {
+                        matches.forEach(m => set.add(m.replace('(', '').trim()));
+                    }
+                }
+            });
+        }
+        _cachedEcommerceOrderSkus = set;
+        return set;
+    }
+
+    function _isEcommerceProduct(p) {
+        if (!p) return false;
+        const cod = String(p.codigo || '').trim();
+        const idStr = String(p.id || '').trim();
+
+        // 1. Sincronização oficial da Loja Integrada / Bling Multiloja
+        if (_state.ecommerceActiveLiSkus && _state.ecommerceActiveLiSkus.size > 0) {
+            return (cod && _state.ecommerceActiveLiSkus.has(cod)) || 
+                   (idStr && _state.ecommerceActiveLiProductIds && _state.ecommerceActiveLiProductIds.has(idStr));
+        }
+
+        // 2. Fallback enquanto carrega a sincronização inicial
+        if (Array.isArray(p.grupo_de_tags_tags)) {
+            const hasEcomTag = p.grupo_de_tags_tags.some(t => {
+                const str = String(t).toLowerCase();
+                return str.includes('e-commerce') || str.includes('ecommerce') || str.includes('loja integrada');
+            });
+            if (hasEcomTag) return true;
+        }
+        if (_getEcommerceOrderSkus().has(cod)) {
+            return true;
+        }
+        return false;
+    }
+
+    function _getFilteredEcommerceProducts() {
+        if (!_allProducts || _allProducts.length === 0) return [];
+
+        const searchQuery = (_state.ecommerceSearchQuery || '').toLowerCase().trim();
+        const scope = _state.ecommerceScope || 'ecommerce';
+        const custoFilter = _state.ecommerceCustoFilter || 'all';
+        const showZerados = _state.ecommerceShowZerados;
+
+        return _allProducts.filter(p => {
+            if (!p.codigo) return false;
+
+            if (scope === 'ecommerce' && !_isEcommerceProduct(p)) {
+                return false;
+            }
+
+            const estoque = parseFloat(p.estoque) || 0;
+            if (!showZerados && estoque <= 0) {
+                return false;
+            }
+
+            const custo = _parseCurrencyBRL(p.preco_de_custo);
+            if (custoFilter === 'com-custo' && custo <= 0) return false;
+            if (custoFilter === 'sem-custo' && custo > 0) return false;
+
+            if (searchQuery) {
+                const desc = (p.descricao || '').toLowerCase();
+                const cod = (p.codigo || '').toLowerCase();
+                if (!desc.includes(searchQuery) && !cod.includes(searchQuery)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }).sort((a, b) => {
+            const key = _state.ecommerceSort.key;
+            const dir = _state.ecommerceSort.direction === 'asc' ? 1 : -1;
+
+            if (key === 'codigo') {
+                const valA = String(a.codigo || '');
+                const valB = String(b.codigo || '');
+                return valA.localeCompare(valB, 'pt-BR', { numeric: true }) * dir;
+            } else if (key === 'descricao') {
+                const valA = String(a.descricao || '');
+                const valB = String(b.descricao || '');
+                return valA.localeCompare(valB, 'pt-BR') * dir;
+            } else if (key === 'preco_custo') {
+                const valA = _parseCurrencyBRL(a.preco_de_custo);
+                const valB = _parseCurrencyBRL(b.preco_de_custo);
+                return (valA - valB) * dir;
+            } else if (key === 'preco_venda') {
+                const valA = _parseCurrencyBRL(a.preco);
+                const valB = _parseCurrencyBRL(b.preco);
+                return (valA - valB) * dir;
+            } else if (key === 'margem') {
+                const vendaA = _parseCurrencyBRL(a.preco);
+                const custoA = _parseCurrencyBRL(a.preco_de_custo);
+                const margemA = (vendaA > 0 && custoA > 0) ? (vendaA - custoA) : -999999;
+                const vendaB = _parseCurrencyBRL(b.preco);
+                const custoB = _parseCurrencyBRL(b.preco_de_custo);
+                const margemB = (vendaB > 0 && custoB > 0) ? (vendaB - custoB) : -999999;
+                return (margemA - margemB) * dir;
+            } else if (key === 'estoque') {
+                const valA = parseFloat(a.estoque) || 0;
+                const valB = parseFloat(b.estoque) || 0;
+                return (valA - valB) * dir;
+            }
+            return 0;
+        });
+    }
+
+    async function _syncLojaIntegradaProducts(forceRefresh = false) {
+        if (_state.ecommerceIsSyncingLi) return;
+        _state.ecommerceIsSyncingLi = true;
+
+        if (_dom.btnSyncEcommerceLi) {
+            _dom.btnSyncEcommerceLi.disabled = true;
+            _dom.btnSyncEcommerceLi.classList.add('opacity-75', 'cursor-not-allowed');
+        }
+        if (_dom.syncEcommerceIcon) {
+            _dom.syncEcommerceIcon.classList.add('animate-spin');
+        }
+        if (_dom.syncEcommerceText) {
+            _dom.syncEcommerceText.textContent = 'Sincronizando...';
+        }
+
+        try {
+            let products = [];
+            if (window.LojaIntegradaApp && typeof window.LojaIntegradaApp.fetchProducts === 'function') {
+                products = await window.LojaIntegradaApp.fetchProducts(forceRefresh);
+            } else {
+                const url = `https://bling-proxy-api-255108547424.southamerica-east1.run.app/loja-integrada/produtos?forceRefresh=${forceRefresh}&t=${Date.now()}`;
+                const res = await fetch(url, { mode: 'cors' });
+                const json = await res.json();
+                products = json.data || [];
+            }
+
+            const activeSkus = new Set();
+            const activeProductIds = new Set();
+            if (Array.isArray(products)) {
+                products.forEach(p => {
+                    if (p.sku) activeSkus.add(String(p.sku).trim());
+                    if (p.produtoId) activeProductIds.add(String(p.produtoId).trim());
+                });
+            }
+
+            // Mapeamento cruzado com _allProducts para garantir resolução completa (ID <-> Código)
+            if (_allProducts && _allProducts.length > 0) {
+                _allProducts.forEach(prod => {
+                    const idStr = String(prod.id || '').trim();
+                    const codStr = String(prod.codigo || '').trim();
+                    if (idStr && activeProductIds.has(idStr)) {
+                        if (codStr) activeSkus.add(codStr);
+                    } else if (codStr && activeSkus.has(codStr)) {
+                        if (idStr) activeProductIds.add(idStr);
+                    }
+                });
+            }
+
+            _state.ecommerceActiveLiSkus = activeSkus;
+            _state.ecommerceActiveLiProductIds = activeProductIds;
+            _state.ecommerceLiProducts = products;
+            _state.ecommerceLastLiSync = new Date();
+
+            console.log(`[Dashboard E-commerce] Sincronização concluída: ${activeSkus.size} SKUs e ${activeProductIds.size} IDs ativos no e-commerce.`);
+
+            if (_dom.syncEcommerceText) {
+                _dom.syncEcommerceText.textContent = `Sincronizado (${activeSkus.size})`;
+            }
+
+            // Se a tela de e-commerce estiver ativa, re-renderiza a tabela
+            if (_dom.ecommerceContainer && !_dom.ecommerceContainer.classList.contains('hidden')) {
+                _state.ecommerceCurrentPage = 1;
+                _renderEcommerceDashboard();
+            }
+        } catch (err) {
+            console.error('[Dashboard E-commerce] Falha ao sincronizar produtos da Loja Integrada:', err);
+            if (_dom.syncEcommerceText) {
+                _dom.syncEcommerceText.textContent = 'Erro ao sincronizar';
+            }
+        } finally {
+            _state.ecommerceIsSyncingLi = false;
+            if (_dom.btnSyncEcommerceLi) {
+                _dom.btnSyncEcommerceLi.disabled = false;
+                _dom.btnSyncEcommerceLi.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+            if (_dom.syncEcommerceIcon) {
+                _dom.syncEcommerceIcon.classList.remove('animate-spin');
+            }
+        }
+    }
+
+    function _renderEcommerceDashboard() {
+        if (!_dom.ecommerceContainer || _dom.ecommerceContainer.classList.contains('hidden')) {
+            return;
+        }
+
+        const filteredProducts = _getFilteredEcommerceProducts();
+        const totalItems = filteredProducts.length;
+
+        // Métricas de Resumo
+        let totalVenda = 0;
+        let countVenda = 0;
+        let countWithCost = 0;
+        let countInStock = 0;
+
+        filteredProducts.forEach(p => {
+            const venda = _parseCurrencyBRL(p.preco);
+            const custo = _parseCurrencyBRL(p.preco_de_custo);
+            const estoque = parseFloat(p.estoque) || 0;
+
+            if (venda > 0) {
+                totalVenda += venda;
+                countVenda++;
+            }
+            if (custo > 0) countWithCost++;
+            if (estoque > 0) countInStock++;
+        });
+
+        const avgVenda = countVenda > 0 ? (totalVenda / countVenda) : 0;
+
+        // Atualizar Badge e Cards de Resumo
+        if (_dom.ecommerceProductsCountBadge) {
+            _dom.ecommerceProductsCountBadge.textContent = `${totalItems} ${totalItems === 1 ? 'item' : 'itens'}`;
+        }
+        if (_dom.ecommerceSummaryTotalItems) {
+            _dom.ecommerceSummaryTotalItems.textContent = totalItems.toLocaleString('pt-BR');
+        }
+        if (_dom.ecommerceSummaryAvgVenda) {
+            _dom.ecommerceSummaryAvgVenda.textContent = avgVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        if (_dom.ecommerceSummaryWithCost) {
+            _dom.ecommerceSummaryWithCost.textContent = countWithCost.toLocaleString('pt-BR');
+        }
+        if (_dom.ecommerceSummaryInStock) {
+            _dom.ecommerceSummaryInStock.textContent = countInStock.toLocaleString('pt-BR');
+        }
+
+        // Atualizar ícones de ordenação no cabeçalho
+        const headers = document.querySelectorAll('#ecommerce-products-table th[data-sort]');
+        if (headers) {
+            headers.forEach(th => {
+                const key = th.dataset.sort;
+                const iconSpan = th.querySelector('.sort-icon');
+                if (iconSpan) {
+                    if (_state.ecommerceSort.key === key) {
+                        iconSpan.textContent = _state.ecommerceSort.direction === 'asc' ? '▲' : '▼';
+                        iconSpan.classList.add('text-teal-600', 'font-bold');
+                        iconSpan.classList.remove('text-gray-400');
+                    } else {
+                        iconSpan.textContent = '↕';
+                        iconSpan.classList.remove('text-teal-600', 'font-bold');
+                        iconSpan.classList.add('text-gray-400');
+                    }
+                }
+            });
+        }
+
+        // Paginação
+        const pageSize = _state.ecommercePageSize || 25;
+        const totalPages = Math.ceil(totalItems / pageSize) || 1;
+        _state.ecommerceCurrentPage = Math.max(1, Math.min(_state.ecommerceCurrentPage, totalPages));
+        const startIndex = (totalPages === 0) ? 0 : (_state.ecommerceCurrentPage - 1) * pageSize;
+        const endIndex = Math.min(startIndex + pageSize, totalItems);
+        const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+
+        // Renderizar Tabela
+        let html = '';
+        if (totalItems === 0) {
+            html = `
+                <tr>
+                    <td colspan="7" class="px-6 py-12 text-center text-gray-500 italic">
+                        <svg class="mx-auto h-12 w-12 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        Nenhum produto do e-commerce encontrado com os filtros atuais.
+                    </td>
+                </tr>
+            `;
+        } else {
+            paginatedProducts.forEach(p => {
+                const custo = _parseCurrencyBRL(p.preco_de_custo);
+                const venda = _parseCurrencyBRL(p.preco);
+                const estoque = parseFloat(p.estoque) || 0;
+                const hasCusto = custo > 0;
+                const hasVenda = venda > 0;
+
+                // Imagem / Foto
+                let thumbUrl = '';
+                if (Array.isArray(p.url_imagens_externas) && p.url_imagens_externas.length > 0) {
+                    thumbUrl = p.url_imagens_externas[0];
+                }
+                const imgHtml = thumbUrl ? `
+                    <div class="w-11 h-11 rounded-lg overflow-hidden bg-gray-50 border border-gray-200 flex items-center justify-center cursor-pointer group/img relative" onclick="window.open('${thumbUrl}', '_blank')" title="Ver imagem completa">
+                        <img src="${thumbUrl}" alt="${(p.descricao || '').replace(/"/g, '&quot;')}" class="w-full h-full object-cover group-hover/img:scale-110 transition-transform" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'text-gray-300 text-xs font-mono\\'>N/A</div>'">
+                    </div>
+                ` : `
+                    <div class="w-11 h-11 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </div>
+                `;
+
+                // Margem
+                let margemHtml = '<span class="text-gray-400 text-xs">-</span>';
+                if (hasVenda && hasCusto) {
+                    const margemR = venda - custo;
+                    const margemP = (margemR / venda) * 100;
+                    const isPositive = margemR >= 0;
+                    margemHtml = `
+                        <div class="text-right">
+                            <span class="font-semibold text-xs ${isPositive ? 'text-emerald-700' : 'text-red-600'}">
+                                ${margemR.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                            <div class="text-[11px] font-bold ${isPositive ? 'text-emerald-600' : 'text-red-500'}">
+                                ${margemP.toFixed(1)}%
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `
+                    <tr class="hover:bg-teal-50/40 transition-colors">
+                        <td class="px-4 py-3 whitespace-nowrap text-center">${imgHtml}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-xs">
+                            <span class="font-mono font-bold text-gray-800 bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200 select-all">${p.codigo}</span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-800 max-w-md">
+                            <div class="font-medium text-gray-900 leading-snug line-clamp-2" title="${(p.descricao || '').replace(/"/g, '&quot;')}">${p.descricao || 'Sem descrição'}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-right">
+                            ${hasCusto ? `
+                                <span class="font-medium text-gray-700">${custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                            ` : `
+                                <span class="text-xs text-gray-400 italic bg-gray-50 px-2 py-0.5 rounded border border-gray-200">Não informado</span>
+                            `}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                            ${hasVenda ? venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '<span class="text-gray-400 text-xs">-</span>'}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-right">
+                            ${margemHtml}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${estoque > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${estoque} un
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        if (_dom.ecommerceProductsTbody) {
+            _dom.ecommerceProductsTbody.innerHTML = html;
+        }
+
+        // Renderizar Informação de Paginação e Controles
+        if (_dom.ecommercePaginationInfo) {
+            const displayStart = totalItems === 0 ? 0 : startIndex + 1;
+            _dom.ecommercePaginationInfo.innerHTML = `Mostrando <span class="font-bold text-gray-900">${displayStart}</span> a <span class="font-bold text-gray-900">${endIndex}</span> de <span class="font-bold text-gray-900">${totalItems}</span> produtos`;
+        }
+
+        if (_dom.ecommercePaginationControls) {
+            if (totalPages <= 1) {
+                _dom.ecommercePaginationControls.innerHTML = '';
+            } else {
+                let controlsHtml = `
+                    <button id="ecommerce-prev-page-btn" class="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors" ${(_state.ecommerceCurrentPage <= 1) ? 'disabled' : ''}>
+                        Anterior
+                    </button>
+                    <span class="px-3 py-1 text-xs font-semibold text-gray-700">Página ${_state.ecommerceCurrentPage} de ${totalPages}</span>
+                    <button id="ecommerce-next-page-btn" class="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors" ${(_state.ecommerceCurrentPage >= totalPages) ? 'disabled' : ''}>
+                        Próxima
+                    </button>
+                `;
+                _dom.ecommercePaginationControls.innerHTML = controlsHtml;
+
+                document.getElementById('ecommerce-prev-page-btn')?.addEventListener('click', () => {
+                    if (_state.ecommerceCurrentPage > 1) {
+                        _state.ecommerceCurrentPage--;
+                        _renderEcommerceDashboard();
+                    }
+                });
+                document.getElementById('ecommerce-next-page-btn')?.addEventListener('click', () => {
+                    if (_state.ecommerceCurrentPage < totalPages) {
+                        _state.ecommerceCurrentPage++;
+                        _renderEcommerceDashboard();
+                    }
+                });
+            }
+        }
+    }
+
+    /**
+     * Carrega uma URL de imagem e a redimensiona para um thumbnail Base64 (máx 140x140)
+     * preenchendo o fundo com branco puro (para fotos PNG transparentes) e utilizando
+     * fetch/createImageBitmap com fallback para new Image().
+     */
+    async function _createImageThumbnailBase64(imageUrl, maxSize = 140) {
+        if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
+            return null;
+        }
+
+        const cleanUrl = imageUrl.trim();
+        const fetchUrl = cleanUrl + (cleanUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+
+        // 1. Tentar via fetch + createImageBitmap (mais rápido e seguro contra contaminação de cache)
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const resp = await fetch(fetchUrl, { mode: 'cors', signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (resp.ok) {
+                const blob = await resp.blob();
+                let bitmap = null;
+                try {
+                    bitmap = await createImageBitmap(blob);
+                } catch (eBm) {}
+
+                if (bitmap) {
+                    let w = bitmap.width;
+                    let h = bitmap.height;
+                    if (w > 0 && h > 0) {
+                        if (w > h) {
+                            if (w > maxSize) {
+                                h = Math.round((h * maxSize) / w);
+                                w = maxSize;
+                            }
+                        } else {
+                            if (h > maxSize) {
+                                w = Math.round((w * maxSize) / h);
+                                h = maxSize;
+                            }
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        // Preenche fundo branco puro para evitar que transparências fiquem pretas
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, w, h);
+                        ctx.drawImage(bitmap, 0, 0, w, h);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                        return dataUrl.split(',')[1];
+                    }
+                }
+            }
+        } catch (eFetch) {}
+
+        // 2. Fallback via new Image()
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            let done = false;
+            const timer = setTimeout(() => {
+                if (!done) {
+                    done = true;
+                    resolve(null);
+                }
+            }, 8000);
+
+            img.onload = () => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                try {
+                    let w = img.naturalWidth || img.width;
+                    let h = img.naturalHeight || img.height;
+                    if (!w || !h) return resolve(null);
+
+                    if (w > h) {
+                        if (w > maxSize) {
+                            h = Math.round((h * maxSize) / w);
+                            w = maxSize;
+                        }
+                    } else {
+                        if (h > maxSize) {
+                            w = Math.round((w * maxSize) / h);
+                            h = maxSize;
+                        }
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    // Preenche fundo branco puro para evitar que transparências fiquem pretas
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    resolve(dataUrl.split(',')[1]);
+                } catch (err) {
+                    resolve(null);
+                }
+            };
+
+            img.onerror = () => {
+                if (!done) {
+                    done = true;
+                    clearTimeout(timer);
+                    resolve(null);
+                }
+            };
+
+            img.src = fetchUrl;
+        });
+    }
+
+    /**
+     * Agrega vendas do canal E-Commerce (quantidade, faturamento de itens e frete rateado) por código SKU.
+     */
+    function _getEcommerceSalesByProduct() {
+        const salesMap = {};
+
+        // Unifica e deduplica pedidos Bling + NFes (mesma base do Ranking)
+        const allSources = [..._allPedidosBling, ..._allNFeData];
+        const uniqueOrdersMap = new Map();
+        allSources.forEach(p => {
+            const num = String(p.numero || p.número || p.id || p.id_pedido || '');
+            if (!num) return;
+            if (!uniqueOrdersMap.has(num) || (!uniqueOrdersMap.get(num).itens && p.itens)) {
+                uniqueOrdersMap.set(num, p);
+            }
+        });
+
+        // Mapa auxiliar de frete dos pedidos da Loja Integrada pelo número do pedido na loja
+        const liFreightMap = new Map();
+        if (Array.isArray(_allLojaIntegradaOrders)) {
+            _allLojaIntegradaOrders.forEach(li => {
+                const liNum = String(li['Numero Pedido'] || li.numero_pedido || li.numeroPedido || li.numero || '').trim();
+                const liFreight = _parseCurrencyBRL(li['Valor Frete'] || li.valor_frete || li.valorFrete || li.frete || 0);
+                if (liNum && liFreight > 0) {
+                    liFreightMap.set(liNum, liFreight);
+                }
+            });
+        }
+
+        const pedidosEcom = Array.from(uniqueOrdersMap.values()).filter(p => {
+            if (_isTestOrder(p)) return false;
+            if (_isGarantiaOrder(p)) return false;
+            const sit = (p.situação || p.situacao || p.situao || p.status || "").toLowerCase().trim();
+            const isContabilizado = _state.tempContabilizados.has(String(p.numero || p.id || ''));
+            const isValidStatus = isContabilizado || sit.includes('atendid') || sit.includes('conclu') || sit.includes('entreg') || sit.includes('faturad') || sit.includes('pago');
+            if (!isValidStatus) return false;
+            return _isEcommerceOrder(p);
+        });
+
+        pedidosEcom.forEach(p => {
+            const nfe = _getNfeForOrder(p);
+            const itemsRaw = p.itens || p.Itens || p.items || (nfe ? nfe.itens : []);
+            const items = _parseNfeItemsString(itemsRaw);
+            if (!items || items.length === 0) return;
+
+            // 1. Descobrir o frete total do pedido (NFe -> Pedido Bling -> Pedido Loja Integrada)
+            let orderFreight = 0;
+            if (nfe) {
+                orderFreight = _parseCurrencyBRL(nfe.valor_do_frete || nfe.valor_frete || nfe.frete || 0);
+            }
+            if (orderFreight <= 0) {
+                orderFreight = _parseCurrencyBRL(p.valor_do_frete || p['Valor Frete'] || p.valor_frete || p.valorFrete || p.frete || 0);
+            }
+            if (orderFreight <= 0 && liFreightMap.size > 0) {
+                const lojaNum = String(p.numero_pedido_loja || p.numeroPedidoLoja || p.numero_loja || p.numeroLoja || p.orcamento || p.orçamento || '').trim();
+                if (lojaNum && liFreightMap.has(lojaNum)) {
+                    orderFreight = liFreightMap.get(lojaNum);
+                }
+            }
+
+            // 2. Subtotal dos itens para ratear o frete proporcionalmente ao valor de cada item no pedido
+            const orderSubtotal = items.reduce((acc, it) => acc + ((parseFloat(it.quantidade) || 0) * (parseFloat(it.valor) || 0)), 0);
+
+            items.forEach(item => {
+                const cod = String(item.codigo || '').trim();
+                if (!cod) return;
+                const qtd = parseFloat(item.quantidade) || 0;
+                const val = parseFloat(item.valor) || 0;
+                const itemTotal = qtd * val;
+
+                let itemFreight = 0;
+                if (orderFreight > 0) {
+                    itemFreight = orderSubtotal > 0
+                        ? orderFreight * (itemTotal / orderSubtotal)
+                        : (orderFreight / items.length);
+                }
+
+                if (!salesMap[cod]) {
+                    salesMap[cod] = { qtd: 0, totalVendas: 0, frete: 0 };
+                }
+                salesMap[cod].qtd += qtd;
+                salesMap[cod].totalVendas += itemTotal;
+                salesMap[cod].frete += itemFreight;
+            });
+        });
+
+        return salesMap;
+    }
+
+    /**
+     * Exporta os produtos do e-commerce para Excel (.xlsx) com miniaturas de fotos embutidas
+     * diretamente na coluna 'Foto' (entre Código e Descrição) e fórmulas automáticas de Margem, Custo Total e Lucro.
+     */
+    async function _exportEcommerceProductsToExcel() {
+        const products = _getFilteredEcommerceProducts();
+        if (products.length === 0) {
+            if (_utils.showMessageModal) {
+                _utils.showMessageModal("Aviso", "Nenhum produto do e-commerce encontrado para exportar.");
+            } else {
+                alert("Nenhum produto do e-commerce encontrado para exportar.");
+            }
+            return;
+        }
+
+        const salesBySku = _getEcommerceSalesByProduct();
+
+        const btnExport = _dom.btnExportEcommerceExcel;
+        const originalText = btnExport ? btnExport.innerHTML : null;
+        if (btnExport) {
+            btnExport.disabled = true;
+            btnExport.classList.add('opacity-75', 'cursor-not-allowed');
+            btnExport.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-emerald-700 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Iniciando download das fotos...
+            `;
+        }
+
+        try {
+            // Se ExcelJS estiver disponível, exporta com miniaturas de imagens embutidas e fórmulas
+            if (typeof ExcelJS !== 'undefined') {
+                const workbook = new ExcelJS.Workbook();
+                workbook.creator = 'MKS Service - E-commerce';
+                workbook.created = new Date();
+
+                const worksheet = workbook.addWorksheet('Produtos E-commerce', {
+                    views: [{ showGridLines: true }]
+                });
+
+                worksheet.columns = [
+                    { header: 'Código', key: 'codigo', width: 16 },
+                    { header: 'Foto', key: 'foto', width: 18 },
+                    { header: 'Descrição do Produto', key: 'descricao', width: 55 },
+                    { header: 'Preço de Custo (R$)', key: 'custo', width: 18 },
+                    { header: 'Preço de Venda (R$)', key: 'venda', width: 18 },
+                    { header: 'Margem Bruta (R$)', key: 'margemR', width: 18 },
+                    { header: 'Margem (%)', key: 'margemP', width: 14 },
+                    { header: 'Estoque Atual', key: 'estoque', width: 14 },
+                    { header: 'Situação', key: 'situacao', width: 14 },
+                    { header: 'Qtd. Vendida (E-com)', key: 'qtdVendida', width: 18 },
+                    { header: 'Total de Vendas (R$)', key: 'totalVendas', width: 20 },
+                    { header: 'Custo Total (R$)', key: 'custoTotal', width: 18 },
+                    { header: 'Frete (R$)', key: 'frete', width: 16 },
+                    { header: 'Lucro (R$)', key: 'lucro', width: 18 }
+                ];
+
+                // Estilização refinada do cabeçalho
+                const headerRow = worksheet.getRow(1);
+                headerRow.height = 28;
+                headerRow.eachCell((cell, colNumber) => {
+                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: colNumber >= 10 ? 'FF115E59' : 'FF0F766E' } // teal-800 para bloco de vendas/lucro
+                    };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FF0D5F58' } },
+                        left: { style: 'thin', color: { argb: 'FF0D5F58' } },
+                        bottom: { style: 'medium', color: { argb: 'FF0D5F58' } },
+                        right: { style: 'thin', color: { argb: 'FF0D5F58' } }
+                    };
+                });
+
+                // Carrega miniaturas com controle de concorrência (6 conexões simultâneas)
+                const totalProducts = products.length;
+                let completedCount = 0;
+                const loadedImages = new Array(totalProducts);
+                const concurrency = 6;
+                let nextIndex = 0;
+
+                async function imageWorker() {
+                    while (nextIndex < totalProducts) {
+                        const idx = nextIndex++;
+                        const p = products[idx];
+                        let thumbUrl = '';
+                        if (Array.isArray(p.url_imagens_externas) && p.url_imagens_externas.length > 0) {
+                            thumbUrl = p.url_imagens_externas[0];
+                        } else if (p.imagem_url || p.link_da_imagem) {
+                            thumbUrl = p.imagem_url || p.link_da_imagem;
+                        }
+
+                        if (thumbUrl) {
+                            const base64 = await _createImageThumbnailBase64(thumbUrl, 140);
+                            loadedImages[idx] = { base64, url: thumbUrl };
+                        } else {
+                            loadedImages[idx] = { base64: null, url: null };
+                        }
+
+                        completedCount++;
+                        if (btnExport) {
+                            btnExport.innerHTML = `
+                                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-emerald-700 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Processando fotos (${completedCount}/${totalProducts})...
+                            `;
+                        }
+                    }
+                }
+
+                const workers = Array.from({ length: Math.min(concurrency, totalProducts) }, () => imageWorker());
+                await Promise.all(workers);
+
+                if (btnExport) {
+                    btnExport.innerHTML = `
+                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-emerald-700 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Gerando planilha Excel...
+                    `;
+                }
+
+                let sumEstoque = 0;
+                let sumQtdVendida = 0;
+                let sumTotalVendas = 0;
+                let sumCustoTotal = 0;
+                let sumFrete = 0;
+                let sumLucro = 0;
+
+                products.forEach((p, idx) => {
+                    const custo = _parseCurrencyBRL(p.preco_de_custo);
+                    const venda = _parseCurrencyBRL(p.preco);
+                    const hasCusto = custo > 0;
+                    const hasVenda = venda > 0;
+                    const estoque = parseFloat(p.estoque) || 0;
+                    const situacao = (p.situacao === true || String(p.situacao).toLowerCase() === 'ativo') ? 'Ativo' : 'Inativo';
+
+                    const sku = String(p.codigo || '').trim();
+                    const sales = salesBySku[sku] || { qtd: 0, totalVendas: 0, frete: 0 };
+                    const qtdVendida = sales.qtd;
+                    const totalVendas = parseFloat(sales.totalVendas.toFixed(2));
+                    const frete = parseFloat(sales.frete.toFixed(2));
+                    const custoTotalResult = qtdVendida === 0 ? 0 : (hasCusto ? parseFloat((qtdVendida * custo).toFixed(2)) : undefined);
+                    const lucroResult = totalVendas === 0 ? 0 : (custoTotalResult !== undefined ? parseFloat((totalVendas - custoTotalResult - frete).toFixed(2)) : undefined);
+
+                    sumEstoque += estoque;
+                    sumQtdVendida += qtdVendida;
+                    sumTotalVendas += totalVendas;
+                    if (custoTotalResult !== undefined) sumCustoTotal += custoTotalResult;
+                    sumFrete += frete;
+                    if (lucroResult !== undefined) sumLucro += lucroResult;
+
+                    const row = worksheet.addRow({
+                        codigo: p.codigo || '',
+                        foto: '',
+                        descricao: p.descricao || '',
+                        custo: hasCusto ? custo : null,
+                        venda: hasVenda ? venda : null,
+                        estoque: estoque,
+                        situacao: situacao,
+                        qtdVendida: qtdVendida,
+                        totalVendas: totalVendas,
+                        frete: frete
+                    });
+
+                    const rowIndex = row.number;
+                    row.height = 64; // Altura confortável para miniatura ampliada
+
+                    // Alinhamentos e Formatações
+                    row.getCell('codigo').alignment = { horizontal: 'center', vertical: 'middle' };
+                    row.getCell('codigo').font = { bold: true };
+                    
+                    row.getCell('descricao').alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+                    
+                    row.getCell('custo').numFmt = '"R$" #,##0.00';
+                    row.getCell('custo').alignment = { horizontal: 'right', vertical: 'middle' };
+                    
+                    if (hasVenda) {
+                        row.getCell('venda').numFmt = '"R$" #,##0.00';
+                        row.getCell('venda').alignment = { horizontal: 'right', vertical: 'middle' };
+                        row.getCell('venda').font = { bold: true };
+                    }
+
+                    // FÓRMULAS VIVAS NO EXCEL:
+                    // Coluna F (Margem Bruta R$): =SE(E(E{row}>0; D{row}>0); E{row}-D{row}; "")
+                    row.getCell('margemR').value = {
+                        formula: `IF(AND(E${rowIndex}>0,D${rowIndex}>0), E${rowIndex}-D${rowIndex}, "")`,
+                        result: (hasCusto && hasVenda) ? parseFloat((venda - custo).toFixed(2)) : undefined
+                    };
+                    row.getCell('margemR').numFmt = '"R$" #,##0.00';
+                    row.getCell('margemR').alignment = { horizontal: 'right', vertical: 'middle' };
+
+                    // Coluna G (Margem %): =SE(E(E{row}>0; D{row}>0); (E{row}-D{row})/E{row}; "")
+                    row.getCell('margemP').value = {
+                        formula: `IF(AND(E${rowIndex}>0,D${rowIndex}>0), (E${rowIndex}-D${rowIndex})/E${rowIndex}, "")`,
+                        result: (hasCusto && hasVenda) ? ((venda - custo) / venda) : undefined
+                    };
+                    row.getCell('margemP').numFmt = '0.0%';
+                    row.getCell('margemP').alignment = { horizontal: 'right', vertical: 'middle' };
+
+                    row.getCell('estoque').alignment = { horizontal: 'center', vertical: 'middle' };
+                    row.getCell('situacao').alignment = { horizontal: 'center', vertical: 'middle' };
+
+                    // Bloco de Vendas E-commerce (Colunas J a N)
+                    row.getCell('qtdVendida').numFmt = '#,##0';
+                    row.getCell('qtdVendida').alignment = { horizontal: 'center', vertical: 'middle' };
+
+                    row.getCell('totalVendas').numFmt = '"R$" #,##0.00';
+                    row.getCell('totalVendas').alignment = { horizontal: 'right', vertical: 'middle' };
+                    if (totalVendas > 0) row.getCell('totalVendas').font = { bold: true };
+
+                    // Coluna L (Custo Total R$): =SE(J{row}=0; 0; SE(D{row}>0; J{row}*D{row}; ""))
+                    row.getCell('custoTotal').value = {
+                        formula: `IF(J${rowIndex}=0, 0, IF(D${rowIndex}>0, J${rowIndex}*D${rowIndex}, ""))`,
+                        result: custoTotalResult
+                    };
+                    row.getCell('custoTotal').numFmt = '"R$" #,##0.00';
+                    row.getCell('custoTotal').alignment = { horizontal: 'right', vertical: 'middle' };
+
+                    // Coluna M (Frete R$)
+                    row.getCell('frete').numFmt = '"R$" #,##0.00';
+                    row.getCell('frete').alignment = { horizontal: 'right', vertical: 'middle' };
+
+                    // Coluna N (Lucro R$): =SE(K{row}=0; 0; SE(ÉNÚM(L{row}); K{row}-L{row}-M{row}; ""))
+                    row.getCell('lucro').value = {
+                        formula: `IF(K${rowIndex}=0, 0, IF(ISNUMBER(L${rowIndex}), K${rowIndex}-L${rowIndex}-M${rowIndex}, ""))`,
+                        result: lucroResult
+                    };
+                    row.getCell('lucro').numFmt = '"R$" #,##0.00';
+                    row.getCell('lucro').alignment = { horizontal: 'right', vertical: 'middle' };
+                    if (lucroResult !== undefined && lucroResult !== 0) {
+                        row.getCell('lucro').font = {
+                            bold: true,
+                            color: { argb: lucroResult > 0 ? 'FF047857' : 'FFDC2626' }
+                        };
+                    }
+
+                    // Linhas zebradas suaves
+                    if (idx % 2 === 1) {
+                        row.eachCell({ includeEmpty: true }, (cell) => {
+                            cell.fill = {
+                                type: 'pattern',
+                                pattern: 'solid',
+                                fgColor: { argb: 'FFF9FAFB' }
+                            };
+                        });
+                    }
+
+                    row.eachCell({ includeEmpty: true }, (cell) => {
+                        cell.border = {
+                            bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+                        };
+                    });
+
+                    // Embutir miniatura na célula B sem texto residual
+                    const imgData = loadedImages[idx];
+
+                    if (imgData && imgData.base64) {
+                        try {
+                            const imageId = workbook.addImage({
+                                base64: imgData.base64,
+                                extension: 'jpeg'
+                            });
+
+                            worksheet.addImage(imageId, {
+                                tl: { col: 1.12, row: rowIndex - 1 + 0.05 },
+                                ext: { width: 62, height: 62 },
+                                editAs: 'oneCell'
+                            });
+
+                            row.getCell('foto').value = '';
+                        } catch (errImg) {
+                            console.warn(`Erro ao embutir imagem para produto ${p.codigo}:`, errImg);
+                            row.getCell('foto').value = '';
+                        }
+                    } else {
+                        row.getCell('foto').value = '-';
+                        row.getCell('foto').alignment = { horizontal: 'center', vertical: 'middle' };
+                        row.getCell('foto').font = { color: { argb: 'FF9CA3AF' } };
+                    }
+                });
+
+                // Linha de TOTAIS ao final da planilha com fórmulas dinâmicas
+                const lastDataRow = products.length + 1;
+                const totalRow = worksheet.addRow({
+                    codigo: '',
+                    foto: '',
+                    descricao: 'TOTAIS',
+                    custo: '',
+                    venda: '',
+                    margemR: '',
+                    margemP: '',
+                    situacao: ''
+                });
+                totalRow.height = 28;
+                totalRow.getCell('descricao').alignment = { horizontal: 'right', vertical: 'middle' };
+                totalRow.getCell('estoque').value = { formula: `SUM(H2:H${lastDataRow})`, result: sumEstoque };
+                totalRow.getCell('estoque').numFmt = '#,##0';
+                totalRow.getCell('estoque').alignment = { horizontal: 'center', vertical: 'middle' };
+
+                totalRow.getCell('qtdVendida').value = { formula: `SUM(J2:J${lastDataRow})`, result: sumQtdVendida };
+                totalRow.getCell('qtdVendida').numFmt = '#,##0';
+                totalRow.getCell('qtdVendida').alignment = { horizontal: 'center', vertical: 'middle' };
+
+                totalRow.getCell('totalVendas').value = { formula: `SUM(K2:K${lastDataRow})`, result: parseFloat(sumTotalVendas.toFixed(2)) };
+                totalRow.getCell('totalVendas').numFmt = '"R$" #,##0.00';
+                totalRow.getCell('totalVendas').alignment = { horizontal: 'right', vertical: 'middle' };
+
+                totalRow.getCell('custoTotal').value = { formula: `SUM(L2:L${lastDataRow})`, result: parseFloat(sumCustoTotal.toFixed(2)) };
+                totalRow.getCell('custoTotal').numFmt = '"R$" #,##0.00';
+                totalRow.getCell('custoTotal').alignment = { horizontal: 'right', vertical: 'middle' };
+
+                totalRow.getCell('frete').value = { formula: `SUM(M2:M${lastDataRow})`, result: parseFloat(sumFrete.toFixed(2)) };
+                totalRow.getCell('frete').numFmt = '"R$" #,##0.00';
+                totalRow.getCell('frete').alignment = { horizontal: 'right', vertical: 'middle' };
+
+                totalRow.getCell('lucro').value = { formula: `SUM(N2:N${lastDataRow})`, result: parseFloat(sumLucro.toFixed(2)) };
+                totalRow.getCell('lucro').numFmt = '"R$" #,##0.00';
+                totalRow.getCell('lucro').alignment = { horizontal: 'right', vertical: 'middle' };
+
+                totalRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                    cell.font = {
+                        bold: true,
+                        size: 11,
+                        color: { argb: colNumber === 14 ? (sumLucro >= 0 ? 'FF047857' : 'FFDC2626') : 'FF111827' }
+                    };
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FFE6FFFA' } // teal-50
+                    };
+                    cell.border = {
+                        top: { style: 'medium', color: { argb: 'FF0F766E' } },
+                        bottom: { style: 'medium', color: { argb: 'FF0F766E' } }
+                    };
+                });
+
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const dateStr = new Date().toISOString().slice(0, 10);
+                const filename = `produtos_ecommerce_${dateStr}.xlsx`;
+
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            } else {
+                // Fallback SheetJS
+                _exportEcommerceProductsToExcelSheetJS(products, salesBySku);
+            }
+        } catch (error) {
+            console.error('Erro ao exportar produtos para Excel:', error);
+            if (_utils.showMessageModal) {
+                _utils.showMessageModal("Erro", "Ocorreu um erro ao gerar o arquivo Excel com fotos: " + error.message);
+            } else {
+                alert("Ocorreu um erro ao gerar o arquivo Excel com fotos.");
+            }
+        } finally {
+            if (btnExport && originalText) {
+                btnExport.disabled = false;
+                btnExport.classList.remove('opacity-75', 'cursor-not-allowed');
+                btnExport.innerHTML = originalText;
+            }
+        }
+    }
+
+    function _exportEcommerceProductsToExcelSheetJS(products, salesBySku = {}) {
+        const headers = [
+            "Código",
+            "Foto",
+            "Descrição do Produto",
+            "Preço de Custo (R$)",
+            "Preço de Venda (R$)",
+            "Margem Bruta (R$)",
+            "Margem (%)",
+            "Estoque Atual",
+            "Situação",
+            "Qtd. Vendida (E-com)",
+            "Total de Vendas (R$)",
+            "Custo Total (R$)",
+            "Frete (R$)",
+            "Lucro (R$)"
+        ];
+
+        const rows = [headers];
+
+        products.forEach((p, idx) => {
+            const custo = _parseCurrencyBRL(p.preco_de_custo);
+            const venda = _parseCurrencyBRL(p.preco);
+            const hasCusto = custo > 0;
+            const hasVenda = venda > 0;
+            const rowIndex = idx + 2;
+            const estoque = parseFloat(p.estoque) || 0;
+            const situacao = (p.situacao === true || String(p.situacao).toLowerCase() === 'ativo') ? 'Ativo' : 'Inativo';
+            let thumbUrl = '';
+            if (Array.isArray(p.url_imagens_externas) && p.url_imagens_externas.length > 0) {
+                thumbUrl = p.url_imagens_externas[0];
+            } else if (p.imagem_url || p.link_da_imagem) {
+                thumbUrl = p.imagem_url || p.link_da_imagem;
+            }
+
+            const sku = String(p.codigo || '').trim();
+            const sales = salesBySku[sku] || { qtd: 0, totalVendas: 0, frete: 0 };
+            const qtdVendida = sales.qtd;
+            const totalVendas = parseFloat(sales.totalVendas.toFixed(2));
+            const frete = parseFloat(sales.frete.toFixed(2));
+            const custoTotalVal = qtdVendida === 0 ? 0 : (hasCusto ? parseFloat((qtdVendida * custo).toFixed(2)) : null);
+            const lucroVal = totalVendas === 0 ? 0 : (custoTotalVal !== null ? parseFloat((totalVendas - custoTotalVal - frete).toFixed(2)) : null);
+
+            rows.push([
+                p.codigo || '',
+                thumbUrl || '',
+                p.descricao || '',
+                hasCusto ? custo : '',
+                hasVenda ? venda : '',
+                { t: 'n', f: `IF(AND(E${rowIndex}>0,D${rowIndex}>0), E${rowIndex}-D${rowIndex}, "")`, v: (hasCusto && hasVenda) ? (venda - custo) : null },
+                { t: 'n', f: `IF(AND(E${rowIndex}>0,D${rowIndex}>0), (E${rowIndex}-D${rowIndex})/E${rowIndex}, "")`, v: (hasCusto && hasVenda) ? ((venda - custo) / venda) : null },
+                estoque,
+                situacao,
+                qtdVendida,
+                totalVendas,
+                { t: 'n', f: `IF(J${rowIndex}=0, 0, IF(D${rowIndex}>0, J${rowIndex}*D${rowIndex}, ""))`, v: custoTotalVal },
+                frete,
+                { t: 'n', f: `IF(K${rowIndex}=0, 0, IF(ISNUMBER(L${rowIndex}), K${rowIndex}-L${rowIndex}-M${rowIndex}, ""))`, v: lucroVal }
+            ]);
+        });
+
+        const lastDataRow = products.length + 1;
+        rows.push([
+            '', '', 'TOTAIS', '', '', '', '',
+            { t: 'n', f: `SUM(H2:H${lastDataRow})` },
+            '',
+            { t: 'n', f: `SUM(J2:J${lastDataRow})` },
+            { t: 'n', f: `SUM(K2:K${lastDataRow})` },
+            { t: 'n', f: `SUM(L2:L${lastDataRow})` },
+            { t: 'n', f: `SUM(M2:M${lastDataRow})` },
+            { t: 'n', f: `SUM(N2:N${lastDataRow})` }
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 15 }, // Código
+            { wch: 14 }, // Foto
+            { wch: 60 }, // Descrição
+            { wch: 18 }, // Preço Custo
+            { wch: 18 }, // Preço Venda
+            { wch: 18 }, // Margem R$
+            { wch: 14 }, // Margem %
+            { wch: 14 }, // Estoque
+            { wch: 12 }, // Situação
+            { wch: 18 }, // Qtd. Vendida
+            { wch: 20 }, // Total Vendas
+            { wch: 18 }, // Custo Total
+            { wch: 16 }, // Frete
+            { wch: 18 }  // Lucro
+        ];
+
+        try {
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const headerCell = ws[XLSX.utils.encode_cell({ r: 0, c: C })];
+                if (headerCell) {
+                    headerCell.s = {
+                        font: { bold: true, color: { rgb: "FFFFFF" } },
+                        fill: { fgColor: { rgb: C >= 9 ? "115E59" : "0F766E" } },
+                        alignment: { horizontal: "center", vertical: "center" }
+                    };
+                }
+            }
+        } catch (e) {
+            console.warn("Estilos no SheetJS não aplicados:", e);
+        }
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Produtos E-commerce");
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const filename = `produtos_ecommerce_${dateStr}.xlsx`;
+        XLSX.writeFile(wb, filename);
+    }
+
+    return {
         init: function(config) {
             _allNFeData = config.allNFeData || [];
             _allProducts = config.allProducts || [];

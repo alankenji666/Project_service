@@ -905,7 +905,11 @@ const lojaIntegradaRouter = createLojaIntegradaRouter(
     SHEET_NAME_VENDAS_LOJA_INTEGRADA,
     SPREADSHEET_ID_NFE, // <-- ATUALIZADO: Planilha onde as chaves de API estão
     SHEET_NAME_LOJA_INTEGRADA_CONFIG, // <-- ATUALIZADO: Aba de configuração
-    notifySync // Injetando Firestore Sync
+    notifySync, // Injetando Firestore Sync
+    APPS_SCRIPT_TOKEN_URL,
+    BLING_API_BASE_URL,
+    SPREADSHEET_ID_ESTOQUE,
+    SHEET_NAME_ESTOQUE
 );
 app.use('/loja-integrada', lojaIntegradaRouter);
 

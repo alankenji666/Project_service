@@ -1,7 +1,7 @@
 const express = require('express');
 const axiosModule = require('axios'); // Usaremos o nome axiosModule para não conflitar com o parâmetro
 
-const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidosBling, axios, APPS_SCRIPT_TOKEN_URL, BLING_API_BASE_URL, notifySync) => {
+const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidosBling, axios, APPS_SCRIPT_TOKEN_URL, BLING_API_BASE_URL, notifySync, spreadsheetIdGarantia = '1ygLHkMzQcpMbXssdlF8iPFUXTXVFDsDud286Z8ihma4') => {
     const router = express.Router();
     const sheetNameLinhaProducao = 'LinhaProducao';
 
@@ -47,6 +47,52 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
         }
     }
 
+    function getLinhaProducaoCols(headerRow) {
+        const norm = (headerRow || []).map(h =>
+            (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[_\s]/g, '')
+        );
+        return {
+            hId: norm.indexOf('pedidoid') !== -1 ? norm.indexOf('pedidoid') : norm.indexOf('idpedido'),
+            hIdx: norm.indexOf('itemindex') !== -1 ? norm.indexOf('itemindex') : norm.indexOf('index'),
+            hDesc: norm.indexOf('descricaocomplementar') !== -1 ? norm.indexOf('descricaocomplementar') : norm.indexOf('descricao'),
+            hSt: norm.indexOf('status'),
+            hSku: norm.indexOf('sku') !== -1 ? norm.indexOf('sku') : norm.indexOf('codigo'),
+            hQty: norm.indexOf('quantidade'),
+            hDate: norm.indexOf('data'),
+            hResp: norm.indexOf('responsavel'),
+            hOrigem: norm.indexOf('origem'),
+            hOrc: norm.indexOf('orcamento'),
+            hVendedor: norm.indexOf('vendedor'),
+            hCliente: norm.indexOf('cliente') !== -1 ? norm.indexOf('cliente') : norm.indexOf('empresa')
+        };
+    }
+
+    function parseOrderItemsRaw(raw) {
+        const items = [];
+        const itemStrings = String(raw || '').split(/(?=\([^,]+,\s*\d+)/).filter(Boolean);
+        itemStrings.forEach((s, idx) => {
+            let c = s.trim();
+            if (c.startsWith('(')) c = c.substring(1);
+            if (c.endsWith(')')) {
+                if ((c.match(/\(/g) || []).length < (c.match(/\)/g) || []).length) {
+                    c = c.substring(0, c.length - 1);
+                }
+            }
+            const p = c.split(',').map(x => x.trim());
+            if (p.length >= 3) {
+                let v = p[2];
+                let st = 'OK';
+                if (v.includes('|')) {
+                    const sp = v.split('|');
+                    v = sp[0];
+                    st = sp[1] || 'OK';
+                }
+                items.push({ index: idx, sku: p[0], qty: p[1], val: v, status: st });
+            }
+        });
+        return items;
+    }
+
     router.get('/', async (req, res, next) => {
         try {
             const sheets = await getSheetsClient();
@@ -56,32 +102,46 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
             });
             const rows = response.data.valueRanges[0].values || [];
             const producaoRows = response.data.valueRanges[1].values || [];
-            if (rows.length === 0) return res.status(200).send({ status: 'success', data: [] });
+            if (rows.length === 0) return res.status(200).send({ status: 'success', data: [], preProducao: [] });
 
             const headersNorm = rows[0].map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[\/\(\)]/g, '_'));
 
             const producaoMap = {};
+            const unlinkedOrcItems = [];
+            const garantiaItems = [];
+
             if (producaoRows && producaoRows.length > 1) {
-                const pHeaders = producaoRows[0].map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, ""));
-                const hId = pHeaders.indexOf('pedidoid');
-                const hIdx = pHeaders.indexOf('itemindex');
-                const hSt = pHeaders.indexOf('status');
-                const hDesc = pHeaders.indexOf('descricaocomplementar');
-                const hQty = pHeaders.indexOf('quantidade');
-                const hDate = pHeaders.indexOf('data');
-                const hResp = pHeaders.indexOf('responsavel');
+                const cols = getLinhaProducaoCols(producaoRows[0]);
 
                 producaoRows.slice(1).forEach(row => {
-                    const pid = String(row[hId] || '').trim();
-                    const pidx = String(row[hIdx] || '').trim();
-                    if (pid && pidx !== '') {
-                        producaoMap[`${pid}-${pidx}`] = {
-                            status: hSt !== -1 ? (row[hSt] || 'OK') : 'OK',
-                            descricao: hDesc !== -1 ? (row[hDesc] || '') : '',
-                            quantidade: hQty !== -1 ? (row[hQty] || '') : '',
-                            data: hDate !== -1 ? (row[hDate] || '') : '',
-                            responsavel: hResp !== -1 ? (row[hResp] || '') : ''
-                        };
+                    const pid = cols.hId !== -1 ? String(row[cols.hId] || '').trim() : '';
+                    const pidx = cols.hIdx !== -1 ? String(row[cols.hIdx] || '').trim() : '';
+                    const pSku = cols.hSku !== -1 ? String(row[cols.hSku] || '').trim() : '';
+                    const pOrc = cols.hOrc !== -1 ? String(row[cols.hOrc] || '').trim() : '';
+                    const pOrig = cols.hOrigem !== -1 ? String(row[cols.hOrigem] || '').trim() : '';
+                    const pCli = cols.hCliente !== -1 ? String(row[cols.hCliente] || '').trim() : '';
+                    const prodObj = {
+                        status: cols.hSt !== -1 ? (row[cols.hSt] || 'OK') : 'OK',
+                        descricao: cols.hDesc !== -1 ? (row[cols.hDesc] || '') : '',
+                        quantidade: cols.hQty !== -1 ? (row[cols.hQty] || '') : '',
+                        data: cols.hDate !== -1 ? (row[cols.hDate] || '') : '',
+                        responsavel: cols.hResp !== -1 ? (row[cols.hResp] || '') : '',
+                        origem: pOrig,
+                        orcamento: pOrc,
+                        vendedor: cols.hVendedor !== -1 ? (row[cols.hVendedor] || '') : '',
+                        cliente: pCli,
+                        sku: pSku,
+                        pedidoId: pid,
+                        itemIndex: pidx
+                    };
+
+                    const isGarantia = pOrig.toLowerCase() === 'garantia' || pid.toUpperCase().startsWith('GAR-');
+                    if (isGarantia) {
+                        garantiaItems.push(prodObj);
+                    } else if (pid && pidx !== '') {
+                        producaoMap[`${pid}-${pidx}`] = prodObj;
+                    } else if (!pid && pOrc && pSku) {
+                        unlinkedOrcItems.push({ ...prodObj, _matched: false });
                     }
                 });
             }
@@ -93,6 +153,7 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 if (obj.id_pedido) obj.id = obj.id_pedido;
                 const pid = String(obj.id_pedido || obj.id || '').trim();
                 const pnum = String(obj.numero_pedido || obj.numero || '').trim();
+                const pOrc = String(obj.orcamento || obj['orcamento'] || '').trim();
                 obj.detalhesProducao = {};
                 Object.keys(producaoMap).forEach(key => {
                     const [keyPid, keyIdx] = key.split('-');
@@ -102,87 +163,245 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                         obj.detalhesProducao[`${pnum}-${keyIdx}`] = producaoMap[key];
                     }
                 });
+
+                // Vínculo fallback por orcamento + sku caso o pedido exista mas o item em LinhaProducao ainda esteja sem pedidoid
+                if (pOrc && pOrc !== '0' && obj.itens && unlinkedOrcItems.length > 0) {
+                    const parsedOrderItems = parseOrderItemsRaw(obj.itens);
+                    parsedOrderItems.forEach(item => {
+                        const existingKey = `${pid}-${item.index}`;
+                        const existingNumKey = `${pnum}-${item.index}`;
+                        if (!obj.detalhesProducao[existingKey] && !obj.detalhesProducao[existingNumKey]) {
+                            const matchedPre = unlinkedOrcItems.find(u =>
+                                !u._matched &&
+                                String(u.orcamento).trim() === pOrc &&
+                                String(u.sku).trim() === String(item.sku).trim()
+                            );
+                            if (matchedPre) {
+                                matchedPre._matched = true;
+                                obj.detalhesProducao[existingKey] = matchedPre;
+                                if (pnum) obj.detalhesProducao[existingNumKey] = matchedPre;
+                            }
+                        }
+                    });
+                }
+
                 return obj;
             });
-            res.status(200).send({ status: 'success', data: pedidos });
+
+            const preProducao = unlinkedOrcItems.filter(u => !u._matched).map(({ _matched, ...rest }) => rest);
+            res.status(200).send({ status: 'success', data: pedidos, preProducao, garantia: garantiaItems });
         } catch (error) { next(error); }
     });
 
     router.post('/update-item-status', async (req, res, next) => {
         try {
-            const { pedidoId, itemCodigo, newStatus, itemIndex, newDescription, responsavel, numeroPedido, quantidade, origem } = req.body;
-            const idParaPlanilha = numeroPedido || pedidoId;
-            if (!idParaPlanilha) throw new Error("Identificação do pedido é obrigatória.");
+            let {
+                pedidoId, itemCodigo, newStatus, itemIndex,
+                newDescription, responsavel, numeroPedido, quantidade,
+                origem, orcamento, vendedor, dataPedido, isManualPreProd, isDateEdit, cliente
+            } = req.body;
+
+            let idParaPlanilha = String(numeroPedido || pedidoId || '').trim();
+            let finalOrcamento = String(orcamento || '').trim();
+            const skuStr = String(itemCodigo || '').trim();
+
+            if (!idParaPlanilha && (!finalOrcamento || !skuStr)) {
+                throw new Error("Identificação do pedido ou orçamento + SKU é obrigatória.");
+            }
 
             const sheets = await getSheetsClient();
-            const pResp = await sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A:Z` });
+            const [pResp, mResp] = await Promise.all([
+                sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A:Z` }),
+                sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNamePedidosBling}!A:Z` })
+            ]);
             let pRows = pResp.data.values || [];
+            const mRows = mResp.data.values || [];
             
             let pHeadersRaw = [];
-            let pHeadersNorm = [];
             if (pRows.length > 0) {
-                pHeadersRaw = pRows[0];
-                pHeadersNorm = pHeadersRaw.map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_'));
+                pHeadersRaw = [...pRows[0]];
+                const normNoUnderscore = pHeadersRaw.map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[_\s]/g, ''));
                 let changed = false;
-                if (pHeadersNorm.indexOf('quantidade') === -1) { pHeadersRaw.push('quantidade'); pHeadersNorm.push('quantidade'); changed = true; }
-                if (pHeadersNorm.indexOf('data') === -1) { pHeadersRaw.push('data'); pHeadersNorm.push('data'); changed = true; }
-                if (pHeadersNorm.indexOf('responsavel') === -1) { pHeadersRaw.push('responsavel'); pHeadersNorm.push('responsavel'); changed = true; }
-                if (pHeadersNorm.indexOf('origem') === -1) { pHeadersRaw.push('Origem'); pHeadersNorm.push('origem'); changed = true; }
+                if (normNoUnderscore.indexOf('quantidade') === -1) { pHeadersRaw.push('quantidade'); changed = true; }
+                if (normNoUnderscore.indexOf('data') === -1) { pHeadersRaw.push('data'); changed = true; }
+                if (normNoUnderscore.indexOf('responsavel') === -1) { pHeadersRaw.push('responsavel'); changed = true; }
+                if (normNoUnderscore.indexOf('origem') === -1) { pHeadersRaw.push('Origem'); changed = true; }
+                if (normNoUnderscore.indexOf('orcamento') === -1) { pHeadersRaw.push('orcamento'); changed = true; }
+                if (normNoUnderscore.indexOf('vendedor') === -1) { pHeadersRaw.push('vendedor'); changed = true; }
+                if (normNoUnderscore.indexOf('cliente') === -1) { pHeadersRaw.push('cliente'); changed = true; }
                 if (changed) {
                     await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeadersRaw] } });
                 }
             } else {
-                pHeadersRaw = ['pedido_id', 'sku', 'item_index', 'status', 'quantidade', 'data', 'descricao', 'responsavel', 'Origem'];
-                pHeadersNorm = ['pedido_id', 'sku', 'item_index', 'status', 'quantidade', 'data', 'descricao', 'responsavel', 'origem'];
+                pHeadersRaw = ['pedidoid', 'sku', 'itemindex', 'status', 'descricaocomplementar', 'quantidade', 'data', 'responsavel', 'Origem', 'orcamento', 'vendedor', 'cliente'];
                 await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [pHeadersRaw] } });
                 pRows = [pHeadersRaw];
             }
 
-            const hId = pHeadersNorm.indexOf('pedido_id') !== -1 ? pHeadersNorm.indexOf('pedido_id') : pHeadersNorm.indexOf('id_pedido') !== -1 ? pHeadersNorm.indexOf('id_pedido') : pHeadersNorm.indexOf('pedidoid');
-            const hIdx = pHeadersNorm.indexOf('item_index') !== -1 ? pHeadersNorm.indexOf('item_index') : pHeadersNorm.indexOf('index') !== -1 ? pHeadersNorm.indexOf('index') : pHeadersNorm.indexOf('itemindex');
-            const hDesc = pHeadersNorm.indexOf('descricao_complementar') !== -1 ? pHeadersNorm.indexOf('descricao_complementar') : pHeadersNorm.indexOf('descricao') !== -1 ? pHeadersNorm.indexOf('descricao') : pHeadersNorm.indexOf('descricaocomplementar');
-            const hSt = pHeadersNorm.indexOf('status');
-            const hSku = pHeadersNorm.indexOf('sku') !== -1 ? pHeadersNorm.indexOf('sku') : pHeadersNorm.indexOf('codigo');
-            const hQty = pHeadersNorm.indexOf('quantidade');
-            const hDate = pHeadersNorm.indexOf('data');
-            const hResp = pHeadersNorm.indexOf('responsavel');
-            const hOrigem = pHeadersNorm.indexOf('origem');
+            const cols = getLinhaProducaoCols(pHeadersRaw);
 
-            let foundIdx = -1;
-            for (let i = 1; i < pRows.length; i++) {
-                const rowPid = String(pRows[i][hId]).trim();
-                if ((rowPid === String(pedidoId).trim() || rowPid === String(numeroPedido).trim()) && String(pRows[i][hIdx]).trim() === String(itemIndex).trim()) {
-                    foundIdx = i; break;
+            // Busca pedido em PedidosBling (para extrair orcamento ou vincular pré-produção se pedido já existir)
+            let mHeaders = [], iCol = -1, idCol = -1, numCol = -1, orcCol = -1, dateCol = -1;
+            let mIdx = -1;
+            if (mRows.length > 0) {
+                mHeaders = mRows[0].map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[\/\(\)]/g, '_'));
+                iCol = mHeaders.indexOf('itens');
+                idCol = mHeaders.indexOf('id_pedido') !== -1 ? mHeaders.indexOf('id_pedido') : mHeaders.indexOf('id');
+                numCol = mHeaders.indexOf('numero');
+                orcCol = mHeaders.indexOf('orcamento');
+                dateCol = mHeaders.indexOf('data');
+
+                if (idParaPlanilha) {
+                    for (let i = 1; i < mRows.length; i++) {
+                        if ((idCol !== -1 && String(mRows[i][idCol]).trim() === String(pedidoId || '').trim()) ||
+                            (numCol !== -1 && String(mRows[i][numCol]).trim() === String(numeroPedido || pedidoId || '').trim())) {
+                            mIdx = i;
+                            break;
+                        }
+                    }
+                    if (mIdx !== -1 && (!finalOrcamento || finalOrcamento === '0') && orcCol !== -1) {
+                        const sheetOrc = String(mRows[mIdx][orcCol] || '').trim();
+                        if (sheetOrc && sheetOrc !== '0') finalOrcamento = sheetOrc;
+                    }
+                } else if (finalOrcamento && finalOrcamento !== '0' && skuStr && orcCol !== -1 && iCol !== -1) {
+                    // Busca se já existe um pedido em PedidosBling com este orçamento + SKU
+                    for (let i = 1; i < mRows.length; i++) {
+                        const rowOrc = String(mRows[i][orcCol] || '').trim();
+                        if (rowOrc === finalOrcamento) {
+                            const orderItems = parseOrderItemsRaw(mRows[i][iCol] || '');
+                            const matchedOrderItem = orderItems.find(it => String(it.sku).trim() === skuStr);
+                            if (matchedOrderItem) {
+                                mIdx = i;
+                                const foundNum = numCol !== -1 ? String(mRows[i][numCol] || '').trim() : '';
+                                const foundId = idCol !== -1 ? String(mRows[i][idCol] || '').trim() : '';
+                                pedidoId = foundId || foundNum;
+                                numeroPedido = foundNum || foundId;
+                                idParaPlanilha = numeroPedido || pedidoId;
+                                itemIndex = matchedOrderItem.index;
+                                if (!dataPedido && dateCol !== -1 && mRows[i][dateCol]) {
+                                    dataPedido = String(mRows[i][dateCol]).trim();
+                                }
+                                break;
+                            }
+                        }
+                    }
                 }
             }
 
-            const { dataPedido } = req.body;
+            // 1. Procurar linha existente por pedidoid + itemindex
+            let foundIdx = -1;
+            if (idParaPlanilha && itemIndex !== undefined && itemIndex !== null && String(itemIndex).trim() !== '') {
+                for (let i = 1; i < pRows.length; i++) {
+                    const rowPid = cols.hId !== -1 ? String(pRows[i][cols.hId] || '').trim() : '';
+                    const rowIdx = cols.hIdx !== -1 ? String(pRows[i][cols.hIdx] || '').trim() : '';
+                    if ((rowPid === String(pedidoId || '').trim() || rowPid === String(numeroPedido || '').trim() || rowPid === idParaPlanilha) &&
+                        rowIdx === String(itemIndex).trim()) {
+                        foundIdx = i; break;
+                    }
+                }
+            }
+
+            // 2. Procurar linha existente por orcamento + sku (pre-producao ou verificacao de duplicidade)
+            if (foundIdx === -1 && finalOrcamento && finalOrcamento !== '0' && skuStr && cols.hOrc !== -1 && cols.hSku !== -1) {
+                for (let i = 1; i < pRows.length; i++) {
+                    const rowOrc = String(pRows[i][cols.hOrc] || '').trim();
+                    const rowSku = String(pRows[i][cols.hSku] || '').trim();
+                    const rowPid = cols.hId !== -1 ? String(pRows[i][cols.hId] || '').trim() : '';
+                    if (rowOrc === finalOrcamento && rowSku === skuStr) {
+                        if (isManualPreProd) {
+                            const existingSt = cols.hSt !== -1 ? (pRows[i][cols.hSt] || 'EM PRODUÇÃO') : 'EM PRODUÇÃO';
+                            const existingPidInfo = rowPid ? ` (Pedido #${rowPid})` : '';
+                            return res.status(409).send({
+                                status: 'duplicate',
+                                message: `O item ${skuStr} já está na Linha de Produção para o orçamento ${finalOrcamento}${existingPidInfo} (Status: "${existingSt}").`
+                            });
+                        }
+                        if (!rowPid || (idParaPlanilha && (rowPid === String(pedidoId || '').trim() || rowPid === String(numeroPedido || '').trim() || rowPid === idParaPlanilha))) {
+                            foundIdx = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (isManualPreProd && foundIdx !== -1) {
+                const existingSt = cols.hSt !== -1 ? (pRows[foundIdx][cols.hSt] || 'EM PRODUÇÃO') : 'EM PRODUÇÃO';
+                return res.status(409).send({
+                    status: 'duplicate',
+                    message: `O item ${skuStr} do orçamento ${finalOrcamento} já está na Linha de Produção (Pedido #${idParaPlanilha}, Status: "${existingSt}").`
+                });
+            }
+
+            const existingRow = foundIdx !== -1 ? pRows[foundIdx] : null;
+            const existingRowPid = existingRow && cols.hId !== -1 ? String(existingRow[cols.hId] || '').trim() : '';
+            const wasUnlinkedPreProd = Boolean(existingRow && !existingRowPid && idParaPlanilha);
+
             let finalStatus = newStatus;
             let finalDesc = newDescription;
             let finalResp = responsavel;
             let finalQty = quantidade;
             let finalDate = dataPedido;
             let finalOrigem = origem;
+            let finalVendedor = vendedor;
 
-            if (foundIdx !== -1) {
-                if (finalStatus === undefined && hSt !== -1) finalStatus = pRows[foundIdx][hSt];
-                if (finalDesc === undefined && hDesc !== -1) finalDesc = pRows[foundIdx][hDesc];
-                if (finalResp === undefined && hResp !== -1) finalResp = pRows[foundIdx][hResp];
-                if (finalQty === undefined && hQty !== -1) finalQty = pRows[foundIdx][hQty];
-                if (finalDate === undefined && hDate !== -1) finalDate = pRows[foundIdx][hDate];
-                if (finalOrigem === undefined && hOrigem !== -1) finalOrigem = pRows[foundIdx][hOrigem];
+            if (existingRow) {
+                const exSt = cols.hSt !== -1 ? (existingRow[cols.hSt] || '') : '';
+                const exDesc = cols.hDesc !== -1 ? (existingRow[cols.hDesc] || '') : '';
+                const exResp = cols.hResp !== -1 ? (existingRow[cols.hResp] || '') : '';
+                const exQty = cols.hQty !== -1 ? (existingRow[cols.hQty] || '') : '';
+                const exDate = cols.hDate !== -1 ? (existingRow[cols.hDate] || '') : '';
+                const exOrig = cols.hOrigem !== -1 ? (existingRow[cols.hOrigem] || '') : '';
+                const exOrc = cols.hOrc !== -1 ? (existingRow[cols.hOrc] || '') : '';
+                const exVendedor = cols.hVendedor !== -1 ? (existingRow[cols.hVendedor] || '') : '';
+
+                if (wasUnlinkedPreProd) {
+                    if (exSt && exSt.toUpperCase() !== 'OK') finalStatus = exSt;
+                    if (exDesc) finalDesc = exDesc;
+                    if (exResp) finalResp = exResp;
+                    if (exQty) finalQty = exQty;
+                    if (exOrig) finalOrigem = exOrig;
+                    if (exVendedor) finalVendedor = exVendedor;
+                } else {
+                    if (finalStatus === undefined) finalStatus = exSt;
+                    if (finalDesc === undefined) finalDesc = exDesc;
+                    if (finalResp === undefined) finalResp = exResp;
+                    if (finalQty === undefined) finalQty = exQty;
+                    if (finalOrigem === undefined) finalOrigem = exOrig;
+                    if (finalVendedor === undefined) finalVendedor = exVendedor;
+                }
+
+                // Preserva a data já registrada (ex: data da pré-produção), a menos que seja uma edição explícita
+                if (!isDateEdit && exDate) {
+                    finalDate = exDate;
+                } else if (finalDate === undefined) {
+                    finalDate = exDate;
+                }
+
+                if ((!finalOrcamento || finalOrcamento === '0') && exOrc) finalOrcamento = exOrc;
             }
 
-            const rowData = new Array(pHeadersRaw.length).fill('');
-            if (hId !== -1) rowData[hId] = idParaPlanilha;
-            if (hSku !== -1) rowData[hSku] = itemCodigo;
-            if (hIdx !== -1) rowData[hIdx] = itemIndex;
-            if (hSt !== -1) rowData[hSt] = finalStatus || 'OK';
-            if (hQty !== -1) rowData[hQty] = finalQty || '';
-            if (hDate !== -1) rowData[hDate] = finalDate || '';
-            if (hDesc !== -1) rowData[hDesc] = finalDesc || '';
-            if (hResp !== -1) rowData[hResp] = finalResp || '';
-            if (hOrigem !== -1) rowData[hOrigem] = finalOrigem || '';
+            if (String(finalStatus || '').toUpperCase().trim() === 'OK') {
+                finalStatus = 'FINALIZADO';
+            }
+            if (finalResp !== undefined && finalResp !== null) {
+                finalResp = String(finalResp).trim().toUpperCase();
+            }
+
+            const rowData = existingRow ? [...existingRow] : new Array(pHeadersRaw.length).fill('');
+            while (rowData.length < pHeadersRaw.length) rowData.push('');
+
+            if (cols.hId !== -1) rowData[cols.hId] = idParaPlanilha;
+            if (cols.hSku !== -1) rowData[cols.hSku] = skuStr;
+            if (cols.hIdx !== -1) rowData[cols.hIdx] = (itemIndex !== undefined && itemIndex !== null) ? itemIndex : '';
+            if (cols.hSt !== -1) rowData[cols.hSt] = finalStatus || 'OK';
+            if (cols.hQty !== -1) rowData[cols.hQty] = finalQty || '';
+            if (cols.hDate !== -1) rowData[cols.hDate] = finalDate || '';
+            if (cols.hDesc !== -1) rowData[cols.hDesc] = finalDesc || '';
+            if (cols.hResp !== -1) rowData[cols.hResp] = finalResp || '';
+            if (cols.hOrigem !== -1) rowData[cols.hOrigem] = finalOrigem || '';
+            if (cols.hOrc !== -1) rowData[cols.hOrc] = (finalOrcamento && finalOrcamento !== '0') ? finalOrcamento : '';
+            if (cols.hVendedor !== -1) rowData[cols.hVendedor] = finalVendedor || '';
+            if (cols.hCliente !== -1) rowData[cols.hCliente] = cliente || (existingRow && cols.hCliente !== -1 ? existingRow[cols.hCliente] : '');
 
             if (foundIdx !== -1) {
                 await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A${foundIdx + 1}`, valueInputOption: 'RAW', resource: { values: [rowData] } });
@@ -190,52 +409,86 @@ const createPedidosRouter = (getSheetsClient, spreadsheetIdNFE, sheetNamePedidos
                 await sheets.spreadsheets.values.append({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNameLinhaProducao}!A1`, valueInputOption: 'RAW', resource: { values: [rowData] } });
             }
 
-            if (finalStatus !== undefined) {
-                const mResp = await sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetIdNFE, range: `${sheetNamePedidosBling}!A:Z` });
-                const mRows = mResp.data.values || [];
-                if (mRows.length > 0) {
-                    const mHeaders = mRows[0].map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_'));
-                    const iCol = mHeaders.indexOf('itens');
-                    const idCol = mHeaders.indexOf('id_pedido') !== -1 ? mHeaders.indexOf('id_pedido') : mHeaders.indexOf('id');
-                    const numCol = mHeaders.indexOf('numero');
-                    let mIdx = -1;
-                    for (let i = 1; i < mRows.length; i++) {
-                        if (String(mRows[i][idCol]).trim() === String(pedidoId).trim() || String(mRows[i][numCol]).trim() === String(numeroPedido || pedidoId).trim()) {
-                            mIdx = i; break;
+            if (mIdx !== -1 && iCol !== -1 && finalStatus !== undefined && itemIndex !== undefined && itemIndex !== null && String(itemIndex).trim() !== '') {
+                const raw = mRows[mIdx][iCol] || '';
+                const parsedItems = parseOrderItemsRaw(raw);
+                const updatedStr = parsedItems.map(it => {
+                    const st = (String(it.index) === String(itemIndex)) ? finalStatus : it.status;
+                    return `(${it.sku}, ${it.qty}, ${it.val}|${st})`;
+                }).join(' ');
+                await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${colToA1(iCol + 1)}${mIdx + 1}`, valueInputOption: 'RAW', resource: { values: [[updatedStr]] } });
+            }
+
+            // Sincronização com OrcamentosGarantia caso seja pedido de garantia
+            if ((idParaPlanilha.startsWith('GAR-') || (finalOrigem && finalOrigem.toLowerCase() === 'garantia')) && itemIndex !== undefined && itemIndex !== null && String(itemIndex).trim() !== '' && finalStatus !== undefined) {
+                try {
+                    const sheetGarantiaResp = await sheets.spreadsheets.values.get({
+                        spreadsheetId: spreadsheetIdGarantia,
+                        range: 'OrcamentosGarantia!A:P'
+                    });
+                    const gRows = sheetGarantiaResp.data.values || [];
+                    for (let gi = 1; gi < gRows.length; gi++) {
+                        const gId = String(gRows[gi][1] || '').trim();
+                        const gNum = String(gRows[gi][2] || '').trim();
+                        if (gId === idParaPlanilha || gNum === idParaPlanilha || (pedidoId && (gId === pedidoId || gNum === pedidoId))) {
+                            const rawItens = gRows[gi][13] || '';
+                            const parsedGarantiaItems = parseOrderItemsRaw(rawItens);
+                            if (parsedGarantiaItems.length > 0) {
+                                const updatedGStr = parsedGarantiaItems.map((it, idx) => {
+                                    const matchIdx = (String(it.index) === String(itemIndex)) || (idx === Number(itemIndex));
+                                    let st = matchIdx ? finalStatus : (it.status || 'FINALIZADO');
+                                    if (st === 'OK') st = 'FINALIZADO';
+                                    return `(${it.sku}, ${it.qty}, ${it.val}|${st})`;
+                                }).join(' ');
+                                await sheets.spreadsheets.values.update({
+                                    spreadsheetId: spreadsheetIdGarantia,
+                                    range: `OrcamentosGarantia!N${gi + 1}`,
+                                    valueInputOption: 'RAW',
+                                    resource: { values: [[updatedGStr]] }
+                                });
+                            }
+                            break;
                         }
                     }
-                    if (mIdx !== -1 && iCol !== -1) {
-                        const raw = mRows[mIdx][iCol] || '';
-                        const items = [];
-                        const itemStrings = String(raw).split(/(?=\([^,]+,\s*\d+)/).filter(Boolean);
-                        itemStrings.forEach((s, i) => {
-                            let c = s.trim();
-                            if (c.startsWith('(')) c = c.substring(1);
-                            if (c.endsWith(')')) { if (((c.match(/\(/g) || []).length < (c.match(/\)/g) || []).length)) c = c.substring(0, c.length - 1); }
-                            const p = c.split(',').map(x => x.trim());
-                            if (p.length >= 3) {
-                                let v = p[2]; let st = 'OK';
-                                if (v.includes('|')) { const sp = v.split('|'); v = sp[0]; st = sp[1] || 'OK'; }
-                                if (String(i) === String(itemIndex)) st = finalStatus;
-                                items.push(`(${p[0]}, ${p[1]}, ${v}|${st})`);
-                            }
-                        });
-                        await sheets.spreadsheets.values.update({ spreadsheetId: spreadsheetIdNFE, range: `${colToA1(iCol + 1)}${mIdx + 1}`, valueInputOption: 'RAW', resource: { values: [[items.join(' ')]] } });
-                    }
+                } catch (gErr) {
+                    console.error('[pedidos.js] Erro ao sincronizar item em OrcamentosGarantia:', gErr);
                 }
             }
-            if (typeof notifySync === 'function') notifySync('orderItemStatusUpdated', { 
-                pedidoId, 
-                numeroPedido: numeroPedido || (req.body && req.body.numeroPedido) || pedidoId,
-                itemCodigo, 
-                newStatus: finalStatus, 
-                newDescription: finalDesc, 
-                itemIndex, 
-                quantidade: finalQty, 
-                dataPedido: finalDate, 
-                responsavel: finalResp 
+
+            if (typeof notifySync === 'function') notifySync('orderItemStatusUpdated', {
+                pedidoId: pedidoId || '',
+                numeroPedido: numeroPedido || idParaPlanilha || '',
+                orcamento: (finalOrcamento && finalOrcamento !== '0') ? finalOrcamento : '',
+                itemCodigo: skuStr,
+                newStatus: finalStatus,
+                newDescription: finalDesc,
+                itemIndex: (itemIndex !== undefined && itemIndex !== null) ? itemIndex : '',
+                quantidade: finalQty,
+                dataPedido: finalDate,
+                responsavel: finalResp,
+                origem: finalOrigem,
+                vendedor: finalVendedor,
+                cliente: (cols.hCliente !== -1 && rowData[cols.hCliente]) ? rowData[cols.hCliente] : (cliente || '')
             });
-            res.status(200).send({ status: 'success' });
+
+            res.status(200).send({
+                status: 'success',
+                linkedFromOrcamento: wasUnlinkedPreProd,
+                linkedToExistingPedido: Boolean(isManualPreProd && idParaPlanilha),
+                pedidoId: pedidoId || '',
+                numeroPedido: numeroPedido || idParaPlanilha || '',
+                itemIndex: (itemIndex !== undefined && itemIndex !== null) ? itemIndex : '',
+                itemData: {
+                    status: finalStatus,
+                    descricao: finalDesc,
+                    responsavel: finalResp,
+                    quantidade: finalQty,
+                    data: finalDate,
+                    orcamento: (finalOrcamento && finalOrcamento !== '0') ? finalOrcamento : '',
+                    origem: finalOrigem,
+                    vendedor: finalVendedor
+                }
+            });
         } catch (error) { next(error); }
     });
 

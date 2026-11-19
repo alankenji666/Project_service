@@ -152,9 +152,10 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                     
                     rowValues[COLUMNS.OBSERVACAO] = dadosManuais.observacao;
                     rowValues[16] = dadosManuais.observacao_frontend; // Restaura Coluna Q
-                    rowValues[COLUMNS.ORCAMENTO] = extrairOrcamentoCRM(p.observacoesInternas); // Col P (15) / R (17) dependendo do script
+                    const orcamentoExtraido = extrairOrcamentoCRM(p.observacoesInternas);
+                    rowValues[COLUMNS.ORCAMENTO] = orcamentoExtraido; // Col P (15) / R (17) dependendo do script
 
-                    // Processamento de Itens com Preservação de Status Manual
+                    // Processamento de Itens com Preservação de Status Manual + Vínculo Automático de Pré-Produção por Orçamento
                     if (p.itens && Array.isArray(p.itens)) {
                         // 1. Extrair os status atuais da planilha para preservá-los
                         const rawItensExistentes = rowIndexToUpdate !== -1 ? (existingRows[rowIndexToUpdate - 2][COLUMNS.ITENS] || "") : "";
@@ -180,8 +181,56 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                             }
                         }
 
-                        // 2. Mapear os novos itens do Bling, injetando o status preservado se existir
-                        rowValues[COLUMNS.ITENS] = p.itens.map(i => {
+                        // 1b. Ler LinhaProducao para vincular itens pré-produzidos (sem pedidoid, com mesmo orçamento + SKU)
+                        const lpPendingUpdates = [];
+                        const unlinkedBySku = {};
+                        const linkedByIdx = {};
+                        try {
+                            const lpRes = await sheets.spreadsheets.values.get({
+                                spreadsheetId: SPREADSHEET_ID,
+                                range: 'LinhaProducao!A:Z'
+                            });
+                            const lpRows = lpRes.data.values || [];
+                            if (lpRows.length > 1) {
+                                const normCols = lpRows[0].map(h => (h || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[_\s]/g, ''));
+                                const hId = normCols.indexOf('pedidoid') !== -1 ? normCols.indexOf('pedidoid') : normCols.indexOf('idpedido');
+                                const hIdx = normCols.indexOf('itemindex') !== -1 ? normCols.indexOf('itemindex') : normCols.indexOf('index');
+                                const hSku = normCols.indexOf('sku') !== -1 ? normCols.indexOf('sku') : normCols.indexOf('codigo');
+                                const hSt = normCols.indexOf('status');
+                                const hQty = normCols.indexOf('quantidade');
+                                const hOrc = normCols.indexOf('orcamento');
+
+                                const pidStr = String(p.id || '').trim();
+                                const pnumStr = String(p.numero || '').trim();
+
+                                for (let r = 1; r < lpRows.length; r++) {
+                                    const rowArr = lpRows[r];
+                                    const rPid = hId !== -1 ? String(rowArr[hId] || '').trim() : '';
+                                    const rIdx = hIdx !== -1 ? String(rowArr[hIdx] || '').trim() : '';
+                                    const rSku = hSku !== -1 ? String(rowArr[hSku] || '').trim() : '';
+                                    const rOrc = hOrc !== -1 ? String(rowArr[hOrc] || '').trim() : '';
+                                    const rSt = hSt !== -1 ? String(rowArr[hSt] || '').trim() : '';
+
+                                    if (rPid && (rPid === pidStr || rPid === pnumStr) && rIdx !== '') {
+                                        linkedByIdx[rIdx] = { sheetRow: r + 1, rowArr, rSt, rOrc, hOrc, colLen: lpRows[0].length };
+                                    } else if (!rPid && orcamentoExtraido && orcamentoExtraido !== '0' && rOrc === orcamentoExtraido && rSku) {
+                                        if (!unlinkedBySku[rSku]) unlinkedBySku[rSku] = [];
+                                        unlinkedBySku[rSku].push({
+                                            sheetRow: r + 1,
+                                            rowArr,
+                                            status: rSt,
+                                            hId, hIdx, hQty, hOrc,
+                                            colLen: lpRows[0].length
+                                        });
+                                    }
+                                }
+                            }
+                        } catch (lpErr) {
+                            console.warn('[Bling Webhook] Aviso ao verificar LinhaProducao para vínculo por orçamento:', lpErr.message);
+                        }
+
+                        // 2. Mapear os novos itens do Bling, injetando o status preservado ou da pré-produção
+                        rowValues[COLUMNS.ITENS] = p.itens.map((i, idx) => {
                             const sku = String(i.codigo || "").trim();
                             let status = "OK"; // Default
 
@@ -189,8 +238,48 @@ module.exports = function(getInitializedSheetsClient, SPREADSHEET_ID, SHEET_NAME
                                 status = statusMap[sku].shift(); // Consome o status na ordem de aparição
                             }
 
+                            const idxStr = String(idx);
+                            if (linkedByIdx[idxStr]) {
+                                const lnk = linkedByIdx[idxStr];
+                                if (lnk.rSt && status === 'OK') status = lnk.rSt;
+                                // Preenche coluna orcamento caso estivesse vazia na LinhaProducao
+                                if (lnk.hOrc !== -1 && (!lnk.rOrc || lnk.rOrc === '0') && orcamentoExtraido && orcamentoExtraido !== '0') {
+                                    const updatedRow = [...lnk.rowArr];
+                                    while (updatedRow.length < lnk.colLen) updatedRow.push('');
+                                    updatedRow[lnk.hOrc] = orcamentoExtraido;
+                                    lpPendingUpdates.push({ sheetRow: lnk.sheetRow, values: updatedRow });
+                                }
+                            } else if (unlinkedBySku[sku] && unlinkedBySku[sku].length > 0) {
+                                const preMatch = unlinkedBySku[sku].shift();
+                                if (preMatch.status) status = preMatch.status;
+                                const updatedRow = [...preMatch.rowArr];
+                                while (updatedRow.length < preMatch.colLen) updatedRow.push('');
+                                if (preMatch.hId !== -1) updatedRow[preMatch.hId] = String(p.numero || p.id);
+                                if (preMatch.hIdx !== -1) updatedRow[preMatch.hIdx] = idxStr;
+                                if (preMatch.hQty !== -1 && !String(updatedRow[preMatch.hQty] || '').trim()) {
+                                    updatedRow[preMatch.hQty] = i.quantidade || 1;
+                                }
+                                // Data, status, responsavel e descricaocomplementar são preservados intactos da pré-produção!
+                                console.log(`[Bling Webhook] Vinculando item pré-produção do orçamento ${orcamentoExtraido} (SKU ${sku}) ao pedido ${p.numero || p.id} (index ${idxStr})`);
+                                lpPendingUpdates.push({ sheetRow: preMatch.sheetRow, values: updatedRow });
+                            }
+
                             return `(${sku}, ${parseFloat(i.quantidade).toFixed(2)}, ${parseFloat(i.valor).toFixed(2)}|${status})`;
                         }).join(' ');
+
+                        // Grava os vínculos em LinhaProducao antes de notificar os clientes
+                        for (const upd of lpPendingUpdates) {
+                            try {
+                                await sheets.spreadsheets.values.update({
+                                    spreadsheetId: SPREADSHEET_ID,
+                                    range: `LinhaProducao!A${upd.sheetRow}`,
+                                    valueInputOption: 'RAW',
+                                    resource: { values: [upd.values] }
+                                });
+                            } catch (updErr) {
+                                console.error(`[Bling Webhook] Erro ao atualizar LinhaProducao linha ${upd.sheetRow}:`, updErr.message);
+                            }
+                        }
                     } else {
                         rowValues[COLUMNS.ITENS] = "";
                     }

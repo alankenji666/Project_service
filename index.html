@@ -15,8 +15,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script
         src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-    <!-- Incluindo SheetJS para exportação em Excel -->
+    <!-- Incluindo SheetJS e ExcelJS para exportação em Excel com imagens -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <!-- Firebase SDK (v10+) -->
     <script type="importmap">
     {
@@ -694,6 +695,10 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                         Nova SAT-G (Manual)
                     </button>
+                    <button id="btn-garantia-linha-producao" onclick="if(window.GerenciarPedidosApp && window.GerenciarPedidosApp.openLinhaProducaoModal) { window.GerenciarPedidosApp.openLinhaProducaoModal('GARANTIA'); } else if(typeof GerenciarPedidosApp !== 'undefined' && GerenciarPedidosApp.openLinhaProducaoModal) { GerenciarPedidosApp.openLinhaProducaoModal('GARANTIA'); }" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg transition-colors shadow hover:shadow-md">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        Linha de Produção
+                    </button>
                     <a href="https://project-service-3fkn.vercel.app" target="_blank" class="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-medium px-4 py-2.5 rounded-lg transition-colors shadow hover:shadow-md">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                     Formulário Sat-G
@@ -965,12 +970,13 @@
                                 </div>
                             </div>
 
-                            <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                            <div class="bg-white rounded-lg border border-gray-200">
                                 <table class="min-w-full divide-y divide-gray-200 text-sm">
                                     <thead class="bg-gray-50">
                                         <tr>
                                             <th class="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Produto</th>
                                             <th class="px-4 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider">Qtd</th>
+                                            <th class="px-4 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider">Situação</th>
                                             <th class="px-4 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider">Peso</th>
                                             <th class="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Valor Uni. (Custo)</th>
                                             <th class="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Valor Total</th>
@@ -979,7 +985,7 @@
                                     </thead>
                                     <tbody id="garantia-items-list" class="divide-y divide-gray-100">
                                         <tr>
-                                            <td colspan="6" id="garantia-items-empty" class="px-4 py-8 text-sm text-gray-500 italic text-center">Nenhum item adicionado.</td>
+                                            <td colspan="7" id="garantia-items-empty" class="px-4 py-8 text-sm text-gray-500 italic text-center">Nenhum item adicionado.</td>
                                         </tr>
                                     </tbody>
                                     <tfoot id="garantia-items-footer" class="border-t border-gray-200 hidden">
@@ -1749,7 +1755,7 @@
                     <p class="text-lg text-gray-600">Selecione o dashboard que deseja visualizar.</p>
                 </div>
                 
-                <div class="flex flex-wrap justify-center gap-8 w-full max-w-6xl">
+                <div class="flex flex-wrap justify-center gap-8 w-full max-w-7xl">
                     <!-- Card Dashboard de Vendas -->
                     <div id="select-vendas-dashboard" class="w-full md:w-[340px] bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all cursor-pointer border-2 border-transparent hover:border-blue-500 group">
                         <div class="flex flex-col items-center text-center">
@@ -1799,6 +1805,19 @@
                             </div>
                             <h2 class="text-2xl font-bold text-gray-800 mb-3">Ranking de Saídas</h2>
                             <p class="text-gray-600">Descubra quais produtos são os mais vendidos e quais geram maior fluxo.</p>
+                        </div>
+                    </div>
+
+                    <!-- Card Produtos E-commerce -->
+                    <div id="select-ecommerce-dashboard" class="w-full md:w-[340px] bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all cursor-pointer border-2 border-transparent hover:border-teal-500 group">
+                        <div class="flex flex-col items-center text-center">
+                            <div class="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-teal-500 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-teal-600 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                </svg>
+                            </div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-3">Produtos E-commerce</h2>
+                            <p class="text-gray-600">Consulte a tabela de itens do e-commerce com preços de venda, custo e exportação em Excel.</p>
                         </div>
                     </div>
                 </div>
@@ -2097,7 +2116,7 @@
                 </div>
 
                 <!-- Cards de Resumo e Filtro por Categoria -->
-                <div id="ranking-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                <div id="ranking-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
                     <!-- Preenchido via JS -->
                 </div>
 
@@ -2128,6 +2147,184 @@
                     <!-- Tabela de Ranking Completa -->
                     <div id="ranking-table-container" class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                         <!-- Gerado via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conteúdo do Dashboard de Produtos E-commerce (Oculto Inicialmente) -->
+            <div id="dashboard-ecommerce-container" class="hidden">
+                <!-- Header com botão voltar, título e ação de exportação -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+                    <div class="flex items-center">
+                        <button id="back-to-selector-from-ecommerce-btn" class="mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-600" title="Voltar para seleção">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                        </button>
+                        <div>
+                            <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-1 flex items-center gap-3">
+                                Produtos do E-commerce
+                                <span id="ecommerce-products-count-badge" class="text-xs sm:text-sm font-semibold bg-teal-100 text-teal-800 px-3 py-1 rounded-full">0 itens</span>
+                            </h1>
+                            <p class="text-sm sm:text-base text-gray-600">Catálogo de itens do e-commerce com preços de venda, custo e margens.</p>
+                        </div>
+                    </div>
+
+                    <!-- Botões de Ação -->
+                    <div class="flex items-center gap-3">
+                        <button id="btn-sync-ecommerce-li" class="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 font-medium py-2.5 px-4 rounded-xl shadow-sm hover:shadow transition-all text-sm group" title="Sincronizar produtos ativos diretamente da API da Loja Integrada">
+                            <svg id="sync-ecommerce-icon" class="w-4 h-4 text-gray-500 group-hover:text-teal-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span id="sync-ecommerce-text">Sincronizar Loja Integrada</span>
+                        </button>
+                        <button id="btn-export-ecommerce-excel" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-5 rounded-xl shadow-sm hover:shadow transition-all text-sm">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>Baixar em Excel</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Cards de Resumo Rápidos -->
+                <div id="ecommerce-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600 shrink-0">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Total de Itens</p>
+                            <h3 id="ecommerce-summary-total-items" class="text-2xl font-bold text-gray-800">0</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Média Preço Venda</p>
+                            <h3 id="ecommerce-summary-avg-venda" class="text-2xl font-bold text-gray-800">R$ 0,00</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Com Custo Cadastrado</p>
+                            <h3 id="ecommerce-summary-with-cost" class="text-2xl font-bold text-gray-800">0</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-600 shrink-0">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Com Estoque Disponível</p>
+                            <h3 id="ecommerce-summary-in-stock" class="text-2xl font-bold text-gray-800">0</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Barra de Filtros e Busca -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
+                    <div class="relative w-full md:w-96">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </span>
+                        <input type="text" id="ecommerce-search-input" 
+                            class="block w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm transition-all" 
+                            placeholder="Buscar por código ou descrição...">
+                    </div>
+
+                    <div class="flex items-center gap-3 w-full md:w-auto flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <label for="ecommerce-filter-scope" class="text-xs font-semibold text-gray-600">Catálogo:</label>
+                            <select id="ecommerce-filter-scope" class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                <option value="ecommerce" selected>Apenas E-commerce</option>
+                                <option value="all">Todos os Produtos Bling</option>
+                            </select>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <label for="ecommerce-filter-custo" class="text-xs font-semibold text-gray-600">Custo:</label>
+                            <select id="ecommerce-filter-custo" class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                <option value="all" selected>Todos</option>
+                                <option value="com-custo">Apenas com Custo</option>
+                                <option value="sem-custo">Sem Custo</option>
+                            </select>
+                        </div>
+
+                        <label class="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer ml-1">
+                            <input type="checkbox" id="ecommerce-show-zerados-cb" checked class="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500">
+                            <span>Incluir estoque zerado</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Tabela de Produtos E-commerce -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                    <div class="overflow-x-auto flex-1 custom-scrollbar">
+                        <table id="ecommerce-products-table" class="min-w-full divide-y divide-gray-200 text-left text-sm">
+                            <thead class="bg-gray-50 text-xs font-semibold text-gray-600 uppercase tracking-wider sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-4 py-3.5 text-center w-16">Foto</th>
+                                    <th class="px-4 py-3.5 cursor-pointer hover:bg-gray-100 select-none transition-colors" data-sort="codigo">
+                                        <div class="flex items-center gap-1">
+                                            <span>Código</span>
+                                            <span class="sort-icon text-gray-400">↕</span>
+                                        </div>
+                                    </th>
+                                    <th class="px-4 py-3.5 cursor-pointer hover:bg-gray-100 select-none transition-colors" data-sort="descricao">
+                                        <div class="flex items-center gap-1">
+                                            <span>Descrição do Item</span>
+                                            <span class="sort-icon text-gray-400">↕</span>
+                                        </div>
+                                    </th>
+                                    <th class="px-4 py-3.5 text-right cursor-pointer hover:bg-gray-100 select-none transition-colors" data-sort="preco_custo">
+                                        <div class="flex items-center justify-end gap-1">
+                                            <span>Preço de Custo</span>
+                                            <span class="sort-icon text-gray-400">↕</span>
+                                        </div>
+                                    </th>
+                                    <th class="px-4 py-3.5 text-right cursor-pointer hover:bg-gray-100 select-none transition-colors" data-sort="preco_venda">
+                                        <div class="flex items-center justify-end gap-1">
+                                            <span>Preço de Venda</span>
+                                            <span class="sort-icon text-gray-400">↕</span>
+                                        </div>
+                                    </th>
+                                    <th class="px-4 py-3.5 text-right cursor-pointer hover:bg-gray-100 select-none transition-colors" data-sort="margem">
+                                        <div class="flex items-center justify-end gap-1">
+                                            <span>Margem (R$ / %)</span>
+                                            <span class="sort-icon text-gray-400">↕</span>
+                                        </div>
+                                    </th>
+                                    <th class="px-4 py-3.5 text-center cursor-pointer hover:bg-gray-100 select-none transition-colors" data-sort="estoque">
+                                        <div class="flex items-center justify-center gap-1">
+                                            <span>Estoque</span>
+                                            <span class="sort-icon text-gray-400">↕</span>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="ecommerce-products-tbody" class="bg-white divide-y divide-gray-100">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Rodapé da tabela com contador e paginação -->
+                    <div id="ecommerce-pagination-container" class="bg-gray-50 px-6 py-3 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
+                        <div id="ecommerce-pagination-info">
+                            Mostrando <span class="font-bold">0</span> de <span class="font-bold">0</span> produtos
+                        </div>
+                        <div id="ecommerce-pagination-controls" class="flex items-center gap-1">
+                            <!-- Injetado via JS -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2400,6 +2597,14 @@
                                         class="order-status-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                         value="entregues">
                                     <span class="flex-grow text-gray-700">Pedidos Entregues</span>
+                                </label>
+                                <div class="border-t border-gray-100 my-1"></div>
+                                <label
+                                    class="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                                    <input type="checkbox"
+                                        class="order-status-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        value="consumo">
+                                    <span class="flex-grow text-gray-700">Pedidos de Consumo</span>
                                 </label>
                             </div>
                         </div>
@@ -3978,11 +4183,11 @@
         </div>
     </div>
 
-    <!-- Modal: Editar Descrição do Item (Linha de Produção) - TEMPLATE PADRONIZADO -->
+    <!-- Modal: Editar Item (Linha de Produção) - TEMPLATE PADRONIZADO -->
     <div id="edit-item-desc-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-bold text-gray-800">Editar Descrição do Item</h3>
+                <h3 class="text-lg font-bold text-gray-800">Editar Item na Produção</h3>
                 <button id="close-edit-item-desc-modal-btn" class="text-gray-400 hover:text-gray-600 transition-colors">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
@@ -3998,18 +4203,64 @@
             </div>
 
             <div class="mb-4">
-                <label for="edit-item-desc-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Nova Descrição / Variação</label>
+                <label for="edit-item-desc-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Descrição / Variação</label>
                 <textarea id="edit-item-desc-input" rows="3"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                     placeholder="Digite a variação para a fabricação..."></textarea>
             </div>
             
-            <div class="mb-5">
-                <label for="edit-item-responsavel-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Responsável pela Produção</label>
-                <input type="text" id="edit-item-responsavel-input" 
-                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nome de quem vai produzir (Ex: Kenji, João, etc)">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="edit-item-responsavel-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Responsável pela Produção</label>
+                    <div id="edit-item-resp-select-group" class="flex items-center gap-1.5">
+                        <select id="edit-item-responsavel-input"
+                            class="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Sem responsável --</option>
+                        </select>
+                        <button type="button" id="edit-item-add-resp-btn"
+                            class="px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-bold text-sm transition-colors flex-shrink-0"
+                            title="Adicionar novo responsável">
+                            +
+                        </button>
+                    </div>
+                    <div id="edit-item-resp-new-group" class="hidden flex items-center gap-1.5">
+                        <input type="text" id="edit-item-new-resp-input"
+                            class="flex-1 min-w-0 border border-blue-400 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Novo responsável...">
+                        <button type="button" id="edit-item-confirm-resp-btn"
+                            class="px-2.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors flex-shrink-0">
+                            OK
+                        </button>
+                        <button type="button" id="edit-item-cancel-resp-btn"
+                            class="px-2 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold transition-colors flex-shrink-0"
+                            title="Cancelar">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label for="edit-item-date-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Data de Solicitação</label>
+                    <input type="date" id="edit-item-date-input"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
             </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                <div>
+                    <label for="edit-item-vendedor-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Vendedor</label>
+                    <select id="edit-item-vendedor-input"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Sem vendedor --</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="edit-item-qty-input" class="block text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Quantidade</label>
+                    <input type="number" id="edit-item-qty-input" min="1" step="any"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ex: 1">
+                </div>
+            </div>
+
             <div class="flex justify-end space-x-3">
                 <button id="cancel-edit-item-desc-btn" class="px-5 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors">Cancelar</button>
                 <button id="save-edit-item-desc-btn" class="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium transition-colors flex items-center gap-2">
@@ -4512,6 +4763,18 @@
                             <option value="FINALIZADO">Finalizado</option>
                         </select>
                     </div>
+                    <div class="flex items-center gap-2">
+                        <label for="filter-tipo-lp" class="text-sm font-bold text-gray-600">Tipo:</label>
+                        <select id="filter-tipo-lp" class="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors">
+                            <option value="TODOS">Todos</option>
+                            <option value="VENDAS">Vendas</option>
+                            <option value="GARANTIA">Garantia</option>
+                        </select>
+                    </div>
+                    <button id="lp-add-item-btn" class="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-bold text-sm transition-all shadow-md">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                        Adicionar Item
+                    </button>
                     <button id="print-production-line-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-all shadow-md">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                         Imprimir
@@ -4527,6 +4790,134 @@
                     <div class="h-24 bg-gray-100 rounded w-full"></div>
                     <div class="h-24 bg-gray-100 rounded w-full"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+    <!-- MODAL ALTERAR SITUAÇÃO ITEM LINHA DE PRODUÇÃO -->
+    <div id="lp-status-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+                <div>
+                    <h3 class="text-lg font-black text-gray-800">Alterar Situação</h3>
+                    <p id="lp-status-modal-subtitle" class="text-xs text-gray-500 font-medium truncate max-w-[320px]">Selecione a nova situação do item</p>
+                </div>
+                <button id="close-lp-status-modal-btn" type="button" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-full hover:bg-gray-200 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-3">
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 cursor-pointer hover:bg-orange-50/50 transition-all has-[:checked]:border-orange-400 has-[:checked]:bg-orange-50">
+                    <input type="radio" name="lp-item-status-radio" value="EM PRODUÇÃO" class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 cursor-pointer">
+                    <span class="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0"></span>
+                    <span class="text-sm font-bold text-gray-800 uppercase tracking-wide flex-1">Em Produção</span>
+                </label>
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 cursor-pointer hover:bg-yellow-50/50 transition-all has-[:checked]:border-yellow-400 has-[:checked]:bg-yellow-50">
+                    <input type="radio" name="lp-item-status-radio" value="AGUARDANDO RETIRADA" class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 cursor-pointer">
+                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 shrink-0"></span>
+                    <span class="text-sm font-bold text-gray-800 uppercase tracking-wide flex-1">Aguardando Retirada</span>
+                </label>
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 cursor-pointer hover:bg-green-50/50 transition-all has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
+                    <input type="radio" name="lp-item-status-radio" value="FINALIZADO" class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 cursor-pointer">
+                    <span class="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0"></span>
+                    <span class="text-sm font-bold text-gray-800 uppercase tracking-wide flex-1">Finalizado</span>
+                </label>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                <button id="cancel-lp-status-modal-btn" type="button" class="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
+                    Cancelar
+                </button>
+                <button id="confirm-lp-status-modal-btn" type="button" class="px-5 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- MODAL ADICIONAR ITEM MANUAL NA LINHA DE PRODUÇÃO (POR ORÇAMENTO) -->
+    <div id="lp-add-item-modal" class="fixed hidden inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+                <div>
+                    <h3 class="text-lg font-black text-gray-800">Adicionar Item na Produção</h3>
+                    <p class="text-xs text-gray-500 font-medium">Pré-produção vinculada ao número do orçamento</p>
+                </div>
+                <button id="close-lp-add-item-btn" type="button" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-full hover:bg-gray-200 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="lp-add-orcamento-input" class="block text-xs font-bold text-gray-600 uppercase mb-1">Nº do Orçamento *</label>
+                        <input type="text" id="lp-add-orcamento-input" placeholder="Ex: 1678-26" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="lp-add-date-input" class="block text-xs font-bold text-gray-600 uppercase mb-1">Data *</label>
+                        <input type="date" id="lp-add-date-input" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div class="relative">
+                    <label for="lp-add-product-search" class="block text-xs font-bold text-gray-600 uppercase mb-1">Buscar Produto (SKU ou Nome)</label>
+                    <input type="text" id="lp-add-product-search" placeholder="Digite o código ou descrição para selecionar..." autocomplete="off" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <div id="lp-add-product-results" class="hidden absolute z-30 left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl divide-y divide-gray-100"></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label for="lp-add-sku-input" class="block text-xs font-bold text-gray-600 uppercase mb-1">Código SKU *</label>
+                        <input type="text" id="lp-add-sku-input" placeholder="Ex: 603022574" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono font-semibold text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="lp-add-qty-input" class="block text-xs font-bold text-gray-600 uppercase mb-1">Quantidade *</label>
+                        <input type="number" id="lp-add-qty-input" min="1" step="any" value="1" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="lp-add-status-input" class="block text-xs font-bold text-gray-600 uppercase mb-1">Situação</label>
+                        <select id="lp-add-status-input" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="EM PRODUÇÃO" selected>Em Produção</option>
+                            <option value="AGUARDANDO RETIRADA">Aguardando Retirada</option>
+                            <option value="FINALIZADO">Finalizado</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="lp-add-desc-input" class="block text-xs font-bold text-gray-600 uppercase mb-1">Descrição / Complemento</label>
+                    <textarea id="lp-add-desc-input" rows="2" placeholder="Descrição do item ou observação de fabricação..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"></textarea>
+                </div>
+                <div>
+                    <label for="lp-add-resp-input" class="block text-xs font-bold text-gray-600 uppercase mb-1">Responsável</label>
+                    <div id="lp-add-resp-select-group" class="flex items-center gap-1.5">
+                        <select id="lp-add-resp-input"
+                            class="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">-- Sem responsável --</option>
+                        </select>
+                        <button type="button" id="lp-add-resp-add-btn"
+                            class="px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-bold text-sm transition-colors flex-shrink-0"
+                            title="Adicionar novo responsável">
+                            +
+                        </button>
+                    </div>
+                    <div id="lp-add-resp-new-group" class="hidden flex items-center gap-1.5">
+                        <input type="text" id="lp-add-new-resp-input"
+                            class="flex-1 min-w-0 px-3 py-2 border border-blue-400 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-blue-500"
+                            placeholder="Novo responsável...">
+                        <button type="button" id="lp-add-confirm-resp-btn"
+                            class="px-2.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors flex-shrink-0">
+                            OK
+                        </button>
+                        <button type="button" id="lp-add-cancel-resp-btn"
+                            class="px-2 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold transition-colors flex-shrink-0"
+                            title="Cancelar">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                <button id="cancel-lp-add-item-btn" type="button" class="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
+                    Cancelar
+                </button>
+                <button id="confirm-lp-add-item-btn" type="button" class="px-5 py-2 text-sm font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-2">
+                    Confirmar
+                </button>
             </div>
         </div>
     </div>
@@ -4797,7 +5188,33 @@
                 <div class="mb-4">
                     <label id="modal-generic-edit-label" class="block text-sm font-semibold text-gray-700 mb-2">Valor</label>
                     <input type="text" id="modal-generic-edit-input" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors text-gray-800 font-medium" autocomplete="off">
-                    <select id="modal-generic-edit-select" class="hidden w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors text-gray-800 font-medium"></select>
+                    
+                    <div id="modal-generic-edit-select-container" class="hidden">
+                        <div id="modal-generic-edit-select-group" class="flex items-center gap-1.5">
+                            <select id="modal-generic-edit-select" class="flex-1 min-w-0 px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors text-gray-800 font-medium">
+                                <option value="">-- Sem responsável --</option>
+                            </select>
+                            <button type="button" id="btn-add-generic-edit-opt"
+                                class="px-3.5 py-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-bold text-sm transition-colors flex-shrink-0"
+                                title="Adicionar novo">
+                                +
+                            </button>
+                        </div>
+                        <div id="modal-generic-edit-new-group" class="hidden flex items-center gap-1.5">
+                            <input type="text" id="modal-generic-edit-new-input"
+                                class="flex-1 min-w-0 border border-blue-400 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Novo responsável...">
+                            <button type="button" id="btn-confirm-generic-edit-new"
+                                class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors flex-shrink-0">
+                                OK
+                            </button>
+                            <button type="button" id="btn-cancel-generic-edit-new"
+                                class="px-2.5 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold transition-colors flex-shrink-0"
+                                title="Cancelar">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">

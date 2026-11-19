@@ -10,14 +10,15 @@
         import { PesquisarProduto } from './modulos/pesquisarProduto.js?v=110';
         window.PesquisarProduto = PesquisarProduto;
         import { Atendimento } from './modulos/atendimento.js?v=110';
-        import { DashboardApp } from './modulos/dashboard.js?v=115';
+        import { DashboardApp } from './modulos/dashboard.js?v=119';
         window.DashboardApp = DashboardApp;
         import { EstoqueApp } from './modulos/estoque.js?v=110';
         import { SaidaItens } from './modulos/saidaItens.js?v=110';
         import { LojaIntegradaApp } from './modulos/lojaIntegrada.js?v=110';
+        window.LojaIntegradaApp = LojaIntegradaApp;
         import { GerenciarPedidosApp } from './modulos/gerenciarPedidos.js?v=115';
         window.GerenciarPedidosApp = GerenciarPedidosApp;
-        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=130';
+        import { GerenciarGarantiaApp } from './modulos/gerenciarGarantia.js?v=132';
         window.GerenciarGarantiaApp = GerenciarGarantiaApp;
         import { PecasEquipamentoApp } from './modulos/pecasEquipamento.js?v=110';
         import { TransportadorasApp } from './modulos/transportadoras.js?v=110';
@@ -2574,8 +2575,24 @@ const data = filteredProducts.map(product => {
                 });
 
                 const selectedStatusFilters = [..._ordersTableState.statusFilters];
+                const hasConsumoFilter = selectedStatusFilters.includes('consumo');
+                const timeStatusFilters = selectedStatusFilters.filter(f => f !== 'consumo');
+
+                if (hasConsumoFilter) {
+                    const productTagsMap = new Map();
+                    _allProducts.forEach(p => {
+                        const code = String(p.codigo || '').trim();
+                        if (code) productTagsMap.set(code, p.grupo_de_tags_tags || []);
+                    });
+
+                    filteredItems = filteredItems.filter(item => {
+                        const tags = productTagsMap.get(String(item.codigoService || '').trim());
+                        return Array.isArray(tags) && tags.some(t => String(t).toLowerCase().includes('consumo'));
+                    });
+                }
+
                 // ATUALIZADO: Lógica de filtro de status
-                if (selectedStatusFilters.length > 0) {
+                if (timeStatusFilters.length > 0) {
                     // Se houver filtros de status ativos, aplica-os
                     filteredItems = filteredItems.filter(item => {
                         const itemStatus = (item.situacao || '').toLowerCase();
@@ -2596,7 +2613,7 @@ const data = filteredProducts.map(product => {
                             }
                         }
 
-                        return selectedStatusFilters.some(filter => {
+                        return timeStatusFilters.some(filter => {
                             switch (filter) {
                                 case 'entregues': return isOk;
                                 case 'dentro_prazo': return !isOk && daysOverdue === 0;
@@ -4085,23 +4102,30 @@ const data = filteredProducts.map(product => {
              * NOVO: Imprime a "Solicitação" a partir da tela de Relatório/Preparação.
              */
             window._promptGeneric = _promptGeneric;
-function _promptGeneric(title, label, callback, type = "text", defaultValue = "") {
+function _promptGeneric(title, label, callback, type = "text", defaultValue = "", options = []) {
     const modal = document.getElementById('modal-generic-edit');
     if (!modal) {
         const ans = window.prompt(label, defaultValue);
-        if (ans !== null) callback(ans);
+        if (ans !== null && callback) callback(ans);
         return;
     }
     const titleEl = document.getElementById('modal-generic-edit-title');
     const labelEl = document.getElementById('modal-generic-edit-label');
     const inputEl = document.getElementById('modal-generic-edit-input');
+    const selectContainer = document.getElementById('modal-generic-edit-select-container');
+    const selectGroup = document.getElementById('modal-generic-edit-select-group');
     const selectEl = document.getElementById('modal-generic-edit-select');
+    const btnAdd = document.getElementById('btn-add-generic-edit-opt');
+    const newGroup = document.getElementById('modal-generic-edit-new-group');
+    const newInputAdd = document.getElementById('modal-generic-edit-new-input');
+    const btnConfirmNew = document.getElementById('btn-confirm-generic-edit-new');
+    const btnCancelNew = document.getElementById('btn-cancel-generic-edit-new');
     const btnCancel = document.getElementById('btn-cancel-generic-edit');
     const btnSave = document.getElementById('btn-save-generic-edit');
     const btnClose = document.getElementById('btn-close-generic-edit');
 
-    titleEl.innerText = title;
-    labelEl.innerText = label;
+    if (titleEl) titleEl.innerText = title;
+    if (labelEl) labelEl.innerText = label;
 
     const newBtnSave = btnSave.cloneNode(true);
     btnSave.parentNode.replaceChild(newBtnSave, btnSave);
@@ -4112,10 +4136,151 @@ function _promptGeneric(title, label, callback, type = "text", defaultValue = ""
     const newInput = inputEl.cloneNode(true);
     inputEl.parentNode.replaceChild(newInput, inputEl);
 
-    if (selectEl) selectEl.classList.add('hidden');
-    newInput.classList.remove('hidden');
-    newInput.type = type;
-    newInput.value = defaultValue || '';
+    let newSelect = null;
+    if (selectEl) {
+        newSelect = selectEl.cloneNode(true);
+        selectEl.parentNode.replaceChild(newSelect, selectEl);
+    }
+
+    const isSelect = (type === 'select') || (Array.isArray(options) && options.length > 0);
+    const isResponsibleField = String(title || '').toLowerCase().includes('respons') ||
+                               String(label || '').toLowerCase().includes('respons');
+
+    if (isSelect && newSelect) {
+        newInput.classList.add('hidden');
+        if (selectContainer) {
+            selectContainer.classList.remove('hidden');
+            if (selectGroup) selectGroup.classList.remove('hidden');
+            if (newGroup) newGroup.classList.add('hidden');
+            if (newInputAdd) newInputAdd.value = '';
+        }
+        newSelect.classList.remove('hidden');
+        newSelect.innerHTML = '';
+
+        if (isResponsibleField) {
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '-- Sem responsável --';
+            newSelect.appendChild(emptyOpt);
+        }
+
+        const normalizedOptions = [];
+        options.forEach(opt => {
+            let val = '';
+            let text = '';
+            if (typeof opt === 'string') {
+                val = opt.trim();
+                text = opt.trim();
+            } else if (opt && typeof opt === 'object') {
+                val = String(opt.value ?? opt.codigo ?? opt.id ?? opt.nome ?? '').trim();
+                text = String(opt.label ?? opt.nome ?? val).trim();
+            }
+            if (val && val !== '-' && val !== 'SEM_RESP' && val !== 'SEM RESPONSÁVEL' && val !== 'SEM RESPONSAVEL') {
+                if (isResponsibleField) {
+                    val = val.toUpperCase();
+                    text = text.toUpperCase();
+                }
+                if (!normalizedOptions.includes(val)) {
+                    normalizedOptions.push(val);
+                    const optEl = document.createElement('option');
+                    optEl.value = val;
+                    optEl.textContent = text;
+                    newSelect.appendChild(optEl);
+                }
+            }
+        });
+
+        const normDefault = String(defaultValue || '').trim();
+        const targetMatch = isResponsibleField ? normDefault.toUpperCase() : normDefault;
+
+        if (targetMatch && Array.from(newSelect.options).some(o => (isResponsibleField ? o.value.toUpperCase() : o.value) === targetMatch)) {
+            const matched = Array.from(newSelect.options).find(o => (isResponsibleField ? o.value.toUpperCase() : o.value) === targetMatch);
+            newSelect.value = matched.value;
+        } else if (targetMatch && targetMatch !== '-' && targetMatch !== 'SEM_RESP' && targetMatch !== 'SEM RESPONSÁVEL') {
+            const extraOpt = document.createElement('option');
+            extraOpt.value = targetMatch;
+            extraOpt.textContent = targetMatch;
+            newSelect.appendChild(extraOpt);
+            newSelect.value = targetMatch;
+        } else {
+            newSelect.value = '';
+        }
+
+        if (btnAdd && newGroup && selectGroup && newInputAdd && btnConfirmNew && btnCancelNew) {
+            const newBtnAdd = btnAdd.cloneNode(true);
+            btnAdd.parentNode.replaceChild(newBtnAdd, btnAdd);
+            const newBtnConfirmNew = btnConfirmNew.cloneNode(true);
+            btnConfirmNew.parentNode.replaceChild(newBtnConfirmNew, btnConfirmNew);
+            const newBtnCancelNew = btnCancelNew.cloneNode(true);
+            btnCancelNew.parentNode.replaceChild(newBtnCancelNew, btnCancelNew);
+            const clonedNewInputAdd = newInputAdd.cloneNode(true);
+            newInputAdd.parentNode.replaceChild(clonedNewInputAdd, newInputAdd);
+
+            const closeNewAdd = () => {
+                clonedNewInputAdd.value = '';
+                newGroup.classList.add('hidden');
+                selectGroup.classList.remove('hidden');
+            };
+
+            const confirmNewAdd = () => {
+                let typed = clonedNewInputAdd.value.trim();
+                if (!typed) {
+                    clonedNewInputAdd.focus();
+                    return;
+                }
+                if (isResponsibleField) {
+                    typed = typed.toUpperCase();
+                }
+                const existing = Array.from(newSelect.options).find(o => o.value.toUpperCase() === typed.toUpperCase());
+                if (existing) {
+                    newSelect.value = existing.value;
+                } else {
+                    const optEl = document.createElement('option');
+                    optEl.value = typed;
+                    optEl.textContent = typed;
+                    newSelect.appendChild(optEl);
+                    newSelect.value = typed;
+                    if (isResponsibleField) {
+                        try {
+                            const cached = JSON.parse(localStorage.getItem('mks_lp_responsaveis_cache') || '[]');
+                            if (!cached.includes(typed)) {
+                                cached.push(typed);
+                                cached.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+                                localStorage.setItem('mks_lp_responsaveis_cache', JSON.stringify(cached));
+                            }
+                        } catch(e) {}
+                    }
+                }
+                closeNewAdd();
+                newSelect.focus();
+            };
+
+            newBtnAdd.onclick = () => {
+                selectGroup.classList.add('hidden');
+                newGroup.classList.remove('hidden');
+                clonedNewInputAdd.value = '';
+                clonedNewInputAdd.focus();
+            };
+
+            newBtnConfirmNew.onclick = confirmNewAdd;
+            newBtnCancelNew.onclick = closeNewAdd;
+            clonedNewInputAdd.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmNewAdd();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeNewAdd();
+                }
+            };
+        }
+    } else {
+        if (selectContainer) selectContainer.classList.add('hidden');
+        if (newSelect) newSelect.classList.add('hidden');
+        newInput.classList.remove('hidden');
+        newInput.type = type;
+        newInput.value = defaultValue || '';
+    }
 
     const closeModal = () => {
         modal.classList.add('hidden');
@@ -4123,9 +4288,17 @@ function _promptGeneric(title, label, callback, type = "text", defaultValue = ""
     };
 
     const handleSave = () => {
-        const val = newInput.value;
+        let val = '';
+        if (isSelect && newSelect) {
+            val = newSelect.value;
+        } else {
+            val = newInput.value;
+        }
+        if (isResponsibleField && val) {
+            val = val.trim().toUpperCase();
+        }
         closeModal();
-        callback(val);
+        if (callback) callback(val);
     };
 
     newBtnCancel.addEventListener('click', closeModal);
@@ -4136,10 +4309,20 @@ function _promptGeneric(title, label, callback, type = "text", defaultValue = ""
         if (e.key === 'Enter') handleSave();
         if (e.key === 'Escape') closeModal();
     });
+    if (newSelect) {
+        newSelect.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleSave();
+            if (e.key === 'Escape') closeModal();
+        });
+    }
 
     modal.classList.add('flex');
     modal.classList.remove('hidden');
-    newInput.focus();
+    if (isSelect && newSelect) {
+        newSelect.focus();
+    } else {
+        newInput.focus();
+    }
 }
 
 function _printReportSolicitation() {

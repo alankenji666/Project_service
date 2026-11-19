@@ -17,6 +17,7 @@
           ORDERS_TERCEIROS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos-terceiros",
           ORDERS_FABRICA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos-fabrica",
           LOJA_INTEGRADA_ORDERS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/loja-integrada/orders",
+          LOJA_INTEGRADA_PRODUCTS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/loja-integrada/produtos",
           ORDERS_BLING: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/pedidos",
           NFE: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/nfe-lista",
           SAIDAS_FABRICA: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/saidas-estoque", // Agora usa a mesma planilha de Garantia
