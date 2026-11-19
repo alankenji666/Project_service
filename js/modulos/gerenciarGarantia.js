@@ -2594,16 +2594,116 @@ export const GerenciarGarantiaApp = (function () {
     }
 
     /**
+     * Retorna o nome do usuário logado para auditoria
+     */
+    function _getLoggedUserName() {
+        try {
+            const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+            return userInfo.nome || userInfo.name || userInfo.login || userInfo.email || 'Usuário';
+        } catch (e) {
+            return 'Usuário';
+        }
+    }
+
+    /**
+     * Parseia o histórico de alterações de status armazenado na coluna AJ (finalizado).
+     * Suporta tanto formato JSON (novo) quanto legado "(dd/mm/aaaa|finalizado)".
+     */
+    function _parseSatgStatusHistory(raw) {
+        if (!raw) return [];
+        if (Array.isArray(raw)) return [...raw];
+        if (typeof raw === 'string') {
+            const trimmed = raw.trim();
+            if (trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) return parsed;
+                } catch (e) {
+                    console.warn('Erro ao parsear historicoStatusSatg:', e);
+                }
+            } else if (trimmed.includes('finalizado')) {
+                let dataStr = '';
+                const match = trimmed.match(/\(([^|)]+)/);
+                if (match) dataStr = match[1];
+                return [{
+                    data: dataStr || '',
+                    usuario: 'Sistema',
+                    campo: 'Finalizado',
+                    de: '',
+                    para: 'FINALIZADO',
+                    texto: 'Solicitação finalizada'
+                }];
+            }
+        }
+        return [];
+    }
+
+    /**
+     * Anexa uma nova alteração de status ao histórico da coluna AJ
+     */
+    function _appendSatgStatusChange(req, { campo, de = '', para = '', texto = '' }) {
+        if (!req) return '';
+        const history = _parseSatgStatusHistory(req.finalizado);
+        const d = new Date();
+        const dia = String(d.getDate()).padStart(2, '0');
+        const mes = String(d.getMonth() + 1).padStart(2, '0');
+        const ano = d.getFullYear();
+        const hora = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        const dataStr = `${dia}/${mes}/${ano} ${hora}:${min}`;
+        const usuario = _getLoggedUserName();
+
+        let desc = texto;
+        if (!desc) {
+            if (de && para) {
+                desc = `${campo}: de "${de}" para "${para}"`;
+            } else if (para) {
+                desc = `${campo}: "${para}"`;
+            } else {
+                desc = `${campo} atualizado`;
+            }
+        }
+
+        history.push({
+            data: dataStr,
+            usuario,
+            campo,
+            de,
+            para,
+            texto: desc
+        });
+
+        const json = JSON.stringify(history);
+        req.finalizado = json;
+        return json;
+    }
+
+    /**
      * Verifica se uma solicitação Sat-G está marcada como finalizada.
-     * Suporta formato de objeto ({ finalizado: '...' }) ou valor direto.
+     * Suporta formato JSON com histórico na coluna AJ, objeto ou string legada.
      */
     function _isSatgFinalizado(item) {
         if (!item) return false;
         const val = (typeof item === 'object' && item !== null && 'finalizado' in item) ? item.finalizado : item;
         if (!val) return false;
         if (typeof val === 'boolean') return val;
-        const str = String(val).toLowerCase().trim();
-        return str.includes('finalizado') || str.includes('sim') || str === 'true' || str.startsWith('(');
+        const str = String(val).trim();
+        if (str.startsWith('[')) {
+            try {
+                const list = JSON.parse(str);
+                if (Array.isArray(list) && list.length > 0) {
+                    for (let i = list.length - 1; i >= 0; i--) {
+                        const entry = list[i];
+                        if (entry && (entry.campo === 'Finalizado' || entry.tipo === 'finalizado')) {
+                            return entry.para === 'FINALIZADO' || entry.status === 'FINALIZADO';
+                        }
+                    }
+                }
+            } catch (e) {}
+            return false;
+        }
+        const lower = str.toLowerCase();
+        return lower.includes('finalizado') || lower.includes('sim') || lower === 'true' || lower.startsWith('(');
     }
 
     /**
@@ -3410,7 +3510,7 @@ export const GerenciarGarantiaApp = (function () {
             tr.innerHTML = `
                 <td class="w-12 px-2.5 py-2.5 whitespace-nowrap text-center text-xs font-medium">
                     <div class="flex items-center justify-center gap-1.5">
-                        <input type="checkbox" class="satg-finalizado-checkbox h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer" data-row-index="${req.rowIndex}" ${isFinalizado ? 'checked' : ''} title="${isFinalizado ? 'Finalizado' + (req.finalizado ? ': ' + req.finalizado : '') + ' (clique para reabrir)' : 'Clique para finalizar esta solicitação'}">
+                        <input type="checkbox" class="satg-finalizado-checkbox h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer" data-row-index="${req.rowIndex}" ${isFinalizado ? 'checked' : ''} title="${isFinalizado ? 'Finalizado (clique para reabrir)' : 'Clique para finalizar esta solicitação'}">
                         <span class="btn-observacao-satg cursor-pointer p-1 rounded-full hover:bg-gray-200 transition-colors inline-flex items-center justify-center" data-row-index="${req.rowIndex}" title="${hasSatgObs ? 'Ver / Adicionar Observação (possui anotações)' : 'Adicionar Observação'}">
                             <svg class="h-4 w-4 ${hasSatgObs ? 'text-red-500' : 'text-gray-400'} hover:scale-110 transition-transform pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
                                 <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"/>
@@ -3499,6 +3599,13 @@ export const GerenciarGarantiaApp = (function () {
                         garBtn.classList.add('animate-pulse', 'opacity-50');
                         garBtn.disabled = true;
                         try {
+                            const newHistoryJson = _appendSatgStatusChange(req, {
+                                campo: 'Garantia',
+                                de: statusUpper,
+                                para: newStatus,
+                                texto: `Garantia alterada para ${newStatus}`
+                            });
+
                             // Se o usuário selecionou NÃO QUALIDADE e ainda não possui orçamento vinculado,
                             // auto-cria o orçamento como 'EM ANALISE' para liberar Orçamento, Retorno e Serviço imediatamente!
                             if (newStatus === 'NÃO QUALIDADE' && !req.idPedido) {
@@ -3520,7 +3627,7 @@ export const GerenciarGarantiaApp = (function () {
                                 await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ rowIndex: req.rowIndex, status: newStatus, idPedido: idGerado })
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, status: newStatus, idPedido: idGerado, finalizado: newHistoryJson })
                                 });
                                 req.idPedido = idGerado;
                                 await _fetchPedidosGarantiaData();
@@ -3528,7 +3635,7 @@ export const GerenciarGarantiaApp = (function () {
                                 const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ rowIndex: req.rowIndex, status: newStatus })
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, status: newStatus, finalizado: newHistoryJson })
                                 });
                                 if (!res.ok) throw new Error();
                             }
@@ -3562,6 +3669,13 @@ export const GerenciarGarantiaApp = (function () {
                         pedBtn.classList.add('animate-pulse', 'opacity-50');
                         pedBtn.disabled = true;
                         try {
+                            const newHistoryJson = _appendSatgStatusChange(req, {
+                                campo: 'Orçamento',
+                                de: pStatus || 'EM ANALISE',
+                                para: newStatus,
+                                texto: `Orçamento alterado para ${newStatus}`
+                            });
+
                             if (req.idPedido || (pedidoVinculado && pedidoVinculado.idPedido)) {
                                 const updateUrl = API_URLS.GARANTIA_PEDIDO_UPDATE || API_URLS.GARANTIA_PEDIDO; 
                                 const targetId = (pedidoVinculado && pedidoVinculado.idPedido) ? pedidoVinculado.idPedido : req.idPedido;
@@ -3571,6 +3685,11 @@ export const GerenciarGarantiaApp = (function () {
                                     body: JSON.stringify({ idPedido: targetId, situacao: newStatus })
                                 });
                                 if (!res.ok) throw new Error();
+                                await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: newHistoryJson })
+                                });
                             } else {
                                 // Cria orçamento vinculado sob demanda se ainda não possuía (NÃO QUALIDADE)
                                 const idGerado = 'GAR-' + Math.floor(Date.now() / 1000).toString();
@@ -3591,7 +3710,7 @@ export const GerenciarGarantiaApp = (function () {
                                 await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ rowIndex: req.rowIndex, idPedido: idGerado })
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, idPedido: idGerado, finalizado: newHistoryJson })
                                 });
                                 req.idPedido = idGerado;
                             }
@@ -3625,10 +3744,17 @@ export const GerenciarGarantiaApp = (function () {
                         retBtn.classList.add('animate-pulse', 'opacity-50');
                         retBtn.disabled = true;
                         try {
+                            const newHistoryJson = _appendSatgStatusChange(req, {
+                                campo: 'Retorno Item',
+                                de: retornoStatus,
+                                para: newRetorno,
+                                texto: `Retorno Item alterado para ${newRetorno}`
+                            });
+
                             const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ rowIndex: req.rowIndex, retornoItem: newRetorno })
+                                body: JSON.stringify({ rowIndex: req.rowIndex, retornoItem: newRetorno, finalizado: newHistoryJson })
                             });
                             if (!res.ok) throw new Error();
                             
@@ -3686,6 +3812,12 @@ export const GerenciarGarantiaApp = (function () {
                             servicoMoBtn.disabled = true;
                             try {
                                 const idMoGerado = 'MO-' + Math.floor(Date.now() / 1000).toString();
+                                const newHistoryJson = _appendSatgStatusChange(req, {
+                                    campo: 'Serviço (M.O)',
+                                    de: 'Não Possui',
+                                    para: chosenVal,
+                                    texto: `Serviço (M.O) criado como ${chosenVal}`
+                                });
                                 await fetch(API_URLS.GARANTIA_SERVICOS_MO, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
@@ -3697,6 +3829,11 @@ export const GerenciarGarantiaApp = (function () {
                                         valorMO: '',
                                         satgRowIndex: req.rowIndex
                                     })
+                                });
+                                await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: newHistoryJson })
                                 });
                                 req.idServicoMO = idMoGerado;
                                 await _fetchSatGData();
@@ -3712,10 +3849,21 @@ export const GerenciarGarantiaApp = (function () {
                                 servicoMoBtn.classList.add('animate-pulse', 'opacity-50');
                                 servicoMoBtn.disabled = true;
                                 try {
+                                    const newHistoryJson = _appendSatgStatusChange(req, {
+                                        campo: 'Serviço (M.O)',
+                                        de: situacaoMoUpper || 'Ativo',
+                                        para: 'Cancelado',
+                                        texto: 'Serviço (M.O) cancelado'
+                                    });
                                     await fetch(API_URLS.GARANTIA_SERVICOS_MO_UPDATE_STATUS, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ idServicoMO: idMo, situacao: 'Cancelado', satgRowIndex: req.rowIndex })
+                                    });
+                                    await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: newHistoryJson })
                                     });
                                     if (servicoMoObj) servicoMoObj.situacao = 'Cancelado';
                                     _fetchSatGData();
@@ -3729,10 +3877,21 @@ export const GerenciarGarantiaApp = (function () {
                                 servicoMoBtn.classList.add('animate-pulse', 'opacity-50');
                                 servicoMoBtn.disabled = true;
                                 try {
+                                    const newHistoryJson = _appendSatgStatusChange(req, {
+                                        campo: 'Serviço (M.O)',
+                                        de: situacaoMoUpper,
+                                        para: chosenVal,
+                                        texto: `Serviço (M.O) alterado para ${chosenVal}`
+                                    });
                                     await fetch(API_URLS.GARANTIA_SERVICOS_MO_UPDATE_STATUS, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ idServicoMO: idMo, situacao: chosenVal, satgRowIndex: req.rowIndex })
+                                    });
+                                    await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: newHistoryJson })
                                     });
                                     if (servicoMoObj) servicoMoObj.situacao = chosenVal;
                                     _fetchSatGData();
@@ -3784,13 +3943,19 @@ export const GerenciarGarantiaApp = (function () {
                         
                         chkFinalizado.disabled = true;
                         try {
+                            const newHistoryJson = _appendSatgStatusChange(req, {
+                                campo: 'Finalizado',
+                                de: 'EM ATENDIMENTO',
+                                para: 'FINALIZADO',
+                                texto: 'Solicitação marcada como FINALIZADA'
+                            });
                             const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: finalizadoStr })
+                                body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: newHistoryJson })
                             });
                             if (!res.ok) throw new Error();
-                            req.finalizado = finalizadoStr;
+                            req.finalizado = newHistoryJson;
                             _fetchSatGData();
                         } catch (err) {
                             alert('Erro ao finalizar solicitação SAT-G');
@@ -3806,13 +3971,19 @@ export const GerenciarGarantiaApp = (function () {
                         
                         chkFinalizado.disabled = true;
                         try {
+                            const newHistoryJson = _appendSatgStatusChange(req, {
+                                campo: 'Finalizado',
+                                de: 'FINALIZADO',
+                                para: 'REABERTO',
+                                texto: 'Solicitação REABERTA'
+                            });
                             const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: '' })
+                                body: JSON.stringify({ rowIndex: req.rowIndex, finalizado: newHistoryJson })
                             });
                             if (!res.ok) throw new Error();
-                            req.finalizado = '';
+                            req.finalizado = newHistoryJson;
                             _fetchSatGData();
                         } catch (err) {
                             alert('Erro ao reabrir solicitação SAT-G');
@@ -4013,18 +4184,28 @@ export const GerenciarGarantiaApp = (function () {
                 const novoRespId = respSelect.value;
                 try {
                     respSelect.disabled = true;
+                    const nomeExibicao = _getUsuarioNome(novoRespId);
+                    const oldNome = _getUsuarioNome(req.responsavel) || 'Sem responsável';
+                    const newHistoryJson = _appendSatgStatusChange(req, {
+                        campo: 'Responsável',
+                        de: oldNome,
+                        para: nomeExibicao || 'Sem responsável',
+                        texto: `Responsável alterado para ${nomeExibicao || 'Sem responsável'}`
+                    });
+
                     const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             rowIndex: req.rowIndex,
-                            responsavel: novoRespId
+                            responsavel: novoRespId,
+                            finalizado: newHistoryJson
                         })
                     });
                     if (!res.ok) throw new Error();
                     req.responsavel = novoRespId;
+                    req.finalizado = newHistoryJson;
                     _fetchSatGData(true);
-                    const nomeExibicao = _getUsuarioNome(novoRespId);
                     if (window._showToast) window._showToast(`Responsável atualizado: ${nomeExibicao || 'Sem Responsável'}`, 'success');
                 } catch(e) {
                     console.error(e);
@@ -5186,6 +5367,17 @@ export const GerenciarGarantiaApp = (function () {
         const elAcaoPecas = document.getElementById('satg-modal-acao-pecas');
         if (elAcaoPecas) payload.acaoPecas = elAcaoPecas.value.trim();
 
+        const reqActual = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
+        if (status && reqActual && status !== reqActual.status) {
+            const newHistoryJson = _appendSatgStatusChange(reqActual, {
+                campo: 'Garantia',
+                de: reqActual.status || 'EM ANALISE',
+                para: status,
+                texto: `Garantia avaliada como ${status}`
+            });
+            payload.finalizado = newHistoryJson;
+        }
+
         if (status === 'APROVADO' || status === 'RECUSADO' || status === 'NÃO QUALIDADE') {
             const respSelect = document.getElementById('satg-modal-responsavel-select');
             if (respSelect && respSelect.value) {
@@ -5440,6 +5632,125 @@ export const GerenciarGarantiaApp = (function () {
         return html;
     }
 
+    function _switchSatgModalTab(tab = 'manual') {
+        const tabManual = document.getElementById('tab-satg-obs-manual');
+        const tabHist = document.getElementById('tab-satg-obs-historico');
+        const panelManual = document.getElementById('satg-obs-manual-panel');
+        const panelHist = document.getElementById('satg-obs-historico-panel');
+
+        if (!tabManual || !tabHist || !panelManual || !panelHist) return;
+
+        if (tab === 'historico') {
+            tabHist.classList.remove('border-transparent', 'text-gray-500', 'hover:bg-gray-100');
+            tabHist.classList.add('border-blue-600', 'text-blue-600', 'bg-white', 'shadow-sm');
+
+            tabManual.classList.remove('border-blue-600', 'text-blue-600', 'bg-white', 'shadow-sm');
+            tabManual.classList.add('border-transparent', 'text-gray-500', 'hover:bg-gray-100');
+
+            panelManual.classList.add('hidden');
+            panelHist.classList.remove('hidden');
+        } else {
+            tabManual.classList.remove('border-transparent', 'text-gray-500', 'hover:bg-gray-100');
+            tabManual.classList.add('border-blue-600', 'text-blue-600', 'bg-white', 'shadow-sm');
+
+            tabHist.classList.remove('border-blue-600', 'text-blue-600', 'bg-white', 'shadow-sm');
+            tabHist.classList.add('border-transparent', 'text-gray-500', 'hover:bg-gray-100');
+
+            panelHist.classList.add('hidden');
+            panelManual.classList.remove('hidden');
+        }
+    }
+
+    function _renderSatgStatusHistory(history) {
+        const container = document.getElementById('satg-status-history');
+        if (!container) return;
+
+        if (!history || history.length === 0) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-10 text-gray-400 text-center">
+                    <svg class="w-12 h-12 mb-2 opacity-40 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <p class="text-sm font-semibold text-gray-600">Nenhuma alteração de status registrada.</p>
+                    <p class="text-xs text-gray-400 mt-1 max-w-xs">As alterações de Garantia, Orçamento, Retorno, Serviço e Finalização aparecerão aqui automaticamente.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const html = history.map((entry) => {
+            let data = '';
+            let usuario = 'Sistema';
+            let campo = 'Status';
+            let texto = '';
+
+            if (typeof entry === 'object' && entry !== null) {
+                data = entry.data || entry.date || '';
+                usuario = entry.usuario || entry.user || 'Sistema';
+                campo = entry.campo || 'Status';
+                texto = entry.texto || entry.text || '';
+            } else if (typeof entry === 'string') {
+                texto = entry;
+                if (entry.includes(' - ')) {
+                    const parts = entry.split(' - ');
+                    data = parts[0];
+                    texto = parts.slice(1).join(' - ');
+                }
+            }
+
+            let badgeBg = 'bg-gray-100 text-gray-700 border-gray-200';
+            let iconSvg = '<svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+
+            const campoUpper = String(campo).toUpperCase();
+            const textoUpper = String(texto).toUpperCase();
+
+            if (campoUpper.includes('GARANTIA')) {
+                badgeBg = 'bg-blue-50 text-blue-700 border-blue-200';
+                iconSvg = '<svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>';
+            } else if (campoUpper.includes('ORÇAMENTO') || campoUpper.includes('ORCAMENTO')) {
+                badgeBg = 'bg-amber-50 text-amber-700 border-amber-200';
+                iconSvg = '<svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>';
+            } else if (campoUpper.includes('RETORNO')) {
+                badgeBg = 'bg-purple-50 text-purple-700 border-purple-200';
+                iconSvg = '<svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>';
+            } else if (campoUpper.includes('SERVIÇO') || campoUpper.includes('SERVICO') || campoUpper.includes('M.O')) {
+                badgeBg = 'bg-cyan-50 text-cyan-700 border-cyan-200';
+                iconSvg = '<svg class="w-4 h-4 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>';
+            } else if (campoUpper.includes('RESPONSÁVEL') || campoUpper.includes('RESPONSAVEL')) {
+                badgeBg = 'bg-slate-100 text-slate-700 border-slate-200';
+                iconSvg = '<svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>';
+            } else if (campoUpper.includes('FINALIZADO')) {
+                if (textoUpper.includes('REABERTO') || textoUpper.includes('REABERTA')) {
+                    badgeBg = 'bg-orange-50 text-orange-700 border-orange-200';
+                    iconSvg = '<svg class="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
+                } else {
+                    badgeBg = 'bg-green-50 text-green-700 border-green-200';
+                    iconSvg = '<svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+                }
+            }
+
+            return `
+                <div class="p-3 bg-white border border-gray-100 rounded-xl shadow-sm hover:border-gray-200 transition-all flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg ${badgeBg} border flex items-center justify-center shrink-0 mt-0.5">
+                        ${iconSvg}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${badgeBg}">${campo}</span>
+                            <span class="text-[11px] text-gray-400 font-medium whitespace-nowrap">${data}</span>
+                        </div>
+                        <p class="text-sm font-semibold text-gray-800 mt-1 leading-snug">${texto}</p>
+                        <div class="flex items-center gap-1.5 mt-1 text-[11px] text-gray-500 font-medium">
+                            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            <span>${usuario}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+    }
+
     function _ensureSatgObservationModalElements() {
         if (!_satgObservationModal || !document.body.contains(_satgObservationModal)) {
             _satgObservationModal = document.getElementById('satg-observation-modal');
@@ -5451,6 +5762,14 @@ export const GerenciarGarantiaApp = (function () {
         if (!_saveSatgObservationBtn) _saveSatgObservationBtn = document.getElementById('save-satg-observation-btn');
         if (!_cancelSatgObservationBtn) _cancelSatgObservationBtn = document.getElementById('cancel-satg-observation-btn');
         if (!_closeSatgObservationModalX) _closeSatgObservationModalX = document.getElementById('close-satg-observation-modal-x');
+
+        const tabManual = document.getElementById('tab-satg-obs-manual');
+        const tabHist = document.getElementById('tab-satg-obs-historico');
+        const closeHistBtn = document.getElementById('close-satg-status-history-btn');
+
+        if (tabManual) tabManual.onclick = () => _switchSatgModalTab('manual');
+        if (tabHist) tabHist.onclick = () => _switchSatgModalTab('historico');
+        if (closeHistBtn) closeHistBtn.onclick = _closeSatgObservationModal;
 
         if (_cancelSatgObservationBtn) {
             _cancelSatgObservationBtn.onclick = _closeSatgObservationModal;
@@ -5501,6 +5820,8 @@ export const GerenciarGarantiaApp = (function () {
             _satgObservationModalInfo.innerHTML = `Editando observação para SAT-G <b>${req.codigo || 'N/A'}</b> - ${req.cliente || 'N/A'}`;
         }
         
+        _switchSatgModalTab('manual');
+
         let history = [];
         try {
             if (typeof req.observacaoSatg === 'string' && req.observacaoSatg.startsWith('[')) {
@@ -5517,7 +5838,23 @@ export const GerenciarGarantiaApp = (function () {
             }
         }
 
+        const statusHistory = _parseSatgStatusHistory(req.finalizado);
+
         _renderSatgObservationHistory(history);
+        _renderSatgStatusHistory(statusHistory);
+
+        const badgeObs = document.getElementById('badge-satg-obs-count');
+        if (badgeObs) {
+            badgeObs.textContent = history.length;
+            badgeObs.classList.toggle('hidden', history.length === 0);
+        }
+
+        const badgeStatus = document.getElementById('badge-satg-status-count');
+        if (badgeStatus) {
+            badgeStatus.textContent = statusHistory.length;
+            badgeStatus.classList.toggle('hidden', statusHistory.length === 0);
+        }
+
         if (_satgObservationTextarea) _satgObservationTextarea.value = '';
         if (_satgObservationCharCount) _satgObservationCharCount.innerText = '0';
         _satgObservationModal.classList.remove('hidden');
