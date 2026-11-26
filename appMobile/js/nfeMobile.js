@@ -72,14 +72,64 @@ function _formatCurrencyInput(inputEl, onInputCallback) {
 
 function _getVendedorName(vendedor) {
     if (!vendedor) return '-';
+    if (typeof vendedor === 'object') {
+        if (vendedor.nome && typeof vendedor.nome === 'string' && vendedor.nome.trim()) {
+            vendedor = vendedor.nome.trim();
+        } else if (vendedor.id !== undefined && vendedor.id !== null && vendedor.id !== 0 && vendedor.id !== '0') {
+            vendedor = vendedor.id;
+        } else {
+            return '-';
+        }
+    }
     const v = String(vendedor).trim();
+    if (!v || v === '-' || v === '0' || v === 'ID: 0' || v === '[object Object]' || v === 'null' || v === 'undefined') return '-';
+    if (v === '15596443455') return 'Reginaldo Araujo de Souza';
+    if (v === '15596443462') return 'Julio Martins dos Santos';
+    if (v === '15596442848') return 'Rodrigo Carbone';
     if (v.includes('ID:')) {
         const id = v.replace('ID:', '').trim();
         if (id === '15596443455') return 'Reginaldo Araujo de Souza';
         if (id === '15596443462') return 'Julio Martins dos Santos';
         if (id === '15596442848') return 'Rodrigo Carbone';
+        if (!id || id === '0') return '-';
     }
-    return vendedor;
+    const vLower = v.toLowerCase();
+    if (vLower === 'e-commerce' || vLower === 'ecommerce' || vLower.includes('loja integrada')) {
+        return 'E-Commerce';
+    }
+    return v;
+}
+
+function _extractPagamentoInfo(pedidoBling, isEcommerce = false) {
+    if (!pedidoBling) return '';
+    const parcelas = Array.isArray(pedidoBling.parcelas) ? pedidoBling.parcelas : [];
+    const count = parcelas.length;
+    const obsParcela = parcelas.map(p => p.observacoes || '').find(o => o && o.trim() !== '') || '';
+    const obsLower = obsParcela.toLowerCase();
+
+    if (obsLower.includes('cartão') || obsLower.includes('cartao') || obsLower.includes('crédito') || obsLower.includes('credito') || obsLower.includes('card')) {
+        const vezes = count > 0 ? `${count}x` : '1x';
+        return `${vezes} no Cartão (Pagali)`;
+    }
+    if (obsLower.includes('pix')) {
+        return 'Pix (Pagali)';
+    }
+    if (obsLower.includes('boleto')) {
+        return 'Boleto (Pagali)';
+    }
+    if (obsParcela) {
+        let clean = obsParcela.replace(/^m[ée]todo de pagamento:\s*/i, '').trim();
+        if (clean) {
+            if (isEcommerce && !clean.toLowerCase().includes('pagali')) {
+                clean += ' (Pagali)';
+            }
+            return clean;
+        }
+    }
+    if (isEcommerce && count > 1) {
+        return `${count}x no Cartão (Pagali)`;
+    }
+    return '';
 }
 
 function _buildFormasPagamentoOptions(selectedId) {
@@ -486,15 +536,63 @@ export async function openMobileNfeModal(orderId) {
 
         let obsFiscal = pedidoBling.observacoes || '';
         const orcamentoVal = order.orcamento || order['orcamento'] || '';
-        let vendedorVal = pedidoBling.vendedor;
-        if (typeof vendedorVal === 'object' && vendedorVal?.id) vendedorVal = vendedorVal.id;
-        const vendedorNome = _getVendedorName(vendedorVal || order.vendedor);
+        let vendedorVal = '';
+        if (pedidoBling.vendedor) {
+            if (typeof pedidoBling.vendedor === 'object') {
+                if (pedidoBling.vendedor.nome && typeof pedidoBling.vendedor.nome === 'string' && pedidoBling.vendedor.nome.trim()) {
+                    vendedorVal = pedidoBling.vendedor.nome.trim();
+                } else if (pedidoBling.vendedor.id && pedidoBling.vendedor.id !== 0 && pedidoBling.vendedor.id !== '0') {
+                    vendedorVal = pedidoBling.vendedor.id;
+                }
+            } else {
+                vendedorVal = pedidoBling.vendedor;
+            }
+        }
+
+        let vendedorNome = _getVendedorName(vendedorVal);
+        if (!vendedorNome || vendedorNome === '-') {
+            if (order && order.vendedor) {
+                vendedorNome = _getVendedorName(order.vendedor);
+            }
+        }
+
+        const isEcommerce = (order && (
+            String(order.loja || '').toLowerCase().includes('loja integrada') ||
+            String(order.vendedor || '').toLowerCase().includes('commerce') ||
+            String(order.numero_loja || '').trim() !== ''
+        )) || (pedidoBling.loja && (
+            String(pedidoBling.loja.id) === '205371925' ||
+            String(pedidoBling.loja.nome || '').toLowerCase().includes('loja integrada')
+        )) || (pedidoBling.numeroLoja && String(pedidoBling.numeroLoja).trim() !== '');
+
+        if (isEcommerce && (!vendedorNome || vendedorNome === '-')) {
+            vendedorNome = 'E-Commerce';
+        }
+
+        const pagamentoTexto = _extractPagamentoInfo(pedidoBling, isEcommerce);
+
+        if (obsFiscal.includes('[object Object]')) {
+            obsFiscal = obsFiscal.replace(/\[object Object\]/g, (vendedorNome && vendedorNome !== '-') ? vendedorNome : 'E-Commerce');
+        }
+
+        // Reposiciona ou insere "Pagamento:" exatamente acima de "Vendedor:"
+        if (pagamentoTexto) {
+            obsFiscal = obsFiscal.replace(/Pagamento:\s*[^\n]+(\r?\n)?/gi, '').trim();
+            if (/Vendedor:\s*[^\n]+/i.test(obsFiscal)) {
+                obsFiscal = obsFiscal.replace(/(Vendedor:\s*[^\n]+)/i, `Pagamento: ${pagamentoTexto}\n$1`);
+            }
+        }
 
         let appendInfo = '';
         if (orcamentoVal && String(orcamentoVal).trim() !== '-' && String(orcamentoVal).trim() !== '0') {
-            appendInfo += `Orçamento: ${String(orcamentoVal).trim()}\n`;
+            if (!obsFiscal.includes('Orçamento:')) {
+                appendInfo += `Orçamento: ${String(orcamentoVal).trim()}\n`;
+            }
         }
-        if (vendedorNome && vendedorNome !== '-') {
+        if (pagamentoTexto && !obsFiscal.includes('Pagamento:')) {
+            appendInfo += `Pagamento: ${pagamentoTexto}\n`;
+        }
+        if (vendedorNome && vendedorNome !== '-' && !obsFiscal.includes('Vendedor:')) {
             appendInfo += `Vendedor: ${vendedorNome}`;
         }
         appendInfo = appendInfo.trim();
@@ -1108,28 +1206,60 @@ async function _handleAiParse() {
         if (!orcamento && _state.currentOrder) {
             orcamento = _state.currentOrder.orcamento || _state.currentOrder['orcamento'] || '';
         }
+        const pagMatch = currentObs.match(/Pagamento:\s*([^\n]+)/i);
 
         let vendedorNome = '';
-        if (_state.currentPedidoBlingBruto && _state.currentPedidoBlingBruto.vendedor) {
-            const v = _state.currentPedidoBlingBruto.vendedor;
-            const rawVendedor = typeof v === 'object' && v.nome ? v.nome : (typeof v === 'object' && v.id ? v.id : v);
+        const curBling = _state.currentPedidoBlingBruto || {};
+        const curOrder = _state.currentOrder || {};
+
+        if (curBling.vendedor) {
+            const v = curBling.vendedor;
+            let rawVendedor = '';
+            if (typeof v === 'object') {
+                if (v.nome && typeof v.nome === 'string' && v.nome.trim()) rawVendedor = v.nome.trim();
+                else if (v.id && v.id !== 0 && v.id !== '0') rawVendedor = v.id;
+            } else {
+                rawVendedor = v;
+            }
             const fullVendedor = _getVendedorName(rawVendedor);
             if (fullVendedor && fullVendedor !== '-') {
-                vendedorNome = fullVendedor.split(' ')[0];
-            }
-        } else if (_state.currentOrder && _state.currentOrder.vendedor) {
-            const fullVendedor = _getVendedorName(_state.currentOrder.vendedor);
-            if (fullVendedor && fullVendedor !== '-') {
-                vendedorNome = fullVendedor.split(' ')[0];
+                vendedorNome = fullVendedor.toLowerCase() === 'e-commerce' ? 'E-Commerce' : fullVendedor.split(' ')[0];
             }
         }
+
+        if (!vendedorNome || vendedorNome === '-') {
+            if (curOrder.vendedor) {
+                const fullVendedor = _getVendedorName(curOrder.vendedor);
+                if (fullVendedor && fullVendedor !== '-') {
+                    vendedorNome = fullVendedor.toLowerCase() === 'e-commerce' ? 'E-Commerce' : fullVendedor.split(' ')[0];
+                }
+            }
+        }
+
+        const isEcommerce = (curOrder && (
+            String(curOrder.loja || '').toLowerCase().includes('loja integrada') ||
+            String(curOrder.vendedor || '').toLowerCase().includes('commerce') ||
+            String(curOrder.numero_loja || '').trim() !== ''
+        )) || (curBling.loja && (
+            String(curBling.loja.id) === '205371925' ||
+            String(curBling.loja.nome || '').toLowerCase().includes('loja integrada')
+        )) || (curBling.numeroLoja && String(curBling.numeroLoja).trim() !== '');
+
+        if (isEcommerce && (!vendedorNome || vendedorNome === '-')) {
+            vendedorNome = 'E-Commerce';
+        }
+
+        const pagamentoTexto = pagMatch ? pagMatch[1].trim() : _extractPagamentoInfo(curBling, isEcommerce);
 
         if (obsEl) {
             let novaObs = 'A venda é realizada com reserva de domínio, nos termos do art. 521 do Código Civil, até a quitação integral. Em caso de mora, a VENDEDORA poderá cobrar os valores em atraso ou requerer a apreensão e depósito judicial do bem.\n\n';
             if (orcamento && String(orcamento).trim() !== '-' && String(orcamento).trim() !== '0') {
                 novaObs += `Orçamento: ${String(orcamento).trim()}\n`;
             }
-            if (vendedorNome) {
+            if (pagamentoTexto) {
+                novaObs += `Pagamento: ${pagamentoTexto}\n`;
+            }
+            if (vendedorNome && vendedorNome !== '-') {
                 novaObs += `Vendedor: ${vendedorNome}\n`;
             }
             obsEl.value = novaObs.trim();

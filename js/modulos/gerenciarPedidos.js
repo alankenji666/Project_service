@@ -66,7 +66,17 @@ export const GerenciarPedidosApp = (function () {
 
     function _getVendedorName(vendedor) {
         if (!vendedor) return '-';
+        if (typeof vendedor === 'object') {
+            if (vendedor.nome && typeof vendedor.nome === 'string' && vendedor.nome.trim()) {
+                vendedor = vendedor.nome.trim();
+            } else if (vendedor.id !== undefined && vendedor.id !== null && vendedor.id !== 0 && vendedor.id !== '0') {
+                vendedor = vendedor.id;
+            } else {
+                return '-';
+            }
+        }
         const v = String(vendedor).trim();
+        if (!v || v === '-' || v === '0' || v === 'ID: 0' || v === '[object Object]' || v === 'null' || v === 'undefined') return '-';
         if (v === '15596443455') return 'Reginaldo Araujo de Souza';
         if (v === '15596443462') return 'Julio Martins dos Santos';
         if (v === '15596442848') return 'Rodrigo Carbone';
@@ -75,8 +85,45 @@ export const GerenciarPedidosApp = (function () {
             if (id === '15596443455') return 'Reginaldo Araujo de Souza';
             if (id === '15596443462') return 'Julio Martins dos Santos';
             if (id === '15596442848') return 'Rodrigo Carbone';
+            if (!id || id === '0') return '-';
         }
-        return vendedor;
+        const vLower = v.toLowerCase();
+        if (vLower === 'e-commerce' || vLower === 'ecommerce' || vLower.includes('loja integrada')) {
+            return 'E-Commerce';
+        }
+        return v;
+    }
+
+    function _extractPagamentoInfo(pedidoBling, isEcommerce = false) {
+        if (!pedidoBling) return '';
+        const parcelas = Array.isArray(pedidoBling.parcelas) ? pedidoBling.parcelas : [];
+        const count = parcelas.length;
+        const obsParcela = parcelas.map(p => p.observacoes || '').find(o => o && o.trim() !== '') || '';
+        const obsLower = obsParcela.toLowerCase();
+
+        if (obsLower.includes('cartão') || obsLower.includes('cartao') || obsLower.includes('crédito') || obsLower.includes('credito') || obsLower.includes('card')) {
+            const vezes = count > 0 ? `${count}x` : '1x';
+            return `${vezes} no Cartão (Pagali)`;
+        }
+        if (obsLower.includes('pix')) {
+            return 'Pix (Pagali)';
+        }
+        if (obsLower.includes('boleto')) {
+            return 'Boleto (Pagali)';
+        }
+        if (obsParcela) {
+            let clean = obsParcela.replace(/^m[ée]todo de pagamento:\s*/i, '').trim();
+            if (clean) {
+                if (isEcommerce && !clean.toLowerCase().includes('pagali')) {
+                    clean += ' (Pagali)';
+                }
+                return clean;
+            }
+        }
+        if (isEcommerce && count > 1) {
+            return `${count}x no Cartão (Pagali)`;
+        }
+        return '';
     }
 
     // Formas de pagamento conhecidas (ID Bling -> Nome)
@@ -202,6 +249,9 @@ export const GerenciarPedidosApp = (function () {
         _state.linhaProducaoFilterTipo = document.getElementById('filter-tipo-lp');
         _state.linhaProducaoFilterResp = document.getElementById('filter-responsavel-lp');
         _state.linhaProducaoFilterStatus = document.getElementById('filter-status-lp');
+        _state.linhaProducaoFilterSearch = document.getElementById('filter-search-lp');
+        _state.linhaProducaoFilterSearchClear = document.getElementById('filter-search-lp-clear');
+        _state.linhaProducaoCountBadge = document.getElementById('lp-items-count-badge');
         _state.linhaProducaoAddBtn = document.getElementById('lp-add-item-btn');
 
         // Elementos do Modal de Detalhes do Pedido
@@ -843,6 +893,38 @@ export const GerenciarPedidosApp = (function () {
             }
             _state.linhaProducaoFilterStatus.addEventListener('change', () => {
                 _saveLinhaProducaoFilterPrefs();
+                _showProductionLine();
+            });
+        }
+        if (_state.linhaProducaoFilterSearch) {
+            _state.linhaProducaoFilterSearch.addEventListener('input', () => {
+                const rawSearch = _state.linhaProducaoFilterSearch.value.trim();
+                if (_state.linhaProducaoFilterSearchClear) {
+                    if (rawSearch) {
+                        _state.linhaProducaoFilterSearchClear.classList.remove('hidden');
+                    } else {
+                        _state.linhaProducaoFilterSearchClear.classList.add('hidden');
+                    }
+                }
+                _showProductionLine();
+            });
+            _state.linhaProducaoFilterSearch.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    _state.linhaProducaoFilterSearch.value = '';
+                    if (_state.linhaProducaoFilterSearchClear) {
+                        _state.linhaProducaoFilterSearchClear.classList.add('hidden');
+                    }
+                    _showProductionLine();
+                }
+            });
+        }
+        if (_state.linhaProducaoFilterSearchClear) {
+            _state.linhaProducaoFilterSearchClear.addEventListener('click', () => {
+                if (_state.linhaProducaoFilterSearch) {
+                    _state.linhaProducaoFilterSearch.value = '';
+                    _state.linhaProducaoFilterSearch.focus();
+                }
+                _state.linhaProducaoFilterSearchClear.classList.add('hidden');
                 _showProductionLine();
             });
         }
@@ -1949,7 +2031,7 @@ export const GerenciarPedidosApp = (function () {
 
         // Salvar as informações da transportadora do pedido no estado para quando ela for necessária
         _state.nfeEditCurrentTranspId = pedidoBling.transporte?.contato?.id || '';
-        _state.nfeEditCurrentTranspNome = pedidoBling.transporte?.etiqueta?.nome || pedidoBling.transporte?.contato?.nome || '';
+        _state.nfeEditCurrentTranspNome = pedidoBling.transporte?.contato?.nome || '';
         
         _state.nfeEditCurrentUf = pedidoBling.transporte?.etiqueta?.uf || pedidoBling.contato?.endereco?.geral?.uf || pedidoBling.transporte?.enderecoEntrega?.uf || '';
 
@@ -2041,22 +2123,64 @@ export const GerenciarPedidosApp = (function () {
         let obsVal = pedidoBling.observacoes || '';
         let vendedorVal = '';
         if (pedidoBling.vendedor) {
-            if (typeof pedidoBling.vendedor === 'object' && pedidoBling.vendedor.id) {
-                vendedorVal = pedidoBling.vendedor.id;
+            if (typeof pedidoBling.vendedor === 'object') {
+                if (pedidoBling.vendedor.nome && typeof pedidoBling.vendedor.nome === 'string' && pedidoBling.vendedor.nome.trim()) {
+                    vendedorVal = pedidoBling.vendedor.nome.trim();
+                } else if (pedidoBling.vendedor.id && pedidoBling.vendedor.id !== 0 && pedidoBling.vendedor.id !== '0') {
+                    vendedorVal = pedidoBling.vendedor.id;
+                }
             } else {
                 vendedorVal = pedidoBling.vendedor;
             }
         }
         
-        const localPedido = _allPedidos.find(p => String(p.id) === String(_currentModalPedidoId) || String(p.numero) === String(_currentModalPedidoId));
+        const localPedido = _allPedidos.find(p => String(p.id) === String(_currentModalPedidoId) || String(p.numero) === String(_currentModalPedidoId) || String(p.id_pedido) === String(_currentModalPedidoId) || (pedidoBling.numero && String(p.numero) === String(pedidoBling.numero)));
         const orcamentoVal = localPedido ? (localPedido.orcamento || localPedido.orçamento || '') : '';
-        const vendedorNome = _getVendedorName(vendedorVal);
+        let vendedorNome = _getVendedorName(vendedorVal);
+        
+        if (!vendedorNome || vendedorNome === '-') {
+            if (localPedido && localPedido.vendedor) {
+                vendedorNome = _getVendedorName(localPedido.vendedor);
+            }
+        }
+
+        const isEcommerce = (localPedido && (
+            String(localPedido.loja || '').toLowerCase().includes('loja integrada') ||
+            String(localPedido.vendedor || '').toLowerCase().includes('commerce') ||
+            String(localPedido.numero_loja || '').trim() !== ''
+        )) || (pedidoBling.loja && (
+            String(pedidoBling.loja.id) === '205371925' ||
+            String(pedidoBling.loja.nome || '').toLowerCase().includes('loja integrada')
+        )) || (pedidoBling.numeroLoja && String(pedidoBling.numeroLoja).trim() !== '');
+
+        if (isEcommerce && (!vendedorNome || vendedorNome === '-')) {
+            vendedorNome = 'E-Commerce';
+        }
+
+        const pagamentoTexto = _extractPagamentoInfo(pedidoBling, isEcommerce);
+
+        if (obsVal.includes('[object Object]')) {
+            obsVal = obsVal.replace(/\[object Object\]/g, (vendedorNome && vendedorNome !== '-') ? vendedorNome : 'E-Commerce');
+        }
+
+        // Reposiciona ou insere "Pagamento:" exatamente acima de "Vendedor:"
+        if (pagamentoTexto) {
+            obsVal = obsVal.replace(/Pagamento:\s*[^\n]+(\r?\n)?/gi, '').trim();
+            if (/Vendedor:\s*[^\n]+/i.test(obsVal)) {
+                obsVal = obsVal.replace(/(Vendedor:\s*[^\n]+)/i, `Pagamento: ${pagamentoTexto}\n$1`);
+            }
+        }
         
         let appendText = '';
         if (orcamentoVal && String(orcamentoVal).trim() !== '-' && String(orcamentoVal).trim() !== '0') {
-            appendText += `Orçamento: ${String(orcamentoVal).trim()}\n`;
+            if (!obsVal.includes('Orçamento:')) {
+                appendText += `Orçamento: ${String(orcamentoVal).trim()}\n`;
+            }
         }
-        if (vendedorNome && vendedorNome !== '-') {
+        if (pagamentoTexto && !obsVal.includes('Pagamento:')) {
+            appendText += `Pagamento: ${pagamentoTexto}\n`;
+        }
+        if (vendedorNome && vendedorNome !== '-' && !obsVal.includes('Vendedor:')) {
             appendText += `Vendedor: ${vendedorNome}`;
         }
         appendText = appendText.trim();
@@ -3056,25 +3180,60 @@ export const GerenciarPedidosApp = (function () {
                 }
             }
 
-            // Limpar Observação da Nota mantendo apenas Orçamento e Vendedor (Primeiro Nome)
+            // Limpar Observação da Nota mantendo apenas Orçamento, Pagamento e Vendedor
             const currentObs = _state.nfeEditObservacoes ? _state.nfeEditObservacoes.value : '';
             const orcMatch = currentObs.match(/Orçamento:\s*([^\n]+)/i); // Pega a linha do orçamento
             const orcamento = orcMatch ? orcMatch[1].trim() : '';
+            const pagMatch = currentObs.match(/Pagamento:\s*([^\n]+)/i); // Pega a linha do pagamento
+
+            const currentPedido = _state.currentPedidoBlingBruto || {};
+            const localPedido = _allPedidos.find(p => String(p.id) === String(_currentModalPedidoId) || String(p.numero) === String(_currentModalPedidoId) || String(p.id_pedido) === String(_currentModalPedidoId) || (currentPedido.numero && String(p.numero) === String(currentPedido.numero)));
 
             let vendedorNome = '';
-            if (_state.currentPedidoBlingBruto && _state.currentPedidoBlingBruto.vendedor) {
-                const v = _state.currentPedidoBlingBruto.vendedor;
-                const rawVendedor = typeof v === 'object' && v.nome ? v.nome : (typeof v === 'object' && v.id ? v.id : v);
+            if (currentPedido.vendedor) {
+                const v = currentPedido.vendedor;
+                let rawVendedor = '';
+                if (typeof v === 'object') {
+                    if (v.nome && typeof v.nome === 'string' && v.nome.trim()) rawVendedor = v.nome.trim();
+                    else if (v.id && v.id !== 0 && v.id !== '0') rawVendedor = v.id;
+                } else {
+                    rawVendedor = v;
+                }
                 const fullVendedor = _getVendedorName(rawVendedor);
                 if (fullVendedor && fullVendedor !== '-') {
-                    vendedorNome = fullVendedor.split(' ')[0];
+                    vendedorNome = fullVendedor.toLowerCase() === 'e-commerce' ? 'E-Commerce' : fullVendedor.split(' ')[0];
                 }
             }
 
+            if (!vendedorNome || vendedorNome === '-') {
+                if (localPedido && localPedido.vendedor) {
+                    const fullVendedor = _getVendedorName(localPedido.vendedor);
+                    if (fullVendedor && fullVendedor !== '-') {
+                        vendedorNome = fullVendedor.toLowerCase() === 'e-commerce' ? 'E-Commerce' : fullVendedor.split(' ')[0];
+                    }
+                }
+            }
+
+            const isEcommerce = (localPedido && (
+                String(localPedido.loja || '').toLowerCase().includes('loja integrada') ||
+                String(localPedido.vendedor || '').toLowerCase().includes('commerce') ||
+                String(localPedido.numero_loja || '').trim() !== ''
+            )) || (currentPedido.loja && (
+                String(currentPedido.loja.id) === '205371925' ||
+                String(currentPedido.loja.nome || '').toLowerCase().includes('loja integrada')
+            )) || (currentPedido.numeroLoja && String(currentPedido.numeroLoja).trim() !== '');
+
+            if (isEcommerce && (!vendedorNome || vendedorNome === '-')) {
+                vendedorNome = 'E-Commerce';
+            }
+
+            const pagamentoTexto = pagMatch ? pagMatch[1].trim() : _extractPagamentoInfo(currentPedido, isEcommerce);
+
             if (_state.nfeEditObservacoes) {
                 let novaObs = 'A venda é realizada com reserva de domínio, nos termos do art. 521 do Código Civil, até a quitação integral. Em caso de mora, a VENDEDORA poderá cobrar os valores em atraso ou requerer a apreensão e depósito judicial do bem.\n\n';
-                if (orcamento) novaObs += `Orçamento: ${orcamento}\n`;
-                if (vendedorNome) novaObs += `Vendedor: ${vendedorNome}\n`;
+                if (orcamento && orcamento !== '-' && orcamento !== '0') novaObs += `Orçamento: ${orcamento}\n`;
+                if (pagamentoTexto) novaObs += `Pagamento: ${pagamentoTexto}\n`;
+                if (vendedorNome && vendedorNome !== '-') novaObs += `Vendedor: ${vendedorNome}\n`;
                 _state.nfeEditObservacoes.value = novaObs.trim();
             }
 
@@ -4375,24 +4534,68 @@ export const GerenciarPedidosApp = (function () {
             }
         }
 
+        function isInvalidOrRetirada(tNome, cliNome) {
+            if (!tNome) return true;
+            const t = String(tNome).trim().toUpperCase();
+            if (!t || t === '-' || t === '0' || t === 'NULL' || t === 'UNDEFINED') return true;
+
+            // Termos que indicam retirada ou ausência de transportadora
+            const retiradaTerms = [
+                'RETIRADA', 'BALCAO', 'BALCÃO', 'CLIENTE RETIRA', 'RETIRA CLIENTE', 
+                'SEM FRETE', 'SEM TRANSPORTE', 'SEM TRANSPORTADORA', 'SEM OCORRENCIA',
+                'TRANSPORTE PROPRIO', 'TRANSPORTE PRÓPRIO', 'PROPRIO', 'PRÓPRIO',
+                'ENTREGA PROPRIA', 'ENTREGA PRÓPRIA', 'A RETIRAR', 'VAI RETIRAR'
+            ];
+            if (retiradaTerms.some(term => t.includes(term))) return true;
+
+            // Se o nome da transportadora for igual ou muito similar ao nome do cliente (destinatário)
+            if (cliNome) {
+                const c = String(cliNome).trim().toUpperCase();
+                if (c) {
+                    if (t === c || c.includes(t) || t.includes(c)) return true;
+                    const wordsT = t.replace(/[^\w\s]/gi, '').split(/\s+/).filter(w => w.length > 2);
+                    const wordsC = c.replace(/[^\w\s]/gi, '').split(/\s+/).filter(w => w.length > 2);
+                    if (wordsT.length >= 2 && wordsC.length >= 2) {
+                        if (wordsT[0] === wordsC[0] && wordsT[1] === wordsC[1]) return true;
+                    } else if (wordsT.length === 1 && wordsC.length >= 1) {
+                        if (wordsT[0] === wordsC[0]) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         // Tentar obter a Transportadora para ESTE pedido
         let transpNome = '';
-        if (pedido.transportadora) transpNome = String(pedido.transportadora);
-        else if (pedido.transporte) transpNome = String(pedido.transporte);
-        else if (nfeObj && nfeObj.transportadora) transpNome = String(nfeObj.transportadora);
-        else if (nfeObj && nfeObj.transporte) transpNome = String(nfeObj.transporte);
+        if (pedido.transportadora && !isInvalidOrRetirada(pedido.transportadora, cliente)) {
+            transpNome = String(pedido.transportadora);
+        } else if (pedido.transporte && !isInvalidOrRetirada(pedido.transporte, cliente)) {
+            transpNome = String(pedido.transporte);
+        } else if (nfeObj && nfeObj.transportadora && !isInvalidOrRetirada(nfeObj.transportadora, cliente)) {
+            transpNome = String(nfeObj.transportadora);
+        } else if (nfeObj && nfeObj.transporte && !isInvalidOrRetirada(nfeObj.transporte, cliente)) {
+            transpNome = String(nfeObj.transporte);
+        }
 
         // Se o modal de edição de NF-e estiver VISÍVEL especificamente para este pedido, considera a seleção do usuário
         if (!transpNome && _state.nfeEditModal && !_state.nfeEditModal.classList.contains('hidden') && String(_currentModalPedidoId || '') === pedidoId) {
-            const selectTransp = document.getElementById('nfe-edit-transportadora');
-            if (selectTransp && selectTransp.selectedIndex > 0) {
-                const optText = selectTransp.options[selectTransp.selectedIndex].text;
-                if (optText && !optText.toUpperCase().includes('SELECIONE') && !optText.toUpperCase().includes('CARREGANDO')) {
-                    transpNome = optText;
+            const isSemFrete = _state.nfeEditFretePorConta && parseInt(_state.nfeEditFretePorConta.value) === 9;
+            if (!isSemFrete) {
+                const selectTransp = document.getElementById('nfe-edit-transportadora');
+                if (selectTransp && selectTransp.selectedIndex > 0) {
+                    const optText = selectTransp.options[selectTransp.selectedIndex].text;
+                    if (optText && !optText.toUpperCase().includes('SELECIONE') && !optText.toUpperCase().includes('CARREGANDO')) {
+                        if (!isInvalidOrRetirada(optText, cliente)) {
+                            transpNome = optText;
+                        }
+                    }
                 }
-            }
-            if (!transpNome && _state.currentPedidoBlingBruto && String(_state.currentPedidoBlingBruto.id || '') === pedidoId) {
-                transpNome = _state.currentPedidoBlingBruto.transporte?.contato?.nome || '';
+                if (!transpNome && _state.currentPedidoBlingBruto && String(_state.currentPedidoBlingBruto.id || '') === pedidoId) {
+                    const cNome = _state.currentPedidoBlingBruto.transporte?.contato?.nome || '';
+                    if (!isInvalidOrRetirada(cNome, cliente)) {
+                        transpNome = cNome;
+                    }
+                }
             }
         }
 
@@ -4405,11 +4608,13 @@ export const GerenciarPedidosApp = (function () {
                     const result = await res.json();
                     if (result && result.data) {
                         const bData = result.data;
-                        if (bData.transporte?.contato?.nome) {
+                        const fretePorConta = bData.transporte?.fretePorConta;
+                        // 9 = Sem Ocorrência de Transporte (ou sem frete / retirada)
+                        if (fretePorConta === 9 || String(fretePorConta) === '9') {
+                            transpNome = '';
+                        } else if (bData.transporte?.contato?.nome && !isInvalidOrRetirada(bData.transporte.contato.nome, cliente)) {
                             transpNome = bData.transporte.contato.nome;
-                        } else if (bData.transporte?.etiqueta?.nome) {
-                            transpNome = bData.transporte.etiqueta.nome;
-                        } else if (bData.transportadora) {
+                        } else if (bData.transportadora && typeof bData.transportadora === 'string' && !isInvalidOrRetirada(bData.transportadora, cliente)) {
                             transpNome = bData.transportadora;
                         }
                     }
@@ -4419,12 +4624,12 @@ export const GerenciarPedidosApp = (function () {
             }
         }
 
-        if (transpNome) {
-            pedido.transportadora = transpNome; // Salva no objeto para cliques subsequentes
+        if (transpNome && !isInvalidOrRetirada(transpNome, cliente)) {
             transpNome = transpNome.trim().toUpperCase();
-            if (transpNome === 'RETIRADA NA LOJA' || transpNome === 'BALCAO' || transpNome === 'BALCÃO' || transpNome.includes('RETIRADA')) {
-                transpNome = ''; 
-            }
+            pedido.transportadora = transpNome; // Salva no objeto para cliques subsequentes
+        } else {
+            transpNome = '';
+            pedido.transportadora = ''; // Limpa para evitar cache incorreto
         }
 
         printWindow.document.open();
@@ -6023,6 +6228,11 @@ export const GerenciarPedidosApp = (function () {
             const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO' || s === 'AGUARDANDO RETIRADA' || s === 'FINALIZADO';
             if (!isProducao) return;
 
+            let respSat = gar.vendedor || gar.responsavelSat || '';
+            if (!respSat && typeof window.GerenciarGarantiaApp !== 'undefined' && typeof window.GerenciarGarantiaApp.getSatgResponsavel === 'function') {
+                respSat = window.GerenciarGarantiaApp.getSatgResponsavel(garPid, gar.orcamento);
+            }
+
             const garDesc = gar.descricaocomplementar || gar.descricaoPersonalizada || gar.descricao || '';
             const safeGarRef = 'GAR_' + garPid.replace(/[^a-zA-Z0-9_-]/g, '_') + (garIdx !== '' ? `_${garIdx}` : '');
             const key = `GAR_${garPid}_${garIdx}_${garSku}`;
@@ -6032,7 +6242,7 @@ export const GerenciarPedidosApp = (function () {
                     descricao: garDesc || garSku,
                     quantidadeTotal: parseFloat(gar.quantidade) || 1,
                     data: gar.data || '',
-                    vendedor: '',
+                    vendedor: respSat || '',
                     empresa: gar.cliente || '',
                     orcamento: gar.orcamento || '',
                     numeroPedido: garPid,
@@ -6125,6 +6335,44 @@ export const GerenciarPedidosApp = (function () {
             }
         }
 
+        // Aplicar o filtro de Busca (Orçamento, Cliente, Pedido, Código, Descrição, Vendedor, Responsável)
+        const rawSearch = _state.linhaProducaoFilterSearch ? _state.linhaProducaoFilterSearch.value.trim() : '';
+        const searchTerm = rawSearch.toLowerCase();
+
+        if (_state.linhaProducaoFilterSearchClear) {
+            if (rawSearch) {
+                _state.linhaProducaoFilterSearchClear.classList.remove('hidden');
+            } else {
+                _state.linhaProducaoFilterSearchClear.classList.add('hidden');
+            }
+        }
+
+        if (searchTerm) {
+            itemsArray = itemsArray.filter(i => {
+                const orc = String(i.orcamento || '').toLowerCase();
+                const cliente = String(i.empresa || i.cliente || '').toLowerCase();
+                const pedido = String(i.numeroPedido || '').toLowerCase();
+                const cod = String(i.codigo || '').toLowerCase();
+                const desc = String(i.descricao || i.descricaoPersonalizada || '').toLowerCase();
+                const vend = String(i.vendedor || '').toLowerCase();
+                const resp = String(i.responsavel || '').toLowerCase();
+
+                return orc.includes(searchTerm) ||
+                       cliente.includes(searchTerm) ||
+                       pedido.includes(searchTerm) ||
+                       cod.includes(searchTerm) ||
+                       desc.includes(searchTerm) ||
+                       vend.includes(searchTerm) ||
+                       resp.includes(searchTerm);
+            });
+        }
+
+        // Atualizar contador de itens no badge
+        if (_state.linhaProducaoCountBadge) {
+            const count = itemsArray.length;
+            _state.linhaProducaoCountBadge.textContent = count === 1 ? '1 item' : `${count} itens`;
+        }
+
         // Ordenar por data (Mais antigos primeiro)
         itemsArray.sort((a, b) => {
             const dA = _parseDate(a.data) || new Date(8640000000000000); 
@@ -6133,11 +6381,14 @@ export const GerenciarPedidosApp = (function () {
         });
 
         if (itemsArray.length === 0) {
+            const emptySub = searchTerm 
+                ? 'Nenhum item corresponde ao termo pesquisado.' 
+                : 'Tente ajustar os filtros de tipo, responsável ou situação.';
             _state.linhaProducaoContent.innerHTML = `
                 <div class="flex flex-col items-center justify-center py-20 text-gray-400">
                     <svg class="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
                     <p class="text-xl font-medium">Nenhum item encontrado</p>
-                    <p class="text-sm">Tente ajustar os filtros de tipo, responsável ou situação.</p>
+                    <p class="text-sm">${emptySub}</p>
                 </div>`;
             _state.linhaProducaoModal.classList.remove('hidden');
             return;
@@ -6183,13 +6434,13 @@ export const GerenciarPedidosApp = (function () {
                             const idxArg = (item.itemIndex !== '' && item.itemIndex !== undefined && item.itemIndex !== null) ? item.itemIndex : "''";
                             const orcSafe = String(item.orcamento || '').replace(/'/g, "\\'");
                             const subtitleHtml = item.isGarantia
-                                ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-black uppercase mr-1.5">Garantia</span><span class="text-gray-600 font-semibold">${item.empresa || 'Cliente Garantia'}</span>`
+                                ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-black uppercase mr-1.5">Garantia</span>${item.vendedor ? `<span class="text-blue-600 font-bold">${item.vendedor}</span> <span class="mx-1 text-gray-400">-</span> ` : ''}<span class="text-gray-600 font-semibold">${item.empresa || 'Cliente Garantia'}</span>`
                                 : item.isPreProducao
                                     ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-black uppercase mr-1.5">Pré-Produção</span>${item.vendedor ? `<span class="text-blue-600 font-bold">${item.vendedor}</span> <span class="mx-1 text-gray-400">-</span> ` : ''}<span class="text-gray-400 font-semibold">Aguardando pedido</span>`
                                     : `<span class="text-blue-600 font-bold">${item.vendedor || '-'}</span> <span class="mx-1 text-gray-400">-</span> <span class="text-gray-500">${item.empresa}</span>`;
 
                             const topTagHtml = item.isGarantia
-                                ? `<span class="inline-flex items-center px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-black uppercase tracking-wide">${item.orcamento ? `SAT-G: ${item.orcamento}` : (item.numeroPedido || 'Garantia')}</span>${item.numeroPedido && item.orcamento ? `<span class="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200 text-[10px] font-black uppercase tracking-wide">Pedido #${item.numeroPedido}</span>` : ''}`
+                                ? `<span class="inline-flex items-center px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-black uppercase tracking-wide">${item.orcamento ? (String(item.orcamento).startsWith('SAT-G') ? item.orcamento : `SAT-G: ${item.orcamento}`) : (item.numeroPedido || 'Garantia')}</span>${item.numeroPedido && item.orcamento ? `<span class="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200 text-[10px] font-black uppercase tracking-wide">Pedido #${item.numeroPedido}</span>` : ''}`
                                 : (item.orcamento && item.orcamento !== '0'
                                     ? `<span class="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 text-[10px] font-black uppercase tracking-wide">Orç.: ${item.orcamento}</span>`
                                     : (item.numeroPedido && item.numeroPedido !== 'N/A'
@@ -6442,6 +6693,15 @@ export const GerenciarPedidosApp = (function () {
             if (!_state.linhaProducaoFilterStatus) {
                 _state.linhaProducaoFilterStatus = document.getElementById('filter-status-lp');
             }
+            if (!_state.linhaProducaoFilterSearch) {
+                _state.linhaProducaoFilterSearch = document.getElementById('filter-search-lp');
+            }
+            if (!_state.linhaProducaoFilterSearchClear) {
+                _state.linhaProducaoFilterSearchClear = document.getElementById('filter-search-lp-clear');
+            }
+            if (!_state.linhaProducaoCountBadge) {
+                _state.linhaProducaoCountBadge = document.getElementById('lp-items-count-badge');
+            }
             if (!_state.linhaProducaoCloseBtn) {
                 _state.linhaProducaoCloseBtn = document.getElementById('close-production-line-modal-btn');
                 if (_state.linhaProducaoCloseBtn) {
@@ -6476,6 +6736,7 @@ export const GerenciarPedidosApp = (function () {
             }
             _showProductionLine();
         },
+        showProductionLine: _showProductionLine,
         toggleItemStatusDropdown: _toggleItemStatusDropdown,
         handleItemClick: handleItemClick,
         handleEditItemDescription: async function(pedidoId, itemCodigo, index, event, orcamento = '') {
@@ -6536,11 +6797,15 @@ export const GerenciarPedidosApp = (function () {
                     data: preItem.data || ''
                 };
             } else if (garItem) {
+                let respSat = garItem.vendedor || garItem.responsavelSat || '';
+                if (!respSat && typeof window.GerenciarGarantiaApp !== 'undefined' && typeof window.GerenciarGarantiaApp.getSatgResponsavel === 'function') {
+                    respSat = window.GerenciarGarantiaApp.getSatgResponsavel(garItem.pedidoId, garItem.orcamento);
+                }
                 item = {
                     codigo: String(garItem.sku || garItem.codigo || itemCodigo || '').trim(),
                     descricaoPersonalizada: garItem.descricaocomplementar || garItem.descricaoPersonalizada || garItem.descricao || '',
                     responsavel: garItem.responsavel || '',
-                    vendedor: '',
+                    vendedor: respSat || '',
                     status: garItem.status || 'EM PRODUÇÃO',
                     quantidade: garItem.quantidade || 1,
                     quantidadeProducao: garItem.quantidade || 1,
@@ -6601,10 +6866,10 @@ export const GerenciarPedidosApp = (function () {
                 currentVal: item.responsavel || ''
             });
             if (vendEl) {
-                if (garItem) {
-                    vendEl.parentElement.classList.add('hidden');
-                } else {
-                    vendEl.parentElement.classList.remove('hidden');
+                vendEl.parentElement.classList.remove('hidden');
+                const lbl = vendEl.parentElement.querySelector('label');
+                if (lbl) {
+                    lbl.textContent = garItem ? 'Responsável SAT:' : 'Vendedor:';
                 }
                 const vendedoresList = _getAllVendedoresList();
                 const rawVend = pedido ? (item.vendedorProducao || pedido.vendedor || '') : (item.vendedor || '');
@@ -7706,6 +7971,7 @@ export const GerenciarPedidosApp = (function () {
                     if (resolvedDate !== undefined) existingGar.data = resolvedDate;
                     if (quantidade !== undefined) existingGar.quantidade = quantidade;
                     if (data.cliente !== undefined) existingGar.cliente = data.cliente;
+                    if (data.vendedor !== undefined) existingGar.vendedor = data.vendedor;
                 } else if (newStatus && String(newStatus).toUpperCase().trim() !== 'OK') {
                     _garantiaProducaoItems.push({
                         pedidoId: targetPid,
@@ -7716,6 +7982,7 @@ export const GerenciarPedidosApp = (function () {
                         descricao: newDescription || '',
                         descricaocomplementar: newDescription || '',
                         responsavel: responsavel || '',
+                        vendedor: data.vendedor || '',
                         data: resolvedDate || '',
                         quantidade: quantidade || 1,
                         origem: 'Garantia',

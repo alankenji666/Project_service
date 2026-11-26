@@ -122,6 +122,7 @@ export const GerenciarGarantiaApp = (function () {
     let _satgCurrentPage = 1;
     const _satgPageSize = 20;
     let _currentSatgRowIndex = null;
+    let _currentActiveSatgReq = null;
     let _currentEditPedidoId = null;
     let _currentEditPedidoSituacao = null;
     let _currentSatgReqForOrder = null; // Guarda o SatG vinculado ao formulário atual
@@ -134,6 +135,310 @@ export const GerenciarGarantiaApp = (function () {
     const _normalizeStr = (str) => {
         return (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
     };
+
+    const _escapeHtml = (str) => {
+        if (!str && str !== 0) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
+
+    const _parsePeso = (val) => {
+        if (val === undefined || val === null || val === '') return 0;
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+        let s = String(val).trim();
+        if (s.includes(',') && s.includes('.')) {
+            s = s.replace(/\./g, '').replace(',', '.');
+        } else if (s.includes(',')) {
+            s = s.replace(',', '.');
+        }
+        const n = parseFloat(s.replace(/[^\d.-]/g, ''));
+        return isNaN(n) ? 0 : n;
+    };
+
+    function _extractTransportadoraCodigo(str) {
+        if (!str) return '';
+        const parenMatches = String(str).match(/\(([^)]+)\)/g);
+        if (parenMatches && parenMatches.length > 0) {
+            const lastParen = parenMatches[parenMatches.length - 1];
+            const numMatch = lastParen.match(/\d+/g);
+            if (numMatch && numMatch.length > 0) {
+                return numMatch[numMatch.length - 1];
+            }
+        }
+        const endNumberMatch = String(str).match(/(?:cod\.?\s*transp\.?|c[oó]d(?:igo)?[:\s]*-?|-)\s*(\d+)\s*$/i);
+        if (endNumberMatch && endNumberMatch[1]) {
+            return endNumberMatch[1];
+        }
+        return '';
+    }
+
+    function _getTransportadoraDisplayName(t) {
+        if (!t) return '';
+        return t.nomeFantasia || t.razaoSocial || t.nome || t.fantasia || '';
+    }
+
+    function _syncTransportadoraSearchUI(valOverride) {
+        const select = document.getElementById('garantia-transportadora');
+        const searchInput = document.getElementById('garantia-transportadora-search');
+        const clearBtn = document.getElementById('garantia-transportadora-clear-btn');
+        if (!select || !searchInput) return;
+
+        const val = (valOverride !== undefined && valOverride !== null) ? String(valOverride).trim() : (select.value || '').trim();
+
+        if (!val) {
+            searchInput.value = '';
+            if (clearBtn) clearBtn.classList.add('hidden');
+            return;
+        }
+
+        let found = null;
+        if (_listaTransportadoras && _listaTransportadoras.length > 0) {
+            // 1. Busca por código de contato/Bling (t.codigo, ex: 18152487089)
+            found = _listaTransportadoras.find(t => String(t.codigo).trim() === val);
+            // 2. Busca pelo código da transportadora no Bling em parênteses (ex: 54, 753)
+            if (!found) {
+                found = _listaTransportadoras.find(t => {
+                    const uCod = _extractTransportadoraCodigo(t.nome || t.fantasia || t.nomeFantasia || t.razaoSocial);
+                    return uCod && uCod === val;
+                });
+            }
+            // 3. Se não encontrou, busca por nome/fantasia
+            if (!found) {
+                const normVal = _normalizeStr(val);
+                found = _listaTransportadoras.find(t => {
+                    const n1 = _normalizeStr(t.nomeFantasia);
+                    const n2 = _normalizeStr(t.razaoSocial);
+                    const n3 = _normalizeStr(t.nome);
+                    const n4 = _normalizeStr(t.fantasia);
+                    return (n1 && n1 === normVal) || (n2 && n2 === normVal) || (n3 && n3 === normVal) || (n4 && n4 === normVal);
+                });
+            }
+        }
+
+        if (found) {
+            select.value = found.codigo;
+            searchInput.value = _getTransportadoraDisplayName(found);
+            if (clearBtn) clearBtn.classList.remove('hidden');
+        } else {
+            let foundText = '';
+            if (select.options) {
+                for (let i = 0; i < select.options.length; i++) {
+                    const opt = select.options[i];
+                    if (opt.value === val || _normalizeStr(opt.text) === _normalizeStr(val)) {
+                        select.selectedIndex = i;
+                        foundText = opt.text;
+                        break;
+                    }
+                }
+            }
+            searchInput.value = foundText || val;
+            if (clearBtn) clearBtn.classList.remove('hidden');
+        }
+    }
+
+    function _renderTransportadoraDropdown(filterText = '') {
+        const dropdown = document.getElementById('garantia-transportadora-dropdown');
+        const select = document.getElementById('garantia-transportadora');
+        if (!dropdown) return;
+
+        const query = _normalizeStr(filterText);
+        const currentVal = select ? String(select.value).trim() : '';
+
+        let items = _listaTransportadoras || [];
+
+        if ((!items || items.length === 0) && select && select.options.length > 1) {
+            items = [];
+            for (let i = 1; i < select.options.length; i++) {
+                items.push({
+                    codigo: select.options[i].value,
+                    nome: select.options[i].text
+                });
+            }
+        }
+
+        if (query) {
+            items = items.filter(t => {
+                const userCod = _extractTransportadoraCodigo(t.nome || t.fantasia || t.nomeFantasia || t.razaoSocial);
+                const cod = _normalizeStr(String(t.codigo || ''));
+                const nome = _normalizeStr(t.nome || '');
+                const fantasia = _normalizeStr(t.fantasia || t.nomeFantasia || '');
+                const razao = _normalizeStr(t.razaoSocial || '');
+                const disp = _normalizeStr(_getTransportadoraDisplayName(t));
+                return (userCod && userCod.includes(query)) || cod.includes(query) || nome.includes(query) || fantasia.includes(query) || razao.includes(query) || disp.includes(query);
+            });
+
+            // Se o usuário digitou o código exato, prioriza no topo
+            items.sort((a, b) => {
+                const codA = _extractTransportadoraCodigo(a.nome || a.fantasia || a.nomeFantasia || a.razaoSocial);
+                const codB = _extractTransportadoraCodigo(b.nome || b.fantasia || b.nomeFantasia || b.razaoSocial);
+                if (codA === query && codB !== query) return -1;
+                if (codB === query && codA !== query) return 1;
+                return 0;
+            });
+        }
+
+        if (!items || items.length === 0) {
+            dropdown.innerHTML = `
+                <div class="p-4 text-center text-xs text-gray-500">
+                    Nenhuma transportadora encontrada${filterText ? ` para "<b>${_escapeHtml(filterText)}</b>"` : ''}.
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        items.forEach(t => {
+            const displayName = _getTransportadoraDisplayName(t);
+            const isSelected = String(t.codigo).trim() === currentVal;
+            const codStr = (t.codigo !== undefined && t.codigo !== null) ? String(t.codigo) : '';
+            const userCod = _extractTransportadoraCodigo(t.nome || t.fantasia || t.nomeFantasia || t.razaoSocial);
+            const locationStr = (t.cidade || t.estado) ? `${t.cidade || ''}${t.cidade && t.estado ? '/' : ''}${t.estado || ''}` : '';
+
+            html += `
+                <div class="px-3 py-2.5 hover:bg-blue-50 cursor-pointer flex items-center justify-between text-xs transition-colors border-b border-gray-100 last:border-0 ${isSelected ? 'bg-blue-50 font-semibold text-blue-900' : 'text-gray-800'}"
+                     data-codigo="${_escapeHtml(codStr)}"
+                     data-nome="${_escapeHtml(displayName)}">
+                    <div class="flex-1 pr-2 min-w-0">
+                        <div class="truncate text-xs ${isSelected ? 'text-blue-900 font-bold' : 'text-gray-800 font-medium'}">
+                            ${_escapeHtml(displayName)}
+                        </div>
+                        ${locationStr ? `<div class="text-[10px] text-gray-400 truncate">${_escapeHtml(locationStr)}</div>` : ''}
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        ${userCod ? `<span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold ${isSelected ? 'bg-blue-200 text-blue-900' : 'bg-blue-50 text-blue-700 border border-blue-200'}">Cód: ${_escapeHtml(userCod)}</span>` : ''}
+                        ${isSelected ? `<i class="fas fa-check text-blue-600 text-xs ml-1"></i>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        dropdown.innerHTML = html;
+
+        dropdown.querySelectorAll('[data-codigo]').forEach(itemEl => {
+            itemEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cod = itemEl.getAttribute('data-codigo');
+                const nome = itemEl.getAttribute('data-nome');
+                _selectTransportadora(cod, nome);
+            });
+        });
+    }
+
+    function _selectTransportadora(cod, nome) {
+        const select = document.getElementById('garantia-transportadora');
+        const searchInput = document.getElementById('garantia-transportadora-search');
+        const clearBtn = document.getElementById('garantia-transportadora-clear-btn');
+        const dropdown = document.getElementById('garantia-transportadora-dropdown');
+
+        if (select) {
+            select.value = cod;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (searchInput) {
+            searchInput.value = nome;
+        }
+        if (clearBtn) {
+            if (cod || nome) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+        }
+        if (dropdown) {
+            dropdown.classList.add('hidden');
+        }
+    }
+
+    function _initTransportadoraCombobox() {
+        const container = document.getElementById('garantia-transportadora-container');
+        const searchInput = document.getElementById('garantia-transportadora-search');
+        const clearBtn = document.getElementById('garantia-transportadora-clear-btn');
+        const toggleBtn = document.getElementById('garantia-transportadora-toggle-btn');
+        const dropdown = document.getElementById('garantia-transportadora-dropdown');
+
+        if (!searchInput || !dropdown) return;
+
+        // Abrir ao focar
+        searchInput.addEventListener('focus', () => {
+            _renderTransportadoraDropdown('');
+            dropdown.classList.remove('hidden');
+            setTimeout(() => searchInput.select(), 10);
+        });
+
+        searchInput.addEventListener('click', () => {
+            if (dropdown.classList.contains('hidden')) {
+                _renderTransportadoraDropdown('');
+                dropdown.classList.remove('hidden');
+                setTimeout(() => searchInput.select(), 10);
+            }
+        });
+
+        // Filtrar ao digitar
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value;
+            if (clearBtn) {
+                if (query.length > 0) clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+            }
+            _renderTransportadoraDropdown(query);
+            dropdown.classList.remove('hidden');
+        });
+
+        // Botão toggle chevron
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (dropdown.classList.contains('hidden')) {
+                    _renderTransportadoraDropdown('');
+                    dropdown.classList.remove('hidden');
+                    searchInput.focus();
+                    setTimeout(() => searchInput.select(), 10);
+                } else {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
+
+        // Botão limpar (X)
+        if (clearBtn) {
+            clearBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _selectTransportadora('', '');
+                searchInput.value = '';
+                clearBtn.classList.add('hidden');
+                _renderTransportadoraDropdown('');
+                dropdown.classList.remove('hidden');
+                searchInput.focus();
+            });
+        }
+
+        // Fechar ao clicar fora
+        document.addEventListener('click', (e) => {
+            if (container && !container.contains(e.target)) {
+                if (!dropdown.classList.contains('hidden')) {
+                    dropdown.classList.add('hidden');
+                    _syncTransportadoraSearchUI();
+                }
+            }
+        });
+
+        // Navegação por teclado
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                dropdown.classList.add('hidden');
+                _syncTransportadoraSearchUI();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (!dropdown.classList.contains('hidden')) {
+                    const firstOption = dropdown.querySelector('[data-codigo]');
+                    if (firstOption) {
+                        firstOption.click();
+                    }
+                }
+            }
+        });
+    }
 
     const _findPedidoVinculado = (idRef) => {
         if (!idRef || !_pedidosGarantiaData || _pedidosGarantiaData.length === 0) return null;
@@ -168,7 +473,7 @@ export const GerenciarGarantiaApp = (function () {
      * Modal Serviço (M.O)
      * =========================================
      */
-    function _openServicoMoModal(req, servicoMoObj = null, initialSituacao = 'Em Andamento') {
+    function _openServicoMoModal(req, servicoMoObj = null, initialSituacao = null) {
         const modal = document.getElementById('modal-servico-mo');
         if (!modal) return;
 
@@ -189,7 +494,16 @@ export const GerenciarGarantiaApp = (function () {
             const isReativando = ['CANCELADO', 'NÃO POSSUI', 'NAO POSSUI'].includes(String(servicoMoObj.situacao || '').trim().toUpperCase());
             titleEl.innerText = isReativando ? `Reativar Serviço (M.O): ${servicoMoObj.idServicoMO}` : `Editar Serviço (M.O): ${servicoMoObj.idServicoMO}`;
             idInput.value = servicoMoObj.idServicoMO;
-            situacaoSelect.value = initialSituacao || (isReativando ? 'Em Andamento' : servicoMoObj.situacao) || 'Em Andamento';
+            
+            const rawSit = (initialSituacao !== null && initialSituacao !== undefined)
+                ? initialSituacao
+                : (isReativando ? 'Em Andamento' : (servicoMoObj.situacao || 'Em Andamento'));
+
+            const matchedOpt = Array.from(situacaoSelect.options).find(opt => 
+                opt.value.trim().toLowerCase() === String(rawSit).trim().toLowerCase()
+            );
+            situacaoSelect.value = matchedOpt ? matchedOpt.value : rawSit;
+
             deslocamentoInput.value = servicoMoObj.deslocamento || '';
             valorInput.value = servicoMoObj.valorMO || '';
             descricaoTextarea.value = servicoMoObj.descricao || '';
@@ -197,7 +511,13 @@ export const GerenciarGarantiaApp = (function () {
             const novoId = 'MO-' + Math.floor(1000000000 + Math.random() * 9000000000);
             titleEl.innerText = `Novo Serviço (M.O): ${novoId}`;
             idInput.value = novoId;
-            situacaoSelect.value = initialSituacao || 'Em Andamento';
+            
+            const rawSit = initialSituacao || 'Em Andamento';
+            const matchedOpt = Array.from(situacaoSelect.options).find(opt => 
+                opt.value.trim().toLowerCase() === String(rawSit).trim().toLowerCase()
+            );
+            situacaoSelect.value = matchedOpt ? matchedOpt.value : rawSit;
+
             deslocamentoInput.value = '';
             valorInput.value = '';
             descricaoTextarea.value = '';
@@ -422,6 +742,7 @@ export const GerenciarGarantiaApp = (function () {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
+        _syncTransportadoraSearchUI();
 
         // Modal Produto
         _btnAddItemModal = document.getElementById('btn-add-garantia-item-modal');
@@ -532,6 +853,7 @@ export const GerenciarGarantiaApp = (function () {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
+        _syncTransportadoraSearchUI();
 
         if (_inputCodCliente) { _inputCodCliente.readOnly = false; _inputCodCliente.classList.remove('bg-gray-100', 'cursor-not-allowed', 'opacity-70'); _inputCodCliente.title = ""; }
         if (_inputCliente) { _inputCliente.readOnly = false; _inputCliente.classList.remove('bg-gray-100', 'cursor-not-allowed', 'opacity-70'); _inputCliente.title = ""; }
@@ -705,6 +1027,7 @@ export const GerenciarGarantiaApp = (function () {
         // Fetch Transportadoras na inicialização
         
         _listaTransportadoras = [];
+        _initTransportadoraCombobox();
         fetch(API_URLS.TRANSPORTADORAS || (window.API_BASE_URL + '/transportadoras'))
             .then(res => res.ok ? res.json() : {transportadoras:[]})
             .then(data => {
@@ -717,8 +1040,7 @@ export const GerenciarGarantiaApp = (function () {
                         opt.text = t.nomeFantasia || t.razaoSocial || t.nome;
                         select.appendChild(opt);
                     });
-                    
-                    
+                    _syncTransportadoraSearchUI();
                 }
             })
             .catch(err => console.error("Erro ao carregar transportadoras", err));
@@ -1213,6 +1535,8 @@ export const GerenciarGarantiaApp = (function () {
         const dataIso = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
         const cliente = _inputCliente ? _inputCliente.value.trim() : (satgObj ? satgObj.cliente : '');
 
+        const satgResp = satgObj ? _getUsuarioNome(satgObj.responsavel) : '';
+
         // Na Linha de Produção, ao voltar para FINALIZADO / OK deve registrar como FINALIZADO
         const backendStatus = (status === 'OK' || status === 'FINALIZADO') ? 'FINALIZADO' : status;
 
@@ -1229,6 +1553,7 @@ export const GerenciarGarantiaApp = (function () {
                     itemIndex: index,
                     newDescription: item.descricaoPersonalizada || item.desc || '',
                     responsavel: item.responsavel ? String(item.responsavel).trim().toUpperCase() : '',
+                    vendedor: satgResp || '',
                     quantidade: item.qtd || 1,
                     dataPedido: dataIso,
                     origem: 'Garantia',
@@ -1805,9 +2130,9 @@ export const GerenciarGarantiaApp = (function () {
             let pPeso = 0;
             if (window._allProducts) {
                 const pr = window._allProducts.find(p => String(p.codigo || '').trim() === String(i.id || i.cod).trim());
-                if (pr) pPeso = parseFloat(pr.pesoBruto || pr.peso || 0);
+                if (pr) pPeso = _parsePeso(pr.pesoBruto || pr.peso || pr.pesoLiquido);
             }
-            totalPesoCalc += (parseFloat(i.peso || i.pesoBruto || pPeso || 0) * parseInt(i.qtd || 1));
+            totalPesoCalc += (_parsePeso(i.peso || i.pesoBruto || pPeso) * parseInt(i.qtd || 1));
         });
         el.value = totalPesoCalc.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3});
     }
@@ -1939,7 +2264,14 @@ export const GerenciarGarantiaApp = (function () {
                 
                 // Dar foco no primeiro campo vazio
                 const firstEl = document.getElementById(missing[0].id);
-                if (firstEl) firstEl.focus();
+                if (firstEl) {
+                    if (firstEl.id === 'garantia-transportadora') {
+                        const searchInput = document.getElementById('garantia-transportadora-search');
+                        if (searchInput) searchInput.focus();
+                    } else {
+                        firstEl.focus();
+                    }
+                }
                 return;
             }
         }
@@ -1978,9 +2310,9 @@ export const GerenciarGarantiaApp = (function () {
                 let pPeso = 0;
                 if (window._allProducts) {
                     const pr = window._allProducts.find(p => String(p.codigo || '').trim() === String(i.id || i.cod).trim());
-                    if (pr) pPeso = parseFloat(pr.pesoBruto || pr.peso || 0);
+                    if (pr) pPeso = _parsePeso(pr.pesoBruto || pr.peso || pr.pesoLiquido);
                 }
-                totalPesoCalc += (parseFloat(i.peso || i.pesoBruto || pPeso || 0) * parseInt(i.qtd || 1));
+                totalPesoCalc += (_parsePeso(i.peso || i.pesoBruto || pPeso) * parseInt(i.qtd || 1));
             });
             payload.pesoTotal = totalPesoCalc;
 
@@ -2118,6 +2450,7 @@ export const GerenciarGarantiaApp = (function () {
                                     itemIndex: idx,
                                     newDescription: it.descricaoPersonalizada || it.desc || '',
                                     responsavel: it.responsavel ? String(it.responsavel).trim().toUpperCase() : '',
+                                    vendedor: _getUsuarioNome(satgObj.responsavel) || '',
                                     quantidade: it.qtd || 1,
                                     dataPedido: dataIso,
                                     origem: 'Garantia',
@@ -2216,17 +2549,42 @@ export const GerenciarGarantiaApp = (function () {
     /**
      * Open form in edit mode
      */
-    function _openEditPedidoForm(idPedido) {
+    async function _openEditPedidoForm(idPedido) {
         if (!_pedidosGarantiaData) return;
         
-                const refStr = String(idPedido);
+        const refStr = String(idPedido);
         const cleanRef = refStr.replace('GAR-', '');
         const satgAssociado = _satgData.find(s => {
             const sId = String(s.idPedido || '').replace('GAR-', '');
             return sId === cleanRef && sId !== '';
         });
         
-        const pedido = _findPedidoVinculado(idPedido);
+        let pedido = _findPedidoVinculado(idPedido);
+
+        // Se o pedido não foi encontrado ou os detalhes dos itens ainda não foram carregados, busca sob demanda
+        if (!pedido || _itensDetalhadoGarantiaData.length === 0) {
+            try {
+                const [pedRes, detRes] = await Promise.all([
+                    !pedido ? fetch(API_URLS.GARANTIA_PEDIDO) : Promise.resolve(null),
+                    _itensDetalhadoGarantiaData.length === 0 ? fetch(API_URLS.GARANTIA_ITENS_DETALHE).catch(() => ({ ok: false })) : Promise.resolve(null)
+                ]);
+
+                if (pedRes && pedRes.ok) {
+                    const pedData = await pedRes.json();
+                    let pData = Array.isArray(pedData) ? pedData : (pedData.data || []);
+                    pData.reverse();
+                    _pedidosGarantiaData = pData;
+                    pedido = _findPedidoVinculado(idPedido);
+                }
+
+                if (detRes && detRes.ok) {
+                    const detData = await detRes.json();
+                    _itensDetalhadoGarantiaData = detData.data || [];
+                }
+            } catch (err) {
+                console.warn('Erro ao carregar pedidos ou detalhes sob demanda:', err);
+            }
+        }
 
         if (!pedido) {
             alert('Pedido não encontrado para edição.');
@@ -2260,9 +2618,12 @@ export const GerenciarGarantiaApp = (function () {
             const destEl = document.getElementById('garantia-destinatario');
             if (destEl) destEl.value = pedido.destinatario || pedido.cliente || '';
             document.getElementById('garantia-transportadora').value = pedido.transportadora || '';
+            _syncTransportadoraSearchUI(pedido.transportadora);
             document.getElementById('garantia-volume').value = pedido.volume || '';
             document.getElementById('garantia-valor-frete').value = formatMoneyBR(pedido.valorFrete) || '';
-            document.getElementById('garantia-peso-total').value = pedido.pesoTotal || '';
+            const rawPeso = (pedido.pesoTotal !== undefined && pedido.pesoTotal !== null) ? pedido.pesoTotal : '';
+            const numPeso = _parsePeso(rawPeso);
+            document.getElementById('garantia-peso-total').value = numPeso > 0 ? numPeso.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : (rawPeso ? String(rawPeso) : '');
             document.getElementById('garantia-cep').value = pedido.cep || '';
             document.getElementById('garantia-endereco').value = pedido.endereco || '';
             document.getElementById('garantia-numero-envio').value = pedido.numeroEndereco || '';
@@ -2402,23 +2763,34 @@ export const GerenciarGarantiaApp = (function () {
             : [];
 
         if (_currentOrderItems.length > 0) {
+            const cleanPedidoRef = String(pedido.idPedido || pedido.numero || pedido.id || '').trim().replace(/^GAR-/, '');
+
             _currentOrderItems.forEach((item, idx) => {
                 const itemRef = String(item.cod || item.id || '').trim();
                 if (_itensDetalhadoGarantiaData.length > 0) {
-                    const detalhe = _itensDetalhadoGarantiaData.find(d => 
-                        (String(d.idPedido) === refStr || String(d.idPedido) === cleanRef) && 
-                        String(d.idProduto).trim() === itemRef
-                    );
+                    const detalhe = _itensDetalhadoGarantiaData.find(d => {
+                        const dPed = String(d.idPedido || '').trim().replace(/^GAR-/, '');
+                        const dProd = String(d.idProduto || '').trim();
+                        return (dPed === cleanRef || (cleanPedidoRef && dPed === cleanPedidoRef)) && dProd === itemRef;
+                    });
                     if (detalhe) {
                         item.descricaoPersonalizada = detalhe.descricao;
                         item.observacaoItem = detalhe.observacoes;
                     }
                 }
-                const gi = garItems.find(g => 
-                    (String(g.pedidoId) === refStr || String(g.pedidoId) === cleanRef) && 
-                    (String(g.itemIndex) === String(idx) || String(g.sku || g.codigo || '').trim() === itemRef)
-                );
+                const gi = garItems.find(g => {
+                    const gPed = String(g.pedidoId || '').trim().replace(/^GAR-/, '');
+                    const gSku = String(g.sku || g.codigo || '').trim();
+                    return (gPed === cleanRef || (cleanPedidoRef && gPed === cleanPedidoRef)) && 
+                           (String(g.itemIndex) === String(idx) || gSku === itemRef);
+                });
                 if (gi) {
+                    if (!item.descricaoPersonalizada) {
+                        item.descricaoPersonalizada = gi.descricaocomplementar || gi.descricaoPersonalizada || '';
+                    }
+                    if (!item.observacaoItem) {
+                        item.observacaoItem = gi.observacoes || gi.observacao || '';
+                    }
                     if (gi.responsavel) {
                         item.responsavel = String(gi.responsavel).trim().toUpperCase();
                     }
@@ -3000,18 +3372,27 @@ export const GerenciarGarantiaApp = (function () {
                 _servicosMoData = Array.isArray(moData) ? moData : [];
             }
             
-            // Carregar pedidos se a lista estiver vazia ou se for uma atualização de sync (isSilent)
-            if (_pedidosGarantiaData.length === 0 || isSilent) {
+            // Carregar pedidos e itens detalhados se a lista estiver vazia ou se for uma atualização de sync (isSilent)
+            if (_pedidosGarantiaData.length === 0 || _itensDetalhadoGarantiaData.length === 0 || isSilent) {
                 try {
-                    const pedRes = await fetch(API_URLS.GARANTIA_PEDIDO);
-                    if (pedRes.ok) {
+                    const shouldFetchPed = _pedidosGarantiaData.length === 0 || isSilent;
+                    const shouldFetchDet = _itensDetalhadoGarantiaData.length === 0 || isSilent;
+                    const [pedRes, detRes] = await Promise.all([
+                        shouldFetchPed ? fetch(API_URLS.GARANTIA_PEDIDO) : Promise.resolve(null),
+                        shouldFetchDet ? fetch(API_URLS.GARANTIA_ITENS_DETALHE).catch(() => ({ ok: false })) : Promise.resolve(null)
+                    ]);
+                    if (pedRes && pedRes.ok) {
                         const pedData = await pedRes.json();
                         let pData = Array.isArray(pedData) ? pedData : (pedData.data || []);
                         pData.reverse(); // Evita dupla inversão em requisições paralelas
                         _pedidosGarantiaData = pData;
                     }
+                    if (detRes && detRes.ok) {
+                        const detData = await detRes.json();
+                        _itensDetalhadoGarantiaData = detData.data || [];
+                    }
                 } catch (e) {
-                    console.warn("Erro ao buscar pedidos silenciosamente:", e);
+                    console.warn("Erro ao buscar pedidos ou detalhes silenciosamente:", e);
                 }
             }
             
@@ -3066,10 +3447,12 @@ export const GerenciarGarantiaApp = (function () {
             }
 
             // 1. Filtro Texto (Busca)
-            const textMatch = !query || 
-                              String(d.codigo).toLowerCase().includes(query) ||
-                              String(d.cliente).toLowerCase().includes(query) ||
-                              String(d.cpf).toLowerCase().includes(query);
+            const cleanQuery = normalizeStr(query);
+            const textMatch = !cleanQuery || 
+                              normalizeStr(String(d.codigo || '')).includes(cleanQuery) ||
+                              normalizeStr(String(d.cliente || '')).includes(cleanQuery) ||
+                              normalizeStr(String(d.cpf || '')).includes(cleanQuery) ||
+                              normalizeStr(String(d.numeroSerie || '')).includes(cleanQuery);
             if (!textMatch) return false;
 
             // 2. Filtro Situação Garantia
@@ -4015,10 +4398,42 @@ export const GerenciarGarantiaApp = (function () {
         }
     }
 
-    function _openSatgModal(req) {
-        _currentSatgRowIndex = req.rowIndex;
-        
-        document.getElementById('satg-modal-codigo').innerText = req.codigo;
+    function _openSatgModal(req, isReadOnly = false) {
+        if (!req) return;
+        try {
+            if (!_modalSatg) {
+                _cacheDomElements();
+            }
+            if (!_modalSatg) {
+                _modalSatg = document.getElementById('modal-satg-avaliar');
+            }
+            if (!_modalSatg) {
+                console.error('Modal Sat-G não encontrado no DOM!');
+                return;
+            }
+
+            const btnFecharHeader = _btnFecharModalSatg || document.getElementById('btn-fechar-modal-satg');
+            if (btnFecharHeader) btnFecharHeader.onclick = _closeSatgModal;
+
+            if (_modalSatg && !_modalSatg._backdropBound) {
+                _modalSatg._backdropBound = true;
+                _modalSatg.addEventListener('click', (e) => {
+                    if (e.target === _modalSatg) {
+                        _closeSatgModal();
+                    }
+                });
+            }
+
+            _currentSatgRowIndex = req.rowIndex;
+            _currentActiveSatgReq = req;
+            
+            const titleTextEl = document.getElementById('satg-modal-title-text');
+            if (titleTextEl) {
+                titleTextEl.innerText = isReadOnly ? 'Visualizar Solicitação' : 'Avaliar Solicitação';
+            }
+
+            const elCodigo = document.getElementById('satg-modal-codigo');
+            if (elCodigo) elCodigo.innerText = req.codigo || '-';
 
         function _openCustomPrompt(title, initialValue, callback, type = null) {
             const modal = document.getElementById('modal-generic-edit');
@@ -4108,6 +4523,7 @@ export const GerenciarGarantiaApp = (function () {
             
             // Remove o botão se já existir dentro do próprio elemento
             el.querySelectorAll('.btn-edit-satg-field').forEach(b => b.remove());
+            if (isReadOnly) return;
             
             // Cria o botão para ficar inline ao lado do texto
             const btn = document.createElement('button');
@@ -4180,41 +4596,51 @@ export const GerenciarGarantiaApp = (function () {
 
             respSelect.value = currentRespId || '';
 
-            respSelect.onchange = async () => {
-                const novoRespId = respSelect.value;
-                try {
-                    respSelect.disabled = true;
-                    const nomeExibicao = _getUsuarioNome(novoRespId);
-                    const oldNome = _getUsuarioNome(req.responsavel) || 'Sem responsável';
-                    const newHistoryJson = _appendSatgStatusChange(req, {
-                        campo: 'Responsável',
-                        de: oldNome,
-                        para: nomeExibicao || 'Sem responsável',
-                        texto: `Responsável alterado para ${nomeExibicao || 'Sem responsável'}`
-                    });
+            if (isReadOnly) {
+                respSelect.disabled = true;
+                respSelect.classList.add('bg-gray-100', 'cursor-default');
+                respSelect.classList.remove('cursor-pointer');
+                respSelect.onchange = null;
+            } else {
+                respSelect.disabled = false;
+                respSelect.classList.remove('bg-gray-100', 'cursor-default');
+                respSelect.classList.add('cursor-pointer');
+                respSelect.onchange = async () => {
+                    const novoRespId = respSelect.value;
+                    try {
+                        respSelect.disabled = true;
+                        const nomeExibicao = _getUsuarioNome(novoRespId);
+                        const oldNome = _getUsuarioNome(req.responsavel) || 'Sem responsável';
+                        const newHistoryJson = _appendSatgStatusChange(req, {
+                            campo: 'Responsável',
+                            de: oldNome,
+                            para: nomeExibicao || 'Sem responsável',
+                            texto: `Responsável alterado para ${nomeExibicao || 'Sem responsável'}`
+                        });
 
-                    const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            rowIndex: req.rowIndex,
-                            responsavel: novoRespId,
-                            finalizado: newHistoryJson
-                        })
-                    });
-                    if (!res.ok) throw new Error();
-                    req.responsavel = novoRespId;
-                    req.finalizado = newHistoryJson;
-                    _fetchSatGData(true);
-                    if (window._showToast) window._showToast(`Responsável atualizado: ${nomeExibicao || 'Sem Responsável'}`, 'success');
-                } catch(e) {
-                    console.error(e);
-                    alert('Erro ao atualizar Responsável');
-                    respSelect.value = currentRespId || '';
-                } finally {
-                    respSelect.disabled = false;
-                }
-            };
+                        const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rowIndex: req.rowIndex,
+                                responsavel: novoRespId,
+                                finalizado: newHistoryJson
+                            })
+                        });
+                        if (!res.ok) throw new Error();
+                        req.responsavel = novoRespId;
+                        req.finalizado = newHistoryJson;
+                        _fetchSatGData(true);
+                        if (window._showToast) window._showToast(`Responsável atualizado: ${nomeExibicao || 'Sem Responsável'}`, 'success');
+                    } catch(e) {
+                        console.error(e);
+                        alert('Erro ao atualizar Responsável');
+                        respSelect.value = currentRespId || '';
+                    } finally {
+                        respSelect.disabled = false;
+                    }
+                };
+            }
         }
 
         
@@ -4250,27 +4676,37 @@ export const GerenciarGarantiaApp = (function () {
         const revendaSelect = document.getElementById('satg-modal-revenda');
         if (revendaSelect) {
             revendaSelect.value = req.revenda || '';
-            revendaSelect.onchange = async () => {
-                const newValue = revendaSelect.value;
-                try {
-                    const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            rowIndex: req.rowIndex,
-                            updates: [ { column: 'H', value: newValue } ]
-                        })
-                    });
-                    if (!res.ok) throw new Error();
-                    req.revenda = newValue;
-                    _fetchSatGData(true);
-                    if (window._showToast) window._showToast('Revenda atualizada com sucesso', 'success');
-                } catch(e) {
-                    console.error(e);
-                    alert('Erro ao atualizar Revenda');
-                    revendaSelect.value = req.revenda || '';
-                }
-            };
+            if (isReadOnly) {
+                revendaSelect.disabled = true;
+                revendaSelect.classList.add('bg-gray-100', 'cursor-default');
+                revendaSelect.classList.remove('cursor-pointer');
+                revendaSelect.onchange = null;
+            } else {
+                revendaSelect.disabled = false;
+                revendaSelect.classList.remove('bg-gray-100', 'cursor-default');
+                revendaSelect.classList.add('cursor-pointer');
+                revendaSelect.onchange = async () => {
+                    const newValue = revendaSelect.value;
+                    try {
+                        const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rowIndex: req.rowIndex,
+                                updates: [ { column: 'H', value: newValue } ]
+                            })
+                        });
+                        if (!res.ok) throw new Error();
+                        req.revenda = newValue;
+                        _fetchSatGData(true);
+                        if (window._showToast) window._showToast('Revenda atualizada com sucesso', 'success');
+                    } catch(e) {
+                        console.error(e);
+                        alert('Erro ao atualizar Revenda');
+                        revendaSelect.value = req.revenda || '';
+                    }
+                };
+            }
         }
         
         document.getElementById('satg-modal-local-revenda').innerText = req.localRevenda || '-';
@@ -4294,25 +4730,35 @@ export const GerenciarGarantiaApp = (function () {
         const tipoSelect = document.getElementById('satg-modal-tipo-equipamento');
         if (tipoSelect) {
             tipoSelect.value = req.tipoEquipamento || '';
-            tipoSelect.onchange = async () => {
-                const newValue = tipoSelect.value;
-                try {
-                    const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            rowIndex: req.rowIndex,
-                            updates: [ { column: 'AF', value: newValue } ]
-                        })
-                    });
-                    if (!res.ok) throw new Error();
-                    req.tipoEquipamento = newValue;
-                    _fetchSatGData(true);
-                } catch(err) {
-                    alert('Erro ao salvar tipo de equipamento.');
-                    tipoSelect.value = req.tipoEquipamento || '';
-                }
-            };
+            if (isReadOnly) {
+                tipoSelect.disabled = true;
+                tipoSelect.classList.add('bg-gray-100', 'cursor-default');
+                tipoSelect.classList.remove('cursor-pointer');
+                tipoSelect.onchange = null;
+            } else {
+                tipoSelect.disabled = false;
+                tipoSelect.classList.remove('bg-gray-100', 'cursor-default');
+                tipoSelect.classList.add('cursor-pointer');
+                tipoSelect.onchange = async () => {
+                    const newValue = tipoSelect.value;
+                    try {
+                        const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rowIndex: req.rowIndex,
+                                updates: [ { column: 'AF', value: newValue } ]
+                            })
+                        });
+                        if (!res.ok) throw new Error();
+                        req.tipoEquipamento = newValue;
+                        _fetchSatGData(true);
+                    } catch(err) {
+                        alert('Erro ao salvar tipo de equipamento.');
+                        tipoSelect.value = req.tipoEquipamento || '';
+                    }
+                };
+            }
         }
         
         document.getElementById('satg-modal-aplicacao').innerText = req.aplicacao || '-';
@@ -4324,27 +4770,37 @@ export const GerenciarGarantiaApp = (function () {
         const operacaoSelect = document.getElementById('satg-modal-operacao');
         if (operacaoSelect) {
             operacaoSelect.value = req.emOperacao || '';
-            operacaoSelect.onchange = async () => {
-                const newValue = operacaoSelect.value;
-                try {
-                    const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            rowIndex: req.rowIndex,
-                            updates: [ { column: 'R', value: newValue } ]
-                        })
-                    });
-                    if (!res.ok) throw new Error();
-                    req.emOperacao = newValue;
-                    _fetchSatGData(true);
-                    if (window._showToast) window._showToast('Status "Em Operação" atualizado com sucesso', 'success');
-                } catch(e) {
-                    console.error(e);
-                    alert('Erro ao atualizar status "Em Operação"');
-                    operacaoSelect.value = req.emOperacao || '';
-                }
-            };
+            if (isReadOnly) {
+                operacaoSelect.disabled = true;
+                operacaoSelect.classList.add('bg-gray-100', 'cursor-default');
+                operacaoSelect.classList.remove('cursor-pointer');
+                operacaoSelect.onchange = null;
+            } else {
+                operacaoSelect.disabled = false;
+                operacaoSelect.classList.remove('bg-gray-100', 'cursor-default');
+                operacaoSelect.classList.add('cursor-pointer');
+                operacaoSelect.onchange = async () => {
+                    const newValue = operacaoSelect.value;
+                    try {
+                        const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rowIndex: req.rowIndex,
+                                updates: [ { column: 'R', value: newValue } ]
+                            })
+                        });
+                        if (!res.ok) throw new Error();
+                        req.emOperacao = newValue;
+                        _fetchSatGData(true);
+                        if (window._showToast) window._showToast('Status "Em Operação" atualizado com sucesso', 'success');
+                    } catch(e) {
+                        console.error(e);
+                        alert('Erro ao atualizar status "Em Operação"');
+                        operacaoSelect.value = req.emOperacao || '';
+                    }
+                };
+            }
         }
         
         document.getElementById('satg-modal-parada').innerText = req.dataParada || '-';
@@ -4383,55 +4839,125 @@ export const GerenciarGarantiaApp = (function () {
             fotosContainer.innerHTML = '<span class="text-gray-500 italic">Sem anexo</span>';
         }
         
-        document.getElementById('satg-modal-observacao').value = req.observacao || '';
-        const elAcaoPecas = document.getElementById('satg-modal-acao-pecas');
-        if (elAcaoPecas) elAcaoPecas.value = req.acaoPecas || req.acao_pecas || req.acao || '';
-        
-        const pedidoLigado = req.idPedido || req.pedidoGerado;
-        if (pedidoLigado) {
-            _btnAprovarPedidoSatg.innerHTML = `
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                Ver Pedido
-            `;
-            _btnAprovarPedidoSatg.className = "px-5 py-2 text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-md flex items-center gap-2";
-            _btnAprovarPedidoSatg.onclick = () => {
-                _closeSatgModal();
-                _openEditPedidoForm(pedidoLigado);
-            };
-        } else {
-            _btnAprovarPedidoSatg.innerHTML = `
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                Criar Pedido (Garantia)
-            `;
-            _btnAprovarPedidoSatg.className = "px-5 py-2 text-white font-bold bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors shadow-md flex items-center gap-2";
-            _btnAprovarPedidoSatg.onclick = _handleAprovarPedidoSatg;
-        }
-        
-        // Atualizar botões de ação do SatG Modal
-        const btnAprovar = document.getElementById('btn-aprovar-pedido-satg');
-        if (btnAprovar) {
-            if (req.idPedido) {
-                btnAprovar.classList.add('hidden');
+        const elObs = document.getElementById('satg-modal-observacao');
+        if (elObs) {
+            elObs.value = req.observacao || '';
+            elObs.readOnly = isReadOnly;
+            if (isReadOnly) {
+                elObs.classList.add('bg-gray-100', 'cursor-default');
             } else {
-                btnAprovar.classList.remove('hidden');
+                elObs.classList.remove('bg-gray-100', 'cursor-default');
+            }
+        }
+
+        const elAcaoPecas = document.getElementById('satg-modal-acao-pecas');
+        if (elAcaoPecas) {
+            elAcaoPecas.value = req.acaoPecas || req.acao_pecas || req.acao || '';
+            elAcaoPecas.readOnly = isReadOnly;
+            if (isReadOnly) {
+                elAcaoPecas.classList.add('bg-gray-100', 'cursor-default');
+            } else {
+                elAcaoPecas.classList.remove('bg-gray-100', 'cursor-default');
             }
         }
         
-        if (_btnVerPedidoSatg) {
-            if (req.idPedido) {
-                _btnVerPedidoSatg.classList.remove('hidden');
-                _btnVerPedidoSatg.onclick = () => _openEditPedidoForm(req.idPedido);
+        const downloadBtn = document.getElementById('modal-satg-download-btn');
+        const btnRecusar = document.getElementById('btn-recusar-satg');
+        const btnSalvar = document.getElementById('btn-salvar-obs-satg');
+        const btnAprovar = document.getElementById('btn-aprovar-pedido-satg');
+        const btnFecharViewOnly = document.getElementById('btn-fechar-satg-viewonly');
+        const badgeSemOrcamento = document.getElementById('badge-satg-sem-orcamento');
+        const pedidoLigado = req.idPedido || req.pedidoGerado;
+
+        if (btnFecharViewOnly) {
+            btnFecharViewOnly.onclick = _closeSatgModal;
+        }
+
+        if (isReadOnly) {
+            if (downloadBtn) downloadBtn.classList.add('hidden');
+            if (btnRecusar) btnRecusar.classList.add('hidden');
+            if (btnSalvar) btnSalvar.classList.add('hidden');
+            if (btnAprovar) btnAprovar.classList.add('hidden');
+            if (btnFecharViewOnly) btnFecharViewOnly.classList.remove('hidden');
+
+            const btnVerPedido = _btnVerPedidoSatg || document.getElementById('btn-ver-pedido-satg');
+            if (pedidoLigado) {
+                if (btnVerPedido) {
+                    btnVerPedido.classList.remove('hidden');
+                    btnVerPedido.classList.add('flex');
+                    btnVerPedido.onclick = () => _openPedidoGarantiaModal(pedidoLigado, true);
+                }
+                if (badgeSemOrcamento) {
+                    badgeSemOrcamento.classList.add('hidden');
+                    badgeSemOrcamento.classList.remove('inline-flex');
+                }
             } else {
-                _btnVerPedidoSatg.classList.add('hidden');
+                if (btnVerPedido) {
+                    btnVerPedido.classList.add('hidden');
+                    btnVerPedido.classList.remove('flex');
+                }
+                if (badgeSemOrcamento) {
+                    badgeSemOrcamento.classList.remove('hidden');
+                    badgeSemOrcamento.classList.add('inline-flex');
+                }
+            }
+        } else {
+            if (downloadBtn) downloadBtn.classList.remove('hidden');
+            if (btnRecusar) btnRecusar.classList.remove('hidden');
+            if (btnSalvar) btnSalvar.classList.remove('hidden');
+            if (btnFecharViewOnly) btnFecharViewOnly.classList.add('hidden');
+            if (badgeSemOrcamento) {
+                badgeSemOrcamento.classList.add('hidden');
+                badgeSemOrcamento.classList.remove('inline-flex');
+            }
+
+            const btnVerPedido = _btnVerPedidoSatg || document.getElementById('btn-ver-pedido-satg');
+            if (pedidoLigado) {
+                if (btnAprovar) btnAprovar.classList.add('hidden');
+                if (btnVerPedido) {
+                    btnVerPedido.classList.remove('hidden');
+                    btnVerPedido.classList.add('flex');
+                    btnVerPedido.onclick = () => {
+                        _closeSatgModal();
+                        _openEditPedidoForm(pedidoLigado);
+                    };
+                }
+            } else {
+                if (btnAprovar) {
+                    btnAprovar.classList.remove('hidden');
+                    btnAprovar.innerHTML = `
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        Criar Pedido (Garantia)
+                    `;
+                    btnAprovar.className = "px-5 py-2 text-white font-bold bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors shadow-md flex items-center gap-2";
+                    btnAprovar.onclick = _handleAprovarPedidoSatg;
+                }
+                if (btnVerPedido) {
+                    btnVerPedido.classList.add('hidden');
+                    btnVerPedido.classList.remove('flex');
+                }
             }
         }
 
         _modalSatg.classList.remove('hidden');
+        _modalSatg.classList.add('flex');
+        } catch (err) {
+            console.error('Erro ao abrir modal SAT-G:', err);
+        }
     }
 
     function _closeSatgModal() {
-        _modalSatg.classList.add('hidden');
+        if (_modalSatg) {
+            _modalSatg.classList.add('hidden');
+            _modalSatg.classList.remove('flex');
+        }
+        const badgeSemOrcamento = document.getElementById('badge-satg-sem-orcamento');
+        if (badgeSemOrcamento) {
+            badgeSemOrcamento.classList.add('hidden');
+            badgeSemOrcamento.classList.remove('inline-flex');
+        }
         _currentSatgRowIndex = null;
+        _currentActiveSatgReq = null;
     }
 
     function _getPedidoPrintHtml(idPedido, hidePrices = false) {
@@ -4441,17 +4967,30 @@ export const GerenciarGarantiaApp = (function () {
         
         let htmlItens = '';
         let totalValor = 0;
-        let totalPeso = parseFloat(pedido.pesoTotal || 0);
+        let totalPeso = _parsePeso(pedido.pesoTotal);
         const parsedItens = _parseItemsString(pedido.itens);
         const fmtBRL = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-        if (parsedItens && parsedItens.length > 0) {
+        if (totalPeso === 0 && parsedItens && parsedItens.length > 0) {
             parsedItens.forEach(i => {
                 const itemRef = String(i.cod || i.id || '').trim();
-                const detalhe = _itensDetalhadoGarantiaData.find(d => 
-                    (String(d.idPedido) === String(pedido.idPedido) || String(d.idPedido) === String(pedido.numero)) && 
-                    String(d.idProduto).trim() === itemRef
-                );
+                let pPeso = _parsePeso(i.peso || i.pesoBruto);
+                if (!pPeso && window._allProducts) {
+                    const prod = window._allProducts.find(p => String(p.codigo || '').trim() === itemRef);
+                    if (prod) pPeso = _parsePeso(prod.pesoBruto || prod.peso || prod.pesoLiquido);
+                }
+                totalPeso += (pPeso * parseInt(i.qtd || 1));
+            });
+        }
+
+        if (parsedItens && parsedItens.length > 0) {
+            const cleanPed = String(pedido.idPedido || pedido.numero || '').trim().replace(/^GAR-/, '');
+            parsedItens.forEach(i => {
+                const itemRef = String(i.cod || i.id || '').trim();
+                const detalhe = _itensDetalhadoGarantiaData.find(d => {
+                    const dPed = String(d.idPedido || '').trim().replace(/^GAR-/, '');
+                    return (cleanPed && dPed === cleanPed) && String(d.idProduto).trim() === itemRef;
+                });
                 
                 // Busca a imagem no cache
                 let imgSrc = '';
@@ -4588,8 +5127,9 @@ export const GerenciarGarantiaApp = (function () {
     }
 
     function _handlePrintSatG(hidePrices = false) {
-        if (!_currentSatgRowIndex) return;
-        const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
+        if (!_currentSatgRowIndex && !_currentActiveSatgReq) return;
+        let req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
+        if (!req && _currentActiveSatgReq) req = _currentActiveSatgReq;
         if (!req) return;
 
         const win = window.open('', '_blank', 'width=850,height=750');
@@ -4870,17 +5410,30 @@ export const GerenciarGarantiaApp = (function () {
             if (pedido) {
                 const parsedItens = _parseItemsString(pedido.itens);
                 let totalValor = 0;
-                let totalPeso = parseFloat(pedido.pesoTotal || 0);
+                let totalPeso = _parsePeso(pedido.pesoTotal);
                 const fmtBRL = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+                if (totalPeso === 0 && parsedItens && parsedItens.length > 0) {
+                    parsedItens.forEach(i => {
+                        const itemRef = String(i.cod || i.id || '').trim();
+                        let pPeso = _parsePeso(i.peso || i.pesoBruto);
+                        if (!pPeso && window._allProducts) {
+                            const prod = window._allProducts.find(p => String(p.codigo || '').trim() === itemRef);
+                            if (prod) pPeso = _parsePeso(prod.pesoBruto || prod.peso || prod.pesoLiquido);
+                        }
+                        totalPeso += (pPeso * parseInt(i.qtd || 1));
+                    });
+                }
 
                 const itensLinhas = [];
                 if (parsedItens && parsedItens.length > 0) {
+                    const cleanPed = String(pedido.idPedido || pedido.numero || '').trim().replace(/^GAR-/, '');
                     parsedItens.forEach(i => {
                         const itemRef = String(i.cod || i.id || '').trim();
-                        const detalhe = _itensDetalhadoGarantiaData.find(d => 
-                            (String(d.idPedido) === String(pedido.idPedido) || String(d.idPedido) === String(pedido.numero)) && 
-                            String(d.idProduto).trim() === itemRef
-                        );
+                        const detalhe = _itensDetalhadoGarantiaData.find(d => {
+                            const dPed = String(d.idPedido || '').trim().replace(/^GAR-/, '');
+                            return (cleanPed && dPed === cleanPed) && String(d.idProduto).trim() === itemRef;
+                        });
                         const precoItem = parseFloat(i.preco || 0);
                         const qtdItem = parseInt(i.qtd || 1);
                         totalValor += (precoItem * qtdItem);
@@ -5471,8 +6024,36 @@ export const GerenciarGarantiaApp = (function () {
     /**
      * Abre o modal de Detalhes do Pedido Garantia
      */
-    async function _openPedidoGarantiaModal(idPedido) {
+    async function _openPedidoGarantiaModal(idPedido, isReadOnly = false) {
+        if (!_modalPedidoGarantiaDetalhes) {
+            _cacheDomElements();
+        }
+        if (!_modalPedidoGarantiaDetalhes) {
+            _modalPedidoGarantiaDetalhes = document.getElementById('modal-pedido-garantia-detalhes');
+        }
         if (!_modalPedidoGarantiaDetalhes) return;
+
+        const btnFecharX = document.getElementById('btn-fechar-modal-pedido-garantia');
+        if (btnFecharX) {
+            btnFecharX.onclick = () => {
+                _modalPedidoGarantiaDetalhes.classList.add('hidden');
+            };
+        }
+        const btnFecharFooter = document.getElementById('btn-fechar-modal-pedido-garantia-footer');
+        if (btnFecharFooter) {
+            btnFecharFooter.onclick = () => {
+                _modalPedidoGarantiaDetalhes.classList.add('hidden');
+            };
+        }
+
+        if (!_modalPedidoGarantiaDetalhes._backdropBound) {
+            _modalPedidoGarantiaDetalhes._backdropBound = true;
+            _modalPedidoGarantiaDetalhes.addEventListener('click', (e) => {
+                if (e.target === _modalPedidoGarantiaDetalhes) {
+                    _modalPedidoGarantiaDetalhes.classList.add('hidden');
+                }
+            });
+        }
         
         const refStr = String(idPedido);
         
@@ -5520,15 +6101,21 @@ export const GerenciarGarantiaApp = (function () {
             document.getElementById('modal-pedido-garantia-data').innerText = pedido.data ? pedido.data.split(' ')[0] : '-';
             document.getElementById('modal-pedido-garantia-situacao').innerText = pedido.situacao || '-';
             document.getElementById('modal-pedido-garantia-equipamento').innerText = equipamento || '-';
-            document.getElementById('modal-pedido-garantia-itens').innerHTML = _renderItensGarantiaHTML(pedido.itens);
+            document.getElementById('modal-pedido-garantia-itens').innerHTML = _renderItensGarantiaHTML(pedido.itens, pedido.idPedido || pedido.numero);
         } else {
             document.getElementById('modal-pedido-garantia-cliente').innerText = 'Não encontrado';
         }
 
-        if (_btnEditarPedidoGarantia) {
-            _btnEditarPedidoGarantia.onclick = () => {
-                _openEditPedidoForm(idPedido);
-            };
+        const btnEditar = _btnEditarPedidoGarantia || document.getElementById('btn-editar-pedido-garantia');
+        if (btnEditar) {
+            if (isReadOnly) {
+                btnEditar.classList.add('hidden');
+            } else {
+                btnEditar.classList.remove('hidden');
+                btnEditar.onclick = () => {
+                    _openEditPedidoForm(idPedido);
+                };
+            }
         }
 
         _modalPedidoGarantiaDetalhes.classList.remove('hidden');
@@ -5537,7 +6124,7 @@ export const GerenciarGarantiaApp = (function () {
     /**
      * Parseia a string de itens e retorna HTML formatado
      */
-    function _renderItensGarantiaHTML(itensStr) {
+    function _renderItensGarantiaHTML(itensStr, pedidoId = '') {
         if (!itensStr || itensStr.trim() === '') {
             return '<span class="text-gray-500 italic">Nenhum item adicionado</span>';
         }
@@ -5599,6 +6186,25 @@ export const GerenciarGarantiaApp = (function () {
                 }
             }
 
+            // Descrição personalizada se disponível
+            let customDescHtml = '';
+            if (pedidoId && _itensDetalhadoGarantiaData && _itensDetalhadoGarantiaData.length > 0) {
+                const cleanPed = String(pedidoId || '').trim().replace(/^GAR-/, '');
+                const detalhe = _itensDetalhadoGarantiaData.find(d => {
+                    const dPed = String(d.idPedido || '').trim().replace(/^GAR-/, '');
+                    const dProd = String(d.idProduto || '').trim();
+                    return dPed === cleanPed && dProd === codigo;
+                });
+                if (detalhe && (detalhe.descricao || detalhe.observacoes)) {
+                    customDescHtml = `
+                        <div class="mt-2 bg-yellow-50 border border-yellow-200/60 rounded px-2.5 py-1.5 text-xs text-left max-w-sm">
+                            ${detalhe.descricao ? `<div class="text-yellow-900 leading-tight"><span class="font-bold text-yellow-800">Desc. Customizada:</span> ${detalhe.descricao}</div>` : ''}
+                            ${detalhe.observacoes ? `<div class="text-yellow-900 leading-tight mt-1"><span class="font-bold text-yellow-800">Obs:</span> ${detalhe.observacoes}</div>` : ''}
+                        </div>
+                    `;
+                }
+            }
+
             html += `
                 <tr class="hover:bg-gray-50/80 transition-all duration-200">
                     <td class="px-5 py-4">
@@ -5615,6 +6221,7 @@ export const GerenciarGarantiaApp = (function () {
                                 <div class="flex items-center gap-2 mt-1">
                                     <span class="text-xs font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md tracking-wide">${codigo}</span>
                                 </div>
+                                ${customDescHtml}
                             </div>
                         </div>
                     </td>
@@ -6098,8 +6705,9 @@ export const GerenciarGarantiaApp = (function () {
     
 
     function _handlePrintMarkerSatG(smallMarker = false) {
-        if (!_currentSatgRowIndex) return;
-        const req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
+        if (!_currentSatgRowIndex && !_currentActiveSatgReq) return;
+        let req = _satgData.find(d => d.rowIndex === _currentSatgRowIndex);
+        if (!req && _currentActiveSatgReq) req = _currentActiveSatgReq;
         if (!req) return;
         
         const printWindow = window.open('', '_blank', 'width=850,height=750');
@@ -6124,11 +6732,39 @@ export const GerenciarGarantiaApp = (function () {
             }
         }
         
-        if (transpNome) {
-            transpNome = transpNome.trim().toUpperCase();
-            if (transpNome === 'RETIRADA NA LOJA' || transpNome === 'BALCAO' || transpNome === 'BAL ÃO' || transpNome.includes('RETIRADA')) {
-                transpNome = ''; 
+        function isInvalidOrRetirada(tNome, cliNome) {
+            if (!tNome) return true;
+            const t = String(tNome).trim().toUpperCase();
+            if (!t || t === '-' || t === '0' || t === 'NULL' || t === 'UNDEFINED') return true;
+
+            const retiradaTerms = [
+                'RETIRADA', 'BALCAO', 'BALCÃO', 'CLIENTE RETIRA', 'RETIRA CLIENTE', 
+                'SEM FRETE', 'SEM TRANSPORTE', 'SEM TRANSPORTADORA', 'SEM OCORRENCIA',
+                'TRANSPORTE PROPRIO', 'TRANSPORTE PRÓPRIO', 'PROPRIO', 'PRÓPRIO',
+                'ENTREGA PROPRIA', 'ENTREGA PRÓPRIA', 'A RETIRAR', 'VAI RETIRAR'
+            ];
+            if (retiradaTerms.some(term => t.includes(term))) return true;
+
+            if (cliNome) {
+                const c = String(cliNome).trim().toUpperCase();
+                if (c) {
+                    if (t === c || c.includes(t) || t.includes(c)) return true;
+                    const wordsT = t.replace(/[^\w\s]/gi, '').split(/\s+/).filter(w => w.length > 2);
+                    const wordsC = c.replace(/[^\w\s]/gi, '').split(/\s+/).filter(w => w.length > 2);
+                    if (wordsT.length >= 2 && wordsC.length >= 2) {
+                        if (wordsT[0] === wordsC[0] && wordsT[1] === wordsC[1]) return true;
+                    } else if (wordsT.length === 1 && wordsC.length >= 1) {
+                        if (wordsT[0] === wordsC[0]) return true;
+                    }
+                }
             }
+            return false;
+        }
+
+        if (transpNome && !isInvalidOrRetirada(transpNome, cliente)) {
+            transpNome = transpNome.trim().toUpperCase();
+        } else {
+            transpNome = '';
         }
         
         const now = new Date().toLocaleString('pt-BR');
@@ -6322,6 +6958,34 @@ export const GerenciarGarantiaApp = (function () {
         }
     }
 
+    function getSatgResponsavel(idPedido, orcamento) {
+        if (!_satgData || _satgData.length === 0) {
+            if (typeof _fetchSatGData === 'function') {
+                _fetchSatGData(true).then(() => {
+                    if (window.GerenciarPedidosApp && typeof window.GerenciarPedidosApp.showProductionLine === 'function') {
+                        window.GerenciarPedidosApp.showProductionLine();
+                    }
+                }).catch(() => {});
+            }
+            return '';
+        }
+        const cleanPed = String(idPedido || '').trim().replace(/^GAR-/, '');
+        const cleanOrc = String(orcamento || '').trim().replace(/^SAT-G:\s*/i, '');
+
+        const sat = _satgData.find(s => {
+            const sPed = String(s.idPedido || '').trim().replace(/^GAR-/, '');
+            const sCod = String(s.codigo || '').trim().replace(/^SAT-G:\s*/i, '');
+            if (cleanPed && sPed && sPed === cleanPed) return true;
+            if (cleanOrc && sCod && sCod === cleanOrc) return true;
+            return false;
+        });
+
+        if (sat && sat.responsavel) {
+            return _getUsuarioNome(sat.responsavel);
+        }
+        return '';
+    }
+
     return {
         init,
         render,
@@ -6329,10 +6993,14 @@ export const GerenciarGarantiaApp = (function () {
         resetToSelector,
         openObservationModal,
         openSatgObservationModal: _openSatgObservationModal,
+        openSatgModal: _openSatgModal,
+        openPedidoGarantiaModal: _openPedidoGarantiaModal,
         toggleItemStatusDropdown: _toggleGarantiaItemStatusDropdown,
         handleDropdownItemStatus: _handleGarantiaDropdownItemStatus,
         handleItemStatusToggle: _handleGarantiaItemStatusToggle,
-        updateItemStatusRealTime: _updateItemStatusRealTime
+        updateItemStatusRealTime: _updateItemStatusRealTime,
+        getSatgResponsavel: getSatgResponsavel,
+        getUsuarioNome: _getUsuarioNome
     };
 })();
 

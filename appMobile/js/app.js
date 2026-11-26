@@ -88,7 +88,11 @@ const closeImageZoomBtn = document.getElementById('close-image-zoom-btn');
 const producaoView = document.getElementById('producao-view');
 const goToProducaoBtn = document.getElementById('go-to-producao-btn');
 const producaoBackToMenuBtn = document.getElementById('producao-back-to-menu-btn');
+const producaoRefreshBtn = document.getElementById('producao-refresh-btn');
 const producaoResponsavelFilter = document.getElementById('producao-responsavel-filter');
+const producaoSearchInput = document.getElementById('producao-search-input');
+const producaoSearchClearBtn = document.getElementById('producao-search-clear-btn');
+const producaoSearchIcon = document.getElementById('producao-search-icon');
 const producaoListContainer = document.getElementById('producao-list-container');
 const aguardandoListContainer = document.getElementById('aguardando-list-container');
 const finalizadosListContainer = document.getElementById('finalizados-list-container');
@@ -100,6 +104,8 @@ let currentProducaoTab = 'EM_PRODUCAO';
 // App State
 let allProducts = [];
 let allPedidos = [];
+let allPreProducao = [];
+let allGarantia = [];
 let filteredPedidos = [];
 
 // --- Helper Functions ---
@@ -154,7 +160,7 @@ function showView(viewId) {
     } else if (viewId === 'producao-view') {
         producaoView.classList.remove('hidden');
         document.title = 'Produção';
-        if (allPedidos.length === 0) {
+        if (allPedidos.length === 0 || (allPreProducao.length === 0 && allGarantia.length === 0)) {
             fetchPedidos().then(() => renderProducaoView());
         } else {
             renderProducaoView();
@@ -328,17 +334,40 @@ function handleSyncUpdate(update) {
             const pedido = allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
             if (pedido) {
                 if (!pedido.detalhesProducao) pedido.detalhesProducao = {};
-                const key = `${pedidoId}-${itemIndex}`;
-                pedido.detalhesProducao[key] = {
-                    status: newStatus || pedido.detalhesProducao[key]?.status || 'OK',
-                    descricao: newDescription !== undefined ? newDescription : (pedido.detalhesProducao[key]?.descricao || ''),
-                    data: dataPedido !== undefined ? dataPedido : (pedido.detalhesProducao[key]?.data || ''),
-                    responsavel: responsavel !== undefined ? responsavel : (pedido.detalhesProducao[key]?.responsavel || '')
+                const key1 = `${pedidoId}-${itemIndex}`;
+                const key2 = `${pedido.numero || pedido.número}-${itemIndex}`;
+                pedido.detalhesProducao[key1] = {
+                    status: newStatus || pedido.detalhesProducao[key1]?.status || 'OK',
+                    descricao: newDescription !== undefined ? newDescription : (pedido.detalhesProducao[key1]?.descricao || ''),
+                    data: dataPedido !== undefined ? dataPedido : (pedido.detalhesProducao[key1]?.data || ''),
+                    responsavel: responsavel !== undefined ? responsavel : (pedido.detalhesProducao[key1]?.responsavel || '')
                 };
-                
-                if (!producaoView.classList.contains('hidden')) {
-                    renderProducaoView();
-                }
+                pedido.detalhesProducao[key2] = pedido.detalhesProducao[key1];
+            }
+            if (Array.isArray(allPreProducao)) {
+                allPreProducao.forEach(pp => {
+                    const ppSku = String(pp.sku || pp.codigo || '').trim();
+                    const ppOrc = String(pp.orcamento || '').trim();
+                    if (ppSku === String(itemCodigo || '').trim() && (!data.orcamento || ppOrc === String(data.orcamento).trim())) {
+                        pp.status = newStatus || pp.status;
+                        if (newDescription !== undefined) pp.descricao = newDescription;
+                        if (responsavel !== undefined) pp.responsavel = responsavel;
+                    }
+                });
+            }
+            if (Array.isArray(allGarantia)) {
+                allGarantia.forEach(gi => {
+                    const gPid = String(gi.pedidoId || '').trim();
+                    const gSku = String(gi.sku || gi.codigo || '').trim();
+                    if (gPid === String(pedidoId || '').trim() && (!itemCodigo || gSku === String(itemCodigo).trim())) {
+                        gi.status = newStatus || gi.status;
+                        if (newDescription !== undefined) gi.descricao = newDescription;
+                        if (responsavel !== undefined) gi.responsavel = responsavel;
+                    }
+                });
+            }
+            if (!producaoView.classList.contains('hidden')) {
+                renderProducaoView();
             }
             break;
             
@@ -820,6 +849,8 @@ async function fetchPedidos(silent = false) {
         if (!response.ok) throw new Error("Erro ao buscar pedidos.");
         const result = await response.json();
         allPedidos = result.data || [];
+        allPreProducao = Array.isArray(result.preProducao) ? result.preProducao : [];
+        allGarantia = Array.isArray(result.garantia) ? result.garantia : [];
         updateNfeMobileContext({ allPedidos });
         
         // Garantir parsing de observação em todos os pedidos trazidos
@@ -1225,7 +1256,7 @@ function _parseNumber(str) {
     return isNaN(n) ? null : n;
 }
 
-function _parseItens(raw, producaoData = {}, pedidoId = '') {
+function _parseItens(raw, producaoData = {}, pedidoId = '', altPedidoId = '') {
     const results = [];
     if (!raw) return results;
 
@@ -1255,15 +1286,26 @@ function _parseItens(raw, producaoData = {}, pedidoId = '') {
                 status = sub[1] || 'OK';
             }
 
-            const key = `${pedidoId}-${index}`;
-            const extra = producaoData[key];
+            const key1 = `${pedidoId}-${index}`;
+            const key2 = altPedidoId ? `${altPedidoId}-${index}` : null;
+            let extra = producaoData[key1] || (key2 ? producaoData[key2] : null);
+            if (!extra && producaoData && typeof producaoData === 'object') {
+                const found = Object.entries(producaoData).find(([k]) => k.endsWith(`-${index}`));
+                if (found) extra = found[1];
+            }
+
+            let customDesc = (extra && extra.descricao) ? extra.descricao : '';
+            if (!customDesc && Array.isArray(allProducts)) {
+                const prod = allProducts.find(p => String(p.codigo).trim() === String(sku).trim());
+                if (prod && prod.descricao) customDesc = prod.descricao;
+            }
             
             results.push({
                 codigo: sku,
                 quantidade: qty,
                 valor: _parseNumber(valPart) || 0,
                 status: (extra && extra.status) ? extra.status : status,
-                descricaoPersonalizada: (extra && extra.descricao) ? extra.descricao : '',
+                descricaoPersonalizada: customDesc,
                 dataProducao: (extra && extra.data) ? extra.data : '',
                 responsavel: (extra && extra.responsavel) ? extra.responsavel : '',
                 index: index
@@ -1279,13 +1321,17 @@ function renderProducaoView() {
     finalizadosListContainer.innerHTML = '';
     
     const aggregatedItems = {};
+    const linkedOrcSkuSet = new Set();
 
+    // 1. Pedidos do Bling
     allPedidos.forEach(p => {
         const numeroPedido = p.numero || p.número || 'N/A';
         const finalId = p.id_pedido || p.id || '';
         const itensRaw = p.itens || p.Itens || '';
-        const parsedItens = _parseItens(itensRaw, p.detalhesProducao || {}, finalId);
+        const parsedItens = _parseItens(itensRaw, p.detalhesProducao || {}, finalId, numeroPedido);
         const empresa = p.contato_nome || p['contato nome'] || p.cliente || 'N/A';
+        const orcamento = String(p.orcamento || p.orçamento || '').trim();
+        const dataPedido = p.data || p.data_criacao || '';
 
         parsedItens.forEach(item => {
             const s = String(item.status || 'OK').toUpperCase().trim();
@@ -1293,6 +1339,9 @@ function renderProducaoView() {
 
             if (isProducao) {
                 const codigo = String(item.codigo).trim();
+                if (orcamento && orcamento !== '0') {
+                    linkedOrcSkuSet.add(`${orcamento}_${codigo}`);
+                }
                 const key = `${codigo}_${numeroPedido}_${item.descricaoPersonalizada || ''}`; 
                 
                 if (!aggregatedItems[key]) {
@@ -1300,14 +1349,17 @@ function renderProducaoView() {
                         codigo: codigo,
                         descricao: item.descricaoPersonalizada || codigo, 
                         quantidadeTotal: 0,
-                        data: item.dataProducao || p.data || '',
+                        data: item.dataProducao || dataPedido,
                         empresa: empresa,
+                        orcamento: orcamento,
                         numeroPedido: numeroPedido,
                         pedidoId: finalId,
                         itemIndex: item.index,
                         status: item.status || 'EM PRODUÇÃO',
                         responsavel: item.responsavel || '',
-                        orcamento: p.orcamento || p.orçamento || ''
+                        isPreProducao: false,
+                        isGarantia: false,
+                        tipo: 'VENDAS'
                     };
                 }
                 aggregatedItems[key].quantidadeTotal += (parseFloat(item.quantidade) || 0);
@@ -1315,15 +1367,92 @@ function renderProducaoView() {
         });
     });
 
-    let itemsArray = Object.values(aggregatedItems);
+    // 2. Pré-Produção (Orçamentos em produção sem pedido faturado)
+    allPreProducao.forEach(pre => {
+        const preSku = String(pre.sku || pre.codigo || '').trim();
+        const preOrc = String(pre.orcamento || '').trim();
+        if (!preSku || !preOrc) return;
+        if (linkedOrcSkuSet.has(`${preOrc}_${preSku}`)) return; // Já vinculado a um pedido real
 
-    const responsaveisSet = new Set();
-    itemsArray.forEach(item => {
-        if (item.responsavel && item.responsavel.trim() !== '') {
-            responsaveisSet.add(item.responsavel.trim());
+        const s = String(pre.status || 'EM PRODUÇÃO').toUpperCase().trim();
+        const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO' || s === 'AGUARDANDO RETIRADA' || s === 'FINALIZADO';
+        if (!isProducao) return;
+
+        let preDesc = pre.descricaocomplementar || pre.descricaoPersonalizada || pre.descricao || '';
+        if (!preDesc && Array.isArray(allProducts)) {
+            const prod = allProducts.find(p => String(p.codigo).trim() === preSku);
+            if (prod && prod.descricao) preDesc = prod.descricao;
+        }
+
+        const key = `PRE_${preSku}_${preOrc}`;
+        if (!aggregatedItems[key]) {
+            aggregatedItems[key] = {
+                codigo: preSku,
+                descricao: preDesc || preSku,
+                quantidadeTotal: parseFloat(pre.quantidade) || 1,
+                data: pre.data || '',
+                empresa: '',
+                orcamento: preOrc,
+                numeroPedido: '',
+                pedidoId: '',
+                itemIndex: '',
+                status: pre.status || 'EM PRODUÇÃO',
+                responsavel: pre.responsavel || '',
+                isPreProducao: true,
+                isGarantia: false,
+                tipo: 'VENDAS'
+            };
         }
     });
-    const responsaveis = Array.from(responsaveisSet).sort();
+
+    // 3. Garantias / SAT-G em Produção
+    allGarantia.forEach(gar => {
+        const garSku = String(gar.sku || '').trim();
+        const garPid = String(gar.pedidoId || '').trim();
+        const garIdx = gar.itemIndex !== undefined && gar.itemIndex !== null ? String(gar.itemIndex) : '';
+        const s = String(gar.status || 'EM PRODUÇÃO').toUpperCase().trim();
+        const isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO' || s === 'AGUARDANDO RETIRADA' || s === 'FINALIZADO';
+        if (!isProducao) return;
+
+        let garDesc = gar.descricaocomplementar || gar.descricaoPersonalizada || gar.descricao || '';
+        if (!garDesc && Array.isArray(allProducts)) {
+            const prod = allProducts.find(p => String(p.codigo).trim() === garSku);
+            if (prod && prod.descricao) garDesc = prod.descricao;
+        }
+
+        const key = `GAR_${garPid}_${garIdx}_${garSku}`;
+        if (!aggregatedItems[key]) {
+            aggregatedItems[key] = {
+                codigo: garSku,
+                descricao: garDesc || garSku,
+                quantidadeTotal: parseFloat(gar.quantidade) || 1,
+                data: gar.data || '',
+                empresa: gar.cliente || '',
+                orcamento: gar.orcamento || '',
+                numeroPedido: garPid,
+                pedidoId: garPid,
+                itemIndex: garIdx,
+                status: gar.status || 'EM PRODUÇÃO',
+                responsavel: gar.responsavel || '',
+                isPreProducao: false,
+                isGarantia: true,
+                tipo: 'GARANTIA',
+                cliente: gar.cliente || ''
+            };
+        }
+    });
+
+    let itemsArray = Object.values(aggregatedItems);
+
+    // Extrair responsáveis únicos para o filtro
+    const responsaveisSet = new Set();
+    itemsArray.forEach(item => {
+        const r = String(item.responsavel || '').trim().toUpperCase();
+        if (r && r !== '-' && r !== 'SEM_RESP' && r !== 'SEM RESPONSÁVEL' && r !== 'SEM RESPONSAVEL') {
+            responsaveisSet.add(r);
+        }
+    });
+    const responsaveis = Array.from(responsaveisSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
     const currentSelection = producaoResponsavelFilter.value || 'TODOS';
     let optionsHTML = '<option value="TODOS">Todos os Responsáveis</option><option value="SEM_RESP">Sem Responsável</option>';
@@ -1340,13 +1469,50 @@ function renderProducaoView() {
     if (producaoResponsavelFilter.value !== 'TODOS') {
         const activeFilter = producaoResponsavelFilter.value;
         if (activeFilter === 'SEM_RESP') {
-            itemsArray = itemsArray.filter(i => !i.responsavel || i.responsavel.trim() === '');
+            itemsArray = itemsArray.filter(i => {
+                const r = String(i.responsavel || '').trim().toUpperCase();
+                return !r || r === '-' || r === 'SEM_RESP' || r === 'SEM RESPONSÁVEL' || r === 'SEM RESPONSAVEL';
+            });
         } else {
-            itemsArray = itemsArray.filter(i => i.responsavel === activeFilter);
+            itemsArray = itemsArray.filter(i => String(i.responsavel || '').trim().toUpperCase() === activeFilter);
         }
     }
 
-    const emProducaoItems = itemsArray.filter(i => i.status.toUpperCase() === 'EM PRODUÇÃO' || i.status.toUpperCase() === 'PRODUCAO' || i.status.toUpperCase() === 'EM PRODUCAO');
+    // Filtro por campo de busca (Orçamento, Cliente, Pedido, Código, Descrição)
+    const rawSearch = producaoSearchInput ? producaoSearchInput.value.trim() : '';
+    const searchTerm = rawSearch.toLowerCase();
+
+    // Controle dos botões limpar/ícone de busca
+    if (producaoSearchClearBtn && producaoSearchIcon) {
+        if (rawSearch) {
+            producaoSearchClearBtn.classList.remove('hidden');
+            producaoSearchIcon.classList.add('hidden');
+        } else {
+            producaoSearchClearBtn.classList.add('hidden');
+            producaoSearchIcon.classList.remove('hidden');
+        }
+    }
+
+    if (searchTerm) {
+        itemsArray = itemsArray.filter(i => {
+            const orc = String(i.orcamento || '').toLowerCase();
+            const cliente = String(i.empresa || i.cliente || '').toLowerCase();
+            const pedido = String(i.numeroPedido || '').toLowerCase();
+            const cod = String(i.codigo || '').toLowerCase();
+            const desc = String(i.descricao || '').toLowerCase();
+
+            return orc.includes(searchTerm) ||
+                   cliente.includes(searchTerm) ||
+                   pedido.includes(searchTerm) ||
+                   cod.includes(searchTerm) ||
+                   desc.includes(searchTerm);
+        });
+    }
+
+    const emProducaoItems = itemsArray.filter(i => {
+        const s = i.status.toUpperCase();
+        return s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
+    });
     const aguardandoItems = itemsArray.filter(i => i.status.toUpperCase() === 'AGUARDANDO RETIRADA');
     const finalizadosItems = itemsArray.filter(i => i.status.toUpperCase() === 'FINALIZADO');
 
@@ -1354,20 +1520,30 @@ function renderProducaoView() {
     document.getElementById('tab-aguardando').innerText = `Aguardando (${aguardandoItems.length})`;
     document.getElementById('tab-finalizados').innerText = `Finalizados (${finalizadosItems.length})`;
 
+    const emptyMsgProducao = searchTerm 
+        ? '<p class="text-gray-500 text-center py-8">Nenhum item encontrado para esta busca.</p>' 
+        : '<p class="text-gray-500 text-center py-8">Nenhum item em produção.</p>';
+    const emptyMsgAguardando = searchTerm 
+        ? '<p class="text-gray-500 text-center py-8">Nenhum item encontrado para esta busca.</p>' 
+        : '<p class="text-gray-500 text-center py-8">Nenhum item aguardando retirada.</p>';
+    const emptyMsgFinalizados = searchTerm 
+        ? '<p class="text-gray-500 text-center py-8">Nenhum item encontrado para esta busca.</p>' 
+        : '<p class="text-gray-500 text-center py-8">Nenhum item finalizado.</p>';
+
     if (emProducaoItems.length === 0) {
-        producaoListContainer.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum item em produção.</p>';
+        producaoListContainer.innerHTML = emptyMsgProducao;
     } else {
         producaoListContainer.innerHTML = emProducaoItems.map(item => _generateProducaoCardHtml(item)).join('');
     }
 
     if (aguardandoItems.length === 0) {
-        aguardandoListContainer.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum item aguardando retirada.</p>';
+        aguardandoListContainer.innerHTML = emptyMsgAguardando;
     } else {
         aguardandoListContainer.innerHTML = aguardandoItems.map(item => _generateProducaoCardHtml(item)).join('');
     }
 
     if (finalizadosItems.length === 0) {
-        finalizadosListContainer.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum item finalizado.</p>';
+        finalizadosListContainer.innerHTML = emptyMsgFinalizados;
     } else {
         finalizadosListContainer.innerHTML = finalizadosItems.map(item => _generateProducaoCardHtml(item)).join('');
     }
@@ -1377,65 +1553,93 @@ function _generateProducaoCardHtml(item) {
     const s = String(item.status || '').toUpperCase().trim();
     let isFinalizado = s === 'FINALIZADO';
     let isAguardando = s === 'AGUARDANDO RETIRADA';
-    let isProducao = s === 'EM PRODUÇÃO' || s === 'PRODUCAO' || s === 'EM PRODUCAO';
     
     let cardClass = '';
     let statusBadge = '';
-    let nextStatus = '';
     let btnClass = '';
-    let btnIcon = '';
     
     if (isFinalizado) {
-        cardClass = 'border-green-300 bg-green-50';
-        statusBadge = '<span class="px-2 py-0.5 bg-green-100 text-green-800 text-[10px] font-bold rounded-full">FINALIZADO</span>';
-        nextStatus = 'EM PRODUÇÃO'; // Botão volta pra produção
-        btnClass = 'bg-green-100 text-green-600 hover:bg-green-200';
-        btnIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>'; // Seta de voltar
+        cardClass = 'border-green-300 bg-green-50/40';
+        statusBadge = '<span class="px-2.5 py-1 bg-green-100 text-green-800 text-[11px] font-bold rounded-full">FINALIZADO</span>';
+        btnClass = 'bg-green-100 text-green-700 hover:bg-green-200 active:scale-95';
     } else if (isAguardando) {
-        cardClass = 'border-yellow-300 bg-yellow-50';
-        statusBadge = '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-[10px] font-bold rounded-full">AGUARDANDO RETIRADA</span>';
-        nextStatus = 'FINALIZADO';
-        btnClass = 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200';
-        btnIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>'; // Check final
+        cardClass = 'border-yellow-300 bg-yellow-50/40';
+        statusBadge = '<span class="px-2.5 py-1 bg-yellow-100 text-yellow-800 text-[11px] font-bold rounded-full">AGUARDANDO RETIRADA</span>';
+        btnClass = 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 active:scale-95';
     } else {
         cardClass = 'border-cyan-200 bg-white';
-        statusBadge = '<span class="px-2 py-0.5 bg-cyan-100 text-cyan-800 text-[10px] font-bold rounded-full">EM PRODUÇÃO</span>';
-        nextStatus = 'AGUARDANDO RETIRADA';
-        btnClass = 'bg-gray-100 text-gray-400 hover:bg-cyan-100 hover:text-cyan-600';
-        btnIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>'; // Seta de avanço
+        statusBadge = '<span class="px-2.5 py-1 bg-cyan-100 text-cyan-800 text-[11px] font-bold rounded-full">EM PRODUÇÃO</span>';
+        btnClass = 'bg-gray-100 text-gray-500 hover:bg-cyan-100 hover:text-cyan-700 active:scale-95';
     }
+
+    let originInfoHtml = '';
+    if (item.isGarantia) {
+        originInfoHtml = `
+            <div class="col-span-2 bg-purple-50/70 p-2.5 rounded-lg mt-1 border border-purple-100">
+                <span class="font-bold text-purple-600 block text-[10px] uppercase mb-1">Garantia / SAT-G</span>
+                <div class="text-[11px] space-y-0.5">
+                    ${item.empresa ? `<div class="truncate"><span class="font-semibold text-gray-500">Cliente:</span> <span class="text-gray-800 font-medium">${item.empresa}</span></div>` : ''}
+                    <div><span class="font-semibold text-gray-500">Identificador:</span> <span class="text-gray-800 font-bold">${item.numeroPedido}</span></div>
+                    ${item.orcamento ? `<div><span class="font-semibold text-gray-500">Orçamento:</span> <span class="text-gray-800">${item.orcamento}</span></div>` : ''}
+                </div>
+            </div>
+        `;
+    } else if (item.isPreProducao) {
+        originInfoHtml = `
+            <div class="col-span-2 bg-amber-50/70 p-2.5 rounded-lg mt-1 border border-amber-100">
+                <span class="font-bold text-amber-700 block text-[10px] uppercase mb-1">Pré-Produção (Orçamento)</span>
+                <div class="text-[11px] space-y-0.5">
+                    <div><span class="font-semibold text-gray-500">Orçamento:</span> <span class="text-amber-900 font-bold">${item.orcamento}</span></div>
+                    <div class="text-[10px] text-amber-600 font-medium italic">Item sem pedido faturado</div>
+                </div>
+            </div>
+        `;
+    } else {
+        originInfoHtml = `
+            <div class="col-span-2 bg-gray-50 p-2.5 rounded-lg mt-1 border border-gray-100">
+                <span class="font-bold text-gray-400 block text-[10px] uppercase mb-1">Cliente / Pedido / Orçamento</span>
+                <div class="text-[11px] space-y-0.5">
+                    <div class="truncate"><span class="font-semibold text-gray-500">Cliente:</span> <span class="text-gray-800 font-medium">${item.empresa}</span></div>
+                    <div><span class="font-semibold text-gray-500">Pedido:</span> <span class="text-gray-800 font-bold">${item.numeroPedido}</span></div>
+                    ${item.orcamento ? `<div><span class="font-semibold text-gray-500">Orçamento:</span> <span class="text-gray-800">${item.orcamento}</span></div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    const safeDesc = (item.descricao || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const safeOrc = (item.orcamento || '').replace(/'/g, "\\'");
+    const safeCodigo = (item.codigo || '').replace(/'/g, "\\'");
+    const safePedidoId = (item.pedidoId || '').replace(/'/g, "\\'");
+    const safeNumeroPedido = (item.numeroPedido || '').replace(/'/g, "\\'");
+    const safeStatus = (item.status || 'EM PRODUÇÃO').replace(/'/g, "\\'");
+    const idxArg = (item.itemIndex !== undefined && item.itemIndex !== null && item.itemIndex !== '') ? item.itemIndex : "''";
+    const modalCall = `window.openMobileProductionStatusModal('${safePedidoId}', '${safeCodigo}', ${idxArg}, '${safeNumeroPedido}', '${safeStatus}', '${safeOrc}', ${item.isPreProducao ? 'true' : 'false'}, ${item.isGarantia ? 'true' : 'false'}, '${safeDesc}', ${item.quantidadeTotal || 1})`;
         
     return `
         <div class="border ${cardClass} p-4 rounded-xl shadow-sm relative overflow-hidden transition-all duration-300">
-            <div class="mb-2 pr-10">
-                <div class="mb-2 inline-block">${statusBadge}</div>
-                <div class="font-bold text-gray-800 text-sm break-all">${item.descricao}</div>
+            <div class="mb-2 pr-12">
+                <button type="button" onclick="${modalCall}" class="mb-2 inline-block text-left" title="Toque para alterar situação">${statusBadge}</button>
+                <div class="font-bold text-gray-800 text-sm break-words leading-snug">${item.descricao}</div>
             </div>
             
             <div class="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-2">
                 <div>
                     <span class="font-semibold text-gray-400 block text-[10px] uppercase">Código</span>
-                    <span>${item.codigo}</span>
+                    <span class="font-medium text-gray-700">${item.codigo}</span>
                 </div>
                 <div>
                     <span class="font-semibold text-gray-400 block text-[10px] uppercase">Quantidade</span>
                     <span class="font-bold text-gray-900">${item.quantidadeTotal}</span>
                 </div>
-                <div class="col-span-2 bg-gray-50 p-2 rounded-lg mt-1 border border-gray-100">
-                    <span class="font-bold text-gray-400 block text-[10px] uppercase mb-1">Cliente / Pedido / Orçamento</span>
-                    <div class="text-[11px] space-y-0.5">
-                        <div class="truncate"><span class="font-semibold text-gray-500">Cliente:</span> <span class="text-gray-800">${item.empresa}</span></div>
-                        <div><span class="font-semibold text-gray-500">Pedido:</span> <span class="text-gray-800">${item.numeroPedido}</span></div>
-                        ${item.orcamento ? `<div><span class="font-semibold text-gray-500">Orçamento:</span> <span class="text-gray-800">${item.orcamento}</span></div>` : ''}
-                    </div>
-                </div>
+                ${originInfoHtml}
             </div>
             
-            ${item.responsavel ? `<div class="mt-2 text-xs text-gray-500"><span class="font-semibold">Resp:</span> ${item.responsavel}</div>` : ''}
+            ${item.responsavel ? `<div class="mt-2 text-xs text-gray-500 flex items-center gap-1.5"><span class="font-semibold text-gray-400">Resp:</span> <span class="bg-gray-100 text-gray-700 font-bold px-2 py-0.5 rounded text-[11px]">${item.responsavel}</span></div>` : ''}
 
-            <button onclick="window.handleMobileProductionStatus('${item.pedidoId}', '${item.codigo}', ${item.itemIndex}, '${item.numeroPedido}', '${nextStatus}', this)" class="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full ${btnClass} transition-colors shadow-sm z-10" title="Avançar Status">
+            <button onclick="${modalCall}" class="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full ${btnClass} transition-all shadow-sm z-10" title="Alterar Situação">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    ${btnIcon}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
             </button>
         </div>
@@ -1443,6 +1647,20 @@ function _generateProducaoCardHtml(item) {
 }
 
 producaoResponsavelFilter.addEventListener('change', renderProducaoView);
+
+if (producaoSearchInput) {
+    producaoSearchInput.addEventListener('input', renderProducaoView);
+}
+
+if (producaoSearchClearBtn) {
+    producaoSearchClearBtn.addEventListener('click', () => {
+        if (producaoSearchInput) {
+            producaoSearchInput.value = '';
+            producaoSearchInput.focus();
+        }
+        renderProducaoView();
+    });
+}
 
 tabEmProducao.addEventListener('click', () => {
     currentProducaoTab = 'EM_PRODUCAO';
@@ -1474,47 +1692,192 @@ tabFinalizados.addEventListener('click', () => {
     aguardandoListContainer.classList.add('hidden');
 });
 
-window.handleMobileProductionStatus = async function(pedidoId, itemCodigo, index, numeroPedido, novoStatus, btnElement) {
-    
-    const originalHtml = btnElement.innerHTML;
-    btnElement.innerHTML = `<svg class="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
-    btnElement.disabled = true;
+window.openMobileProductionStatusModal = function(pedidoId, itemCodigo, index, numeroPedido, currentStatus, orcamento, isPreProducao, isGarantia, itemDesc, itemQtd) {
+    const modal = document.getElementById('lp-status-modal');
+    const subtitle = document.getElementById('lp-status-modal-subtitle');
+    const closeBtn = document.getElementById('close-lp-status-modal-btn');
+    const cancelBtn = document.getElementById('cancel-lp-status-modal-btn');
+    const confirmBtn = document.getElementById('confirm-lp-status-modal-btn');
 
-    try {
-        const payload = {
-            pedidoId: String(pedidoId),
-            numeroPedido: String(numeroPedido),
-            itemCodigo: String(itemCodigo),
-            itemIndex: index,
-            newStatus: novoStatus
-        };
+    if (!modal || !confirmBtn) return;
 
-        const res = await fetch(API_URLS.UPDATE_ITEM_STATUS, {
-            method: 'POST',
-            mode: 'cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+    let normStatus = String(currentStatus || 'EM PRODUÇÃO').toUpperCase().trim();
+    if (normStatus === 'PRODUCAO' || normStatus === 'EM PRODUCAO') normStatus = 'EM PRODUÇÃO';
 
-        if (!res.ok) throw new Error("Falha na API.");
+    if (subtitle) {
+        if (isGarantia) {
+            subtitle.textContent = `Garantia #${numeroPedido || pedidoId} • ${itemDesc || itemCodigo}`;
+        } else if (isPreProducao) {
+            subtitle.textContent = `Orçamento ${orcamento} (Pré-Prod) • ${itemDesc || itemCodigo}`;
+        } else {
+            subtitle.textContent = `Pedido #${numeroPedido || pedidoId} • ${itemDesc || itemCodigo}`;
+        }
+    }
 
-        const order = allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId));
-        if (order) {
-            if (!order.detalhesProducao) order.detalhesProducao = {};
-            const key = `${pedidoId}-${index}`;
-            if (!order.detalhesProducao[key]) order.detalhesProducao[key] = {};
-            order.detalhesProducao[key].status = novoStatus;
+    const radios = modal.querySelectorAll('input[name="lp-item-status-radio"]');
+    let matched = false;
+    radios.forEach(r => {
+        if (r.value.toUpperCase() === normStatus) {
+            r.checked = true;
+            matched = true;
+        } else {
+            r.checked = false;
+        }
+    });
+    if (!matched && radios.length > 0) radios[0].checked = true;
+
+    const closeModal = () => modal.classList.add('hidden');
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (cancelBtn) cancelBtn.onclick = closeModal;
+    modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+
+    confirmBtn.disabled = false;
+    confirmBtn.innerHTML = 'Confirmar';
+    confirmBtn.onclick = async () => {
+        const checkedRadio = modal.querySelector('input[name="lp-item-status-radio"]:checked');
+        if (!checkedRadio) return;
+        const selectedStatus = checkedRadio.value;
+
+        if (selectedStatus === normStatus) {
+            closeModal();
+            return;
         }
 
-        renderProducaoView();
-        
-    } catch (e) {
-        console.error(e);
-        alert('Erro ao atualizar status.');
-        btnElement.innerHTML = originalHtml;
-        btnElement.disabled = false;
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `<svg class="animate-spin h-4 w-4 text-white inline-block mr-1.5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Salvando...`;
+
+        try {
+            await window.saveMobileProductionStatus({
+                pedidoId,
+                itemCodigo,
+                index,
+                numeroPedido,
+                selectedStatus,
+                orcamento,
+                isPreProducao,
+                isGarantia,
+                itemDesc,
+                itemQtd
+            });
+            closeModal();
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao atualizar situação: ' + (e.message || 'Falha na conexão'));
+        } finally {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = 'Confirmar';
+        }
+    };
+
+    modal.classList.remove('hidden');
+};
+
+window.saveMobileProductionStatus = async function({
+    pedidoId,
+    itemCodigo,
+    index,
+    numeroPedido,
+    selectedStatus,
+    orcamento,
+    isPreProducao,
+    isGarantia,
+    itemDesc,
+    itemQtd
+}) {
+    const pCache = (!isPreProducao && !isGarantia && pedidoId)
+        ? allPedidos.find(p => String(p.id) === String(pedidoId) || String(p.numero) === String(pedidoId) || String(p.numero) === String(numeroPedido))
+        : null;
+
+    let preItem = null;
+    if (isPreProducao || (!pCache && orcamento)) {
+        preItem = allPreProducao.find(pp =>
+            String(pp.orcamento || '').trim() === String(orcamento || '').trim() &&
+            String(pp.sku || pp.codigo || '').trim() === String(itemCodigo || '').trim()
+        ) || null;
     }
-}
+
+    let garItem = null;
+    if (isGarantia || (!pCache && !preItem && String(pedidoId || numeroPedido).startsWith('GAR-'))) {
+        const targetPid = String(pedidoId || numeroPedido || '').trim();
+        const targetSku = String(itemCodigo || '').trim();
+        garItem = allGarantia.find(gi => {
+            const gPid = String(gi.pedidoId || '').trim();
+            const gSku = String(gi.sku || gi.codigo || '').trim();
+            return gPid === targetPid && (!targetSku || gSku === targetSku);
+        }) || null;
+    }
+
+    let currentDesc = itemDesc || '';
+    let currentResp = '';
+    if (pCache && pCache.detalhesProducao) {
+        const keyId = `${pedidoId}-${index}`;
+        const keyNum = `${pCache.numero || pCache.número}-${index}`;
+        const extra = pCache.detalhesProducao[keyId] || pCache.detalhesProducao[keyNum];
+        if (extra) {
+            currentDesc = extra.descricao || currentDesc;
+            currentResp = extra.responsavel || '';
+        }
+    } else if (preItem) {
+        currentDesc = preItem.descricaocomplementar || preItem.descricaoPersonalizada || preItem.descricao || currentDesc;
+        currentResp = preItem.responsavel || '';
+    } else if (garItem) {
+        currentDesc = garItem.descricaocomplementar || garItem.descricaoPersonalizada || garItem.descricao || currentDesc;
+        currentResp = garItem.responsavel || '';
+    }
+
+    const payload = {
+        pedidoId: pCache ? (pCache.id || pedidoId) : (garItem ? (garItem.pedidoId || pedidoId) : ''),
+        itemCodigo: String(itemCodigo),
+        newStatus: selectedStatus,
+        itemIndex: pCache ? index : (garItem ? (garItem.itemIndex !== undefined ? garItem.itemIndex : index) : ''),
+        newDescription: currentDesc,
+        responsavel: currentResp,
+        numeroPedido: pCache ? (pCache.numero || pCache.número || '') : (garItem ? (garItem.pedidoId || pedidoId) : (numeroPedido || '')),
+        orcamento: garItem ? (garItem.orcamento || orcamento) : orcamento,
+        quantidade: itemQtd || 1,
+        dataPedido: pCache ? (pCache.data || pCache.data_criacao || '') : (garItem ? (garItem.data || '') : (preItem ? (preItem.data || '') : '')),
+        origem: garItem ? 'Garantia' : undefined,
+        cliente: garItem ? (garItem.cliente || '') : undefined
+    };
+
+    const res = await fetch(API_URLS.UPDATE_ITEM_STATUS, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || 'Falha na resposta do servidor.');
+    }
+
+    // Atualiza estado local imediatamente
+    if (pCache) {
+        if (!pCache.detalhesProducao) pCache.detalhesProducao = {};
+        const key1 = `${pCache.id || pedidoId}-${index}`;
+        const key2 = `${pCache.numero || pCache.número}-${index}`;
+        pCache.detalhesProducao[key1] = {
+            ...(pCache.detalhesProducao[key1] || {}),
+            status: selectedStatus,
+            descricao: currentDesc,
+            responsavel: currentResp
+        };
+        pCache.detalhesProducao[key2] = pCache.detalhesProducao[key1];
+    } else if (preItem) {
+        preItem.status = selectedStatus;
+        if (currentDesc) preItem.descricao = currentDesc;
+    } else if (garItem) {
+        garItem.status = selectedStatus;
+        if (currentDesc) garItem.descricao = currentDesc;
+    }
+
+    renderProducaoView();
+};
+
+window.handleMobileProductionStatus = function(pedidoId, itemCodigo, index, numeroPedido, novoStatus, btnElement) {
+    window.openMobileProductionStatusModal(pedidoId, itemCodigo, index, numeroPedido, novoStatus, '', false, false, '', 1);
+};
 
 // --- UTILS ---
 function debounce(func, wait) {
@@ -1543,6 +1906,11 @@ function initializeApp() {
     entradaBackToMenuBtn.addEventListener('click', () => showView('menu-view'));
     pedidosBackToMenuBtn.addEventListener('click', () => showView('menu-view'));
     producaoBackToMenuBtn.addEventListener('click', () => showView('menu-view'));
+    if (producaoRefreshBtn) {
+        producaoRefreshBtn.addEventListener('click', () => {
+            fetchPedidos().then(() => renderProducaoView());
+        });
+    }
     reqBackToMenuBtn.addEventListener('click', () => {
         if (requisitionItems.length === 0 || confirm("Deseja sair e limpar a lista de requisição atual?")) {
             requisitionItems = [];

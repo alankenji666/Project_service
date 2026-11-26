@@ -448,6 +448,9 @@ export const DashboardApp = (function() {
         _dom.ecommerceFilterCusto = document.getElementById('ecommerce-filter-custo');
         _dom.ecommerceShowZeradosCb = document.getElementById('ecommerce-show-zerados-cb');
         _dom.btnExportEcommerceExcel = document.getElementById('btn-export-ecommerce-excel');
+        _dom.btnSyncEcommerceLi = document.getElementById('btn-sync-ecommerce-li');
+        _dom.syncEcommerceIcon = document.getElementById('sync-ecommerce-icon');
+        _dom.syncEcommerceText = document.getElementById('sync-ecommerce-text');
         _dom.ecommerceProductsTbody = document.getElementById('ecommerce-products-tbody');
         _dom.ecommerceProductsCountBadge = document.getElementById('ecommerce-products-count-badge');
         _dom.ecommerceSummaryTotalItems = document.getElementById('ecommerce-summary-total-items');
@@ -517,8 +520,11 @@ export const DashboardApp = (function() {
         if (_dom.filterBar) _dom.filterBar.classList.add('hidden');
         _state.ecommerceCurrentPage = 1;
         
-        if (!_state.ecommerceActiveLiSkus || _state.ecommerceActiveLiSkus.size === 0) {
-            _syncLojaIntegradaProducts(false);
+        if (_state.ecommerceIsSyncingLi || !_state.ecommerceActiveLiSkus || _state.ecommerceActiveLiSkus.size === 0) {
+            _showEcommerceLoading();
+            if (!_state.ecommerceIsSyncingLi) {
+                _syncLojaIntegradaProducts(false);
+            }
         } else {
             _renderEcommerceDashboard();
         }
@@ -3514,8 +3520,10 @@ export const DashboardApp = (function() {
             _renderEcommerceDashboard();
         });
 
-        _dom.btnExportEcommerceExcel?.addEventListener('click', _exportEcommerceProductsToExcel);
-        _dom.btnSyncEcommerceLi?.addEventListener('click', () => _syncLojaIntegradaProducts(true));
+        _dom.btnSyncEcommerceLi?.addEventListener('click', () => {
+            _showEcommerceLoading();
+            _syncLojaIntegradaProducts(true);
+        });
 
         const ecommerceHeaders = document.querySelectorAll('#ecommerce-products-table th[data-sort]');
         if (ecommerceHeaders) {
@@ -4652,6 +4660,8 @@ async function _showGarantiaDashboard() {
         const activeMoItems = [];
         const processedMoIds = new Set();
         const processedPedidoIds = new Set();
+        const mapEquipamentosSatgs = {};
+        const mapClientesSatgs = {};
 
         // 4. Analisar SAT-Gs filtradas
         filteredSatgData.forEach(satg => {
@@ -4664,6 +4674,12 @@ async function _showGarantiaDashboard() {
 
             countEquipamentos[equip] = (countEquipamentos[equip] || 0) + 1;
             countClientes[cliente] = (countClientes[cliente] || 0) + 1;
+
+            if (!mapEquipamentosSatgs[equip]) mapEquipamentosSatgs[equip] = [];
+            mapEquipamentosSatgs[equip].push(satg);
+
+            if (!mapClientesSatgs[cliente]) mapClientesSatgs[cliente] = [];
+            mapClientesSatgs[cliente].push(satg);
 
             // Verificar M.O vinculado
             if (satg.idServicoMO && !processedMoIds.has(String(satg.idServicoMO).trim())) {
@@ -4826,6 +4842,10 @@ async function _showGarantiaDashboard() {
             </div>
         `;
 
+        // Armazena mapeamento de SAT-Gs no estado para drilldown
+        _state.garantiaEquipamentosMap = mapEquipamentosSatgs;
+        _state.garantiaClientesMap = mapClientesSatgs;
+
         // Top Equipamentos
         const topEquips = Object.entries(countEquipamentos).sort((a, b) => b[1] - a[1]).slice(0, 10);
         const equipList = document.getElementById('garantia-equipamentos-list');
@@ -4834,11 +4854,27 @@ async function _showGarantiaDashboard() {
                 equipList.innerHTML = '<li class="text-sm text-gray-400 text-center py-6">Nenhum equipamento registrado no período.</li>';
             } else {
                 equipList.innerHTML = topEquips.map(([name, count]) => `
-                    <li class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100 hover:bg-gray-100/60 transition-colors">
-                        <span class="font-medium text-gray-700 text-sm truncate pr-4">${name}</span>
-                        <span class="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap">${count} SAT-Gs</span>
+                    <li data-drilldown-type="equipamento" data-name="${encodeURIComponent(name)}" class="cursor-pointer group flex justify-between items-center bg-gray-50 hover:bg-purple-50/70 p-3 rounded-xl border border-gray-100 hover:border-purple-200 transition-all hover:shadow-sm" title="Clique para ver os detalhes das ${count} SAT-Gs deste equipamento">
+                        <div class="flex items-center min-w-0 pr-3">
+                            <span class="w-2 h-2 rounded-full bg-purple-400 group-hover:scale-125 transition-transform shrink-0 mr-2.5"></span>
+                            <span class="font-semibold text-gray-700 group-hover:text-purple-900 text-sm truncate transition-colors">${name}</span>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="bg-purple-100 group-hover:bg-purple-200 text-purple-700 group-hover:text-purple-800 text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap transition-colors">${count} SAT-Gs</span>
+                            <svg class="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </div>
                     </li>
                 `).join('');
+            }
+
+            if (!equipList._drilldownAttached) {
+                equipList._drilldownAttached = true;
+                equipList.addEventListener('click', (e) => {
+                    const li = e.target.closest('li[data-drilldown-type]');
+                    if (li && li.dataset.name) {
+                        _openGarantiaDrilldownModal('equipamento', decodeURIComponent(li.dataset.name));
+                    }
+                });
             }
         }
 
@@ -4850,11 +4886,27 @@ async function _showGarantiaDashboard() {
                 cliList.innerHTML = '<li class="text-sm text-gray-400 text-center py-6">Nenhum cliente registrado no período.</li>';
             } else {
                 cliList.innerHTML = topClientes.map(([name, count]) => `
-                    <li class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100 hover:bg-gray-100/60 transition-colors">
-                        <span class="font-medium text-gray-700 text-sm truncate pr-4">${name}</span>
-                        <span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap">${count} SAT-Gs</span>
+                    <li data-drilldown-type="cliente" data-name="${encodeURIComponent(name)}" class="cursor-pointer group flex justify-between items-center bg-gray-50 hover:bg-indigo-50/70 p-3 rounded-xl border border-gray-100 hover:border-indigo-200 transition-all hover:shadow-sm" title="Clique para ver os detalhes das ${count} SAT-Gs deste cliente">
+                        <div class="flex items-center min-w-0 pr-3">
+                            <span class="w-2 h-2 rounded-full bg-indigo-400 group-hover:scale-125 transition-transform shrink-0 mr-2.5"></span>
+                            <span class="font-semibold text-gray-700 group-hover:text-indigo-900 text-sm truncate transition-colors">${name}</span>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="bg-indigo-100 group-hover:bg-indigo-200 text-indigo-700 group-hover:text-indigo-800 text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap transition-colors">${count} SAT-Gs</span>
+                            <svg class="w-4 h-4 text-gray-400 group-hover:text-indigo-600 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </div>
                     </li>
                 `).join('');
+            }
+
+            if (!cliList._drilldownAttached) {
+                cliList._drilldownAttached = true;
+                cliList.addEventListener('click', (e) => {
+                    const li = e.target.closest('li[data-drilldown-type]');
+                    if (li && li.dataset.name) {
+                        _openGarantiaDrilldownModal('cliente', decodeURIComponent(li.dataset.name));
+                    }
+                });
             }
         }
 
@@ -4948,6 +5000,211 @@ async function _showGarantiaDashboard() {
                 _garantiaMoPage++;
                 _renderGarantiaMoTable(totalMO, totalDeslocamento);
             };
+        }
+    }
+
+    /**
+     * Inicializa eventos e listeners do modal de drilldown da garantia
+     */
+    function _initGarantiaDrilldownEvents() {
+        const modal = document.getElementById('modal-garantia-drilldown');
+        if (!modal || modal._eventsConfigured) return;
+        modal._eventsConfigured = true;
+
+        const closeX = document.getElementById('close-garantia-drilldown-modal-x');
+        if (closeX) closeX.onclick = _closeGarantiaDrilldownModal;
+
+        const closeBtn = document.getElementById('close-garantia-drilldown-modal-btn');
+        if (closeBtn) closeBtn.onclick = _closeGarantiaDrilldownModal;
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                _closeGarantiaDrilldownModal();
+            }
+        });
+
+        const searchInput = document.getElementById('garantia-drilldown-search-input');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const query = (e.target.value || '').toLowerCase().trim();
+                const baseItems = _state.currentDrilldownItems || [];
+                if (!query) {
+                    _renderGarantiaDrilldownTable(baseItems);
+                    return;
+                }
+                const filtered = baseItems.filter(satg => {
+                    const cod = String(satg.codigo || '').toLowerCase();
+                    const cli = String(satg.cliente || '').toLowerCase();
+                    const equip = String(satg.equipamento || satg.produto || '').toLowerCase();
+                    const serie = String(satg.numeroSerie || '').toLowerCase();
+                    const st = String(satg.status || '').toLowerCase();
+                    const prob = String(satg.problema || '').toLowerCase();
+                    const sint = String(satg.sintoma || '').toLowerCase();
+                    return cod.includes(query) || cli.includes(query) || equip.includes(query) || serie.includes(query) || st.includes(query) || prob.includes(query) || sint.includes(query);
+                });
+                _renderGarantiaDrilldownTable(filtered);
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const satgModal = document.getElementById('modal-satg-avaliar');
+                if (satgModal && !satgModal.classList.contains('hidden')) {
+                    return; // Modal do SAT-G tem prioridade
+                }
+                const dModal = document.getElementById('modal-garantia-drilldown');
+                if (dModal && !dModal.classList.contains('hidden')) {
+                    _closeGarantiaDrilldownModal();
+                }
+            }
+        });
+    }
+
+    /**
+     * Fecha o modal de drilldown da garantia
+     */
+    function _closeGarantiaDrilldownModal() {
+        const modal = document.getElementById('modal-garantia-drilldown');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    }
+
+    /**
+     * Abre o modal de drilldown mostrando as SAT-Gs de um equipamento ou cliente
+     */
+    function _openGarantiaDrilldownModal(type, name) {
+        _initGarantiaDrilldownEvents();
+
+        const modal = document.getElementById('modal-garantia-drilldown');
+        if (!modal) return;
+
+        _state.currentDrilldownType = type;
+        _state.currentDrilldownName = name;
+
+        const map = (type === 'equipamento') ? _state.garantiaEquipamentosMap : _state.garantiaClientesMap;
+        const items = (map && map[name]) ? map[name] : [];
+        _state.currentDrilldownItems = items;
+
+        const titleEl = document.getElementById('garantia-drilldown-title');
+        const badgeEl = document.getElementById('garantia-drilldown-badge');
+        const subtitleEl = document.getElementById('garantia-drilldown-subtitle');
+        const iconContainer = document.getElementById('garantia-drilldown-icon-container');
+        const colHeader = document.getElementById('garantia-drilldown-col-header');
+        const searchInput = document.getElementById('garantia-drilldown-search-input');
+
+        if (titleEl) titleEl.innerText = name;
+        if (subtitleEl) subtitleEl.innerText = `${items.length} solicitação(ões) registrada(s) no período selecionado`;
+
+        if (type === 'equipamento') {
+            if (badgeEl) {
+                badgeEl.innerText = 'Equipamento';
+                badgeEl.className = 'px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider rounded-full bg-purple-100 text-purple-700';
+            }
+            if (iconContainer) {
+                iconContainer.className = 'p-2.5 rounded-xl bg-purple-100 text-purple-600';
+                iconContainer.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>`;
+            }
+            if (colHeader) colHeader.innerText = 'CLIENTE';
+        } else {
+            if (badgeEl) {
+                badgeEl.innerText = 'Cliente';
+                badgeEl.className = 'px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider rounded-full bg-indigo-100 text-indigo-700';
+            }
+            if (iconContainer) {
+                iconContainer.className = 'p-2.5 rounded-xl bg-indigo-100 text-indigo-600';
+                iconContainer.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>`;
+            }
+            if (colHeader) colHeader.innerText = 'EQUIPAMENTO';
+        }
+
+        if (searchInput) searchInput.value = '';
+
+        _renderGarantiaDrilldownTable(items);
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    /**
+     * Renderiza as linhas da tabela de SAT-Gs no modal de drilldown
+     */
+    function _renderGarantiaDrilldownTable(items) {
+        const tbody = document.getElementById('garantia-drilldown-table-body');
+        const emptyMsg = document.getElementById('garantia-drilldown-empty-message');
+        const countBadge = document.getElementById('garantia-drilldown-count-badge');
+        const footerInfo = document.getElementById('garantia-drilldown-footer-info');
+
+        if (!tbody) return;
+
+        if (!items || items.length === 0) {
+            tbody.innerHTML = '';
+            if (emptyMsg) emptyMsg.classList.remove('hidden');
+            if (countBadge) countBadge.innerText = '0 SAT-Gs';
+            if (footerInfo) footerInfo.innerText = 'Nenhuma solicitação para exibir';
+            return;
+        }
+
+        if (emptyMsg) emptyMsg.classList.add('hidden');
+        if (countBadge) countBadge.innerText = `${items.length} SAT-G${items.length === 1 ? '' : 's'}`;
+        const totalBase = (_state.currentDrilldownItems || []).length;
+        if (footerInfo) footerInfo.innerText = `Exibindo ${items.length} de ${totalBase} solicitação(ões)`;
+
+        const isEquip = _state.currentDrilldownType === 'equipamento';
+
+        tbody.innerHTML = items.map((satg, idx) => {
+            let codigo = String(satg.codigo || '-').trim();
+            codigo = codigo.replace(/^SAT-?G\s*[:\-]?\s*/i, '').trim();
+            if (!codigo) codigo = '-';
+
+            const dataFormatted = satg.data ? (satg.data.includes(' ') ? satg.data.split(' ')[0] : satg.data) : '-';
+            const otherEntity = isEquip ? (satg.cliente || 'Não informado') : (satg.equipamento || satg.produto || 'Não informado');
+            const problema = (satg.problema || satg.sintoma || satg.preDiagnostico || '-').trim();
+
+            return `
+                <tr class="hover:bg-purple-50/40 transition-colors">
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="font-mono font-bold text-gray-800 text-xs">${codigo}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500 font-medium">
+                        ${dataFormatted}
+                    </td>
+                    <td class="px-4 py-3 max-w-[240px]">
+                        <div class="text-xs font-semibold text-gray-800 truncate" title="${otherEntity}">${otherEntity}</div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="text-xs text-gray-600 line-clamp-2" title="${problema}">${problema}</div>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-right">
+                        <button type="button" class="btn-ver-satg-drilldown inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold rounded-lg text-xs border border-purple-200 transition-colors shadow-sm" title="Avaliar / Ver Detalhes da SAT-G" data-index="${idx}">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                            <span>Ver SAT-G</span>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        tbody.querySelectorAll('.btn-ver-satg-drilldown').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.index, 10);
+                const satgItem = items[idx];
+                if (satgItem) {
+                    _handleDrilldownVerSatg(satgItem);
+                }
+            });
+        });
+    }
+
+    /**
+     * Abre a avaliação/detalhes da SAT-G no modal padrão do GerenciarGarantiaApp
+     */
+    function _handleDrilldownVerSatg(satgItem) {
+        if (window.GerenciarGarantiaApp && typeof window.GerenciarGarantiaApp.openSatgModal === 'function') {
+            window.GerenciarGarantiaApp.openSatgModal(satgItem, true);
+        } else {
+            alert('Módulo de Gerenciar Garantia não disponível para abrir detalhes da solicitação.');
         }
     }
 
@@ -5352,6 +5609,60 @@ async function _showGarantiaDashboard() {
         });
     }
 
+    function _showEcommerceLoading() {
+        if (_dom.ecommerceProductsCountBadge) {
+            _dom.ecommerceProductsCountBadge.innerHTML = `
+                <span class="inline-flex items-center gap-1.5">
+                    <svg class="animate-spin h-3.5 w-3.5 text-teal-700" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    Carregando...
+                </span>
+            `;
+        }
+
+        const loadingCardHtml = `
+            <span class="inline-flex items-center gap-2 text-gray-400 text-lg font-normal animate-pulse">
+                <svg class="animate-spin h-4 w-4 text-teal-600 shrink-0" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Carregando...
+            </span>
+        `;
+        if (_dom.ecommerceSummaryTotalItems) _dom.ecommerceSummaryTotalItems.innerHTML = loadingCardHtml;
+        if (_dom.ecommerceSummaryAvgVenda) _dom.ecommerceSummaryAvgVenda.innerHTML = loadingCardHtml;
+        if (_dom.ecommerceSummaryWithCost) _dom.ecommerceSummaryWithCost.innerHTML = loadingCardHtml;
+        if (_dom.ecommerceSummaryInStock) _dom.ecommerceSummaryInStock.innerHTML = loadingCardHtml;
+
+        if (_dom.ecommerceProductsTbody) {
+            _dom.ecommerceProductsTbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="px-6 py-20 text-center">
+                        <div class="flex flex-col items-center justify-center">
+                            <div class="relative w-16 h-16 mb-4 flex items-center justify-center">
+                                <div class="absolute inset-0 rounded-full border-4 border-teal-100 animate-ping opacity-25"></div>
+                                <svg class="animate-spin h-10 w-10 text-teal-600" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                            <h4 class="text-base font-bold text-gray-800 mb-1">Carregando produtos do e-commerce...</h4>
+                            <p class="text-xs text-gray-500 max-w-sm text-center">
+                                Buscando produtos ativos e informações atualizadas da Loja Integrada. Isso ocorre apenas na primeira vez.
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        if (_dom.ecommercePaginationInfo) {
+            _dom.ecommercePaginationInfo.innerHTML = '<span class="text-gray-400 text-xs italic">Aguardando dados...</span>';
+        }
+        if (_dom.ecommercePaginationControls) {
+            _dom.ecommercePaginationControls.innerHTML = '';
+        }
+    }
+
     async function _syncLojaIntegradaProducts(forceRefresh = false) {
         if (_state.ecommerceIsSyncingLi) return;
         _state.ecommerceIsSyncingLi = true;
@@ -5365,6 +5676,12 @@ async function _showGarantiaDashboard() {
         }
         if (_dom.syncEcommerceText) {
             _dom.syncEcommerceText.textContent = 'Sincronizando...';
+        }
+
+        if (_dom.ecommerceContainer && !_dom.ecommerceContainer.classList.contains('hidden')) {
+            if (forceRefresh || !_state.ecommerceActiveLiSkus || _state.ecommerceActiveLiSkus.size === 0) {
+                _showEcommerceLoading();
+            }
         }
 
         try {
@@ -5420,6 +5737,39 @@ async function _showGarantiaDashboard() {
             console.error('[Dashboard E-commerce] Falha ao sincronizar produtos da Loja Integrada:', err);
             if (_dom.syncEcommerceText) {
                 _dom.syncEcommerceText.textContent = 'Erro ao sincronizar';
+            }
+            if (_dom.ecommerceContainer && !_dom.ecommerceContainer.classList.contains('hidden')) {
+                if (!_state.ecommerceActiveLiSkus || _state.ecommerceActiveLiSkus.size === 0) {
+                    if (_dom.ecommerceProductsTbody) {
+                        _dom.ecommerceProductsTbody.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="px-6 py-14 text-center text-red-500">
+                                    <svg class="mx-auto h-12 w-12 text-red-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <p class="font-semibold text-gray-800 text-sm">Não foi possível carregar os produtos do e-commerce.</p>
+                                    <p class="text-xs text-gray-500 mt-1 mb-4">Ocorreu um erro ao comunicar com a API da Loja Integrada.</p>
+                                    <button type="button" id="btn-retry-sync-ecommerce" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors">
+                                        Tentar Novamente
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        document.getElementById('btn-retry-sync-ecommerce')?.addEventListener('click', () => {
+                            _showEcommerceLoading();
+                            _syncLojaIntegradaProducts(true);
+                        });
+                    }
+                    if (_dom.ecommerceProductsCountBadge) {
+                        _dom.ecommerceProductsCountBadge.textContent = 'Erro';
+                    }
+                    if (_dom.ecommerceSummaryTotalItems) _dom.ecommerceSummaryTotalItems.textContent = '-';
+                    if (_dom.ecommerceSummaryAvgVenda) _dom.ecommerceSummaryAvgVenda.textContent = '-';
+                    if (_dom.ecommerceSummaryWithCost) _dom.ecommerceSummaryWithCost.textContent = '-';
+                    if (_dom.ecommerceSummaryInStock) _dom.ecommerceSummaryInStock.textContent = '-';
+                } else {
+                    _renderEcommerceDashboard();
+                }
             }
         } finally {
             _state.ecommerceIsSyncingLi = false;
@@ -6373,6 +6723,8 @@ async function _showGarantiaDashboard() {
                     _renderRankingDashboard();
                 } else if (_dom.garantiaContainer && !_dom.garantiaContainer.classList.contains('hidden')) {
                     _loadGarantiaData(true).then(() => _renderGarantiaDashboardView());
+                } else if (_dom.ecommerceContainer && !_dom.ecommerceContainer.classList.contains('hidden')) {
+                    _renderEcommerceDashboard();
                 }
             } else {
                 _showSelector();
@@ -6387,7 +6739,9 @@ async function _showGarantiaDashboard() {
             _dom.selectorContainer?.classList.add('hidden');
             _dom.vendasContainer?.classList.add('hidden');
             _dom.estoqueContainer?.classList.add('hidden');
+            _dom.rankingContainer?.classList.add('hidden');
             _dom.garantiaContainer?.classList.add('hidden');
+            _dom.ecommerceContainer?.classList.add('hidden');
             _state.isStarted = false;
         },
 

@@ -252,6 +252,9 @@
                         <h1 class="text-2xl font-bold text-gray-800">Linha de Produção</h1>
                     </div>
                 </div>
+                <button id="producao-refresh-btn" class="absolute right-4 text-cyan-600 hover:text-cyan-800 p-1" title="Atualizar dados">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
             </div>
 
             <!-- Abas (Tabs) -->
@@ -274,6 +277,13 @@
                         <option value="TODOS">Todos os Responsáveis</option>
                     </select>
                 </div>
+                <div class="relative">
+                    <input type="text" id="producao-search-input" class="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm bg-white" placeholder="Buscar por orçamento, cliente ou pedido...">
+                    <button id="producao-search-clear-btn" type="button" class="hidden absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                    <svg id="producao-search-icon" class="w-5 h-5 text-gray-400 absolute right-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </div>
             </div>
 
             <!-- Lista de Produção -->
@@ -289,6 +299,46 @@
             <!-- Lista de Finalizados -->
             <div id="finalizados-list-container" class="space-y-3 pb-8 hidden">
                 <p class="text-gray-500 text-center py-8">Nenhum item finalizado.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ALTERAR SITUAÇÃO ITEM LINHA DE PRODUÇÃO (MOBILE) -->
+    <div id="lp-status-modal" class="fixed hidden inset-0 bg-black bg-opacity-60 flex items-end sm:items-center justify-center z-[70] p-0 sm:p-4">
+        <div class="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+                <div>
+                    <h3 class="text-lg font-black text-gray-800">Alterar Situação</h3>
+                    <p id="lp-status-modal-subtitle" class="text-xs text-gray-500 font-medium truncate max-w-[280px] sm:max-w-[320px]">Selecione a nova situação do item</p>
+                </div>
+                <button id="close-lp-status-modal-btn" type="button" class="text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-200 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-5 space-y-3">
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 cursor-pointer hover:bg-orange-50/50 transition-all has-[:checked]:border-orange-400 has-[:checked]:bg-orange-50">
+                    <input type="radio" name="lp-item-status-radio" value="EM PRODUÇÃO" class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 cursor-pointer">
+                    <span class="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0"></span>
+                    <span class="text-sm font-bold text-gray-800 uppercase tracking-wide flex-1">Em Produção</span>
+                </label>
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 cursor-pointer hover:bg-yellow-50/50 transition-all has-[:checked]:border-yellow-400 has-[:checked]:bg-yellow-50">
+                    <input type="radio" name="lp-item-status-radio" value="AGUARDANDO RETIRADA" class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 cursor-pointer">
+                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 shrink-0"></span>
+                    <span class="text-sm font-bold text-gray-800 uppercase tracking-wide flex-1">Aguardando Retirada</span>
+                </label>
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 cursor-pointer hover:bg-green-50/50 transition-all has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
+                    <input type="radio" name="lp-item-status-radio" value="FINALIZADO" class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 cursor-pointer">
+                    <span class="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0"></span>
+                    <span class="text-sm font-bold text-gray-800 uppercase tracking-wide flex-1">Finalizado</span>
+                </label>
+            </div>
+            <div class="px-5 py-3.5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                <button id="cancel-lp-status-modal-btn" type="button" class="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
+                    Cancelar
+                </button>
+                <button id="confirm-lp-status-modal-btn" type="button" class="px-5 py-2 text-sm font-bold text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 transition-colors shadow-sm flex items-center gap-2">
+                    Confirmar
+                </button>
             </div>
         </div>
     </div>
