@@ -403,7 +403,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `${sheetName}!A2:AJ` // Até AJ (coluna 36 - Finalizado)
+                range: `${sheetName}!A2:AK` // Até AK (coluna 37: 36 é Finalizado (AJ), 37 é idRetornoItem (AK))
             });
 
             const rows = response.data.values || [];
@@ -446,7 +446,8 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     codigoCliente: row[32] || '',              // AG (Cod Cliente)
                     idServicoMO: row[33] || '',                // AH (ID Serviço M.O vinculado)
                     responsavel: row[34] || '',                // AI (Responsável)
-                    finalizado: row[35] || ''                  // AJ (Finalizado)
+                    finalizado: row[35] || '',                 // AJ (Finalizado)
+                    idRetornoItem: row[36] || ''               // AK (ID Retorno Item vinculado)
                 };
             });
 
@@ -548,12 +549,13 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                 safeString(formData.codigoCliente),         // AG: Cod Cliente
                 '',                                         // AH: ID Serviço (M.O)
                 safeString(formData.responsavel || ''),     // AI: Responsável
-                ''                                          // AJ: Finalizado
+                '',                                         // AJ: Finalizado
+                safeString(formData.idRetornoItem || '')    // AK: ID Retorno Item
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: `${sheetName}!A:AJ`,
+                range: `${sheetName}!A:AK`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
@@ -577,7 +579,7 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
     // Atualiza o Status e Observação de um pedido na SatG
     router.post('/satg/update', async (req, res, next) => {
         try {
-            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg, acaoPecas, servicoMO, idServicoMO, responsavel, finalizado } = req.body;
+            const { rowIndex, status, observacao, idPedido, retornoItem, observacaoSatg, acaoPecas, servicoMO, idServicoMO, responsavel, finalizado, idRetornoItem } = req.body;
             
             if (!rowIndex) {
                 return res.status(400).json({ error: true, message: 'rowIndex é obrigatório.' });
@@ -698,6 +700,15 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
                     range: `${sheetName}!AJ${rowIndex}`,
                     valueInputOption: 'USER_ENTERED',
                     resource: { values: [[finalizado]] }
+                });
+            }
+
+            if (idRetornoItem !== undefined) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `${sheetName}!AK${rowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[idRetornoItem]] }
                 });
             }
 
@@ -948,6 +959,178 @@ function createGarantiaRouter(getInitializedSheetsClient, spreadsheetId) {
             res.json({ error: false, message: 'Status atualizado com sucesso.' });
         } catch (error) {
             console.error('[garantia] Erro ao atualizar status de Serviço MO:', error);
+            next(error);
+        }
+    });
+
+    // ==========================================
+    // ROTAS DE RETORNO DE ITEM
+    // ==========================================
+
+    // GET /garantia/retorno-item
+    router.get('/retorno-item', async (req, res, next) => {
+        try {
+            const sheets = await getInitializedSheetsClient();
+            const sheetName = 'RetornoItem';
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${sheetName}'!A2:F`
+            });
+            const rows = response.data.values || [];
+            const data = rows.map((row, index) => ({
+                rowIndex: index + 2,
+                idRetornoItem: row[0] || '',
+                situacao: row[1] || 'EM ANALISE',
+                custoFrete: row[2] || '',
+                descricao: row[3] || '',
+                transportadora: row[4] || '',
+                numeroColeta: row[5] || ''
+            }));
+            res.json(data);
+        } catch (error) {
+            console.error('[garantia] Erro ao buscar RetornoItem:', error);
+            next(error);
+        }
+    });
+
+    // POST /garantia/retorno-item
+    router.post('/retorno-item', async (req, res, next) => {
+        try {
+            const { idRetornoItem, situacao, custoFrete, descricao, transportadora, numeroColeta, satgRowIndex } = req.body;
+            if (!idRetornoItem) {
+                return res.status(400).json({ error: true, message: 'idRetornoItem é obrigatório.' });
+            }
+
+            const sheets = await getInitializedSheetsClient();
+            const sheetName = 'RetornoItem';
+
+            // Verifica se a planilha já tem cabeçalho
+            const headerCheck = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${sheetName}'!A1:F1`
+            });
+            const headerRows = headerCheck.data.values || [];
+            if (headerRows.length === 0) {
+                await sheets.spreadsheets.values.append({
+                    spreadsheetId,
+                    range: `'${sheetName}'!A1:F1`,
+                    valueInputOption: 'USER_ENTERED',
+                    insertDataOption: 'INSERT_ROWS',
+                    resource: { values: [['ID Retorno Item', 'Situação', 'Custo Frete', 'Descrição', 'Transportadora', 'Numero Coleta']] }
+                });
+            }
+
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${sheetName}'!A2:A`
+            });
+            const rows = response.data.values || [];
+            const existingIndex = rows.findIndex(r => String(r[0] || '').trim() === String(idRetornoItem).trim());
+
+            const safeString = val => {
+                if (!val) return '';
+                const str = String(val);
+                if (str.startsWith('+') || str.startsWith('=')) return "'" + str;
+                return str;
+            };
+
+            const rowData = [
+                safeString(idRetornoItem),
+                safeString(situacao || 'EM ANALISE'),
+                safeString(custoFrete),
+                safeString(descricao),
+                safeString(transportadora),
+                safeString(numeroColeta)
+            ];
+
+            if (existingIndex !== -1) {
+                const targetRow = existingIndex + 2;
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `'${sheetName}'!A${targetRow}:F${targetRow}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [rowData] }
+                });
+            } else {
+                await sheets.spreadsheets.values.append({
+                    spreadsheetId,
+                    range: `'${sheetName}'!A:F`,
+                    valueInputOption: 'USER_ENTERED',
+                    insertDataOption: 'INSERT_ROWS',
+                    resource: { values: [rowData] }
+                });
+            }
+
+            // Se satgRowIndex foi fornecido, vincula na aba SatG (Coluna AK para idRetornoItem e Coluna AC para situacao)
+            if (satgRowIndex) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `'SatG'!AK${satgRowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[safeString(idRetornoItem)]] }
+                });
+                if (situacao) {
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId,
+                        range: `'SatG'!AC${satgRowIndex}`,
+                        valueInputOption: 'USER_ENTERED',
+                        resource: { values: [[safeString(situacao)]] }
+                    });
+                }
+            }
+
+            if (req.notifySync) {
+                await req.notifySync('garantiaUpdated', { idRetornoItem, tipo: 'retorno_item' });
+            }
+
+            res.json({ error: false, message: 'Retorno de item salvo com sucesso.', idRetornoItem });
+        } catch (error) {
+            console.error('[garantia] Erro ao salvar Retorno de item:', error);
+            next(error);
+        }
+    });
+
+    // POST /garantia/retorno-item/update-status
+    router.post('/retorno-item/update-status', async (req, res, next) => {
+        try {
+            const { idRetornoItem, situacao, satgRowIndex } = req.body;
+            const sheets = await getInitializedSheetsClient();
+            const sheetName = 'RetornoItem';
+
+            if (idRetornoItem) {
+                const response = await sheets.spreadsheets.values.get({
+                    spreadsheetId,
+                    range: `'${sheetName}'!A2:A`
+                });
+                const rows = response.data.values || [];
+                const existingIndex = rows.findIndex(r => String(r[0] || '').trim() === String(idRetornoItem).trim());
+                if (existingIndex !== -1) {
+                    const targetRow = existingIndex + 2;
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId,
+                        range: `'${sheetName}'!B${targetRow}`,
+                        valueInputOption: 'USER_ENTERED',
+                        resource: { values: [[situacao || 'EM ANALISE']] }
+                    });
+                }
+            }
+
+            if (satgRowIndex && situacao) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `'SatG'!AC${satgRowIndex}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[situacao]] }
+                });
+            }
+
+            if (req.notifySync) {
+                await req.notifySync('garantiaUpdated', { idRetornoItem, tipo: 'retorno_item' });
+            }
+
+            res.json({ error: false, message: 'Status de retorno atualizado com sucesso.' });
+        } catch (error) {
+            console.error('[garantia] Erro ao atualizar status de Retorno de item:', error);
             next(error);
         }
     });

@@ -30,6 +30,8 @@
           GARANTIA_RESPONSAVEIS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/responsaveis",
           GARANTIA_SERVICOS_MO: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/servicos-mo",
           GARANTIA_SERVICOS_MO_UPDATE_STATUS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/servicos-mo/update-status",
+          GARANTIA_RETORNO_ITEM: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/retorno-item",
+          GARANTIA_RETORNO_ITEM_UPDATE_STATUS: "https://bling-proxy-api-255108547424.southamerica-east1.run.app/garantia/retorno-item/update-status",
       
           // APIs de Ações (Cloud Functions)
           WEBHOOK_LAUNCH: "https://bling-proxy-api-255108547424.southamerica-east1.run.app",

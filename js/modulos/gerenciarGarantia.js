@@ -51,6 +51,7 @@ export const GerenciarGarantiaApp = (function () {
     let _clearSearchBtn;
 
     let _servicosMoData = [];
+    let _retornoItemData = [];
 
     // Referências do DOM - SatG
     let _satgContainer;
@@ -599,12 +600,312 @@ export const GerenciarGarantiaApp = (function () {
         }
     }
 
+    /**
+     * =========================================
+     * Modal Retorno de Item
+     * =========================================
+     */
+    function _renderRetornoItemTransportadoraDropdown(filterText = '') {
+        const dropdown = document.getElementById('retorno-item-transportadora-dropdown');
+        const input = document.getElementById('retorno-item-transportadora');
+        const clearBtn = document.getElementById('retorno-item-transportadora-clear-btn');
+        if (!dropdown || !input) return;
+
+        const query = _normalizeStr(filterText);
+        let items = _listaTransportadoras || [];
+
+        if (query) {
+            items = items.filter(t => {
+                const userCod = _extractTransportadoraCodigo(t.nome || t.fantasia || t.nomeFantasia || t.razaoSocial);
+                const cod = _normalizeStr(String(t.codigo || ''));
+                const nome = _normalizeStr(t.nome || '');
+                const fantasia = _normalizeStr(t.fantasia || t.nomeFantasia || '');
+                const razao = _normalizeStr(t.razaoSocial || '');
+                const disp = _normalizeStr(_getTransportadoraDisplayName(t));
+                return (userCod && userCod.includes(query)) || cod.includes(query) || nome.includes(query) || fantasia.includes(query) || razao.includes(query) || disp.includes(query);
+            });
+        }
+
+        if (!items || items.length === 0) {
+            dropdown.innerHTML = `
+                <div class="p-3 text-center text-xs text-gray-500">
+                    Nenhuma transportadora encontrada${filterText ? ` para "<b>${_escapeHtml(filterText)}</b>"` : ''}.
+                </div>
+            `;
+            dropdown.classList.remove('hidden');
+            return;
+        }
+
+        let html = '';
+        items.forEach(t => {
+            const displayName = _getTransportadoraDisplayName(t);
+            const isSelected = _normalizeStr(displayName) === _normalizeStr(input.value);
+            const userCod = _extractTransportadoraCodigo(t.nome || t.fantasia || t.nomeFantasia || t.razaoSocial);
+            const locationStr = (t.cidade || t.estado) ? `${t.cidade || ''}${t.cidade && t.estado ? '/' : ''}${t.estado || ''}` : '';
+
+            html += `
+                <div class="px-3 py-2 hover:bg-purple-50 cursor-pointer flex items-center justify-between text-xs transition-colors border-b border-gray-100 last:border-0 ${isSelected ? 'bg-purple-50 font-bold text-purple-900' : 'text-gray-800'}"
+                     data-nome="${_escapeHtml(displayName)}">
+                    <div class="flex-1 pr-2 min-w-0">
+                        <div class="truncate text-xs ${isSelected ? 'text-purple-900 font-bold' : 'text-gray-800 font-medium'}">
+                            ${_escapeHtml(displayName)}
+                        </div>
+                        ${locationStr ? `<div class="text-[10px] text-gray-400 truncate">${_escapeHtml(locationStr)}</div>` : ''}
+                    </div>
+                    ${userCod ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-100 text-purple-700 shrink-0">Cód: ${_escapeHtml(userCod)}</span>` : ''}
+                </div>
+            `;
+        });
+
+        dropdown.innerHTML = html;
+        dropdown.classList.remove('hidden');
+
+        dropdown.querySelectorAll('[data-nome]').forEach(itemEl => {
+            itemEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const nome = itemEl.getAttribute('data-nome');
+                input.value = nome;
+                if (clearBtn) clearBtn.classList.remove('hidden');
+                dropdown.classList.add('hidden');
+            });
+        });
+    }
+
+    function _openRetornoItemModal(req, retornoItemObj = null, initialSituacao = null) {
+        const modal = document.getElementById('modal-retorno-item');
+        if (!modal) return;
+
+        _initRetornoItemModalEvents();
+
+        if (!_listaTransportadoras || _listaTransportadoras.length === 0) {
+            fetch(API_URLS.TRANSPORTADORAS || (window.API_BASE_URL + '/transportadoras'))
+                .then(res => res.ok ? res.json() : { transportadoras: [] })
+                .then(data => {
+                    if (data && data.transportadoras) {
+                        _listaTransportadoras = data.transportadoras;
+                    }
+                })
+                .catch(() => {});
+        }
+
+        const titleEl = document.getElementById('modal-retorno-item-title');
+        const subtitleEl = document.getElementById('modal-retorno-item-subtitle');
+        const rowIndexInput = document.getElementById('retorno-item-satg-row-index');
+        const idInput = document.getElementById('retorno-item-id');
+        const situacaoSelect = document.getElementById('retorno-item-situacao');
+        const custoFreteInput = document.getElementById('retorno-item-custo-frete');
+        const transportadoraInput = document.getElementById('retorno-item-transportadora');
+        const transpClearBtn = document.getElementById('retorno-item-transportadora-clear-btn');
+        const numeroColetaInput = document.getElementById('retorno-item-numero-coleta');
+        const descricaoTextarea = document.getElementById('retorno-item-descricao');
+
+        rowIndexInput.value = req.rowIndex;
+        const codExibicao = req.codigo ? (String(req.codigo).trim().startsWith('SAT-G') ? req.codigo : `SAT-G: ${req.codigo}`) : '-';
+        subtitleEl.innerText = `Vinculado a ${codExibicao} | Cliente: ${req.cliente || '-'}`;
+
+        const satgStatus = (req.retornoItem || 'EM ANALISE').toUpperCase();
+
+        if (retornoItemObj) {
+            titleEl.innerText = `Editar Retorno de Item: ${retornoItemObj.idRetornoItem}`;
+            idInput.value = retornoItemObj.idRetornoItem;
+
+            const rawSit = (initialSituacao !== null && initialSituacao !== undefined)
+                ? initialSituacao
+                : (retornoItemObj.situacao || satgStatus || 'EM ANALISE');
+
+            const matchedOpt = Array.from(situacaoSelect.options).find(opt => 
+                opt.value.trim().toUpperCase() === String(rawSit).trim().toUpperCase()
+            );
+            situacaoSelect.value = matchedOpt ? matchedOpt.value : rawSit;
+
+            custoFreteInput.value = retornoItemObj.custoFrete || '';
+            if (transportadoraInput) {
+                transportadoraInput.value = retornoItemObj.transportadora || '';
+                if (transpClearBtn) {
+                    if (transportadoraInput.value) transpClearBtn.classList.remove('hidden');
+                    else transpClearBtn.classList.add('hidden');
+                }
+            }
+            if (numeroColetaInput) numeroColetaInput.value = retornoItemObj.numeroColeta || '';
+            descricaoTextarea.value = retornoItemObj.descricao || '';
+        } else {
+            const novoId = 'RET-' + Math.floor(1000000000 + Math.random() * 9000000000);
+            titleEl.innerText = `Novo Retorno de Item: ${novoId}`;
+            idInput.value = novoId;
+
+            const rawSit = initialSituacao || satgStatus || 'EM ANALISE';
+            const matchedOpt = Array.from(situacaoSelect.options).find(opt => 
+                opt.value.trim().toUpperCase() === String(rawSit).trim().toUpperCase()
+            );
+            situacaoSelect.value = matchedOpt ? matchedOpt.value : rawSit;
+
+            custoFreteInput.value = '';
+            if (transportadoraInput) {
+                transportadoraInput.value = '';
+                if (transpClearBtn) transpClearBtn.classList.add('hidden');
+            }
+            if (numeroColetaInput) numeroColetaInput.value = '';
+            descricaoTextarea.value = '';
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function _initRetornoItemModalEvents() {
+        const modal = document.getElementById('modal-retorno-item');
+        if (!modal || window._retornoItemEventsInit) return;
+        window._retornoItemEventsInit = true;
+
+        const closeBtn = document.getElementById('btn-close-retorno-item');
+        const cancelBtn = document.getElementById('btn-cancel-retorno-item');
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            const dropdown = document.getElementById('retorno-item-transportadora-dropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+        };
+
+        if (closeBtn) closeBtn.onclick = closeModal;
+        if (cancelBtn) cancelBtn.onclick = closeModal;
+
+        // Máscara para Custo de Frete
+        const custoFreteInput = document.getElementById('retorno-item-custo-frete');
+        if (custoFreteInput) {
+            custoFreteInput.addEventListener('input', (e) => {
+                let v = e.target.value.replace(/\D/g, '');
+                if (v === '') {
+                    e.target.value = '';
+                    return;
+                }
+                v = (parseInt(v, 10) / 100).toFixed(2);
+                e.target.value = 'R$ ' + v.replace('.', ',').replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+            });
+        }
+
+        // Combobox Transportadora
+        const transpInput = document.getElementById('retorno-item-transportadora');
+        const transpClearBtn = document.getElementById('retorno-item-transportadora-clear-btn');
+        const transpToggleBtn = document.getElementById('retorno-item-transportadora-toggle-btn');
+        const transpDropdown = document.getElementById('retorno-item-transportadora-dropdown');
+
+        if (transpInput && transpDropdown) {
+            transpInput.addEventListener('focus', () => {
+                _renderRetornoItemTransportadoraDropdown(transpInput.value.trim());
+            });
+
+            transpInput.addEventListener('input', () => {
+                const val = transpInput.value.trim();
+                if (transpClearBtn) {
+                    if (val) transpClearBtn.classList.remove('hidden');
+                    else transpClearBtn.classList.add('hidden');
+                }
+                _renderRetornoItemTransportadoraDropdown(val);
+            });
+
+            if (transpToggleBtn) {
+                transpToggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (transpDropdown.classList.contains('hidden')) {
+                        _renderRetornoItemTransportadoraDropdown('');
+                        transpInput.focus();
+                    } else {
+                        transpDropdown.classList.add('hidden');
+                    }
+                });
+            }
+
+            if (transpClearBtn) {
+                transpClearBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    transpInput.value = '';
+                    transpClearBtn.classList.add('hidden');
+                    _renderRetornoItemTransportadoraDropdown('');
+                    transpInput.focus();
+                });
+            }
+
+            document.addEventListener('click', (e) => {
+                const container = document.getElementById('retorno-item-transportadora-container');
+                if (container && !container.contains(e.target)) {
+                    transpDropdown.classList.add('hidden');
+                }
+            });
+        }
+
+        const form = document.getElementById('form-retorno-item');
+        if (form) {
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                const btnSave = document.getElementById('btn-save-retorno-item');
+                const origHtml = btnSave.innerHTML;
+                btnSave.innerHTML = '<span class="animate-pulse">Salvando...</span>';
+                btnSave.disabled = true;
+
+                const idRetorno = document.getElementById('retorno-item-id').value;
+                const situacao = document.getElementById('retorno-item-situacao').value;
+                const custoFrete = document.getElementById('retorno-item-custo-frete').value.trim();
+                const descricao = document.getElementById('retorno-item-descricao').value.trim();
+                const transportadora = document.getElementById('retorno-item-transportadora') ? document.getElementById('retorno-item-transportadora').value.trim() : '';
+                const numeroColeta = document.getElementById('retorno-item-numero-coleta') ? document.getElementById('retorno-item-numero-coleta').value.trim() : '';
+                const satgRowIndex = document.getElementById('retorno-item-satg-row-index').value;
+
+                const payload = {
+                    idRetornoItem: idRetorno,
+                    situacao: situacao,
+                    custoFrete: custoFrete,
+                    descricao: descricao,
+                    transportadora: transportadora,
+                    numeroColeta: numeroColeta,
+                    satgRowIndex: satgRowIndex
+                };
+
+                try {
+                    // Adicionar histórico se a situação mudou
+                    const req = _satgData.find(d => String(d.rowIndex) === String(satgRowIndex));
+                    if (req) {
+                        const oldSit = (req.retornoItem || 'EM ANALISE').toUpperCase();
+                        if (oldSit !== situacao.toUpperCase()) {
+                            const newHistoryJson = _appendSatgStatusChange(req, {
+                                campo: 'Retorno Item',
+                                de: oldSit,
+                                para: situacao,
+                                texto: `Retorno Item alterado para ${situacao} via modal`
+                            });
+                            await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ rowIndex: satgRowIndex, finalizado: newHistoryJson })
+                            }).catch(() => {});
+                        }
+                    }
+
+                    const res = await fetch(API_URLS.GARANTIA_RETORNO_ITEM, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error();
+
+                    closeModal();
+                    _fetchSatGData();
+                } catch (err) {
+                    alert('Erro ao salvar Retorno de Item');
+                } finally {
+                    btnSave.innerHTML = origHtml;
+                    btnSave.disabled = false;
+                }
+            };
+        }
+    }
+
     function init() {
         _cacheDomElements();
         _applySavedSatgFilterPreferences();
         if (_overviewCards) {
             _bindEvents();
-        _initServicoMoModalEvents();
+            _initServicoMoModalEvents();
+            _initRetornoItemModalEvents();
         }
         _showView('cards');
         render(); // Pré-carrega a tabela
@@ -3357,9 +3658,10 @@ export const GerenciarGarantiaApp = (function () {
         }
 
         try {
-            const [response, moResponse] = await Promise.all([
+            const [response, moResponse, retornoResponse] = await Promise.all([
                 fetch(API_URLS.GARANTIA_SATG),
-                fetch(API_URLS.GARANTIA_SERVICOS_MO).catch(() => ({ ok: false }))
+                fetch(API_URLS.GARANTIA_SERVICOS_MO).catch(() => ({ ok: false })),
+                fetch(API_URLS.GARANTIA_RETORNO_ITEM).catch(() => ({ ok: false }))
             ]);
             if (!response.ok) throw new Error('Falha ao carregar SatG');
             
@@ -3370,6 +3672,10 @@ export const GerenciarGarantiaApp = (function () {
             if (moResponse && moResponse.ok) {
                 const moData = await moResponse.json();
                 _servicosMoData = Array.isArray(moData) ? moData : [];
+            }
+            if (retornoResponse && retornoResponse.ok) {
+                const retData = await retornoResponse.json();
+                _retornoItemData = Array.isArray(retData) ? retData : [];
             }
             
             // Carregar pedidos e itens detalhados se a lista estiver vazia ou se for uma atualização de sync (isSilent)
@@ -3816,6 +4122,12 @@ export const GerenciarGarantiaApp = (function () {
             let retornoStatus = (req.retornoItem || 'EM ANALISE').toUpperCase();
             if (retornoStatus === 'FINALIZADO') retornoStatus = 'RETORNADO';
 
+            const idRetorno = String(req.idRetornoItem || '').trim();
+            const retornoItemObj = idRetorno && typeof _retornoItemData !== 'undefined' ? _retornoItemData.find(r => String(r.idRetornoItem || '').trim() === idRetorno) : null;
+            if (retornoItemObj && retornoItemObj.situacao && (!req.retornoItem || req.retornoItem === 'EM ANALISE')) {
+                retornoStatus = retornoItemObj.situacao.toUpperCase();
+            }
+
             let retornoBadgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
             if (retornoStatus === 'EM ANALISE') retornoBadgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
             else if (retornoStatus === 'SOLICITADO') retornoBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
@@ -3826,7 +4138,7 @@ export const GerenciarGarantiaApp = (function () {
 
             let retornoDropdownHtml = `
             <div class="relative inline-block text-left" data-dropdown-container>
-                <button type="button" class="retorno-custom-dropdown-btn px-2.5 py-0.5 inline-flex items-center justify-between text-[10px] font-bold rounded-full border ${retornoBadgeClass} min-w-[110px] transition-all hover:shadow-sm">
+                <button type="button" class="retorno-custom-dropdown-btn px-2.5 py-0.5 inline-flex items-center justify-between text-[10px] font-bold rounded-full border ${retornoBadgeClass} min-w-[110px] transition-all hover:shadow-sm" title="Clique para alterar situação ou editar retorno">
                     <span class="flex-1 text-center">${retornoStatus}</span>
                     <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
@@ -3837,6 +4149,11 @@ export const GerenciarGarantiaApp = (function () {
                     <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="NÃO RETORNADO"><span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>NÃO RETORNADO</button>
                     <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-purple-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="NÃO NECESSARIO"><span class="w-2 h-2 rounded-full bg-purple-400 shrink-0"></span>NÃO NECESSARIO</button>
                     <button class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-red-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="CANCELADO"><span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>CANCELADO</button>
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <button class="w-full text-left px-3.5 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2.5 whitespace-nowrap" data-value="EDITAR">
+                        <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        Editar Dados Retorno
+                    </button>
                 </div>
             </div>`;
 
@@ -4121,7 +4438,14 @@ export const GerenciarGarantiaApp = (function () {
                     btn.addEventListener('click', async (e) => {
                         e.stopPropagation();
                         retMenu.classList.add('hidden');
-                        const newRetorno = btn.dataset.value;
+                        const chosenVal = btn.dataset.value;
+                        
+                        if (chosenVal === 'EDITAR') {
+                            _openRetornoItemModal(req, retornoItemObj);
+                            return;
+                        }
+
+                        const newRetorno = chosenVal;
                         if (newRetorno === retornoStatus) return;
                         
                         retBtn.classList.add('animate-pulse', 'opacity-50');
@@ -4133,6 +4457,14 @@ export const GerenciarGarantiaApp = (function () {
                                 para: newRetorno,
                                 texto: `Retorno Item alterado para ${newRetorno}`
                             });
+
+                            if (idRetorno) {
+                                await fetch(API_URLS.GARANTIA_RETORNO_ITEM_UPDATE_STATUS, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ idRetornoItem: idRetorno, situacao: newRetorno, satgRowIndex: req.rowIndex })
+                                }).catch(() => {});
+                            }
 
                             const res = await fetch(API_URLS.GARANTIA_SATG_UPDATE, {
                                 method: 'POST',
